@@ -118,21 +118,36 @@ AWS_DEFAULT_REGION=us-east-1
 
 ## 5. Start the Stack
 
+### Option A — All-in-one (recommended)
+
+`docker-compose.aws.yml` already includes MiniStack. One command starts everything:
+
 ```bash
 cd ~/sparkyfitness
-
-# Start MiniStack first (standalone, as you specified)
-docker run -d \
-  --name ministack \
-  --network sparkyfitness_sparkyfitness-network \
-  -p 4566:4566 \
-  ministackorg/ministack
-
-# Then bring up the full compose stack
 docker compose -f docker/docker-compose.aws.yml --env-file .env up -d
 ```
 
-> **Note:** `docker-compose.aws.yml` already includes MiniStack as a service. The standalone `docker run` above is equivalent — use one approach or the other, not both.
+### Option B — Standalone `docker run` for MiniStack
+
+The Docker network is created by `docker compose up`. If you want to run MiniStack separately **before** the compose stack, create the network first:
+
+```bash
+cd ~/sparkyfitness
+
+# Create the network that compose will also use
+docker network create sparkyfitness-network
+
+# Start MiniStack standalone
+docker run -d \
+  --name ministack \
+  --network sparkyfitness-network \
+  -p 4566:4566 \
+  ministackorg/ministack
+
+# Then start the rest of the stack (skip the built-in ministack service)
+docker compose -f docker/docker-compose.aws.yml --env-file .env up -d \
+  sparkyfitness-db sparkyfitness-server sparkyfitness-frontend
+```
 
 ---
 

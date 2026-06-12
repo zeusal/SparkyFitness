@@ -34,6 +34,20 @@ output "frontend_url" {
   )
 }
 
+output "rds_endpoint" {
+  description = "RDS PostgreSQL hostname. Used as SPARKY_FITNESS_DB_HOST in your .env."
+  value = var.use_ministack ? "N/A (MiniStack mode — use Docker Compose postgres container)" : (
+    length(aws_db_instance.postgres) > 0
+      ? aws_db_instance.postgres[0].address
+      : "not provisioned"
+  )
+}
+
+output "rds_port" {
+  description = "RDS PostgreSQL port."
+  value       = var.use_ministack ? "5432 (Docker Compose)" : "5432"
+}
+
 output "ministack_endpoint" {
   description = "MiniStack endpoint in use (empty when targeting real AWS)."
   value       = var.use_ministack ? var.ministack_endpoint : "real AWS"

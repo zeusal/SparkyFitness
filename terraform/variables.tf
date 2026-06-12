@@ -94,6 +94,32 @@ variable "s3_backups_bucket" {
   default     = "sparkyfitness-backups"
 }
 
+# ── RDS ───────────────────────────────────────────────────────────────────────
+
+variable "rds_instance_class" {
+  description = "RDS instance type. db.t3.micro is the cheapest (~$13/mo Single-AZ). Only used when use_ministack = false."
+  type        = string
+  default     = "db.t3.micro"
+}
+
+variable "rds_storage_gb" {
+  description = "Allocated storage for the RDS instance in GB."
+  type        = number
+  default     = 20
+}
+
+variable "rds_multi_az" {
+  description = "Enable Multi-AZ for RDS (higher availability, doubles cost). Recommended for prod only."
+  type        = bool
+  default     = false
+}
+
+variable "rds_backup_retention_days" {
+  description = "Number of days to retain automated RDS backups (0 disables backups)."
+  type        = number
+  default     = 7
+}
+
 # ── SES ───────────────────────────────────────────────────────────────────────
 
 variable "ses_email_identity" {

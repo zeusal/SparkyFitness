@@ -49,18 +49,19 @@ MiniStack resources provisioned:
 
 ## Resources Created
 
-| Resource | MiniStack | Real AWS |
-|---|---|---|
-| S3 uploads bucket | ✓ | ✓ |
-| S3 backups bucket | ✓ | ✓ |
-| SES email identity | ✓ | ✓ |
-| Secrets Manager | ✓ | ✓ |
-| IAM role + profile | ✓ | ✓ |
-| Security group | ✓ | ✓ |
-| EC2 instance | ✗ | ✓ |
-| Elastic IP | ✗ | ✓ |
-| S3 lifecycle rules | ✗ | ✓ |
-| SES configuration set | ✗ | ✓ |
+| Resource | MiniStack | Real AWS | Est. cost/mo |
+|---|---|---|---|
+| S3 uploads bucket | ✓ | ✓ | ~$0.02/GB |
+| S3 backups bucket | ✓ | ✓ | ~$0.02/GB |
+| SES email identity | ✓ | ✓ | $0 (1k emails free) |
+| Secrets Manager | ✓ | ✓ | ~$0.40 |
+| IAM role + profile | ✓ | ✓ | free |
+| Security group | ✓ | ✓ | free |
+| RDS PostgreSQL | ✗ (Docker Compose) | ✓ | ~$13 (db.t3.micro) |
+| EC2 instance | ✗ | ✓ | $0–$7 (t2.micro free tier) |
+| Elastic IP | ✗ | ✓ | $0 (free while attached) |
+| S3 lifecycle rules | ✗ | ✓ | — |
+| SES configuration set | ✗ | ✓ | — |
 
 ## Destroy
 

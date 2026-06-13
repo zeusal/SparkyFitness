@@ -26,7 +26,7 @@ This guide deploys SparkyFitness on a single AWS EC2 instance using Docker Compo
 4. Storage: **20 GB gp3** (cheaper than gp2)
 5. Security Group — open these inbound ports:
    - `22` (SSH) — your IP only
-   - `3004` (frontend) — 0.0.0.0/0
+   - `8080` (frontend) — 0.0.0.0/0
    - `3010` (API, optional) — your IP only
    - `4566` (MiniStack) — your IP only (for testing)
 6. Create or reuse a key pair and download `.pem`
@@ -94,7 +94,7 @@ nano .env
 Edit `.env` — minimum required changes:
 
 ```env
-SPARKY_FITNESS_FRONTEND_URL=http://<EC2_PUBLIC_IP>:3004
+SPARKY_FITNESS_FRONTEND_URL=http://<EC2_PUBLIC_IP>:8080
 
 # Generate strong secrets:
 # openssl rand -hex 32
@@ -161,7 +161,7 @@ docker compose -f docker/docker-compose.aws.yml ps
 curl http://localhost:4566/_ministack/health
 
 # Check frontend
-curl -s -o /dev/null -w "%{http_code}" http://localhost:3004
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8080
 
 # View logs
 docker compose -f docker/docker-compose.aws.yml logs -f

@@ -69,15 +69,13 @@ variable "ec2_volume_size_gb" {
 }
 
 variable "allowed_ssh_cidr" {
-  description = "CIDR block allowed to SSH into the EC2 instance. Restrict to your IP for security."
+  description = "CIDR block allowed to SSH into the EC2 instance. Restrict to your IP for security (e.g. \"1.2.3.4/32\")."
   type        = string
-  default     = "0.0.0.0/0"
 }
 
 variable "allowed_admin_cidr" {
-  description = "CIDR block allowed to reach the backend API port (3010) and MiniStack port (4566)."
+  description = "CIDR block allowed to reach the backend API port (3010) and MiniStack port (4566). Restrict to your IP for security (e.g. \"1.2.3.4/32\")."
   type        = string
-  default     = "0.0.0.0/0"
 }
 
 # ── S3 ────────────────────────────────────────────────────────────────────────
@@ -173,7 +171,7 @@ variable "better_auth_secret" {
 }
 
 variable "frontend_url" {
-  description = "Public URL of the frontend (used for CORS). Set to the EC2 public IP/domain after provisioning."
+  description = "Public URL of the frontend (used for CORS). Set to the EC2 public IP/domain after provisioning (e.g. \"http://<EC2_IP>:8080\")."
   type        = string
-  default     = "http://localhost:3004"
+  default     = "http://localhost:8080"
 }

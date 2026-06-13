@@ -158,7 +158,7 @@ export const CheckInPhotos = ({ selectedDate }: CheckInPhotosProps) => {
         </p>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-3 gap-2 sm:gap-4">
           {PHOTO_TYPES.map(({ type, labelKey, defaultLabel }) => (
             <PhotoSlot
               key={type}

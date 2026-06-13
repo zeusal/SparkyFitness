@@ -25,6 +25,7 @@ import preferenceRoutes from './routes/preferenceRoutes.js';
 import nutrientDisplayPreferenceRoutes from './routes/nutrientDisplayPreferenceRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import measurementRoutes from './routes/measurementRoutes.js';
+import checkInPhotoRoutes from './routes/checkInPhotoRoutes.js';
 import goalRoutes from './routes/goalRoutes.js';
 import goalPresetRoutes from './routes/goalPresetRoutes.js';
 // @ts-expect-error TS1192
@@ -401,6 +402,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/user-preferences', preferenceRoutes);
 app.use('/api/preferences/nutrient-display', nutrientDisplayPreferenceRoutes);
 app.use('/api/measurements', measurementRoutes);
+app.use('/api/measurements/check-in-photos', checkInPhotoRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/user-goals', goalRoutes);
 app.use('/api/goal-presets', goalPresetRoutes);

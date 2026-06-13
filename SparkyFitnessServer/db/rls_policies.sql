@@ -24,6 +24,7 @@ BEGIN
   FOR table_name IN SELECT unnest(ARRAY[
     'ai_service_settings',
     'check_in_measurements',
+    'check_in_photos',
     'custom_categories',
     'custom_measurements',
     'exercise_entries',

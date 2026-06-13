@@ -1332,7 +1332,21 @@
     "measurementDeletedSuccessfully": "Medida eliminada correctamente",
     "failedToDeleteMeasurement": "Error al eliminar la medida",
     "failedToLoadRecentMeasurements": "Error al cargar las medidas recientes",
-    "enterCustomCategory": "Introduce {{categoryName}}"
+    "enterCustomCategory": "Introduce {{categoryName}}",
+    "photos": {
+      "title": "Fotos de progreso",
+      "subtitle": "Sube fotos de frente, espalda y lateral para ver tu evolución física con el tiempo.",
+      "front": "Frente",
+      "back": "Espalda",
+      "side": "Lateral",
+      "tapToUpload": "Toca para subir",
+      "upload": "Subir",
+      "replace": "Reemplazar",
+      "uploadSuccess": "Foto guardada",
+      "uploadError": "Error al subir la foto",
+      "deleteSuccess": "Foto eliminada",
+      "deleteError": "Error al eliminar la foto"
+    }
   },
   "sleepTimelineEditor": {
     "sleepTimeline": "Línea de tiempo del sueño",

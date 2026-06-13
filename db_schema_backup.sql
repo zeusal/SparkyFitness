@@ -1020,6 +1020,23 @@ CREATE TABLE public.check_in_measurements (
 
 
 --
+-- Name: check_in_photos; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.check_in_photos (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    check_in_measurement_id uuid,
+    entry_date date NOT NULL,
+    photo_type character varying(5) NOT NULL,
+    file_path text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT check_in_photos_type_check CHECK (((photo_type)::text = ANY (ARRAY[('front'::character varying)::text, ('back'::character varying)::text, ('side'::character varying)::text])))
+);
+
+
+--
 -- Name: custom_categories; Type: TABLE; Schema: public; Owner: -
 --
 

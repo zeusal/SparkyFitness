@@ -22,12 +22,14 @@ mkdir -p "$APP_DIR/postgresql" "$APP_DIR/backup" "$APP_DIR/uploads"
 cd "$APP_DIR"
 
 # --- Decide public URL ------------------------------------------------------
+# If a domain is set -> serve it over HTTPS. Otherwise fall back to the Lightsail
+# static IP that Terraform injects here (NOT a runtime IP lookup, which at first
+# boot can return the temporary IP before the static IP is attached).
 DOMAIN="${domain}"
 if [ -n "$DOMAIN" ]; then
   FRONTEND_URL="https://$DOMAIN"
 else
-  PUBLIC_IP="$(curl -fsS https://checkip.amazonaws.com || echo "")"
-  FRONTEND_URL="http://$PUBLIC_IP"
+  FRONTEND_URL="http://${static_ip}"
 fi
 echo "[sparky] frontend url: $FRONTEND_URL"
 

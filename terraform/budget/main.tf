@@ -8,6 +8,7 @@ locals {
 
   user_data = templatefile("${path.module}/user-data.sh.tftpl", {
     domain             = var.domain
+    static_ip          = aws_lightsail_static_ip.app.ip_address
     db_name            = var.db_name
     db_user            = var.db_user
     db_password        = var.db_password
@@ -50,6 +51,16 @@ resource "aws_lightsail_instance" "app" {
       snapshot_time = var.snapshot_time
       status        = "Enabled"
     }
+  }
+
+  # user_data only runs on first boot (cloud-init). Changing it here would force
+  # Lightsail to REPLACE the instance — destroying the database. Ignore it so a
+  # later `apply` never recreates a live box; runtime config is changed in-place
+  # on the instance (/opt/sparkyfitness/.env + Caddyfile). A fresh deploy (empty
+  # state) still gets the latest user_data because ignore_changes only affects
+  # updates, not creation.
+  lifecycle {
+    ignore_changes = [user_data]
   }
 
   tags = {

@@ -1,0 +1,116 @@
+# SparkyFitness — budget single-instance stack (Lightsail).
+# Frontend + backend + PostgreSQL + Caddy (HTTPS) + Watchtower, all on one box.
+# Garmin, MCP, MiniStack, SES and OIDC are intentionally left out.
+#
+# The app images default to your own GitHub Container Registry builds. The exact
+# refs are injected via .env (SPARKY_FRONTEND_IMAGE / SPARKY_SERVER_IMAGE) from
+# Terraform; the :- fallbacks below are only used if those vars are missing.
+services:
+  sparkyfitness-db:
+    image: postgres:18.3-alpine
+    container_name: sparkyfitness-db
+    restart: always
+    environment:
+      POSTGRES_DB: ${SPARKY_FITNESS_DB_NAME:?Variable is required and must be set}
+      POSTGRES_USER: ${SPARKY_FITNESS_DB_USER:?Variable is required and must be set}
+      POSTGRES_PASSWORD: ${SPARKY_FITNESS_DB_PASSWORD:?Variable is required and must be set}
+      PUID: 1000
+      GUID: 1000
+    volumes:
+      - ./postgresql:/var/lib/postgresql
+    networks:
+      - sparkyfitness-network
+
+  sparkyfitness-server:
+    image: ${SPARKY_SERVER_IMAGE:-ghcr.io/zeusal/sparkyfitness-server:latest}
+    container_name: sparkyfitness-server
+    restart: always
+    # Watchtower watches ONLY containers carrying this label.
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    environment:
+      SPARKY_FITNESS_LOG_LEVEL: ${SPARKY_FITNESS_LOG_LEVEL:-ERROR}
+      SPARKY_FITNESS_DB_USER: ${SPARKY_FITNESS_DB_USER:-sparky}
+      SPARKY_FITNESS_DB_HOST: sparkyfitness-db
+      SPARKY_FITNESS_DB_NAME: ${SPARKY_FITNESS_DB_NAME}
+      SPARKY_FITNESS_DB_PASSWORD: ${SPARKY_FITNESS_DB_PASSWORD:?Variable is required and must be set}
+      SPARKY_FITNESS_APP_DB_USER: ${SPARKY_FITNESS_APP_DB_USER:-sparkyapp}
+      SPARKY_FITNESS_APP_DB_PASSWORD: ${SPARKY_FITNESS_APP_DB_PASSWORD:?Variable is required and must be set}
+      SPARKY_FITNESS_DB_PORT: 5432
+      SPARKY_FITNESS_API_ENCRYPTION_KEY: ${SPARKY_FITNESS_API_ENCRYPTION_KEY:?Variable is required and must be set}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Variable is required and must be set}
+      SPARKY_FITNESS_FRONTEND_URL: ${SPARKY_FITNESS_FRONTEND_URL}
+      SPARKY_FITNESS_DISABLE_SIGNUP: ${SPARKY_FITNESS_DISABLE_SIGNUP:-false}
+      SPARKY_FITNESS_ADMIN_EMAIL: ${SPARKY_FITNESS_ADMIN_EMAIL:-}
+      SPARKY_FITNESS_FORCE_EMAIL_LOGIN: "true"
+      ALLOW_PRIVATE_NETWORK_CORS: "false"
+      PUID: 1000
+      GUID: 1000
+    networks:
+      - sparkyfitness-network
+    depends_on:
+      - sparkyfitness-db
+    volumes:
+      - ./backup:/app/SparkyFitnessServer/backup
+      - ./uploads:/app/SparkyFitnessServer/uploads
+
+  sparkyfitness-frontend:
+    image: ${SPARKY_FRONTEND_IMAGE:-ghcr.io/zeusal/sparkyfitness-frontend:latest}
+    container_name: sparkyfitness-frontend
+    restart: always
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    environment:
+      SPARKY_FITNESS_FRONTEND_URL: ${SPARKY_FITNESS_FRONTEND_URL}
+      SPARKY_FITNESS_SERVER_HOST: sparkyfitness-server
+      SPARKY_FITNESS_SERVER_PORT: 3010
+      PUID: 1000
+      GUID: 1000
+    networks:
+      - sparkyfitness-network
+    depends_on:
+      - sparkyfitness-server
+
+  # Reverse proxy: terminates TLS and forwards everything to the frontend,
+  # which in turn proxies /api, /uploads and /health-data to the backend.
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - sparkyfitness-network
+    depends_on:
+      - sparkyfitness-frontend
+
+  # Auto-updates: every hour Watchtower checks the registry and, when a new
+  # image is published for a labelled container, pulls it and recreates the
+  # container (old images are cleaned up). Only the two labelled app services
+  # are watched — Postgres and Caddy are left untouched on purpose.
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # ghcr credentials (written by first-boot login). Empty {} if images are public.
+      - /root/.docker/config.json:/config.json:ro
+    environment:
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_POLL_INTERVAL: "3600"
+      TZ: "Europe/Madrid"
+
+networks:
+  sparkyfitness-network:
+    driver: bridge
+
+volumes:
+  caddy-data:
+  caddy-config:

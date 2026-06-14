@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useEffect, useState, useMemo, useId } from 'react';
+import { useEffect, useState, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { Flame } from 'lucide-react';
@@ -66,7 +66,7 @@ const FastingTimerRing: React.FC<FastingTimerRingProps> = ({
     };
   };
 
-  const zone = useMemo(() => getZone(hoursFasted), [hoursFasted]);
+  const zone = getZone(hoursFasted);
 
   const radius = size / 2 - 14;
   const circumference = 2 * Math.PI * radius;

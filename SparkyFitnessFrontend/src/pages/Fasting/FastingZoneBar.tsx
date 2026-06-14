@@ -83,13 +83,14 @@ const FastingZoneBar: React.FC<FastingZoneBarProps> = ({ hoursFasted }) => {
               : 'opacity-20';
           if (isActive) opacity = 'opacity-100 ring-2 ring-white ring-inset';
 
+          const fallback = ZONE_FALLBACK[zone.key];
           const zoneName = t(
             `fasting.zones.${zone.key}`,
-            ZONE_FALLBACK[zone.key].name
+            fallback?.name ?? zone.key
           );
           const zoneDesc = t(
             `fasting.zoneDesc.${zone.key}`,
-            ZONE_FALLBACK[zone.key].desc
+            fallback?.desc ?? ''
           );
           return (
             <TooltipProvider key={zone.key}>

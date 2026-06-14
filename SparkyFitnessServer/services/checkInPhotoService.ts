@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
 import { fileURLToPath } from 'url';
+import { localDateToDay } from '@workspace/shared';
 import type {
   CheckInPhotoResponse,
   PhotoType,
@@ -44,7 +45,7 @@ export const getPhotosByDate = async (
       ...r,
       entry_date:
         r.entry_date instanceof Date
-          ? r.entry_date.toISOString().split('T')[0]
+          ? localDateToDay(r.entry_date)
           : String(r.entry_date),
       created_at:
         r.created_at instanceof Date
@@ -132,7 +133,7 @@ export const upsertPhoto = async (
       ...r,
       entry_date:
         r.entry_date instanceof Date
-          ? r.entry_date.toISOString().split('T')[0]
+          ? localDateToDay(r.entry_date)
           : String(r.entry_date),
       created_at:
         r.created_at instanceof Date

@@ -1,8 +1,9 @@
 import express from 'express';
-import path from 'path';
 import { authenticate } from '../middleware/authMiddleware.js';
 import checkPermissionMiddleware from '../middleware/checkPermissionMiddleware.js';
-import checkInPhotoUpload from '../middleware/checkInPhotoUpload.js';
+import checkInPhotoUpload, {
+  isAllowedImageBuffer,
+} from '../middleware/checkInPhotoUpload.js';
 import checkInPhotoService from '../services/checkInPhotoService.js';
 import { log } from '../config/logging.js';
 import {
@@ -53,6 +54,62 @@ router.get(
     } catch (err) {
       log('error', 'Failed to fetch check-in photos', err);
       res.status(500).json({ error: 'Failed to fetch check-in photos' });
+    }
+  }
+);
+
+/**
+ * @swagger
+ * /measurements/check-in-photos/file/{id}:
+ *   get:
+ *     summary: Serve a progress photo image (authenticated, owner/family only)
+ *     tags: [Wellness & Metrics]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: The image file.
+ *         content:
+ *           image/*:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       404:
+ *         description: Photo not found or not accessible.
+ */
+router.get(
+  '/file/:id',
+  authenticate,
+  checkPermissionMiddleware('checkin'),
+  async (req, res) => {
+    const parsed = CheckInPhotoIdParamSchema.safeParse(req.params);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues[0]?.message });
+      return;
+    }
+    try {
+      const absolutePath = await checkInPhotoService.getPhotoFileById(
+        req.userId,
+        parsed.data.id
+      );
+      if (!absolutePath) {
+        res.status(404).json({ error: 'Photo not found' });
+        return;
+      }
+      // Stored uploads are user-supplied; stop the browser from MIME-sniffing
+      // the response into an executable type.
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.sendFile(absolutePath);
+    } catch (err) {
+      log('error', 'Failed to serve check-in photo', err);
+      res.status(500).json({ error: 'Failed to serve check-in photo' });
     }
   }
 );
@@ -117,20 +174,21 @@ router.post(
       date: string;
       type: 'front' | 'back' | 'side';
     };
-    // Store a relative path so records are portable across deployments
-    const relativePath = path.join(
-      'uploads',
-      'check-in',
-      req.userId,
-      date,
-      path.basename(req.file.path)
-    );
+    // The multer fileFilter only trusts the client-supplied filename/mime type;
+    // verify the real bytes before anything is written to disk.
+    if (!isAllowedImageBuffer(req.file.buffer)) {
+      res
+        .status(400)
+        .json({ error: 'Uploaded file is not a valid image (jpeg, png, gif)' });
+      return;
+    }
     try {
       const photo = await checkInPhotoService.upsertPhoto(
         req.userId,
         date,
         type,
-        relativePath
+        req.file.originalname,
+        req.file.buffer
       );
       res.json(photo);
     } catch (err) {

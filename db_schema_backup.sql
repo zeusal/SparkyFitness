@@ -4146,6 +4146,22 @@ ALTER TABLE ONLY public.check_in_measurements
 
 
 --
+-- Name: check_in_photos check_in_photos_check_in_measurement_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.check_in_photos
+    ADD CONSTRAINT check_in_photos_check_in_measurement_id_fkey FOREIGN KEY (check_in_measurement_id) REFERENCES public.check_in_measurements(id) ON DELETE SET NULL;
+
+
+--
+-- Name: check_in_photos check_in_photos_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.check_in_photos
+    ADD CONSTRAINT check_in_photos_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
 -- Name: custom_categories custom_categories_created_by_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5036,6 +5052,12 @@ ALTER TABLE public.api_key ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.check_in_measurements ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: check_in_photos; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.check_in_photos ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: custom_categories; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -5203,6 +5225,13 @@ ALTER TABLE public.meals ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY modify_policy ON public.check_in_measurements USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+
+
+--
+-- Name: check_in_photos modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.check_in_photos USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
 
 
 --
@@ -5638,6 +5667,13 @@ CREATE POLICY select_exercise_preset_entry_linked_policy ON public.exercise_entr
 --
 
 CREATE POLICY select_policy ON public.check_in_measurements FOR SELECT USING (public.has_diary_access(user_id));
+
+
+--
+-- Name: check_in_photos select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.check_in_photos FOR SELECT USING (public.has_diary_access(user_id));
 
 
 --

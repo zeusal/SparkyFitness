@@ -1,7 +1,18 @@
-import { vi, beforeEach, describe, expect, it } from 'vitest';
+import {
+  vi,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+} from 'vitest';
 // @ts-expect-error TS(7016): Could not find a declaration file for module 'supertest'
 import request from 'supertest';
 import express from 'express';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import checkInPhotoRoutes from '../routes/checkInPhotoRoutes.js';
 import checkInPhotoService from '../services/checkInPhotoService.js';
 import errorHandler from '../middleware/errorHandler.js';
@@ -16,17 +27,31 @@ vi.mock('../middleware/authMiddleware', () => ({
 vi.mock('../middleware/checkPermissionMiddleware', () => ({
   default: vi.fn(() => (_req: any, _res: any, next: any) => next()),
 }));
-vi.mock('../middleware/checkInPhotoUpload', () => ({
-  default: {
-    single: vi.fn(() => (req: any, _res: any, next: any) => {
-      req.file = {
-        path: '/uploads/check-in/test-user-id/2026-06-14/front.jpg',
-        originalname: 'front.jpg',
-      };
-      next();
-    }),
-  },
-}));
+// Keep the real isAllowedImageBuffer so the magic-byte validation is exercised;
+// only stub the multer middleware and the disk-writing persist helper. The
+// fake single() lets a test drive the validated bytes via an x-test-bytes
+// header (hex), defaulting to a valid JPEG signature.
+vi.mock('../middleware/checkInPhotoUpload', async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import('../middleware/checkInPhotoUpload.js')
+    >();
+  return {
+    ...actual,
+    default: {
+      single: vi.fn(() => (req: any, _res: any, next: any) => {
+        const hex = req.headers['x-test-bytes'] as string | undefined;
+        req.file = {
+          originalname: 'front.jpg',
+          buffer: hex
+            ? Buffer.from(hex, 'hex')
+            : Buffer.from([0xff, 0xd8, 0xff, 0x00]),
+        };
+        next();
+      }),
+    },
+  };
+});
 
 const app = express();
 app.use(express.json());
@@ -73,6 +98,52 @@ describe('GET /:date', () => {
   });
 });
 
+describe('GET /file/:id', () => {
+  const PHOTO_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+  let tempFile: string;
+
+  beforeAll(() => {
+    tempFile = path.join(os.tmpdir(), `checkin-test-${Date.now()}.jpg`);
+    fs.writeFileSync(tempFile, Buffer.from([0xff, 0xd8, 0xff, 0x00, 0x42]));
+  });
+  afterAll(() => {
+    if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+  });
+  beforeEach(() => vi.clearAllMocks());
+
+  it('serves the image with a nosniff header when accessible', async () => {
+    // @ts-expect-error mock
+    checkInPhotoService.getPhotoFileById.mockResolvedValue(tempFile);
+    const res = await request(app).get(`/file/${PHOTO_ID}`);
+    expect(res.status).toBe(200);
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+    expect(checkInPhotoService.getPhotoFileById).toHaveBeenCalledWith(
+      'test-user-id',
+      PHOTO_ID
+    );
+  });
+
+  it('returns 404 when the photo is not found or not accessible', async () => {
+    // @ts-expect-error mock
+    checkInPhotoService.getPhotoFileById.mockResolvedValue(null);
+    const res = await request(app).get(`/file/${PHOTO_ID}`);
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 400 for a non-UUID id', async () => {
+    const res = await request(app).get('/file/not-a-uuid');
+    expect(res.status).toBe(400);
+    expect(checkInPhotoService.getPhotoFileById).not.toHaveBeenCalled();
+  });
+
+  it('returns 500 when the service throws', async () => {
+    // @ts-expect-error mock
+    checkInPhotoService.getPhotoFileById.mockRejectedValue(new Error('boom'));
+    const res = await request(app).get(`/file/${PHOTO_ID}`);
+    expect(res.status).toBe(500);
+  });
+});
+
 describe('POST /:date/:type', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -86,8 +157,17 @@ describe('POST /:date/:type', () => {
       'test-user-id',
       '2026-06-14',
       'front',
-      expect.stringContaining('front.jpg')
+      'front.jpg',
+      expect.any(Buffer)
     );
+  });
+
+  it('returns 400 when the file content is not a valid image', async () => {
+    const res = await request(app)
+      .post('/2026-06-14/front')
+      .set('x-test-bytes', '0001020304');
+    expect(res.status).toBe(400);
+    expect(checkInPhotoService.upsertPhoto).not.toHaveBeenCalled();
   });
 
   it('returns 400 for an invalid photo type', async () => {

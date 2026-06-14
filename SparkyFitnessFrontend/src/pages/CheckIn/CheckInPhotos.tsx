@@ -43,7 +43,12 @@ const PhotoSlot = ({
     [type, onUpload]
   );
 
-  const photoUrl = photo ? `/api/${photo.file_path.replace(/\\/g, '/')}` : null;
+  // Served through the authenticated, ownership-checked route (the session
+  // cookie travels with the same-origin <img> request), not the public static
+  // mount — progress photos are private.
+  const photoUrl = photo
+    ? `/api/measurements/check-in-photos/file/${photo.id}`
+    : null;
 
   return (
     <div className="flex flex-col items-center gap-2">

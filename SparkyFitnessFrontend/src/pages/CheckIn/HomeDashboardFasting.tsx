@@ -140,7 +140,8 @@ const HomeDashboardFasting = () => {
                 }}
                 className="w-full gap-2 font-semibold"
               >
-                <Play className="w-4 h-4" /> Start Fast
+                <Play className="w-4 h-4" />{' '}
+                {t('fasting.startFast', 'Start Fast')}
               </Button>
             </div>
           )}
@@ -158,7 +159,8 @@ const HomeDashboardFasting = () => {
               onClick={() => setShowEndDialog(true)}
               className="w-full shadow-md hover:shadow-lg transition-all"
             >
-              <Square className="w-4 h-4 mr-2 fill-current" /> End Fast
+              <Square className="w-4 h-4 mr-2 fill-current" />{' '}
+              {t('fasting.endFast', 'End Fast')}
             </Button>
           </>
         )}
@@ -179,7 +181,13 @@ const HomeDashboardFasting = () => {
                 {t('fasting.avgDurationLabel', 'Avg Duration')}
               </span>
               <span className="text-xl font-bold">
-                {Math.round(parseInt(stats.average_duration_minutes) / 60)}h
+                {(() => {
+                  const avgMinutes = Number(stats.average_duration_minutes);
+                  return Number.isFinite(avgMinutes)
+                    ? Math.round(avgMinutes / 60)
+                    : 0;
+                })()}
+                h
               </span>
             </div>
           </div>
@@ -202,7 +210,7 @@ const HomeDashboardFasting = () => {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Start Time</Label>
+              <Label>{t('fasting.startTime', 'Start Time')}</Label>
               <Input
                 type="datetime-local"
                 value={startLocal}
@@ -210,7 +218,7 @@ const HomeDashboardFasting = () => {
               />
             </div>
             <div className="space-y-2">
-              <Label>Fasting Protocol</Label>
+              <Label>{t('fasting.fastingProtocol', 'Fasting Protocol')}</Label>
               <Select
                 value={selectedPresetId}
                 onValueChange={setSelectedPresetId}
@@ -236,9 +244,11 @@ const HomeDashboardFasting = () => {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowStartDialog(false)}>
-              Cancel
+              {t('common.cancel', 'Cancel')}
             </Button>
-            <Button onClick={handleStartFast}>Start Fasting</Button>
+            <Button onClick={handleStartFast}>
+              {t('fasting.startFasting', 'Start Fasting')}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -31,8 +31,29 @@
     "iron": "Iron"
   },
   "calculationSettings": {
+    "title": "Calculation Settings",
+    "description": "Manage BMR, Body Fat calculation, and unit preferences.",
     "showNetCarbs": "Show net carbs (carbs minus fiber)",
     "showNetCarbsHint": "When enabled, carbohydrate summaries display total carbs minus dietary fiber."
+  },
+  "allergenSettings": {
+    "title": "Allergen Preferences",
+    "intro": "Add the allergens you want to be warned about. When a food contains one of these, a warning badge will appear on food cards and search results.",
+    "commonAllergens": "Common Allergens",
+    "customAllergen": "Custom allergen",
+    "customPlaceholder": "e.g., lupin, molluscs…",
+    "add": "Add",
+    "syncTitle": "Sync from OpenFoodFacts",
+    "syncDescription": "Fetch allergen data for your saved OpenFoodFacts foods. Only needs to be done once.",
+    "syncing": "Syncing…",
+    "syncButton": "Sync Allergens",
+    "trackedTitle": "Your Tracked Allergens",
+    "noneTracked": "No allergens tracked yet. Add some above to get warnings on food cards.",
+    "allergen": "Allergen",
+    "actions": "Actions",
+    "remove": "Remove",
+    "alreadyAddedTitle": "Already added",
+    "alreadyAddedDescription": "{{name}} is already in your list."
   },
   "aboutDialog": {
     "title": "About SparkyFitness",
@@ -522,6 +543,10 @@
     "nutrientDisplay": {
       "title": "Nutrient Display",
       "description": "Choose which nutrients to display in food and meal views"
+    },
+    "allergenPreferences": {
+      "title": "Allergen Preferences",
+      "description": "Track allergens you want to be warned about in foods"
     },
     "calculationSettings": {
       "title": "Calculation Settings",
@@ -1064,7 +1089,45 @@
     "totalFastsLabel": "Total Fasts",
     "avgDurationLabel": "Avg Duration",
     "startNewFastTitle": "Start a New Fast",
-    "startNewFastDesc": "Select a protocol to begin your fast."
+    "startNewFastDesc": "Select a protocol to begin your fast.",
+    "startFast": "Start Fast",
+    "startFasting": "Start Fasting",
+    "endFast": "End Fast",
+    "startTime": "Start Time",
+    "fastingProtocol": "Fasting Protocol",
+    "metabolicState": "Metabolic State",
+    "goalReached": "Goal Reached",
+    "zones": {
+      "anabolic": "Anabolic",
+      "catabolic": "Catabolic",
+      "fatBurning": "Fat Burning",
+      "ketosis": "Ketosis",
+      "deepKetosis": "Deep Ketosis"
+    },
+    "zoneDesc": {
+      "anabolic": "Rising blood sugar.",
+      "catabolic": "Blood sugar falls.",
+      "fatBurning": "Ramping up fat burn.",
+      "ketosis": "Running on ketones.",
+      "deepKetosis": "Autophagy peaks."
+    }
+  },
+  "mealTypeManager": {
+    "title": "Meal Categories",
+    "add": "Add Category",
+    "addTitle": "Add Meal Category",
+    "editTitle": "Edit Meals",
+    "nameLabel": "Name",
+    "sortOrderLabel": "Sort Order"
+  },
+  "familyAccessManager": {
+    "noAccessTitle": "No family access granted yet",
+    "noAccessDescription": "Add family members to let them help manage your fitness data",
+    "addFamilyAccess": "Add Family Access",
+    "editFamilyAccess": "Edit Family Access"
+  },
+  "customNutrientsManagement": {
+    "title": "Custom Nutrients Management"
   },
   "miniNutritionTrends": {
     "noTrendData": "No trend data available for the past 14 days"
@@ -1676,6 +1739,12 @@
     "hips": "Hips",
     "bodyFatPercentage": "Body Fat %",
     "dailySteps": "Daily Steps",
+    "netEnergyBalance": "Net Balance",
+    "totalEaten": "Total Eaten",
+    "totalGoal": "Total Goal",
+    "avgDailyVariance": "Avg Daily Variance",
+    "avgVarianceDescription": "Average deviation from goal per day",
+    "cumulativeBalanceTitle": "Cumulative Balance",
     "fasting": {
       "insightsTab": "Fasting",
       "totalFasts": "Total Fasts",
@@ -1685,6 +1754,7 @@
       "dailyDuration": "Daily Fasting Duration",
       "hours": "Hours",
       "zoneDistribution": "Fasting Zones",
+      "consistencyGrid": "Fasting Heatmap (Last 90 Days)",
       "history": "Fasting History",
       "startDate": "Start Date",
       "endDate": "End Date",

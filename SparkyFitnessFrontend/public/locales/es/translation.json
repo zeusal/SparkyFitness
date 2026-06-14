@@ -31,8 +31,29 @@
     "iron": "Hierro"
   },
   "calculationSettings": {
+    "title": "Ajustes de cálculo",
+    "description": "Gestiona los ajustes de TMB, el cálculo de grasa corporal y las preferencias de unidades.",
     "showNetCarbs": "Mostrar carbohidratos netos (carbohidratos menos fibra)",
     "showNetCarbsHint": "Cuando está activado, los resúmenes de carbohidratos muestran los carbohidratos totales menos la fibra dietética."
+  },
+  "allergenSettings": {
+    "title": "Preferencias de alérgenos",
+    "intro": "Añade los alérgenos sobre los que quieres recibir avisos. Cuando un alimento contenga uno de ellos, aparecerá una insignia de advertencia en las tarjetas de alimentos y en los resultados de búsqueda.",
+    "commonAllergens": "Alérgenos comunes",
+    "customAllergen": "Alérgeno personalizado",
+    "customPlaceholder": "p. ej., altramuz, moluscos…",
+    "add": "Añadir",
+    "syncTitle": "Sincronizar desde OpenFoodFacts",
+    "syncDescription": "Obtén datos de alérgenos para tus alimentos guardados de OpenFoodFacts. Solo es necesario hacerlo una vez.",
+    "syncing": "Sincronizando…",
+    "syncButton": "Sincronizar alérgenos",
+    "trackedTitle": "Tus alérgenos registrados",
+    "noneTracked": "Aún no hay alérgenos registrados. Añade algunos arriba para recibir avisos en las tarjetas de alimentos.",
+    "allergen": "Alérgeno",
+    "actions": "Acciones",
+    "remove": "Eliminar",
+    "alreadyAddedTitle": "Ya añadido",
+    "alreadyAddedDescription": "{{name}} ya está en tu lista."
   },
   "aboutDialog": {
     "title": "Sobre SparkyFitness",
@@ -522,6 +543,10 @@
     "nutrientDisplay": {
       "title": "Visualización de nutrientes",
       "description": "Elige qué nutrientes mostrar en las vistas de comida y comidas"
+    },
+    "allergenPreferences": {
+      "title": "Preferencias de alérgenos",
+      "description": "Registra los alérgenos sobre los que quieres recibir avisos en los alimentos"
     },
     "calculationSettings": {
       "title": "Ajustes de cálculo",
@@ -1280,7 +1305,45 @@
     "totalFastsLabel": "Total de ayunos",
     "avgDurationLabel": "Duración promedio",
     "startNewFastTitle": "Iniciar un nuevo ayuno",
-    "startNewFastDesc": "Selecciona un protocolo para comenzar tu ayuno."
+    "startNewFastDesc": "Selecciona un protocolo para comenzar tu ayuno.",
+    "startFast": "Iniciar ayuno",
+    "startFasting": "Comenzar ayuno",
+    "endFast": "Finalizar ayuno",
+    "startTime": "Hora de inicio",
+    "fastingProtocol": "Protocolo de ayuno",
+    "metabolicState": "Estado metabólico",
+    "goalReached": "Objetivo alcanzado",
+    "zones": {
+      "anabolic": "Anabólica",
+      "catabolic": "Catabólica",
+      "fatBurning": "Quema de grasa",
+      "ketosis": "Cetosis",
+      "deepKetosis": "Cetosis profunda"
+    },
+    "zoneDesc": {
+      "anabolic": "Sube el azúcar en sangre.",
+      "catabolic": "Baja el azúcar en sangre.",
+      "fatBurning": "Aumenta la quema de grasa.",
+      "ketosis": "Funcionando con cetonas.",
+      "deepKetosis": "La autofagia alcanza su punto máximo."
+    }
+  },
+  "mealTypeManager": {
+    "title": "Categorías de comida",
+    "add": "Añadir categoría",
+    "addTitle": "Añadir categoría de comida",
+    "editTitle": "Editar comidas",
+    "nameLabel": "Nombre",
+    "sortOrderLabel": "Orden de clasificación"
+  },
+  "familyAccessManager": {
+    "noAccessTitle": "Aún no se ha concedido acceso a la familia",
+    "noAccessDescription": "Añade miembros de la familia para que te ayuden a gestionar tus datos de fitness",
+    "addFamilyAccess": "Añadir acceso de familia",
+    "editFamilyAccess": "Editar acceso de familia"
+  },
+  "customNutrientsManagement": {
+    "title": "Gestión de nutrientes personalizados"
   },
   "checkIn": {
     "howAreYouFeelingToday": "¿Cómo te sientes hoy?",
@@ -1671,6 +1734,12 @@
     "hips": "Caderas",
     "bodyFatPercentage": "Grasa corporal %",
     "dailySteps": "Pasos diarios",
+    "netEnergyBalance": "Balance neto",
+    "totalEaten": "Total ingerido",
+    "totalGoal": "Objetivo total",
+    "avgDailyVariance": "Variación diaria media",
+    "avgVarianceDescription": "Desviación media respecto al objetivo por día",
+    "cumulativeBalanceTitle": "Balance acumulado",
     "fasting": {
       "insightsTab": "Ayuno",
       "totalFasts": "Total de ayunos",
@@ -1680,6 +1749,7 @@
       "dailyDuration": "Duración diaria de ayuno",
       "hours": "Horas",
       "zoneDistribution": "Zonas de ayuno",
+      "consistencyGrid": "Mapa de calor de ayuno (últimos 90 días)",
       "history": "Historial de ayunos",
       "startDate": "Fecha de inicio",
       "endDate": "Fecha de fin",

@@ -2434,7 +2434,20 @@
     "calciumLabel": "Calcium (mg)",
     "ironLabel": "Iron (mg)",
     "cancelButton": "Cancel",
-    "saveFoodButton": "Save Food"
+    "saveFoodButton": "Save Food",
+    "editFoodTitle": "Edit Food",
+    "addCustomFoodTitle": "Add Custom Food",
+    "unitVariantsTitle": "Unit Variants",
+    "addUnitButton": "Add Unit",
+    "unitVariantsDescription": "Add different unit measurements for this food with specific nutrition values for each unit.",
+    "savingButton": "Saving...",
+    "updateFoodButton": "Update Food",
+    "addFoodButton": "Add Food",
+    "syncConfirmTitle": "Sync Past Entries?",
+    "syncConfirmDescription": "Do you want to update all your past diary entries for this food with the new nutritional information?",
+    "allergensLabel": "Allergens",
+    "customAllergenPlaceholder": "Custom allergen…",
+    "addAllergenButton": "Add"
   },
   "customMeasurements": {
     "title": "Custom Measurements - {{date}}",

@@ -2393,7 +2393,20 @@
     "calciumLabel": "Calcio (mg)",
     "ironLabel": "Hierro (mg)",
     "cancelButton": "Cancelar",
-    "saveFoodButton": "Guardar alimento"
+    "saveFoodButton": "Guardar alimento",
+    "editFoodTitle": "Editar alimento",
+    "addCustomFoodTitle": "Añadir alimento personalizado",
+    "unitVariantsTitle": "Variantes de unidad",
+    "addUnitButton": "Añadir unidad",
+    "unitVariantsDescription": "Añade diferentes medidas de unidad para este alimento con valores nutricionales específicos para cada unidad.",
+    "savingButton": "Guardando...",
+    "updateFoodButton": "Actualizar alimento",
+    "addFoodButton": "Añadir alimento",
+    "syncConfirmTitle": "¿Sincronizar entradas anteriores?",
+    "syncConfirmDescription": "¿Quieres actualizar todas tus entradas anteriores del diario para este alimento con la nueva información nutricional?",
+    "allergensLabel": "Alérgenos",
+    "customAllergenPlaceholder": "Alérgeno personalizado…",
+    "addAllergenButton": "Añadir"
   },
   "customMeasurements": {
     "title": "Mediciones personalizadas - {{date}}",

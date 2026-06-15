@@ -60,6 +60,7 @@ import AppSettingsScreen from './src/screens/AppSettingsScreen';
 import AboutScreen from './src/screens/AboutScreen';
 import WhatsNewScreen from './src/screens/WhatsNewScreen';
 import MeasurementsAddScreen from './src/screens/MeasurementsAddScreen';
+import CheckInScreen from './src/screens/CheckInScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import ReauthModal from './src/components/ReauthModal';
 import ServerConfigModal from './src/components/ServerConfigModal';
@@ -159,6 +160,7 @@ const SafeActivityDetail = withErrorBoundary(ActivityDetailScreen, 'ActivityDeta
 const SafeLogs = withErrorBoundary(LogScreen, 'Logs', { canGoBack: true });
 const SafeSync = withErrorBoundary(SyncScreen, 'Sync', { canGoBack: true });
 const SafeMeasurementsAdd = withErrorBoundary(MeasurementsAddScreen, 'MeasurementsAdd', { canGoBack: true });
+const SafeCheckIn = withErrorBoundary(CheckInScreen, 'CheckIn', { canGoBack: true });
 const SafeCalorieSettings = withErrorBoundary(CalorieSettingsScreen, 'CalorieSettings', { canGoBack: true });
 const SafeFoodSettings = withErrorBoundary(FoodSettingsScreen, 'FoodSettings', { canGoBack: true });
 const SafeServerSettings = withErrorBoundary(ServerSettingsScreen, 'ServerSettings', { canGoBack: true });
@@ -359,6 +361,11 @@ function AppContent() {
   const handleAddMeasurements = useCallback(() => {
     const date = getActiveDiaryDate();
     navigateFromSheet('MeasurementsAdd', { date });
+  }, [getActiveDiaryDate, navigateFromSheet]);
+
+  const handleCheckIn = useCallback(() => {
+    const date = getActiveDiaryDate();
+    navigateFromSheet('CheckIn', { date });
   }, [getActiveDiaryDate, navigateFromSheet]);
 
   const handleSyncHealthData = useCallback(async () => {
@@ -953,6 +960,16 @@ function AppContent() {
             }}
           />
           <Stack.Screen
+            name="CheckIn"
+            component={SafeCheckIn}
+            options={{
+              headerShown: false,
+              presentation: 'modal',
+              gestureEnabled: true,
+              ...androidModalAnimation,
+            }}
+          />
+          <Stack.Screen
             name="CalorieSettings"
             component={SafeCalorieSettings}
             options={{
@@ -995,7 +1012,7 @@ function AppContent() {
             }}
           />
         </Stack.Navigator>
-        <AddSheet ref={addSheetRef} onAddFood={handleAddFood} onAddWorkout={handleAddWorkout} onAddActivity={handleAddActivity} onAddFromPreset={handleAddFromPreset} onSyncHealthData={handleSyncHealthData} onBarcodeScan={handleBarcodeScan} onAddMeasurements={handleAddMeasurements} />
+        <AddSheet ref={addSheetRef} onAddFood={handleAddFood} onAddWorkout={handleAddWorkout} onAddActivity={handleAddActivity} onAddFromPreset={handleAddFromPreset} onSyncHealthData={handleSyncHealthData} onBarcodeScan={handleBarcodeScan} onAddMeasurements={handleAddMeasurements} onCheckIn={handleCheckIn} />
         <ReauthModal
           visible={showReauthModal}
           expiredConfigId={expiredConfigId}

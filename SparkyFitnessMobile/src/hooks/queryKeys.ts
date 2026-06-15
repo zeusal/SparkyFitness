@@ -6,6 +6,16 @@ export const dailySummaryQueryKey = (date: string) => ['dailySummary', date] as 
 
 export const measurementsQueryKey = (date: string) => ['measurements', date] as const;
 
+export const moodQueryKey = (date: string) => ['mood', date] as const;
+
+export const sleepQueryKey = (startDate: string, endDate: string) =>
+  ['sleep', startDate, endDate] as const;
+
+export const checkInPhotosQueryKey = (date: string) => ['checkInPhotos', date] as const;
+
+export const mostRecentMeasurementQueryKey = (measurementType: string) =>
+  ['mostRecentMeasurement', measurementType] as const;
+
 export const preferencesQueryKey = ['userPreferences'] as const;
 
 export const profileQueryKey = ['userProfile'] as const;

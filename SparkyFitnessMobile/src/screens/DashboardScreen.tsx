@@ -220,6 +220,19 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) => {
           skipTopInset
           skipHorizontalPadding
         />
+        <Pressable
+          className="bg-surface rounded-xl p-4 mb-3 shadow-sm flex-row items-center"
+          onPress={() => navigation.navigate('CheckIn', { date: selectedDate })}
+        >
+          <Icon name="checkin" size={26} color={accentColor} />
+          <View className="flex-1 ml-3">
+            <Text className="text-text-primary font-bold text-base">Daily Check-In</Text>
+            <Text className="text-text-muted text-xs mt-0.5">
+              Mood, sleep, measurements & photos
+            </Text>
+          </View>
+          <Icon name="chevron-forward" size={18} color={accentColor} />
+        </Pressable>
         {(summary.foodEntries.length > 0 || summary.exerciseEntries.length > 0 || goal > 0) && (
           <CalorieRingCard
             caloriesConsumed={eaten}

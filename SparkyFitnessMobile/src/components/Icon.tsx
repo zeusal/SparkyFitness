@@ -41,6 +41,9 @@ const ICON_MAP = {
   'forward': { sf: 'forward.fill', ion: 'play-skip-forward' },
   'measurements': { sf: 'ruler', ion: 'analytics-outline' },
   'scale': { sf: 'scalemass', ion: 'scale-outline' },
+  'trash': { sf: 'trash', ion: 'trash-outline' },
+  'moon': { sf: 'moon.fill', ion: 'moon' },
+  'checkin': { sf: 'heart.text.square', ion: 'heart-circle-outline' },
 
   // Status
   'shield-checkmark': { sf: 'checkmark.shield', ion: 'shield-checkmark-outline' },

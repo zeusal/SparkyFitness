@@ -4,6 +4,10 @@ export {
   serverConfigsQueryKey,
   dailySummaryQueryKey,
   measurementsQueryKey,
+  moodQueryKey,
+  sleepQueryKey,
+  checkInPhotosQueryKey,
+  mostRecentMeasurementQueryKey,
   preferencesQueryKey,
   waterContainersQueryKey,
   foodsQueryKey,
@@ -37,6 +41,10 @@ export { useSyncHealthData } from './useSyncHealthData';
 export { useDailySummary } from './useDailySummary';
 export { useMeasurements } from './useMeasurements';
 export { useUpsertCheckIn } from './useUpsertCheckIn';
+export { useMoodEntryByDate, useSaveMoodMutation } from './useMood';
+export { useSleepEntries, useSaveSleepMutation, useDeleteSleepMutation } from './useSleep';
+export { useCheckInPhotos, useCheckInPhotoSource } from './useCheckInPhotos';
+export type { PhotoAsset } from './useCheckInPhotos';
 export { usePreferences } from './usePreferences';
 export { useRefetchOnFocus } from './useRefetchOnFocus';
 export { useWaterIntakeMutation } from './useWaterIntakeMutation';

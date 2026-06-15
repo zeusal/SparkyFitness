@@ -25,6 +25,7 @@ interface AddSheetProps {
   onSyncHealthData: () => void;
   onBarcodeScan: () => void;
   onAddMeasurements: () => void;
+  onCheckIn: () => void;
 }
 
 interface ActionCard {
@@ -34,7 +35,7 @@ interface ActionCard {
 }
 
 const AddSheet = React.forwardRef<AddSheetRef, AddSheetProps>(
-  ({ onAddFood, onAddWorkout, onAddActivity, onAddFromPreset, onSyncHealthData, onBarcodeScan, onAddMeasurements }, ref) => {
+  ({ onAddFood, onAddWorkout, onAddActivity, onAddFromPreset, onSyncHealthData, onBarcodeScan, onAddMeasurements, onCheckIn }, ref) => {
     const bottomSheetRef = useRef<BottomSheetModal>(null);
     const isDismissingRef = useRef(false);
     const isOpenRef = useRef(false);
@@ -272,6 +273,7 @@ const AddSheet = React.forwardRef<AddSheetRef, AddSheetProps>(
                 {renderCard(cards[2])}
                 {renderCard(cards[3])}
               </View>
+              {renderSecondaryRow('Daily Check-In', 'checkin', onCheckIn)}
               {renderSecondaryRow('Sync Health Data', 'sync', onSyncHealthData)}
             </>
           )}

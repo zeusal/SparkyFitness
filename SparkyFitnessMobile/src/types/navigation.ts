@@ -153,6 +153,7 @@ export type RootStackParamList = {
   ActivityDetail: { session: IndividualSessionResponse };
   Logs: undefined;
   Sync: undefined;
+  CheckIn: { date?: string } | undefined;
   MeasurementsAdd: { date?: string } | undefined;
   CalorieSettings: undefined;
   FoodSettings: undefined;

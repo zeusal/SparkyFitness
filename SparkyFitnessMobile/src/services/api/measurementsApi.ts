@@ -80,6 +80,47 @@ export const upsertCheckIn = async (params: {
 };
 
 /**
+ * Fetches the user's most recent value for a single standard measurement type
+ * (e.g. `height`, `weight`). Returns `null` when none has ever been recorded —
+ * the server replies with an empty object in that case.
+ */
+export const getMostRecentMeasurement = async (
+  measurementType: string,
+): Promise<CheckInMeasurement | null> => {
+  const response = await apiFetch<CheckInMeasurement | Record<string, never>>({
+    endpoint: `/api/measurements/most-recent/${measurementType}`,
+    serviceName: 'Measurements API',
+    operation: 'fetch most recent measurement',
+  });
+  if (!response || Object.keys(response).length === 0) {
+    return null;
+  }
+  return response as CheckInMeasurement;
+};
+
+/**
+ * Updates a single field on an existing check-in measurement row. Passing
+ * `null` clears that field (used by the recent-activity delete action).
+ */
+export const updateCheckInMeasurementField = async (params: {
+  id: string;
+  field: string;
+  value: number | null;
+  entryDate: string;
+}): Promise<void> => {
+  return apiFetch<void>({
+    endpoint: `/api/measurements/check-in/${params.id}`,
+    serviceName: 'Measurements API',
+    operation: 'update check-in field',
+    method: 'PUT',
+    body: {
+      entry_date: params.entryDate,
+      [params.field]: params.value,
+    },
+  });
+};
+
+/**
  * Changes water intake by adding or removing a drink.
  */
 export const changeWaterIntake = async (params: {

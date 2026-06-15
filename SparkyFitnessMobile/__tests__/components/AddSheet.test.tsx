@@ -78,6 +78,7 @@ describe('AddSheet', () => {
         onSyncHealthData={jest.fn()}
         onBarcodeScan={jest.fn()}
         onAddMeasurements={jest.fn()}
+        onCheckIn={jest.fn()}
       />,
     );
 
@@ -109,6 +110,7 @@ describe('AddSheet', () => {
         onSyncHealthData={jest.fn()}
         onBarcodeScan={jest.fn()}
         onAddMeasurements={jest.fn()}
+        onCheckIn={jest.fn()}
       />,
     );
 
@@ -134,6 +136,7 @@ describe('AddSheet', () => {
         onSyncHealthData={jest.fn()}
         onBarcodeScan={jest.fn()}
         onAddMeasurements={jest.fn()}
+        onCheckIn={jest.fn()}
       />,
     );
 
@@ -155,6 +158,7 @@ describe('AddSheet', () => {
         onSyncHealthData={onSyncHealthData}
         onBarcodeScan={jest.fn()}
         onAddMeasurements={jest.fn()}
+        onCheckIn={jest.fn()}
       />,
     );
 

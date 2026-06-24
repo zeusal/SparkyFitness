@@ -34,6 +34,7 @@ export const userGoalsSchema = z.object({
   dinner_percentage: z.number().nullable(),
   snacks_percentage: z.number().nullable(),
   water_goal_ml: z.number().nullable(),
+  steps_goal: z.number().nullable(),
   custom_nutrients: z.unknown().nullable(),
 });
 
@@ -70,6 +71,7 @@ export const userGoalsInitializerSchema = z.object({
   dinner_percentage: z.number().optional().nullable(),
   snacks_percentage: z.number().optional().nullable(),
   water_goal_ml: z.number().optional().nullable(),
+  steps_goal: z.number().optional().nullable(),
   custom_nutrients: z.unknown().optional().nullable(),
 });
 
@@ -106,6 +108,7 @@ export const userGoalsMutatorSchema = z.object({
   dinner_percentage: z.number().optional().nullable(),
   snacks_percentage: z.number().optional().nullable(),
   water_goal_ml: z.number().optional().nullable(),
+  steps_goal: z.number().optional().nullable(),
   custom_nutrients: z.unknown().optional().nullable(),
 });
 

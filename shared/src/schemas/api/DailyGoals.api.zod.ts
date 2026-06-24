@@ -21,6 +21,7 @@ export const dailyGoalsResponseSchema = z.object({
   iron: z.number(),
   target_exercise_calories_burned: z.number(),
   target_exercise_duration_minutes: z.number(),
+  steps_goal: z.number(),
   protein_percentage: z.number().nullable(),
   carbs_percentage: z.number().nullable(),
   fat_percentage: z.number().nullable(),

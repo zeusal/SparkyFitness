@@ -8,6 +8,7 @@ import {
   UpdateWaterIntakeBodySchema,
   UpsertCheckInBodySchema,
   UpdateCheckInBodySchema,
+  AddStepsBodySchema,
   CreateCustomCategoryBodySchema,
   UpdateCustomCategoryBodySchema,
   UpsertCustomEntryBodySchema,
@@ -462,6 +463,67 @@ router.delete(
         // @ts-expect-error TS(2571): Object is of type 'unknown'.
         return res.status(404).json({ error: error.message });
       }
+      next(error);
+    }
+  }
+);
+/**
+ * @swagger
+ * /measurements/steps:
+ *   post:
+ *     summary: Add daily steps (supports incremental accumulation)
+ *     tags: [Wellness & Metrics]
+ *     security:
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               entry_date:
+ *                 type: string
+ *                 format: date
+ *                 description: Date in YYYY-MM-DD format.
+ *               steps:
+ *                 type: integer
+ *                 minimum: 0
+ *                 description: Number of steps to record.
+ *               incremental:
+ *                 type: boolean
+ *                 default: false
+ *                 description: If true, adds to existing step count instead of replacing it.
+ *             required: [entry_date, steps]
+ *     responses:
+ *       200:
+ *         description: Steps recorded successfully.
+ *       400:
+ *         description: Validation error.
+ */
+router.post(
+  '/steps',
+  authenticate,
+  checkPermissionMiddleware('checkin'),
+  async (req, res, next) => {
+    const bodyResult = AddStepsBodySchema.safeParse(req.body);
+    if (!bodyResult.success) {
+      return res.status(400).json({
+        error: bodyResult.error.issues.map((i) => i.message).join(', '),
+      });
+    }
+    const { entry_date, steps, incremental } = bodyResult.data;
+    try {
+      const result = await measurementService.addSteps(
+        req.userId,
+        req.originalUserId || req.userId,
+        entry_date,
+        steps,
+        incremental
+      );
+      clearUserTdeeCache(req.userId);
+      res.status(200).json(result);
+    } catch (error) {
       next(error);
     }
   }

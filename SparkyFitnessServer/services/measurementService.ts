@@ -1667,6 +1667,31 @@ async function deleteWaterIntake(
     throw error;
   }
 }
+async function addSteps(
+  userId: string,
+  actingUserId: string,
+  entryDate: string,
+  steps: number,
+  incremental: boolean
+) {
+  try {
+    return await measurementRepository.upsertStepData(
+      userId,
+      actingUserId,
+      steps,
+      entryDate,
+      incremental
+    );
+  } catch (error) {
+    log(
+      'error',
+      `Error adding steps for user ${userId} on ${entryDate}:`,
+      error
+    );
+    throw error;
+  }
+}
+
 async function upsertCheckInMeasurements(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   authenticatedUserId: any,
@@ -2644,6 +2669,7 @@ export { upsertWaterIntake };
 export { getWaterIntakeEntryById };
 export { updateWaterIntake };
 export { deleteWaterIntake };
+export { addSteps };
 export { upsertCheckInMeasurements };
 export { getCheckInMeasurements };
 export { getLatestCheckInMeasurementsOnOrBeforeDate };
@@ -2783,6 +2809,7 @@ export default {
   getWaterIntakeLog,
   deleteWaterIntakeLogEntry,
   updateWaterIntakeLogTime,
+  addSteps,
   upsertCheckInMeasurements,
   getCheckInMeasurements,
   getLatestCheckInMeasurementsOnOrBeforeDate,

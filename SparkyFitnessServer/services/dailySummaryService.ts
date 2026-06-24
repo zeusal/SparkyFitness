@@ -281,13 +281,14 @@ export async function getDailySummary({
       : null,
   ]);
 
-  const stepCalories = includeCheckin
+  const stepResult = includeCheckin
     ? await measurementRepository.getStepCaloriesForDate(
         targetUserId,
         date,
         exerciseSessions as ExerciseSessionResponse[]
       )
-    : 0;
+    : { stepCalories: 0, totalSteps: 0 };
+  const { stepCalories, totalSteps } = stepResult;
 
   // External BMR override — only when opted in AND checkin data is permitted
   // (includeCheckin is the route's permission gate; the override must not bypass it).
@@ -343,6 +344,7 @@ export async function getDailySummary({
     exerciseSessions,
     waterIntake: parseFloat(waterResult?.water_ml) || 0,
     stepCalories,
+    totalSteps,
     calorieBalance,
     adjustedGoals: computedAdjustedGoals,
   };

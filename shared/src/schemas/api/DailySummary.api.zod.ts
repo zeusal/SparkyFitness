@@ -39,6 +39,7 @@ export const dailySummaryResponseSchema = z.object({
   exerciseSessions: z.array(exerciseSessionResponseSchema),
   waterIntake: z.number(),
   stepCalories: z.number(),
+  totalSteps: z.number(),
   calorieBalance: calorieBalanceSchema,
   adjustedGoals: adjustedGoalsSchema.nullable(),
 });

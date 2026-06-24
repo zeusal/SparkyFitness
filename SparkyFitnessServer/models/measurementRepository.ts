@@ -22,9 +22,10 @@ async function upsertStepData(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   value: any,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  date: any
+  date: any,
+  incremental = false
 ) {
-  const client = await getClient(actingUserId); // User-specific operation, using actingUserId for RLS context
+  const client = await getClient(actingUserId);
   try {
     const existingRecord = await client.query(
       'SELECT * FROM check_in_measurements WHERE user_id = $1 AND entry_date = $2',
@@ -32,9 +33,14 @@ async function upsertStepData(
     );
     let result;
     if (existingRecord.rows.length > 0) {
+      const currentSteps =
+        parseInt(existingRecord.rows[0].steps ?? '0', 10) || 0;
+      const newSteps = incremental
+        ? currentSteps + Number(value)
+        : Number(value);
       const updateResult = await client.query(
         'UPDATE check_in_measurements SET steps = $1, updated_at = now(), updated_by_user_id = $2 WHERE entry_date = $3 AND user_id = $4 RETURNING *',
-        [value, actingUserId, date, userId]
+        [newSteps, actingUserId, date, userId]
       );
       result = updateResult.rows[0];
     } else {
@@ -858,16 +864,12 @@ async function deleteCustomMeasurement(id: any, userId: any) {
     client.release();
   }
 }
-/**
- * Compute step calories for a user on a given date.
- * Background steps = total check-in steps minus steps already logged in exercise sessions.
- * @param {string} userId
- * @param {string} date - YYYY-MM-DD
- * @param {Array} sessions - exercise sessions for the date (ExerciseSessionResponse[])
- * @returns {Promise<number>} step calories burned
- */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function getStepCaloriesForDate(userId: any, date: any, sessions: any) {
+async function getStepCaloriesForDate(
+  userId: any,
+  date: any,
+  sessions: any
+): Promise<{ stepCalories: number; totalSteps: number }> {
   const client = await getClient(userId);
   try {
     const [checkInResult, weightResult, heightResult] = await Promise.all([
@@ -914,11 +916,12 @@ async function getStepCaloriesForDate(userId: any, date: any, sessions: any) {
     const strideLengthM =
       (heightCm * CALORIE_CALCULATION_CONSTANTS.STRIDE_LENGTH_MULTIPLIER) / 100;
     const distanceKm = (backgroundSteps * strideLengthM) / 1000;
-    return Math.round(
+    const stepCalories = Math.round(
       distanceKm *
         weightKg *
         CALORIE_CALCULATION_CONSTANTS.NET_CALORIES_PER_KG_PER_KM
     );
+    return { stepCalories, totalSteps };
   } finally {
     client.release();
   }

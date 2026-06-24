@@ -422,6 +422,7 @@ async function manageGoalTimeline(authenticatedUserId: string, goalData: any) {
       p_iron,
       p_target_exercise_calories_burned,
       p_target_exercise_duration_minutes,
+      p_steps_goal,
       p_protein_percentage,
       p_carbs_percentage,
       p_fat_percentage,
@@ -540,6 +541,7 @@ async function manageGoalTimeline(authenticatedUserId: string, goalData: any) {
       target_exercise_duration_minutes: cleanNumber(
         p_target_exercise_duration_minutes
       ),
+      steps_goal: cleanNumber(p_steps_goal),
       protein_percentage: cleanNumber(p_protein_percentage, true),
       carbs_percentage: cleanNumber(p_carbs_percentage, true),
       fat_percentage: cleanNumber(p_fat_percentage, true),

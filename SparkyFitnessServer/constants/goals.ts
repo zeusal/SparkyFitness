@@ -19,6 +19,7 @@ export const DEFAULT_GOALS = {
   iron: 18,
   target_exercise_calories_burned: 0,
   target_exercise_duration_minutes: 0,
+  steps_goal: 10000,
   protein_percentage: null,
   carbs_percentage: null,
   fat_percentage: null,

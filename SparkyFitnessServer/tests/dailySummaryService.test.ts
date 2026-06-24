@@ -128,9 +128,10 @@ describe('dailySummaryService', () => {
       weight: 80,
       height: 180,
     });
-    vi.mocked(measurementRepository.getStepCaloriesForDate).mockResolvedValue(
-      40
-    );
+    vi.mocked(measurementRepository.getStepCaloriesForDate).mockResolvedValue({
+      stepCalories: 40,
+      totalSteps: 1000,
+    });
     vi.mocked(userRepository.getUserProfile).mockResolvedValue({
       date_of_birth: '1990-01-01',
       gender: 'male',

@@ -139,9 +139,12 @@ const DailyProgress = ({ selectedDate }: { selectedDate: string }) => {
   const goalCalories = calorieBalance.goal;
   const eatenCalories = calorieBalance.eaten;
 
+  const goalsRecord = summaryData.goals as Record<string, unknown>;
+  const stepsGoal = Number(goalsRecord['steps_goal']) || 10000;
+
   const otherExerciseCalories = exerciseData?.otherCalories || 0;
   const activeCaloriesFromExercise = exerciseData?.activeCalories || 0;
-  const dailySteps = stepsData?.steps || 0;
+  const dailySteps = summaryData.totalSteps ?? stepsData?.steps ?? 0;
   const activitySteps = exerciseData?.activitySteps || 0;
   const backgroundSteps = Math.max(0, dailySteps - activitySteps);
   const stepCalories = summaryData.stepCalories || 0;
@@ -698,6 +701,31 @@ const DailyProgress = ({ selectedDate }: { selectedDate: string }) => {
             </div>
             <Progress value={calorieProgress} className="h-2" />
           </div>
+
+          {/* Steps Goal Progress */}
+          {stepsGoal > 0 && (
+            <div className="p-2 bg-purple-50 dark:bg-slate-700 rounded-lg space-y-1">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1">
+                  <Activity className="w-3 h-3 text-purple-500" />
+                  <span className="text-xs font-medium text-purple-700 dark:text-purple-400">
+                    {t('exercise.dailyProgress.stepsGoal', 'Daily Steps')}
+                  </span>
+                </div>
+                <span className="text-xs font-semibold text-purple-700 dark:text-purple-300">
+                  {dailySteps.toLocaleString()} / {stepsGoal.toLocaleString()}
+                </span>
+              </div>
+              <Progress
+                value={Math.min(100, (dailySteps / stepsGoal) * 100)}
+                className="h-2"
+              />
+              <div className="text-[10px] text-center text-gray-500 dark:text-slate-400">
+                {Math.round((dailySteps / stepsGoal) * 100)}%{' '}
+                {t('exercise.dailyProgress.complete', 'complete')}
+              </div>
+            </div>
+          )}
 
           {/* Calorie Math Breakdown Dropdown */}
           <div className="pt-3 border-t border-border/40 space-y-2.5">

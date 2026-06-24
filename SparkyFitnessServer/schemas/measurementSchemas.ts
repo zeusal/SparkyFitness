@@ -106,6 +106,16 @@ export const UpdateCheckInBodySchema = z
 
 export type UpdateCheckInBody = z.infer<typeof UpdateCheckInBodySchema>;
 
+export const AddStepsBodySchema = z
+  .object({
+    entry_date: requiredLegacyString('entry_date'),
+    steps: z.preprocess(coerceLegacyNumber, z.number().int().min(0)),
+    incremental: z.boolean().optional().default(false),
+  })
+  .strict();
+
+export type AddStepsBody = z.infer<typeof AddStepsBodySchema>;
+
 export const CreateCustomCategoryBodySchema = z
   .object({
     name: requiredLegacyString('name'),

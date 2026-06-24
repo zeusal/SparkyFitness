@@ -29,6 +29,7 @@ export interface CreateFoodEntryPayload {
   cholesterol?: number;
   vitamin_a?: number;
   vitamin_c?: number;
+  custom_nutrients?: Record<string, string | number> | null;
   // Meal entry
   meal_id?: string;
 }
@@ -72,6 +73,7 @@ export interface UpdateFoodEntryPayload {
   cholesterol?: number;
   vitamin_a?: number;
   vitamin_c?: number;
+  custom_nutrients?: Record<string, string | number> | null;
 }
 
 /**
@@ -96,6 +98,28 @@ export const deleteFoodEntry = async (id: string): Promise<void> => {
     serviceName: 'Food Entries API',
     operation: 'delete food entry',
     method: 'DELETE',
+  });
+};
+
+export interface CopyFoodEntriesPayload {
+  sourceDate: string;
+  sourceMealType: string;
+  targetDate: string;
+  targetMealType: string;
+}
+
+/**
+ * Copies the food entries from one date/meal type into another date/meal type.
+ * Meal types are matched by name (case-insensitive) server-side. The source
+ * entries are left untouched.
+ */
+export const copyFoodEntries = async (payload: CopyFoodEntriesPayload): Promise<void> => {
+  await apiFetch<unknown>({
+    endpoint: '/api/food-entries/copy',
+    serviceName: 'Food Entries API',
+    operation: 'copy food entries',
+    method: 'POST',
+    body: payload,
   });
 };
 
@@ -144,3 +168,22 @@ export const calculateProtein = (entries: FoodEntry[]): number => calculateMacro
 export const calculateCarbs = (entries: FoodEntry[]): number => calculateMacro(entries, 'carbs');
 export const calculateFat = (entries: FoodEntry[]): number => calculateMacro(entries, 'fat');
 export const calculateFiber = (entries: FoodEntry[]): number => calculateMacro(entries, 'dietary_fiber');
+
+/**
+ * Aggregates all custom nutrient values across food entries.
+ * Uses the same (value * quantity) / serving_size formula as calculateMacro.
+ * Returns a map of nutrient name → total consumed value.
+ */
+export const calculateCustomNutrientTotals = (entries: FoodEntry[]): Record<string, number> => {
+  const totals: Record<string, number> = {};
+  for (const entry of entries) {
+    if (!entry.custom_nutrients || entry.serving_size === 0) continue;
+    for (const [name, rawValue] of Object.entries(entry.custom_nutrients)) {
+      const value = typeof rawValue === 'number' ? rawValue : parseFloat(String(rawValue));
+      if (isNaN(value)) continue;
+      const scaled = (value * entry.quantity) / entry.serving_size;
+      totals[name] = (totals[name] ?? 0) + scaled;
+    }
+  }
+  return totals;
+};

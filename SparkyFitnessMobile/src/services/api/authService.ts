@@ -98,6 +98,14 @@ const getJsonHeaders = (): Record<string, string> => ({
 
 const trustedOriginCache = new Map<string, string | null>();
 
+export const _clearTrustedOriginCache = (): void => {
+  trustedOriginCache.clear();
+};
+
+export const _setTrustedOriginCache = (url: string, origin: string | null): void => {
+  trustedOriginCache.set(normalizeUrl(url), origin);
+};
+
 type NetworkingModule = {
   clearCookies: (callback: (result: boolean) => void) => void;
 };
@@ -161,7 +169,9 @@ const getTrustedAuthOrigin = async (serverUrl: string): Promise<string | undefin
   return trustedOrigin;
 };
 
-const getMfaHeaders = async (serverUrl: string): Promise<Record<string, string>> => {
+// Headers for Better Auth endpoint requests (sign-in, two-factor verify/send-otp).
+// Adds the trusted Origin header Better Auth requires on top of the JSON headers.
+const getBetterAuthHeaders = async (serverUrl: string): Promise<Record<string, string>> => {
   const origin = await getTrustedAuthOrigin(serverUrl);
 
   if (!origin) {
@@ -236,7 +246,7 @@ export const login = async (
   const response = await fetch(`${baseUrl}/api/auth/sign-in/email`, {
     method: 'POST',
     credentials: 'include',
-    headers: getJsonHeaders(),
+    headers: await getBetterAuthHeaders(baseUrl),
     body: JSON.stringify({ email, password }),
   });
 
@@ -306,7 +316,7 @@ export const verifyTotp = async (
   code: string,
 ): Promise<MfaVerifyResult> => {
   const baseUrl = normalizeUrl(serverUrl);
-  const headers = await getMfaHeaders(baseUrl);
+  const headers = await getBetterAuthHeaders(baseUrl);
 
   const response = await fetch(`${baseUrl}/api/auth/two-factor/verify-totp`, {
     method: 'POST',
@@ -340,7 +350,7 @@ export const sendEmailOtp = async (
   serverUrl: string,
 ): Promise<void> => {
   const baseUrl = normalizeUrl(serverUrl);
-  const headers = await getMfaHeaders(baseUrl);
+  const headers = await getBetterAuthHeaders(baseUrl);
 
   const response = await fetch(`${baseUrl}/api/auth/two-factor/send-otp`, {
     method: 'POST',
@@ -361,7 +371,7 @@ export const verifyEmailOtp = async (
   code: string,
 ): Promise<MfaVerifyResult> => {
   const baseUrl = normalizeUrl(serverUrl);
-  const headers = await getMfaHeaders(baseUrl);
+  const headers = await getBetterAuthHeaders(baseUrl);
 
   const response = await fetch(`${baseUrl}/api/auth/two-factor/verify-otp`, {
     method: 'POST',

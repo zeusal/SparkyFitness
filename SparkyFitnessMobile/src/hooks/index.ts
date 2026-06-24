@@ -30,6 +30,12 @@ export {
   workoutPresetsLibraryQueryKey,
   activeAiServiceSettingQueryKey,
   userAiConfigAllowedQueryKey,
+  fastingRootQueryKey,
+  fastingCurrentQueryKey,
+  fastingStatsQueryKey,
+  fastingHistoryQueryKey,
+  customNutrientsQueryKey,
+  nutrientDisplayPreferencesQueryKey,
 } from './queryKeys';
 export { useServerConnection } from './useServerConnection';
 export { useServerConfigs } from './useServerConfigs';
@@ -89,3 +95,16 @@ export { useWidgetSync } from './useWidgetSync';
 export { useProfile } from './useProfile';
 export { useActiveAiServiceSetting } from './useActiveAiServiceSetting';
 export { useUserAiConfigAllowed } from './useUserAiConfigAllowed';
+export {
+  useCurrentFast,
+  useFastingStats,
+  useFastingHistory,
+  useStartFast,
+  useEndFast,
+  useFastingGoalReconciler,
+} from './useFasting';
+export { useFastingTimer } from './useFastingTimer';
+export type { FastTimerValues } from './useFastingTimer';
+export { useCustomNutrients } from './useCustomNutrients';
+export type { UserCustomNutrient } from './useCustomNutrients';
+export { useNutrientDisplayPreferences } from './useNutrientDisplayPreferences';

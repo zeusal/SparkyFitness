@@ -69,6 +69,7 @@ export type RootStackParamList = {
         date?: string;
         adjustedValues?: FoodFormData;
         adjustedUnitSelection?: FoodUnitSelectionResult;
+        adjustedCustomNutrients?: Record<string, string | number> | null;
         pendingEquivalents?: EquivalentUnit[];
         selectedVariantOverride?: FoodUnitVariant;
         pickerMode?: FoodPickerMode;
@@ -80,6 +81,7 @@ export type RootStackParamList = {
     entry: FoodEntry;
     adjustedValues?: FoodFormData;
     adjustedUnitSelection?: FoodUnitSelectionResult;
+    adjustedCustomNutrients?: Record<string, string | number> | null;
   };
   MealTypeDetail: { date: string; mealType: MealTypeKey; mealLabel?: string };
   FoodForm:
@@ -151,6 +153,7 @@ export type RootStackParamList = {
   ActivityAdd: { entry?: IndividualSessionResponse; date?: string; popCount?: number; selectedExercise?: Exercise; selectionNonce?: number; skipDraftLoad?: boolean } | undefined;
   WorkoutDetail: { session: PresetSessionResponse; selectedExercise?: Exercise; selectionNonce?: number };
   ActivityDetail: { session: IndividualSessionResponse };
+  FastingDetail: undefined;
   Logs: undefined;
   Sync: undefined;
   MeasurementsAdd: { date?: string } | undefined;

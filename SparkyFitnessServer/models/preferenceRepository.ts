@@ -38,11 +38,14 @@ async function updateUserPreferences(userId: any, preferenceData: any) {
         goal_mode = COALESCE($34, goal_mode),
         goal_mode_calculation_method = COALESCE($35, goal_mode_calculation_method),
         goal_mode_custom_percentage = COALESCE($36, goal_mode_custom_percentage),
+        use_external_bmr = COALESCE($37, use_external_bmr),
+        add_exercise_water_to_goal = COALESCE($40, add_exercise_water_to_goal),
         default_barcode_provider_id = CASE WHEN $28 THEN $27 ELSE default_barcode_provider_id END,
+        active_ai_service_id = CASE WHEN $39 THEN $38 ELSE active_ai_service_id END,
+        measurement_decimal_places = COALESCE($41, measurement_decimal_places),
         updated_at = now()
       WHERE user_id = $29
       RETURNING *`,
-
       [
         preferenceData.date_format,
         preferenceData.default_weight_unit,
@@ -80,6 +83,11 @@ async function updateUserPreferences(userId: any, preferenceData: any) {
         preferenceData.goal_mode,
         preferenceData.goal_mode_calculation_method,
         preferenceData.goal_mode_custom_percentage,
+        preferenceData.use_external_bmr,
+        preferenceData.active_ai_service_id,
+        'active_ai_service_id' in preferenceData,
+        preferenceData.add_exercise_water_to_goal,
+        preferenceData.measurement_decimal_places,
       ]
     );
     return result.rows[0];
@@ -160,6 +168,10 @@ async function upsertUserPreferences(preferenceData: any) {
        goal_mode,
        goal_mode_calculation_method,
        goal_mode_custom_percentage,
+       use_external_bmr,
+       add_exercise_water_to_goal,
+       active_ai_service_id,
+       measurement_decimal_places,
        created_at, updated_at
      ) VALUES (
        $1, COALESCE($2, 'yyyy-MM-dd'), COALESCE($3, 'lbs'), COALESCE($4, 'in'), COALESCE($5, 'km'),
@@ -179,6 +191,10 @@ async function upsertUserPreferences(preferenceData: any) {
        COALESCE($34, 'maintain'),
        COALESCE($35, 'manual'),
        COALESCE($36, 0),
+       COALESCE($37, false),
+       COALESCE($40, false),
+       $38,
+       COALESCE($41, 0),
        now(), now()
      )
      ON CONFLICT (user_id) DO UPDATE SET
@@ -215,7 +231,11 @@ async function upsertUserPreferences(preferenceData: any) {
        goal_mode = COALESCE(EXCLUDED.goal_mode, user_preferences.goal_mode),
        goal_mode_calculation_method = COALESCE(EXCLUDED.goal_mode_calculation_method, user_preferences.goal_mode_calculation_method),
        goal_mode_custom_percentage = COALESCE(EXCLUDED.goal_mode_custom_percentage, user_preferences.goal_mode_custom_percentage),
+       use_external_bmr = COALESCE(EXCLUDED.use_external_bmr, user_preferences.use_external_bmr),
+       add_exercise_water_to_goal = COALESCE(EXCLUDED.add_exercise_water_to_goal, user_preferences.add_exercise_water_to_goal),
        default_barcode_provider_id = CASE WHEN $29 THEN EXCLUDED.default_barcode_provider_id ELSE user_preferences.default_barcode_provider_id END,
+       active_ai_service_id = CASE WHEN $39 THEN EXCLUDED.active_ai_service_id ELSE user_preferences.active_ai_service_id END,
+       measurement_decimal_places = COALESCE(EXCLUDED.measurement_decimal_places, user_preferences.measurement_decimal_places),
        updated_at = now()
      RETURNING *`,
       [
@@ -255,6 +275,11 @@ async function upsertUserPreferences(preferenceData: any) {
         preferenceData.goal_mode,
         preferenceData.goal_mode_calculation_method,
         preferenceData.goal_mode_custom_percentage,
+        preferenceData.use_external_bmr,
+        preferenceData.active_ai_service_id,
+        'active_ai_service_id' in preferenceData,
+        preferenceData.add_exercise_water_to_goal,
+        preferenceData.measurement_decimal_places,
       ]
     );
     return result.rows[0];

@@ -1,8 +1,15 @@
 import { getClient, getSystemClient } from '../db/poolManager.js';
 import { encrypt, decrypt, ENCRYPTION_KEY } from '../security/encryption.js';
 import { log } from '../config/logging.js';
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function upsertAiServiceSetting(settingData: any) {
+import {
+  AiServiceSettings,
+  SparkyChatHistory,
+  SparkyChatHistoryMutator,
+} from '@workspace/shared';
+
+async function upsertAiServiceSetting(
+  settingData: Partial<AiServiceSettings> & { api_key?: string | null }
+) {
   const client = await getClient(settingData.user_id); // User-specific operation
   try {
     let encryptedApiKey = settingData.encrypted_api_key || null;
@@ -68,13 +75,12 @@ async function upsertAiServiceSetting(settingData: any) {
     client.release();
   }
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function getAiServiceSettingForBackend(id: any, userId: any) {
+async function getAiServiceSettingForBackend(id: string, userId: string) {
   const client = await getClient(userId); // User-specific operation
   try {
     // Try to get setting (can be user-specific or global)
     const result = await client.query(
-      'SELECT * FROM ai_service_settings WHERE id = $1',
+      'SELECT * FROM ai_service_settings WHERE id = $1 AND is_active = TRUE',
       [id]
     );
     const setting = result.rows[0];
@@ -106,8 +112,7 @@ async function getAiServiceSettingForBackend(id: any, userId: any) {
     client.release();
   }
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function getAiServiceSettingById(id: any, userId: any) {
+async function getAiServiceSettingById(id: string, userId: string) {
   const client = await getClient(userId); // User-specific operation
   try {
     const result = await client.query(
@@ -119,8 +124,7 @@ async function getAiServiceSettingById(id: any, userId: any) {
     client.release();
   }
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function deleteAiServiceSetting(id: any, userId: any) {
+async function deleteAiServiceSetting(id: string, userId: string) {
   const client = await getClient(userId); // User-specific operation
   try {
     const result = await client.query(
@@ -132,28 +136,24 @@ async function deleteAiServiceSetting(id: any, userId: any) {
     client.release();
   }
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function getAiServiceSettingsByUserId(userId: any) {
+async function getAiServiceSettingsByUserId(userId: string) {
   const client = await getClient(userId); // User-specific operation
   try {
     // Get user-specific settings
     const userResult = await client.query(
-      'SELECT id, service_name, service_type, custom_url, is_active, model_name, is_public, system_prompt FROM ai_service_settings WHERE is_public = FALSE AND user_id = $1 ORDER BY created_at DESC',
+      'SELECT id, service_name, service_type, custom_url, is_active, model_name, is_public, system_prompt, user_id FROM ai_service_settings WHERE is_public = FALSE AND user_id = $1 ORDER BY created_at DESC',
       [userId]
     );
-    // Get global settings (all authenticated users can read)
+    // Get global settings (admin-created, all authenticated users can read)
     const globalResult = await client.query(
-      'SELECT id, service_name, service_type, custom_url, is_active, model_name, is_public, system_prompt FROM ai_service_settings WHERE is_public = TRUE ORDER BY created_at DESC',
+      'SELECT id, service_name, service_type, custom_url, is_active, model_name, is_public, system_prompt, user_id FROM ai_service_settings WHERE is_public = TRUE ORDER BY created_at DESC',
       []
     );
-    // Combine results: user settings first, then public settings
-    // Add is_public flag to distinguish them
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // Combine results: user settings first, then global settings
     const userSettings = userResult.rows.map((row: any) => ({
       ...row,
       is_public: false,
     }));
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const publicSettings = globalResult.rows.map((row: any) => ({
       ...row,
       is_public: true,
@@ -163,33 +163,57 @@ async function getAiServiceSettingsByUserId(userId: any) {
     client.release();
   }
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function getActiveAiServiceSetting(userId: any) {
+async function getActiveAiServiceSetting(userId: string) {
   const client = await getClient(userId); // User-specific operation
   try {
+    // Priority 0: check if user has active_ai_service_id in user_preferences
+    const prefResult = await client.query(
+      'SELECT active_ai_service_id FROM user_preferences WHERE user_id = $1',
+      [userId]
+    );
+    if (prefResult.rows.length > 0 && prefResult.rows[0].active_ai_service_id) {
+      const activeId = prefResult.rows[0].active_ai_service_id;
+      const settingResult = await client.query(
+        `SELECT ai.id, ai.service_name, ai.service_type, ai.custom_url, ai.is_active, ai.model_name, ai.is_public, ai.system_prompt, ai.user_id, u.name as creator_name
+         FROM ai_service_settings ai
+         LEFT JOIN public."user" u ON ai.user_id = u.id
+         WHERE ai.id = $1 AND ai.is_active = TRUE`,
+        [activeId]
+      );
+      if (settingResult.rows.length > 0) {
+        const setting = settingResult.rows[0];
+        const source = setting.is_public ? 'global' : 'user';
+        log(
+          'debug',
+          `Using preferred AI service setting for user ${userId}: ${setting.id} (source: ${source})`
+        );
+        return { ...setting, source };
+      }
+    }
+
     // Priority 1: User-specific active setting
     const userResult = await client.query(
-      'SELECT id, service_name, service_type, custom_url, is_active, model_name, is_public, system_prompt FROM ai_service_settings WHERE is_active = TRUE AND is_public = FALSE AND user_id = $1 ORDER BY created_at DESC LIMIT 1',
+      'SELECT id, service_name, service_type, custom_url, is_active, model_name, is_public, system_prompt, user_id FROM ai_service_settings WHERE is_active = TRUE AND is_public = FALSE AND user_id = $1 ORDER BY created_at DESC LIMIT 1',
       [userId]
     );
     if (userResult.rows.length > 0) {
       const setting = userResult.rows[0];
       log(
         'debug',
-        `Using user-specific AI service setting for user ${userId}: ${setting.id}`
+        `Using user-specific AI service setting fallback for user ${userId}: ${setting.id}`
       );
       return { ...setting, source: 'user' };
     }
     // Priority 2: Database global active setting
     const globalResult = await client.query(
-      'SELECT id, service_name, service_type, custom_url, is_active, model_name, is_public, system_prompt FROM ai_service_settings WHERE is_active = TRUE AND is_public = TRUE ORDER BY created_at DESC LIMIT 1',
+      'SELECT id, service_name, service_type, custom_url, is_active, model_name, is_public, system_prompt, user_id FROM ai_service_settings WHERE is_active = TRUE AND is_public = TRUE ORDER BY created_at DESC LIMIT 1',
       []
     );
     if (globalResult.rows.length > 0) {
       const setting = globalResult.rows[0];
       log(
         'debug',
-        `Using global database AI service setting for user ${userId}: ${setting.id}`
+        `Using global database AI service setting fallback for user ${userId}: ${setting.id}`
       );
       return { ...setting, source: 'global' };
     }
@@ -199,8 +223,7 @@ async function getActiveAiServiceSetting(userId: any) {
     client.release();
   }
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function clearOldChatHistory(userId: any) {
+async function clearOldChatHistory(userId: string) {
   const client = await getClient(userId);
   try {
     await client.query(
@@ -215,12 +238,14 @@ async function clearOldChatHistory(userId: any) {
     client.release();
   }
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function getChatHistoryByUserId(userId: any) {
+async function getChatHistoryByUserId(userId: string) {
   const client = await getClient(userId); // User-specific operation
   try {
+    // Fetch the 50 most recent messages (ORDER BY created_at DESC LIMIT 50)
+    // and sort them chronologically (ORDER BY created_at ASC) in the outer query
+    // so that the AI context and UI display them in the correct chronological order.
     const result = await client.query(
-      'SELECT id, content, message_type, created_at, metadata, parts FROM sparky_chat_history WHERE user_id = $1 ORDER BY created_at ASC LIMIT 50',
+      'SELECT id, content, message_type, created_at, metadata, parts FROM (SELECT id, content, message_type, created_at, metadata, parts FROM sparky_chat_history WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50) sub ORDER BY created_at ASC',
       [userId]
     );
     return result.rows;
@@ -228,8 +253,7 @@ async function getChatHistoryByUserId(userId: any) {
     client.release();
   }
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function getChatHistoryEntryById(id: any, userId: any) {
+async function getChatHistoryEntryById(id: string, userId: string) {
   const client = await getClient(userId); // User-specific operation (RLS will handle access)
   try {
     const result = await client.query(
@@ -241,8 +265,7 @@ async function getChatHistoryEntryById(id: any, userId: any) {
     client.release();
   }
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function getChatHistoryEntryOwnerId(id: any, userId: any) {
+async function getChatHistoryEntryOwnerId(id: string, userId: string) {
   const client = await getClient(userId); // User-specific operation (RLS will handle access)
   try {
     const result = await client.query(
@@ -254,8 +277,11 @@ async function getChatHistoryEntryOwnerId(id: any, userId: any) {
     client.release();
   }
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function updateChatHistoryEntry(id: any, userId: any, updateData: any) {
+async function updateChatHistoryEntry(
+  id: string,
+  userId: string,
+  updateData: SparkyChatHistoryMutator
+) {
   const client = await getClient(userId); // User-specific operation
   try {
     const result = await client.query(
@@ -286,8 +312,7 @@ async function updateChatHistoryEntry(id: any, userId: any, updateData: any) {
     client.release();
   }
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function deleteChatHistoryEntry(id: any, userId: any) {
+async function deleteChatHistoryEntry(id: string, userId: string) {
   const client = await getClient(userId); // User-specific operation
   try {
     const result = await client.query(
@@ -299,8 +324,7 @@ async function deleteChatHistoryEntry(id: any, userId: any) {
     client.release();
   }
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function clearAllChatHistory(userId: any) {
+async function clearAllChatHistory(userId: string) {
   const client = await getClient(userId); // User-specific operation
   try {
     await client.query('DELETE FROM sparky_chat_history', []);
@@ -309,8 +333,11 @@ async function clearAllChatHistory(userId: any) {
     client.release();
   }
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function saveChatHistory(historyData: any) {
+async function saveChatHistory(
+  historyData: Partial<SparkyChatHistory> & {
+    messageType?: 'user' | 'assistant';
+  }
+) {
   const client = await getClient(historyData.user_id); // User-specific operation
   try {
     await client.query(
@@ -329,8 +356,9 @@ async function saveChatHistory(historyData: any) {
     client.release();
   }
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function upsertGlobalAiServiceSetting(settingData: any) {
+async function upsertGlobalAiServiceSetting(
+  settingData: Partial<AiServiceSettings> & { api_key?: string | null }
+) {
   const client = await getSystemClient(); // Use system client for global operations
   try {
     let encryptedApiKey = settingData.encrypted_api_key || null;
@@ -407,8 +435,7 @@ async function getGlobalAiServiceSettings() {
     client.release();
   }
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function getGlobalAiServiceSettingById(id: any) {
+async function getGlobalAiServiceSettingById(id: string) {
   const client = await getSystemClient(); // Use system client for global operations
   try {
     const result = await client.query(
@@ -420,8 +447,7 @@ async function getGlobalAiServiceSettingById(id: any) {
     client.release();
   }
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function deleteGlobalAiServiceSetting(id: any) {
+async function deleteGlobalAiServiceSetting(id: string) {
   const client = await getSystemClient(); // Use system client for global operations
   try {
     const result = await client.query(

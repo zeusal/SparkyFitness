@@ -11,12 +11,15 @@ import { SymbolView, SymbolViewProps } from 'expo-symbols';
 const ICON_MAP = {
   // Navigation
   'chevron-down': { sf: 'chevron.down', ion: 'chevron-down' },
+  'chevron-up': { sf: 'chevron.up', ion: 'chevron-up' },
   'chevron-forward': { sf: 'chevron.right', ion: 'chevron-forward' },
   'chevron-back': { sf: 'chevron.left', ion: 'chevron-back' },
 
   // Actions
   'copy': { sf: 'doc.on.doc', ion: 'copy-outline' },
   'paste': { sf: 'doc.on.clipboard', ion: 'clipboard-outline' },
+  'eye': { sf: 'eye', ion: 'eye-outline' },
+  'eye-off': { sf: 'eye.slash', ion: 'eye-off-outline' },
   'add-circle': { sf: 'plus.circle', ion: 'add-circle-outline' },
   'remove-circle': { sf: 'minus.circle', ion: 'remove-circle-outline' },
   'checkmark': { sf: 'checkmark', ion: 'checkmark' },
@@ -38,6 +41,7 @@ const ICON_MAP = {
   'pencil': { sf: 'pencil', ion: 'create-outline' },
   'pause': { sf: 'pause.fill', ion: 'pause' },
   'play': { sf: 'play.fill', ion: 'play' },
+  'stop': { sf: 'stop.fill', ion: 'stop' },
   'forward': { sf: 'forward.fill', ion: 'play-skip-forward' },
   'measurements': { sf: 'ruler', ion: 'analytics-outline' },
   'scale': { sf: 'scalemass', ion: 'scale-outline' },

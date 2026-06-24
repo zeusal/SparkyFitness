@@ -40,6 +40,10 @@ export const userPreferencesSchema = z.object({
   goal_mode: z.enum(['maintain', 'recomp', 'cut', 'high_cut', 'manual']),
   goal_mode_calculation_method: z.enum(['adaptive', 'manual']),
   goal_mode_custom_percentage: z.number().int().min(0).max(40),
+  measurement_decimal_places: z.number().int().min(0),
+  // Manually added (file is ts-to-zod generated; precedent: MealFoods.zod.ts). Keep on regen.
+  use_external_bmr: z.boolean(),
+  active_ai_service_id: z.string().uuid().nullable().optional(),
 });
 
 export const userPreferencesInitializerSchema = z.object({
@@ -81,6 +85,9 @@ export const userPreferencesInitializerSchema = z.object({
   goal_mode: z.enum(['maintain', 'recomp', 'cut', 'high_cut', 'manual']).optional(),
   goal_mode_calculation_method: z.enum(['adaptive', 'manual']).optional(),
   goal_mode_custom_percentage: z.number().int().min(0).max(40).optional(),
+  measurement_decimal_places: z.number().int().min(0).optional(),
+  use_external_bmr: z.boolean().optional(),
+  active_ai_service_id: z.string().uuid().nullable().optional(),
 });
 
 export const userPreferencesMutatorSchema = z.object({
@@ -122,6 +129,9 @@ export const userPreferencesMutatorSchema = z.object({
   goal_mode: z.enum(['maintain', 'recomp', 'cut', 'high_cut', 'manual']).optional(),
   goal_mode_calculation_method: z.enum(['adaptive', 'manual']).optional(),
   goal_mode_custom_percentage: z.number().int().min(0).max(40).optional(),
+  measurement_decimal_places: z.number().int().min(0).optional(),
+  use_external_bmr: z.boolean().optional(),
+  active_ai_service_id: z.string().uuid().nullable().optional(),
 });
 
 export type UserPreferences = z.infer<typeof userPreferencesSchema>;

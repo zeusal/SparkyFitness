@@ -651,10 +651,9 @@ async function performFetch(
   built: BuiltRequest,
   timeoutMs: number
 ): Promise<HttpOutcome> {
-  let lastRateLimitOutcome: HttpOutcome | null = null;
+  let response: Response | undefined;
 
   for (let attempt = 0; attempt <= MAX_FETCH_RETRIES; attempt++) {
-    let response: Response;
     try {
       response = await fetch(built.url, {
         method: 'POST',
@@ -683,25 +682,16 @@ async function performFetch(
       } catch {
         // best-effort
       }
-      const delayMs =
-        parseRetryAfterMs(body) ??
-        INITIAL_BACKOFF_MS * Math.pow(2, attempt);
-      lastRateLimitOutcome = {
-        error: {
-          ok: false,
-          category: 'upstream_error',
-          status: 429,
-          detail: `AI service returned status 429${body ? `: ${truncateBody(body)}` : ''}`,
-        },
-      };
-      await sleep(delayMs);
+      await sleep(
+        parseRetryAfterMs(body) ?? INITIAL_BACKOFF_MS * Math.pow(2, attempt)
+      );
       continue;
     }
 
-    return readResponse(response);
+    break;
   }
 
-  return lastRateLimitOutcome!;
+  return readResponse(response!);
 }
 
 async function performOllama(

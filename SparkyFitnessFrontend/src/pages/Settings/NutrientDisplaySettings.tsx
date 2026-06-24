@@ -53,12 +53,48 @@ const baseNutrients = [
 ];
 
 const viewGroups = [
-  { id: 'summary', name: 'Summary' },
-  { id: 'quick_info', name: 'Quick Info' },
-  { id: 'food_database', name: 'Food Database' },
-  { id: 'goal', name: 'Goal' },
-  { id: 'report_tabular', name: 'Report (Tabular)' },
-  { id: 'report_chart', name: 'Report (Chart)' },
+  {
+    id: 'summary',
+    name: 'Summary',
+    nameKey: 'settings.nutrientDisplay.groupSummary',
+    descKey: 'settings.nutrientDisplay.descSummary',
+    desc: 'Controls the Nutrition Summary and 14-Day Trends on the Diary page.',
+  },
+  {
+    id: 'quick_info',
+    name: 'Quick Info',
+    nameKey: 'settings.nutrientDisplay.groupQuickInfo',
+    descKey: 'settings.nutrientDisplay.descQuickInfo',
+    desc: 'Controls nutrients shown for individual food entries, meal totals, food search results, and the food database.',
+  },
+  {
+    id: 'food_database',
+    name: 'Food Database',
+    nameKey: 'settings.nutrientDisplay.groupFoodDatabase',
+    descKey: 'settings.nutrientDisplay.descFoodDatabase',
+    desc: 'Controls nutrients shown when editing foods in your database.',
+  },
+  {
+    id: 'goal',
+    name: 'Goal',
+    nameKey: 'settings.nutrientDisplay.groupGoal',
+    descKey: 'settings.nutrientDisplay.descGoal',
+    desc: 'Controls nutrients shown when setting or editing your goals.',
+  },
+  {
+    id: 'report_tabular',
+    name: 'Report (Tabular)',
+    nameKey: 'settings.nutrientDisplay.groupReportTabular',
+    descKey: 'settings.nutrientDisplay.descReportTabular',
+    desc: 'Controls nutrient columns in the Reports table view.',
+  },
+  {
+    id: 'report_chart',
+    name: 'Report (Chart)',
+    nameKey: 'settings.nutrientDisplay.groupReportChart',
+    descKey: 'settings.nutrientDisplay.descReportChart',
+    desc: 'Controls which nutrients are available for charts in the Reports section.',
+  },
 ];
 
 interface NutrientPreference {
@@ -184,6 +220,7 @@ const NutrientDisplaySettingsInner: React.FC<
   resetPreference,
   loadNutrientDisplayPreferences,
 }) => {
+  const { t } = useTranslation();
   const allNutrients = useMemo(
     () => [...baseNutrients, ...customNutrients.map((n) => n.name)],
     [customNutrients]
@@ -458,8 +495,12 @@ const NutrientDisplaySettingsInner: React.FC<
         }
       >
         <TabsList className="h-10">
-          <TabsTrigger value="desktop">Desktop</TabsTrigger>
-          <TabsTrigger value="mobile">Mobile</TabsTrigger>
+          <TabsTrigger value="desktop">
+            {t('settings.nutrientDisplay.platformDesktop', 'Desktop')}
+          </TabsTrigger>
+          <TabsTrigger value="mobile">
+            {t('settings.nutrientDisplay.platformMobile', 'Mobile')}
+          </TabsTrigger>
         </TabsList>
 
         {(['desktop', 'mobile'] as const).map((platform) => (
@@ -471,7 +512,7 @@ const NutrientDisplaySettingsInner: React.FC<
               <TabsList className="h-10">
                 {viewGroups.map((group) => (
                   <TabsTrigger key={group.id} value={group.id}>
-                    {group.name}
+                    {t(group.nameKey, group.name)}
                   </TabsTrigger>
                 ))}
               </TabsList>
@@ -490,17 +531,7 @@ const NutrientDisplaySettingsInner: React.FC<
                 return (
                   <TabsContent key={group.id} value={group.id}>
                     <p className="text-sm text-muted-foreground mb-1">
-                      {group.id === 'summary'
-                        ? 'Controls the Nutrition Summary and 14-Day Trends on the Diary page.'
-                        : group.id === 'quick_info'
-                          ? 'Controls nutrients shown for individual food entries, meal totals, food search results, and the food database.'
-                          : group.id === 'food_database'
-                            ? 'Controls nutrients shown when editing foods in your database.'
-                            : group.id === 'goal'
-                              ? 'Controls nutrients shown when setting or editing your goals.'
-                              : group.id === 'report_tabular'
-                                ? 'Controls nutrient columns in the Reports table view.'
-                                : 'Controls which nutrients are available for charts in the Reports section.'}
+                      {t(group.descKey, group.desc)}
                     </p>
 
                     <DndContext
@@ -545,27 +576,37 @@ const NutrientDisplaySettingsInner: React.FC<
                           className="cursor-pointer"
                           htmlFor={`sync-${group.id}-${platform}`}
                         >
-                          Sync with{' '}
-                          {platform === 'desktop' ? 'Mobile' : 'Desktop'}
+                          {platform === 'desktop'
+                            ? t(
+                                'settings.nutrientDisplay.syncWithMobile',
+                                'Sync with Mobile'
+                              )
+                            : t(
+                                'settings.nutrientDisplay.syncWithDesktop',
+                                'Sync with Desktop'
+                              )}
                         </Label>
                       </div>
                       <Button
                         variant="outline"
                         onClick={() => handleSelectAll(group.id, platform)}
                       >
-                        Select All
+                        {t('settings.nutrientDisplay.selectAll', 'Select All')}
                       </Button>
                       <Button
                         variant="outline"
                         onClick={() => handleClearAll(group.id, platform)}
                       >
-                        Clear All
+                        {t('settings.nutrientDisplay.clearAll', 'Clear All')}
                       </Button>
                       <Button
                         variant="outline"
                         onClick={() => handleReset(group.id, platform)}
                       >
-                        Reset to Default
+                        {t(
+                          'settings.nutrientDisplay.resetToDefault',
+                          'Reset to Default'
+                        )}
                       </Button>
                     </div>
                   </TabsContent>

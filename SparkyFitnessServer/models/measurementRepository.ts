@@ -33,15 +33,15 @@ async function upsertStepData(
     );
     let result;
     if (existingRecord.rows.length > 0) {
-      const currentSteps =
-        parseInt(existingRecord.rows[0].steps ?? '0', 10) || 0;
-      const newSteps = incremental
-        ? currentSteps + Number(value)
-        : Number(value);
-      const updateResult = await client.query(
-        'UPDATE check_in_measurements SET steps = $1, updated_at = now(), updated_by_user_id = $2 WHERE entry_date = $3 AND user_id = $4 RETURNING *',
-        [newSteps, actingUserId, date, userId]
-      );
+      const updateResult = incremental
+        ? await client.query(
+            'UPDATE check_in_measurements SET steps = COALESCE(steps, 0) + $1, updated_at = now(), updated_by_user_id = $2 WHERE entry_date = $3 AND user_id = $4 RETURNING *',
+            [Number(value), actingUserId, date, userId]
+          )
+        : await client.query(
+            'UPDATE check_in_measurements SET steps = $1, updated_at = now(), updated_by_user_id = $2 WHERE entry_date = $3 AND user_id = $4 RETURNING *',
+            [Number(value), actingUserId, date, userId]
+          );
       result = updateResult.rows[0];
     } else {
       const insertResult = await client.query(

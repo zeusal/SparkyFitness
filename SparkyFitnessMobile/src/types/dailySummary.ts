@@ -19,6 +19,8 @@ export interface DailySummary {
   carbs: MacroSummary;
   fat: MacroSummary;
   fiber: MacroSummary;
+  totalSteps: number;          // Total daily steps from check_in_measurements
+  stepsGoal: number;           // User-configured daily steps goal (default 10000)
   stepCalories: number;        // Server-computed step calories using stride formula
   exerciseMinutes: number;
   exerciseMinutesGoal: number;

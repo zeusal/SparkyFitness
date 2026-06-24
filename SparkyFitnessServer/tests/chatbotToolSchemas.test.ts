@@ -187,6 +187,7 @@ describe('published (flat) chatbot tool schemas', () => {
         'weight',
         'weight_unit',
         'steps',
+        'incremental',
         'height',
         'height_unit',
         'neck',
@@ -214,6 +215,7 @@ describe('published (flat) chatbot tool schemas', () => {
       ],
       actions: [
         'log_biometrics',
+        'add_steps',
         'log_custom_metric',
         'list_categories',
         'create_category',
@@ -237,6 +239,7 @@ describe('published (flat) chatbot tool schemas', () => {
         'carbs',
         'fat',
         'water_goal_ml',
+        'steps_goal',
         'weight',
       ],
       actions: ['get_goals', 'set_goals', 'list_goal_timeline'],

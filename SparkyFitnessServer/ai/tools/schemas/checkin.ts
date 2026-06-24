@@ -165,6 +165,21 @@ const getFastingStatusSchema = z
   })
   .strict();
 
+const addStepsSchema = z
+  .object({
+    action: z.literal('add_steps'),
+    entry_date: dateSchema,
+    steps: z.coerce.number().int().min(0).describe('Number of steps to add'),
+    incremental: z
+      .boolean()
+      .optional()
+      .default(true)
+      .describe(
+        'If true (default), adds to existing step count; if false, replaces it'
+      ),
+  })
+  .strict();
+
 const getBiometricsHistorySchema = z
   .object({
     action: z.literal('get_biometrics_history'),
@@ -177,6 +192,7 @@ const getBiometricsHistorySchema = z
 
 export const manageCheckinSchema = z.discriminatedUnion('action', [
   logBiometricsSchema,
+  addStepsSchema,
   logCustomMetricSchema,
   listCategoriesSchema,
   createCategorySchema,
@@ -197,6 +213,7 @@ export const manageCheckinInput = z.object({
   action: z
     .enum([
       'log_biometrics',
+      'add_steps',
       'log_custom_metric',
       'list_categories',
       'create_category',
@@ -217,6 +234,12 @@ export const manageCheckinInput = z.object({
     .optional()
     .describe('Unit for weight (defaults to kg)'),
   steps: z.coerce.number().int().min(0).optional().describe('Daily step count'),
+  incremental: z
+    .boolean()
+    .optional()
+    .describe(
+      'add_steps: if true (default), adds to existing step count; if false, replaces it'
+    ),
   height: z.coerce.number().min(0).optional().describe('Height value'),
   height_unit: heightUnitEnum.optional().describe('Unit for height'),
   neck: z.coerce.number().min(0).optional().describe('Neck measurement'),

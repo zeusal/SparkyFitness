@@ -52,7 +52,8 @@ describe('sparky_manage_goals', () => {
         '- **Protein:** 160g\n' +
         '- **Carbs:** 240g\n' +
         '- **Fat:** 70g\n' +
-        '- **Water:** 2200ml\n'
+        '- **Water:** 2200ml\n' +
+        '- **Steps:** 10000\n'
     );
     expect(goalService.getUserGoals).toHaveBeenCalledWith(
       'user-1',
@@ -80,7 +81,8 @@ describe('sparky_manage_goals', () => {
         '- **Protein:** 150g\n' +
         '- **Carbs:** 250g\n' +
         '- **Fat:** 67g\n' +
-        '- **Water:** 1920ml\n'
+        '- **Water:** 1920ml\n' +
+        '- **Steps:** 10000\n'
     );
     expect(goalService.getUserGoals).toHaveBeenCalledWith(
       'user-1',
@@ -107,6 +109,7 @@ describe('sparky_manage_goals', () => {
       p_carbs: 250,
       p_fat: 67,
       p_water_goal_ml: 2000,
+      p_steps_goal: 10000,
     });
   });
 
@@ -172,8 +175,8 @@ describe('sparky_manage_goals', () => {
 
     expect(result).toBe(
       '# Goal Timeline\n\n' +
-        '**2026-06-01**: 2000 kcal | P: 150g | C: 250g | F: 67g | W: 2000ml\n\n' +
-        '**2026-05-01**: 1800 kcal | P: 140g | C: 200g | F: 60g | W: 1500ml'
+        '**2026-06-01**: 2000 kcal | P: 150g | C: 250g | F: 67g | W: 2000ml | Steps: 10000\n\n' +
+        '**2026-05-01**: 1800 kcal | P: 140g | C: 200g | F: 60g | W: 1500ml | Steps: 10000'
     );
     expect(goalRepository.getGoalTimeline).toHaveBeenCalledWith('user-1');
   });
@@ -198,7 +201,7 @@ describe('sparky_manage_goals', () => {
 
     expect(result).toBe(
       '# Goal Timeline\n\n' +
-        '**2026-06-01**: 2000 kcal | P: 150g | C: 250g | F: 67g | W: 2000ml'
+        '**2026-06-01**: 2000 kcal | P: 150g | C: 250g | F: 67g | W: 2000ml | Steps: 10000'
     );
   });
 
@@ -233,6 +236,7 @@ describe('sparky_get_goal_snapshot', () => {
       carbs: 250,
       fat: 67,
       water_goal_ml: 1920,
+      steps_goal: 10000,
       saturated_fat: 20,
       polyunsaturated_fat: 10,
       monounsaturated_fat: 25,

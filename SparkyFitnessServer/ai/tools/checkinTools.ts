@@ -17,6 +17,7 @@ import {
 
 const VALID_ACTIONS = [
   'log_biometrics',
+  'add_steps',
   'log_custom_metric',
   'list_categories',
   'create_category',
@@ -81,6 +82,7 @@ export function buildCheckinTools(userId: string, tz: string) {
 
 Actions:
 - log_biometrics(entry_date, weight?, steps?, height?, neck?, waist?, hips?, body_fat?, weight_unit?:"kg"|"lbs", height_unit?:"cm"|"in", measurements_unit?:"cm"|"in")
+- add_steps(entry_date, steps, incremental?:true) — add steps incrementally (default) or replace total for the day
 - log_mood(entry_date, mood_value:1-10, notes?)
 - log_sleep(entry_date, duration_seconds?, sleep_score?:0-100, bedtime?, wake_time?, source?)
 - log_fasting(start_time:ISO8601, end_time?, fasting_status?:"ACTIVE"|"COMPLETED"|"CANCELLED", fasting_type?)
@@ -176,6 +178,20 @@ Actions:
                 parts.length > 0 ? parts.join(', ') : 'no changes';
               return formatConfirmation(
                 `Biometrics logged for ${args.entry_date} (${summary}).`
+              );
+            }
+
+            case 'add_steps': {
+              await measurementService.addSteps(
+                userId,
+                userId,
+                args.entry_date,
+                args.steps,
+                args.incremental
+              );
+              const mode = args.incremental ? 'added' : 'set to';
+              return formatConfirmation(
+                `${args.steps.toLocaleString()} steps ${mode} for ${args.entry_date}.`
               );
             }
 

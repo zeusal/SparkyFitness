@@ -35,6 +35,12 @@ const setGoalsSchema = z
       .min(0)
       .optional()
       .describe('Daily water intake goal (ml)'),
+    steps_goal: z.coerce
+      .number()
+      .int()
+      .min(0)
+      .optional()
+      .describe('Daily steps goal'),
     weight: z.coerce.number().min(0).optional().describe('Target body weight'),
   })
   .strict();
@@ -92,6 +98,12 @@ export const manageGoalsInput = z.object({
     .min(0)
     .optional()
     .describe('set_goals: daily water intake goal (ml)'),
+  steps_goal: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe('set_goals: daily steps goal'),
   weight: z.coerce
     .number()
     .min(0)

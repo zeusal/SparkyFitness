@@ -22,6 +22,7 @@ const GOAL_SNAPSHOT_FIELDS = [
   'carbs',
   'fat',
   'water_goal_ml',
+  'steps_goal',
   'saturated_fat',
   'polyunsaturated_fat',
   'monounsaturated_fat',
@@ -47,11 +48,11 @@ const goalSnapshotSchema = z.object({
 export function buildGoalTools(userId: string, tz: string) {
   return {
     sparky_manage_goals: tool({
-      description: `Target management: set and view calorie, macro, water, and weight goals.
-      
+      description: `Target management: set and view calorie, macro, water, steps, and weight goals.
+
 Actions:
 - get_goals(target_date?) — returns the goals active on a specific date
-- set_goals(start_date, calories?, protein?, carbs?, fat?, water_goal_ml?, weight?) — sets new goals from a start date
+- set_goals(start_date, calories?, protein?, carbs?, fat?, water_goal_ml?, steps_goal?, weight?) — sets new goals from a start date
 - list_goal_timeline() — lists all goal changes over time`,
       inputSchema: manageGoalsInput,
       execute: async (rawArgs) => {
@@ -73,6 +74,7 @@ Actions:
               text += `- **Carbs:** ${goals.carbs || 250}g\n`;
               text += `- **Fat:** ${goals.fat || 67}g\n`;
               text += `- **Water:** ${goals.water_goal_ml || 2000}ml\n`;
+              text += `- **Steps:** ${goals.steps_goal || 10000}\n`;
               return text;
             }
 
@@ -87,6 +89,7 @@ Actions:
                 p_carbs: args.carbs ?? 250,
                 p_fat: args.fat ?? 67,
                 p_water_goal_ml: args.water_goal_ml ?? 2000,
+                p_steps_goal: args.steps_goal ?? 10000,
               });
               return formatConfirmation(
                 `Goals set successfully starting from ${args.start_date}.`
@@ -99,7 +102,7 @@ Actions:
                 timeline,
                 'Goal Timeline',
                 (g: any) =>
-                  `**${dayString(g.goal_date)}**: ${g.calories} kcal | P: ${g.protein}g | C: ${g.carbs}g | F: ${g.fat}g | W: ${g.water_goal_ml}ml`
+                  `**${dayString(g.goal_date)}**: ${g.calories} kcal | P: ${g.protein}g | C: ${g.carbs}g | F: ${g.fat}g | W: ${g.water_goal_ml}ml | Steps: ${g.steps_goal ?? 10000}`
               );
             }
 

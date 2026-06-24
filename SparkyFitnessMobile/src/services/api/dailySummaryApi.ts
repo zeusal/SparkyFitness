@@ -9,6 +9,7 @@ interface DailySummaryApiResponse {
   exerciseSessions: ExerciseSessionResponse[];
   waterIntake: number;
   stepCalories?: number;
+  totalSteps?: number;
   calorieBalance?: CalorieBalance;
   adjustedGoals?: { calories: number; protein: number; carbs: number; fat: number } | null;
 }

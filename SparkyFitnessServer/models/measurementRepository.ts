@@ -682,7 +682,7 @@ async function getCheckInMeasurementsByDateRange(
   endDate: any
 ) {
   log(
-    'info',
+    'debug',
     `[measurementRepository] getCheckInMeasurementsByDateRange called for userId: ${userId}, startDate: ${startDate}, endDate: ${endDate}`
   );
   const client = await getClient(userId); // User-specific operation
@@ -693,7 +693,7 @@ async function getCheckInMeasurementsByDateRange(
     );
     log(
       'debug',
-      `[measurementRepository] getCheckInMeasurementsByDateRange returning: ${JSON.stringify(result.rows)}`
+      `[measurementRepository] getCheckInMeasurementsByDateRange returning ${result.rows.length} row(s)`
     );
     return result.rows;
   } finally {

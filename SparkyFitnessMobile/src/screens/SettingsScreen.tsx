@@ -11,6 +11,7 @@ import SettingsRow, { SettingsRowGroup } from '../components/SettingsRow';
 import { SectionErrorBoundary } from '../components/ScreenErrorBoundary';
 import { shareDiagnosticReport, sanitizeQueryKey } from '../services/diagnosticReportService';
 import { useActiveWorkoutBarPadding } from '../components/ActiveWorkoutBar';
+import { useNativeIOSTabsActive } from '../services/nativeTabBarPreference';
 import { loadLastSyncedTime } from '../services/storage';
 import { formatRelativeTime } from '../utils/dateUtils';
 import type { DiagnosticQueryState } from '../types/diagnosticReport';
@@ -28,6 +29,7 @@ type SettingsScreenProps = CompositeScreenProps<
 const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const activeWorkoutBarPadding = useActiveWorkoutBarPadding();
+  const usesNativeTabs = useNativeIOSTabsActive();
 
   const [showPrivacyModal, setShowPrivacyModal] = useState<boolean>(false);
 
@@ -53,7 +55,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
     ? `Last synced ${formatRelativeTime(new Date(lastSyncedTime))}`
     : 'Never synced';
 
-  const [success, danger, catSlate, catPink, catViolet, catOrange, catCalories, hydration] = useCSSVariable([
+  const [success, danger, catSlate, catPink, catViolet, catOrange, catCalories, hydration, macroGreen] = useCSSVariable([
     '--color-icon-success',
     '--color-bg-danger',
     '--color-cat-slate',
@@ -62,7 +64,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
     '--color-cat-orange',
     '--color-calories',
     '--color-hydration',
-  ]) as [string, string, string, string, string, string, string, string];
+    '--color-cat-green',
+  ]) as [string, string, string, string, string, string, string, string, string];
 
   const serverSubtitle = activeConfig ? (
     <View className="flex-row items-center">
@@ -114,12 +117,24 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
   };
 
   return (
-    <View className="flex-1 bg-background" style={{ paddingTop: insets.top }}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 80 + activeWorkoutBarPadding }} contentInsetAdjustmentBehavior="never">
-        <View className="flex-1 p-4">
-          <View className="mb-6">
-            <Text className="text-2xl font-bold text-text-primary">Settings</Text>
-          </View>
+    <>
+      <ScrollView
+        className="flex-1 bg-background"
+        style={[{ flex: 1 }, usesNativeTabs ? undefined : { paddingTop: insets.top }]}
+        contentContainerStyle={{
+          ...(!usesNativeTabs ? { paddingTop: 0 } : null),
+          paddingBottom: 80 + activeWorkoutBarPadding,
+        }}
+        scrollEventThrottle={16}
+        contentInsetAdjustmentBehavior={usesNativeTabs ? 'automatic' : 'never'}
+        automaticallyAdjustsScrollIndicatorInsets={usesNativeTabs}
+      >
+        <View className={usesNativeTabs ? 'px-4 pb-4' : 'flex-1 p-4'}>
+          {!usesNativeTabs && (
+            <View className="mb-6">
+              <Text className="text-2xl font-bold text-text-primary">Settings</Text>
+            </View>
+          )}
 
           <SettingsRow
             icon="server"
@@ -160,6 +175,14 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
                   iconColor={catOrange}
                 />
               )}
+              {isConnected && (
+                <SettingsRow
+                  icon="dashboard-settings"
+                  title="Dashboard Settings"
+                  onPress={() => navigation.navigate('DashboardSettings')}
+                  iconColor={macroGreen}
+                />
+              )}
               <SettingsRow
                 icon="app-settings"
                 title="App Settings"
@@ -170,7 +193,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
 
             <SettingsRowGroup>
               <SettingsRow
-                icon="sparkle"
+                icon="whats-new"
                 title="What's New"
                 onPress={() => navigation.navigate('WhatsNew')}
                 iconColor={catPink}
@@ -217,7 +240,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
         visible={showPrivacyModal}
         onClose={() => setShowPrivacyModal(false)}
       />
-    </View>
+    </>
   );
 };
 

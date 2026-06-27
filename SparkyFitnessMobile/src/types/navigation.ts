@@ -154,11 +154,13 @@ export type RootStackParamList = {
   WorkoutDetail: { session: PresetSessionResponse; selectedExercise?: Exercise; selectionNonce?: number };
   ActivityDetail: { session: IndividualSessionResponse };
   FastingDetail: undefined;
+  Chat: undefined;
   Logs: undefined;
   Sync: undefined;
   MeasurementsAdd: { date?: string } | undefined;
   CalorieSettings: undefined;
   FoodSettings: undefined;
+  DashboardSettings: undefined;
   ServerSettings: undefined;
   AppSettings: undefined;
   About: undefined;

@@ -123,6 +123,7 @@ jest.mock('expo-notifications', () => {
     requestPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
     scheduleNotificationAsync: jest.fn(async () => `mock-notif-${nextId++}`),
     cancelScheduledNotificationAsync: jest.fn().mockResolvedValue(undefined),
+    cancelAllScheduledNotificationsAsync: jest.fn().mockResolvedValue(undefined),
     AndroidImportance: { HIGH: 4, DEFAULT: 3, LOW: 2, MIN: 1, NONE: 0 },
     SchedulableTriggerInputTypes: {
       CALENDAR: 'calendar',
@@ -278,6 +279,9 @@ jest.mock('react-native-keyboard-controller', () => {
 
   return {
     KeyboardProvider: ({ children }) => React.createElement(React.Fragment, null, children),
+    KeyboardAvoidingView: React.forwardRef(({ children, behavior: _behavior, ...props }, ref) =>
+      React.createElement(View, { ...props, ref }, children),
+    ),
     KeyboardAwareScrollView: React.forwardRef(({ children, ...props }, ref) =>
       React.createElement(ScrollView, { ...props, ref }, children),
     ),
@@ -405,6 +409,17 @@ jest.mock('uniwind', () => ({
     setTheme: jest.fn(),
   },
 }));
+
+// Mock react-native-enriched-markdown (native md4c renderer). Render the
+// markdown prop as plain Text so chat tests can assert content without the
+// native component; `remend` runs for real (it's plain JS).
+jest.mock('react-native-enriched-markdown', () => {
+  const React = require('react');
+  const { Text } = require('react-native');
+  const Markdown = ({ markdown, onLinkPress }) =>
+    React.createElement(Text, { testID: 'enriched-markdown', onLinkPress }, markdown);
+  return { __esModule: true, EnrichedMarkdownText: Markdown, default: Markdown };
+});
 
 // Mock react-native-toast-message
 jest.mock('react-native-toast-message', () => {

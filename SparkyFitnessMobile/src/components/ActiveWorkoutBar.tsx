@@ -52,8 +52,9 @@ export function useActiveWorkoutBarPadding(
 
 /**
  * Routes where the HUD should be hidden — either modal entry flows (food /
- * exercise search) or full-screen editors with their own sticky bottom
- * footers (WorkoutAdd, ActivityAdd) that would collide with the bar.
+ * exercise search), full-screen editors with their own sticky bottom footers
+ * (WorkoutAdd, ActivityAdd), or the chat screen whose composer is pinned to
+ * the bottom — all of which would collide with the bar.
  */
 const HIDDEN_ROUTES = new Set<string>([
   'FoodSearch',
@@ -67,6 +68,7 @@ const HIDDEN_ROUTES = new Set<string>([
   'WorkoutAdd',
   'ActivityAdd',
   'MeasurementsAdd',
+  'Chat',
 ]);
 
 function formatCountdown(totalSeconds: number): string {
@@ -286,7 +288,6 @@ const ActiveWorkoutBar: React.FC<ActiveWorkoutBarProps> = ({
   const secondaryLine = isWorkoutComplete
     ? ''
     : (activeSetLabel?.loadText ?? '');
-
   // Right-aligned countdown — only rendered while a rest timer is running.
   const countdownLabel =
     restState === 'resting' ? formatCountdown(displaySeconds) : null;

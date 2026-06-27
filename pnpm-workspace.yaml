@@ -35,6 +35,8 @@ onlyBuiltDependencies:
 overrides:
   side-channel: "1.0.6"
   tailwindcss: "4.2.1"
+  assistant-cloud: "0.1.33"
+  zustand: "5.0.14"
 
 patchedDependencies:
   "react-native-health-connect@3.5.3": "patches/react-native-health-connect@3.5.3.patch"

@@ -21,6 +21,7 @@ interface UserServiceListItemProps {
   loading?: boolean;
   isUserConfigAllowed: boolean;
   isOwner: boolean;
+  isActiveProvider: boolean;
 }
 
 export const UserServiceListItem = ({
@@ -36,6 +37,7 @@ export const UserServiceListItem = ({
   loading = false,
   isUserConfigAllowed,
   isOwner,
+  isActiveProvider,
 }: UserServiceListItemProps) => {
   const { t } = useTranslation();
   const serviceTypes = getServiceTypes(t);
@@ -57,6 +59,8 @@ export const UserServiceListItem = ({
       model_name: editData.model_name || service.model_name || '',
       showCustomModelInput: editData.showCustomModelInput ?? false,
       custom_model_name: editData.custom_model_name ?? service.model_name ?? '',
+      chat_tool_profile:
+        editData.chat_tool_profile ?? service.chat_tool_profile ?? 'full',
     };
 
     return (
@@ -109,8 +113,8 @@ export const UserServiceListItem = ({
               />
             )}
 
-            {/* Admin global: show active badge */}
-            {service.is_public && service.is_active && (
+            {/* Admin global: show active badge when it's the selected provider */}
+            {service.is_public && isActiveProvider && (
               <span className="px-2 py-1 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded-full text-xs">
                 {t('settings.aiService.userSettings.active')}
               </span>

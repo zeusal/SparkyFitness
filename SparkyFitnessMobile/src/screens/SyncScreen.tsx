@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { View, Text, Image, ScrollView, Platform, Alert, ActivityIndicator, AppState } from 'react-native';
 import Button from '../components/ui/Button';
 import Icon from '../components/Icon';
@@ -6,6 +6,9 @@ import { useActiveWorkoutBarPadding } from '../components/ActiveWorkoutBar';
 import SyncFrequency from '../components/SyncFrequency';
 import SyncOnOpen from '../components/SyncOnOpen';
 import HealthDataSync from '../components/HealthDataSync';
+import HealthDataWriteback from '../components/HealthDataWriteback';
+import { WRITEBACK_METRICS, type WritebackMetric, type WritebackDateRange } from '../WritebackMetrics';
+import HealthSourceLabel from '../components/HealthSourceLabel';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCSSVariable } from 'uniwind';
 import BottomSheetPicker from '../components/BottomSheetPicker';
@@ -26,6 +29,9 @@ import {
   stopObservers,
 } from '../services/healthConnectService';
 import { configureBackgroundSync, stopBackgroundSync, performBackgroundSync } from '../services/backgroundSyncService';
+import { removeWrittenData } from '../services/writeback';
+import DateRangeSheet, { type DateRangeSheetRef } from '../components/DateRangeSheet';
+import Toast from 'react-native-toast-message';
 import {
   tryClaimAutoSync,
   isForegroundAutoSyncWindowOpen,
@@ -73,7 +79,10 @@ const SyncScreen: React.FC<SyncScreenProps> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const activeWorkoutBarPadding = useActiveWorkoutBarPadding('stack');
   const accentPrimary = useCSSVariable('--color-accent-primary') as string | undefined;
+  const textPrimary = useCSSVariable('--color-text-primary') as string;
   const [healthMetricStates, setHealthMetricStates] = useState<HealthMetricStates>({});
+  const [writebackStates, setWritebackStates] = useState<Record<string, boolean>>({});
+  const dateRangeSheetRef = useRef<DateRangeSheetRef>(null);
   const [isBackgroundSyncEnabled, setIsBackgroundSyncEnabled] = useState<boolean>(false);
   const [isSyncOnOpenEnabled, setIsSyncOnOpenEnabled] = useState<boolean>(false);
   const [lastSyncedTime, setLastSyncedTime] = useState<string | null>(null);
@@ -117,8 +126,15 @@ const SyncScreen: React.FC<SyncScreenProps> = ({ navigation }) => {
       newHealthMetricStates[metric.stateKey] = enabled === true;
     }
 
+    const newWritebackStates: Record<string, boolean> = {};
+    for (const metric of WRITEBACK_METRICS) {
+      const enabled = await loadHealthPreference<boolean>(metric.preferenceKey);
+      newWritebackStates[metric.id] = enabled === true;
+    }
+
     setSelectedTimeRange(initialTimeRange);
     setHealthMetricStates(newHealthMetricStates);
+    setWritebackStates(newWritebackStates);
 
     if (initialized) {
       await refreshEnabledMetricPermissions(newHealthMetricStates);
@@ -259,6 +275,93 @@ const SyncScreen: React.FC<SyncScreenProps> = ({ navigation }) => {
     setHealthDataRefreshKey(k => k + 1);
   };
 
+  const handleToggleWriteback = async (
+    metric: WritebackMetric,
+    newValue: boolean
+  ): Promise<void> => {
+    setWritebackStates(prev => ({ ...prev, [metric.id]: newValue }));
+    await saveHealthPreference(metric.preferenceKey, newValue);
+    if (!newValue) {
+      return;
+    }
+    // Enabling: request the write permission; revert the toggle if denied.
+    try {
+      const granted = await requestHealthPermissions([metric.permission]);
+      if (!granted) {
+        Alert.alert(
+          'Permission Denied',
+          `Please grant ${metric.label.toLowerCase()} write permission in ${healthSettingsName}.`
+        );
+        setWritebackStates(prev => ({ ...prev, [metric.id]: false }));
+        await saveHealthPreference(metric.preferenceKey, false);
+        addLog(`Writeback permission denied: ${metric.label}.`, 'WARNING');
+      } else {
+        addLog(`${metric.label} writeback enabled and write permission granted.`, 'INFO');
+      }
+    } catch (permissionError) {
+      const errorMessage =
+        permissionError instanceof Error ? permissionError.message : String(permissionError);
+      Alert.alert(
+        'Permission Error',
+        `Failed to request ${metric.label.toLowerCase()} write permission: ${errorMessage}`
+      );
+      setWritebackStates(prev => ({ ...prev, [metric.id]: false }));
+      await saveHealthPreference(metric.preferenceKey, false);
+      addLog(`Writeback permission request error for ${metric.label}: ${errorMessage}`, 'ERROR');
+    }
+  };
+
+  const writebackStoreName = isAndroid ? 'Health Connect' : 'Apple Health';
+
+  // Delete written data, then surface the outcome honestly: success, a warning when
+  // some records couldn't be deleted (partial), or an error if it threw. A full purge
+  // (range === null) is a rollback, so reset the toggles locally to match the prefs.
+  const doRemoveWritebackData = async (range: WritebackDateRange | null): Promise<void> => {
+    try {
+      const { ok } = await removeWrittenData(range);
+      if (range === null) setWritebackStates({});
+      if (ok) {
+        Toast.show({
+          type: 'success',
+          text1: 'Removed',
+          text2: `Deleted SparkyFitness data from ${writebackStoreName}.`,
+        });
+      } else {
+        Toast.show({
+          type: 'error',
+          text1: 'Partially removed',
+          text2: `Some records couldn't be deleted from ${writebackStoreName}.`,
+        });
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      addLog(`[SyncScreen] Failed to remove writeback data: ${errorMessage}`, 'ERROR');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: `Could not remove data from ${writebackStoreName}.`,
+      });
+    }
+  };
+
+  // Full purge → confirm (it's destructive and turns writeback off).
+  const handleRemoveAllData = (): void => {
+    Alert.alert(
+      `Remove all ${writebackStoreName} data`,
+      `Delete every nutrition and hydration record SparkyFitness wrote to ${writebackStoreName}, and turn writeback off? Your SparkyFitness diary and records from other apps are not affected.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => doRemoveWritebackData(null) },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  // Date range → the picker's own confirm button is the commit point.
+  const handleRemoveDateRange = (): void => {
+    dateRangeSheetRef.current?.present();
+  };
+
   const handleToggleAllMetrics = async (): Promise<void> => {
     const newValue = !isAllMetricsEnabled;
 
@@ -342,12 +445,13 @@ const SyncScreen: React.FC<SyncScreenProps> = ({ navigation }) => {
   };
 
   return (
-    <View className="flex-1 bg-background" style={{ paddingTop: insets.top }}>
+    <View className="flex-1 bg-background" style={Platform.OS === 'ios' ? undefined : { paddingTop: insets.top }}>
       <ScrollView
         contentContainerStyle={{ padding: 16, paddingTop: 16, paddingBottom: insets.bottom + 80 + activeWorkoutBarPadding }}
-        contentInsetAdjustmentBehavior="never"
+        contentInsetAdjustmentBehavior={Platform.OS === 'ios' ? 'automatic' : 'never'}
       >
         {/* Header */}
+        {Platform.OS !== 'ios' && (
         <View className="flex-row justify-between items-center mb-4">
           <View className="flex-row items-center">
             <Button
@@ -356,11 +460,12 @@ const SyncScreen: React.FC<SyncScreenProps> = ({ navigation }) => {
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               className="py-0 px-0 mr-2"
             >
-              <Icon name="chevron-back" size={22} color={accentPrimary} />
+              <Icon name="chevron-back" size={22} color={textPrimary} />
             </Button>
             <Text className="text-2xl font-bold text-text-primary">Health Data Sync</Text>
           </View>
         </View>
+        )}
 
         {/* Sync Range */}
         <View className="bg-surface rounded-xl p-4 py-3 mb-4 shadow-sm">
@@ -418,16 +523,7 @@ const SyncScreen: React.FC<SyncScreenProps> = ({ navigation }) => {
                 : formatRelativeTime(null))
               : ' '}
           </Text>
-          {Platform.OS === 'ios' && (
-            <Text className="text-text-muted text-center text-xs mb-2">
-              <Text className="font-bold">Source:</Text> Apple Health
-            </Text>
-          )}
-          {Platform.OS === 'android' && (
-            <Text className="text-text-muted text-center text-xs mb-2">
-              <Text className="font-bold">Source:</Text> Health Connect
-            </Text>
-          )}
+          <HealthSourceLabel className="text-center mb-2" />
         </View>
 
         {/* Health Disclaimer */}
@@ -449,6 +545,17 @@ const SyncScreen: React.FC<SyncScreenProps> = ({ navigation }) => {
           handleToggleAllMetrics={handleToggleAllMetrics}
           healthData={healthData}
           isLoadingHealthData={isLoadingHealthData}
+        />
+
+        <HealthDataWriteback
+          writebackStates={writebackStates}
+          handleToggleWriteback={handleToggleWriteback}
+          onRemoveAllData={handleRemoveAllData}
+          onRemoveDateRange={handleRemoveDateRange}
+        />
+        <DateRangeSheet
+          ref={dateRangeSheetRef}
+          onConfirm={(from, to) => doRemoveWritebackData({ from, to })}
         />
 
         {/* Health Data Report — Android only */}

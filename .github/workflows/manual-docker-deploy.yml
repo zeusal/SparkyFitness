@@ -6,7 +6,7 @@ on:
       tag:
         description: "Docker image tag"
         required: true
-        default: "dev"
+        default: "latest"
       service:
         description: "Target to build (all or a specific service)"
         type: choice
@@ -20,7 +20,7 @@ on:
 
 jobs:
   push_to_registries:
-    name: Push Docker image to multiple registries
+    name: Push Docker image to GitHub Container Registry
     runs-on: ubuntu-latest
     permissions:
       packages: write
@@ -32,18 +32,16 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v4
 
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set lowercase repository name
+        id: repo
+        run: echo "name=${GITHUB_REPOSITORY,,}" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -55,8 +53,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            codewithcj/sparkyfitness
-            ghcr.io/${{ github.repository }}-frontend
+            ghcr.io/${{ steps.repo.outputs.name }}-frontend
           tags: |
             type=raw,value=${{ inputs.tag }}
 
@@ -78,7 +75,7 @@ jobs:
         if: ${{ inputs.service == 'all' || inputs.service == 'frontend' }}
         uses: actions/attest-build-provenance@v2
         with:
-          subject-name: ghcr.io/${{ github.repository }}-frontend
+          subject-name: ghcr.io/${{ steps.repo.outputs.name }}-frontend
           subject-digest: ${{ steps.push-frontend.outputs.digest }}
           push-to-registry: true
 
@@ -89,8 +86,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            codewithcj/sparkyfitness_server
-            ghcr.io/${{ github.repository }}-server
+            ghcr.io/${{ steps.repo.outputs.name }}-server
           tags: |
             type=raw,value=${{ inputs.tag }}
 
@@ -112,7 +108,7 @@ jobs:
         if: ${{ inputs.service == 'all' || inputs.service == 'server' }}
         uses: actions/attest-build-provenance@v2
         with:
-          subject-name: ghcr.io/${{ github.repository }}-server
+          subject-name: ghcr.io/${{ steps.repo.outputs.name }}-server
           subject-digest: ${{ steps.push-server.outputs.digest }}
           push-to-registry: true
 
@@ -123,8 +119,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            codewithcj/sparkyfitness_garmin
-            ghcr.io/${{ github.repository }}-garmin
+            ghcr.io/${{ steps.repo.outputs.name }}-garmin
           tags: |
             type=raw,value=${{ inputs.tag }}
 
@@ -146,7 +141,7 @@ jobs:
         if: ${{ inputs.service == 'all' || inputs.service == 'garmin' }}
         uses: actions/attest-build-provenance@v2
         with:
-          subject-name: ghcr.io/${{ github.repository }}-garmin
+          subject-name: ghcr.io/${{ steps.repo.outputs.name }}-garmin
           subject-digest: ${{ steps.push-garmin.outputs.digest }}
           push-to-registry: true
 
@@ -157,8 +152,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            codewithcj/sparkyfitness_mcp
-            ghcr.io/${{ github.repository }}-mcp
+            ghcr.io/${{ steps.repo.outputs.name }}-mcp
           tags: |
             type=raw,value=${{ inputs.tag }}
 
@@ -180,6 +174,6 @@ jobs:
         if: ${{ inputs.service == 'all' || inputs.service == 'mcp' }}
         uses: actions/attest-build-provenance@v2
         with:
-          subject-name: ghcr.io/${{ github.repository }}-mcp
+          subject-name: ghcr.io/${{ steps.repo.outputs.name }}-mcp
           subject-digest: ${{ steps.push-mcp.outputs.digest }}
           push-to-registry: true

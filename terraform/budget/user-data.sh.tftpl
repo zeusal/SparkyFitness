@@ -1,0 +1,94 @@
+#!/bin/bash
+# Bootstrap script run once on first boot by Lightsail (cloud-init).
+# Terraform substitutes its template tokens in this file BEFORE the script runs.
+set -euo pipefail
+exec > /var/log/sparky-bootstrap.log 2>&1
+echo "[sparky] bootstrap start: $(date -u)"
+
+# --- Install Docker + Compose plugin ---------------------------------------
+dnf update -y
+dnf install -y docker
+systemctl enable --now docker
+usermod -aG docker ec2-user
+
+mkdir -p /usr/local/lib/docker/cli-plugins
+curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 \
+  -o /usr/local/lib/docker/cli-plugins/docker-compose
+chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+# --- Layout -----------------------------------------------------------------
+APP_DIR=/opt/sparkyfitness
+mkdir -p "$APP_DIR/postgresql" "$APP_DIR/backup" "$APP_DIR/uploads"
+cd "$APP_DIR"
+
+# --- Decide public URL ------------------------------------------------------
+# If a domain is set -> serve it over HTTPS. Otherwise fall back to the Lightsail
+# static IP that Terraform injects here (NOT a runtime IP lookup, which at first
+# boot can return the temporary IP before the static IP is attached).
+DOMAIN="${domain}"
+if [ -n "$DOMAIN" ]; then
+  FRONTEND_URL="https://$DOMAIN"
+else
+  FRONTEND_URL="http://${static_ip}"
+fi
+echo "[sparky] frontend url: $FRONTEND_URL"
+
+# --- Write .env (quoted heredoc => bash does NOT touch the values) ----------
+cat > .env <<'ENVEOF'
+SPARKY_FITNESS_DB_NAME=${db_name}
+SPARKY_FITNESS_DB_USER=${db_user}
+SPARKY_FITNESS_DB_PASSWORD=${db_password}
+SPARKY_FITNESS_APP_DB_USER=${db_app_user}
+SPARKY_FITNESS_APP_DB_PASSWORD=${db_app_password}
+SPARKY_FITNESS_API_ENCRYPTION_KEY=${api_encryption_key}
+BETTER_AUTH_SECRET=${better_auth_secret}
+SPARKY_FITNESS_DISABLE_SIGNUP=${disable_signup}
+SPARKY_FITNESS_ADMIN_EMAIL=${admin_email}
+SPARKY_FITNESS_LOG_LEVEL=${log_level}
+SPARKY_SERVER_IMAGE=ghcr.io/${ghcr_namespace}/sparkyfitness-server:${image_tag}
+SPARKY_FRONTEND_IMAGE=ghcr.io/${ghcr_namespace}/sparkyfitness-frontend:${image_tag}
+ENVEOF
+# Append the runtime-computed URL (uses a bash variable, so it stays outside the heredoc)
+echo "SPARKY_FITNESS_FRONTEND_URL=$FRONTEND_URL" >> .env
+
+# --- Registry auth for ghcr -------------------------------------------------
+# Needed only if your ghcr packages are PRIVATE. If public, this is skipped and
+# an empty docker config is created so Watchtower's bind mount always exists.
+mkdir -p /root/.docker
+GHCR_TOKEN="${ghcr_token}"
+GHCR_USER="${ghcr_username}"
+[ -z "$GHCR_USER" ] && GHCR_USER="${ghcr_namespace}"
+if [ -n "$GHCR_TOKEN" ]; then
+  echo "[sparky] logging in to ghcr.io as $GHCR_USER"
+  echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+fi
+[ -f /root/.docker/config.json ] || echo '{}' > /root/.docker/config.json
+
+# --- Write docker-compose.yml (verbatim from the module) --------------------
+cat > docker-compose.yml <<'COMPOSEEOF'
+${compose_content}
+COMPOSEEOF
+
+# --- Write Caddyfile --------------------------------------------------------
+# With a domain: automatic HTTPS via Let's Encrypt.
+# Without one: plain HTTP on :80 so http://<ip> works immediately.
+if [ -n "$DOMAIN" ]; then
+  cat > Caddyfile <<CADDYEOF
+$DOMAIN {
+    encode gzip
+    reverse_proxy sparkyfitness-frontend:80
+}
+CADDYEOF
+else
+  cat > Caddyfile <<'CADDYEOF'
+:80 {
+    encode gzip
+    reverse_proxy sparkyfitness-frontend:80
+}
+CADDYEOF
+fi
+
+# --- Launch -----------------------------------------------------------------
+docker compose pull
+docker compose up -d
+echo "[sparky] bootstrap done: $(date -u)"

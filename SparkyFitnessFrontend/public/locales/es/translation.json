@@ -31,8 +31,37 @@
     "iron": "Hierro"
   },
   "calculationSettings": {
+    "title": "Ajustes de cálculo",
+    "description": "Gestiona los ajustes de TMB, el cálculo de grasa corporal y las preferencias de unidades.",
     "showNetCarbs": "Mostrar carbohidratos netos (carbohidratos menos fibra)",
-    "showNetCarbsHint": "Cuando está activado, los resúmenes de carbohidratos muestran los carbohidratos totales menos la fibra dietética."
+    "showNetCarbsHint": "Cuando está activado, los resúmenes de carbohidratos muestran los carbohidratos totales menos la fibra dietética.",
+    "bmrAlgorithm": "Algoritmo de TMB",
+    "selectBmrAlgorithm": "Selecciona el algoritmo de TMB",
+    "bmrAlgorithmHint": "Selecciona la fórmula utilizada para calcular tu tasa metabólica basal.",
+    "bodyFatAlgorithm": "Algoritmo de grasa corporal",
+    "selectBodyFatAlgorithm": "Selecciona el algoritmo de grasa corporal",
+    "bodyFatAlgorithmHint": "Selecciona la fórmula utilizada para estimar el porcentaje de grasa corporal a partir de las medidas.",
+    "includeBmrInNetCalories": "Incluir la TMB en las calorías netas",
+    "includeBmrInNetCaloriesHint": "Cuando está activado, tu TMB se restará del total diario de calorías netas."
+  },
+  "allergenSettings": {
+    "title": "Preferencias de alérgenos",
+    "intro": "Añade los alérgenos sobre los que quieres recibir avisos. Cuando un alimento contenga uno de ellos, aparecerá una insignia de advertencia en las tarjetas de alimentos y en los resultados de búsqueda.",
+    "commonAllergens": "Alérgenos comunes",
+    "customAllergen": "Alérgeno personalizado",
+    "customPlaceholder": "p. ej., altramuz, moluscos…",
+    "add": "Añadir",
+    "syncTitle": "Sincronizar desde OpenFoodFacts",
+    "syncDescription": "Obtén datos de alérgenos para tus alimentos guardados de OpenFoodFacts. Solo es necesario hacerlo una vez.",
+    "syncing": "Sincronizando…",
+    "syncButton": "Sincronizar alérgenos",
+    "trackedTitle": "Tus alérgenos registrados",
+    "noneTracked": "Aún no hay alérgenos registrados. Añade algunos arriba para recibir avisos en las tarjetas de alimentos.",
+    "allergen": "Alérgeno",
+    "actions": "Acciones",
+    "remove": "Eliminar",
+    "alreadyAddedTitle": "Ya añadido",
+    "alreadyAddedDescription": "{{name}} ya está en tu lista."
   },
   "aboutDialog": {
     "title": "Sobre SparkyFitness",
@@ -521,7 +550,86 @@
     },
     "nutrientDisplay": {
       "title": "Visualización de nutrientes",
-      "description": "Elige qué nutrientes mostrar en las vistas de comida y comidas"
+      "description": "Elige qué nutrientes mostrar en las vistas de comida y comidas",
+      "platformDesktop": "Escritorio",
+      "platformMobile": "Móvil",
+      "groupSummary": "Resumen",
+      "groupQuickInfo": "Información rápida",
+      "groupFoodDatabase": "Base de datos de alimentos",
+      "groupGoal": "Objetivo",
+      "groupReportTabular": "Informe (tabla)",
+      "groupReportChart": "Informe (gráfico)",
+      "descSummary": "Controla el resumen nutricional y las tendencias de 14 días en la página del diario.",
+      "descQuickInfo": "Controla los nutrientes que se muestran en las entradas de alimentos individuales, los totales de las comidas, los resultados de búsqueda de alimentos y la base de datos de alimentos.",
+      "descFoodDatabase": "Controla los nutrientes que se muestran al editar alimentos en tu base de datos.",
+      "descGoal": "Controla los nutrientes que se muestran al establecer o editar tus objetivos.",
+      "descReportTabular": "Controla las columnas de nutrientes en la vista de tabla de los informes.",
+      "descReportChart": "Controla qué nutrientes están disponibles para los gráficos en la sección de informes.",
+      "syncWithMobile": "Sincronizar con móvil",
+      "syncWithDesktop": "Sincronizar con escritorio",
+      "selectAll": "Seleccionar todo",
+      "clearAll": "Borrar todo",
+      "resetToDefault": "Restablecer valores predeterminados"
+    },
+    "calorieGoalAdjustment": {
+      "title": "Ajuste del objetivo diario de calorías",
+      "adaptiveGoal": "TDEE adaptativo",
+      "adaptiveGoalDescription": "El 'estándar de oro'. SparkyFitness calcula tu TDEE correlacionando tus cambios reales de peso con tu ingesta de calorías de los últimos 35 días. 'Aprende' tu metabolismo único.",
+      "dynamicGoal": "Objetivo dinámico",
+      "dynamicGoalDescription": "Tu objetivo de calorías se ajustará dinámicamente según tu nivel de actividad diaria (p. ej., ejercicio, pasos). Es ideal para personas activas o cuyo nivel de actividad varía cada día.",
+      "fixedGoal": "Objetivo fijo",
+      "fixedGoalDescription": "Tu objetivo de calorías permanecerá fijo, independientemente de tu actividad diaria. Es adecuado para personas con un nivel de actividad constante o que prefieren un objetivo estable.",
+      "percentageGoal": "Recuperación por porcentaje",
+      "percentageGoalDescription": "Recupera solo un porcentaje fijo de las calorías de tu ejercicio. Por ejemplo, un 50 % crea un margen de seguridad para evitar comer de más por quemas sobreestimadas.",
+      "percentageLabel": "Porcentaje de recuperación:",
+      "tdeeGoal": "Proyección del dispositivo",
+      "tdeeGoalDescription": "Como MyFitnessPal con Apple Watch. SparkyFitness proyecta tu gasto de todo el día extrapolando los datos actuales de tu dispositivo hasta medianoche. El ajuste = proyección − TDEE.",
+      "activityLevel": "Nivel de actividad:",
+      "activityNone": "Ninguno (×1.0)",
+      "activityNotMuch": "Sedentario (×1.2)",
+      "activityLight": "Ligeramente activo (×1.375)",
+      "activityModerate": "Moderadamente activo (×1.55)",
+      "activityHeavy": "Muy activo (×1.725)",
+      "adaptiveActivityHint": "En el modo adaptativo, este ajuste actúa como valor de reserva hasta que tengas suficientes datos de seguimiento.",
+      "allowNegativeAdjustment": "Permitir ajuste negativo (penalizar por quemar menos que el TDEE)"
+    },
+    "calculationExplanation": {
+      "title": "Cómo se calcularán tus calorías",
+      "burnedTitle": "Calorías quemadas",
+      "burnedBmr": "Actividad + TMB (tu metabolismo basal)",
+      "burnedActivity": "Actividad (solo ejercicio y pasos)",
+      "netTitle": "Energía neta",
+      "netFormula": "Consumidas − Total quemadas",
+      "remainingTitle": "Calorías restantes",
+      "remainingDynamic": "Objetivo diario − Energía neta (tu objetivo crece a medida que te mueves)",
+      "remainingPercentage": "Objetivo diario − (Consumidas − {{pct}} % de lo quemado en ejercicio)",
+      "remainingTdee": "Objetivo diario − Consumidas + (Proyección de día completo − TDEE)",
+      "remainingAdaptive": "Objetivo diario − Consumidas (el objetivo es tu TDEE adaptativo ajustado)",
+      "remainingFixed": "Objetivo diario − Consumidas (la actividad no cambia tu presupuesto)",
+      "dynamicFootnote": "* Ideal para dar energía a tus entrenamientos y a la recuperación activa.",
+      "percentageFootnote": "* Crea un margen de seguridad para evitar comer de más por quemas de calorías sobreestimadas.",
+      "tdeeFootnote": "* La proyección converge con el valor real a medianoche. Requiere que la TMB se pueda calcular y un dispositivo que sincronice pasos o calorías activas.",
+      "adaptiveFootnote": "* Ajusta dinámicamente tu objetivo diario según tu metabolismo real. Necesita un seguimiento constante de comidas y peso para una alta precisión.",
+      "fixedFootnote": "* Ideal para déficits calóricos estrictos y el control del peso."
+    },
+    "goalMode": {
+      "title": "Modo de objetivo",
+      "subtitle": "Ajusta tu objetivo diario de calorías según tu meta de composición corporal.",
+      "goalModeLabel": "Modo de objetivo",
+      "modeMaintain": "Mantener (0 %)",
+      "modeRecomp": "Recomposición corporal (-10 %)",
+      "modeCut": "Definición (-15 %)",
+      "modeHighCut": "Definición intensa (-20 %)",
+      "modeManual": "Manual (% personalizado)",
+      "calculationMethodLabel": "Método de cálculo",
+      "methodAdaptive": "Adaptativo",
+      "methodManual": "Manual",
+      "customPercentageLabel": "Porcentaje de déficit personalizado:",
+      "livePreview": "Cálculo de vista previa en directo"
+    },
+    "allergenPreferences": {
+      "title": "Preferencias de alérgenos",
+      "description": "Registra los alérgenos sobre los que quieres recibir avisos en los alimentos"
     },
     "calculationSettings": {
       "title": "Ajustes de cálculo",
@@ -1280,7 +1388,45 @@
     "totalFastsLabel": "Total de ayunos",
     "avgDurationLabel": "Duración promedio",
     "startNewFastTitle": "Iniciar un nuevo ayuno",
-    "startNewFastDesc": "Selecciona un protocolo para comenzar tu ayuno."
+    "startNewFastDesc": "Selecciona un protocolo para comenzar tu ayuno.",
+    "startFast": "Iniciar ayuno",
+    "startFasting": "Comenzar ayuno",
+    "endFast": "Finalizar ayuno",
+    "startTime": "Hora de inicio",
+    "fastingProtocol": "Protocolo de ayuno",
+    "metabolicState": "Estado metabólico",
+    "goalReached": "Objetivo alcanzado",
+    "zones": {
+      "anabolic": "Anabólica",
+      "catabolic": "Catabólica",
+      "fatBurning": "Quema de grasa",
+      "ketosis": "Cetosis",
+      "deepKetosis": "Cetosis profunda"
+    },
+    "zoneDesc": {
+      "anabolic": "Sube el azúcar en sangre.",
+      "catabolic": "Baja el azúcar en sangre.",
+      "fatBurning": "Aumenta la quema de grasa.",
+      "ketosis": "Funcionando con cetonas.",
+      "deepKetosis": "La autofagia alcanza su punto máximo."
+    }
+  },
+  "mealTypeManager": {
+    "title": "Categorías de comida",
+    "add": "Añadir categoría",
+    "addTitle": "Añadir categoría de comida",
+    "editTitle": "Editar comidas",
+    "nameLabel": "Nombre",
+    "sortOrderLabel": "Orden de clasificación"
+  },
+  "familyAccessManager": {
+    "noAccessTitle": "Aún no se ha concedido acceso a la familia",
+    "noAccessDescription": "Añade miembros de la familia para que te ayuden a gestionar tus datos de fitness",
+    "addFamilyAccess": "Añadir acceso de familia",
+    "editFamilyAccess": "Editar acceso de familia"
+  },
+  "customNutrientsManagement": {
+    "title": "Gestión de nutrientes personalizados"
   },
   "checkIn": {
     "howAreYouFeelingToday": "¿Cómo te sientes hoy?",
@@ -1332,7 +1478,21 @@
     "measurementDeletedSuccessfully": "Medida eliminada correctamente",
     "failedToDeleteMeasurement": "Error al eliminar la medida",
     "failedToLoadRecentMeasurements": "Error al cargar las medidas recientes",
-    "enterCustomCategory": "Introduce {{categoryName}}"
+    "enterCustomCategory": "Introduce {{categoryName}}",
+    "photos": {
+      "title": "Fotos de progreso",
+      "subtitle": "Sube fotos de frente, espalda y lateral para ver tu evolución física con el tiempo.",
+      "front": "Frente",
+      "back": "Espalda",
+      "side": "Lateral",
+      "tapToUpload": "Toca para subir",
+      "upload": "Subir",
+      "replace": "Reemplazar",
+      "uploadSuccess": "Foto guardada",
+      "uploadError": "Error al subir la foto",
+      "deleteSuccess": "Foto eliminada",
+      "deleteError": "Error al eliminar la foto"
+    }
   },
   "sleepTimelineEditor": {
     "sleepTimeline": "Línea de tiempo del sueño",
@@ -1657,6 +1817,12 @@
     "hips": "Caderas",
     "bodyFatPercentage": "Grasa corporal %",
     "dailySteps": "Pasos diarios",
+    "netEnergyBalance": "Balance neto",
+    "totalEaten": "Total ingerido",
+    "totalGoal": "Objetivo total",
+    "avgDailyVariance": "Variación diaria media",
+    "avgVarianceDescription": "Desviación media respecto al objetivo por día",
+    "cumulativeBalanceTitle": "Balance acumulado",
     "fasting": {
       "insightsTab": "Ayuno",
       "totalFasts": "Total de ayunos",
@@ -1666,6 +1832,7 @@
       "dailyDuration": "Duración diaria de ayuno",
       "hours": "Horas",
       "zoneDistribution": "Zonas de ayuno",
+      "consistencyGrid": "Mapa de calor de ayuno (últimos 90 días)",
       "history": "Historial de ayunos",
       "startDate": "Fecha de inicio",
       "endDate": "Fecha de fin",
@@ -2309,7 +2476,20 @@
     "calciumLabel": "Calcio (mg)",
     "ironLabel": "Hierro (mg)",
     "cancelButton": "Cancelar",
-    "saveFoodButton": "Guardar alimento"
+    "saveFoodButton": "Guardar alimento",
+    "editFoodTitle": "Editar alimento",
+    "addCustomFoodTitle": "Añadir alimento personalizado",
+    "unitVariantsTitle": "Variantes de unidad",
+    "addUnitButton": "Añadir unidad",
+    "unitVariantsDescription": "Añade diferentes medidas de unidad para este alimento con valores nutricionales específicos para cada unidad.",
+    "savingButton": "Guardando...",
+    "updateFoodButton": "Actualizar alimento",
+    "addFoodButton": "Añadir alimento",
+    "syncConfirmTitle": "¿Sincronizar entradas anteriores?",
+    "syncConfirmDescription": "¿Quieres actualizar todas tus entradas anteriores del diario para este alimento con la nueva información nutricional?",
+    "allergensLabel": "Alérgenos",
+    "customAllergenPlaceholder": "Alérgeno personalizado…",
+    "addAllergenButton": "Añadir"
   },
   "customMeasurements": {
     "title": "Mediciones personalizadas - {{date}}",

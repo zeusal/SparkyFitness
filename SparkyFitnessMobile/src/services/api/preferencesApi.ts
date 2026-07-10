@@ -3,6 +3,42 @@ import { UserPreferences } from '../../types/preferences';
 import { isValidTimeZone } from '@workspace/shared';
 import { addLog } from '../LogService';
 
+/** Mirrors the server's nutrient display preference record shape. */
+export interface NutrientDisplayPreference {
+  view_group: string;
+  platform: string;
+  visible_nutrients: string[];
+}
+
+/**
+ * Fetches all nutrient display preferences for the current user.
+ * GET /api/preferences/nutrient-display
+ */
+export const fetchNutrientDisplayPreferences = (): Promise<NutrientDisplayPreference[]> =>
+  apiFetch<NutrientDisplayPreference[]>({
+    endpoint: '/api/preferences/nutrient-display',
+    serviceName: 'Preferences API',
+    operation: 'fetch nutrient display preferences',
+  });
+
+/**
+ * Updates the visible nutrients for a single view group / platform.
+ * PUT /api/preferences/nutrient-display/:viewGroup/:platform — full-array
+ * upsert (the server replaces the row's list rather than merging).
+ */
+export const updateNutrientDisplayPreference = (
+  viewGroup: string,
+  platform: string,
+  visibleNutrients: string[],
+): Promise<NutrientDisplayPreference> =>
+  apiFetch<NutrientDisplayPreference>({
+    endpoint: `/api/preferences/nutrient-display/${viewGroup}/${platform}`,
+    serviceName: 'Preferences API',
+    operation: 'update nutrient display preference',
+    method: 'PUT',
+    body: { visible_nutrients: visibleNutrients },
+  });
+
 interface EnsureTimezoneBootstrappedOptions {
   throwOnFailure?: boolean;
 }

@@ -1,7 +1,15 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Bot, Plus } from 'lucide-react';
 import {
   AlertDialog,
@@ -23,10 +31,12 @@ import { UserServiceListItem } from '@/components/ai/UserServiceListItem';
 import { getModelOptions } from '@/utils/aiServiceUtils';
 import {
   useAIServices,
+  useActiveAIService,
   useUserAIPreferences,
   useAddAIService,
   useUpdateAIService,
   useDeleteAIService,
+  useUpdateUserAIPreferences,
 } from '@/hooks/AI/useAIServiceSettings';
 import { useUserAiConfigAllowed } from '@/hooks/AI/useUserAiConfigAllowed';
 import { AiServiceSettingsResponse } from '@workspace/shared';
@@ -46,7 +56,18 @@ const AIServiceSettings = () => {
   const { data: isUserConfigAllowed = false, isLoading: settingsLoading } =
     useUserAiConfigAllowed();
   const { data: services = [] } = useAIServices();
+  const { data: activeService } = useActiveAIService(!!user);
   const { data: preferencesData } = useUserAIPreferences();
+
+  // Services the user has enabled (many can be on). The active-provider
+  // dropdown and the global "Active" badge both key off the single selection
+  // below, validated against this set so a stale pointer can never win.
+  const enabledServices = services.filter((s) => s.is_active);
+  const activeServiceId =
+    enabledServices.find((s) => s.id === preferencesData?.active_ai_service_id)
+      ?.id ??
+    enabledServices.find((s) => s.id === activeService?.id)?.id ??
+    '';
 
   // Mutations
   const { mutateAsync: addService, isPending: isAdding } = useAddAIService();
@@ -54,8 +75,10 @@ const AIServiceSettings = () => {
     useUpdateAIService();
   const { mutateAsync: deleteService, isPending: isDeleting } =
     useDeleteAIService();
+  const { mutateAsync: updatePreferences, isPending: isUpdatingPrefs } =
+    useUpdateUserAIPreferences();
 
-  const loading = isAdding || isUpdating || isDeleting;
+  const loading = isAdding || isUpdating || isDeleting || isUpdatingPrefs;
 
   const [newService, setNewService] =
     useState<CreateAiServiceSettingsFormInput>({
@@ -68,6 +91,7 @@ const AIServiceSettings = () => {
       model_name: '',
       showCustomModelInput: false,
       custom_model_name: '',
+      chat_tool_profile: 'full',
     });
 
   const [editingService, setEditingService] = useState<string | null>(null);
@@ -128,6 +152,7 @@ const AIServiceSettings = () => {
         system_prompt: globalSetting.system_prompt || '',
         is_active: true,
         model_name: globalSetting.model_name || undefined,
+        chat_tool_profile: globalSetting.chat_tool_profile ?? 'full',
       };
       await addService(overrideData);
       // Success toast is handled by the mutation meta
@@ -227,6 +252,7 @@ const AIServiceSettings = () => {
         model_name: '',
         showCustomModelInput: false,
         custom_model_name: '',
+        chat_tool_profile: 'full',
       });
 
       setShowAddForm(false);
@@ -307,7 +333,10 @@ const AIServiceSettings = () => {
     try {
       await updateService({ serviceId, serviceData: serviceToUpdate });
       setEditingService(null);
-      setEditData({ showCustomModelInput: false, custom_model_name: '' });
+      setEditData({
+        showCustomModelInput: false,
+        custom_model_name: '',
+      });
       // Success toast is handled by the mutation meta
     } catch (error: unknown) {
       // Check for 403 errors and show appropriate message
@@ -425,6 +454,27 @@ const AIServiceSettings = () => {
       return;
     }
 
+    const isOwner = originalService.user_id === user?.id;
+
+    if (!isOwner) {
+      try {
+        await updatePreferences({
+          active_ai_service_id: isActive ? serviceId : null,
+          auto_clear_history: preferencesData?.auto_clear_history || 'never',
+        });
+        toast({
+          title: t('settings.aiService.userSettings.success'),
+          description: isActive
+            ? t('settings.aiService.userSettings.serviceActivated')
+            : t('settings.aiService.userSettings.serviceDeactivated'),
+        });
+        return;
+      } catch (error) {
+        console.error('Error updating active AI service preference:', error);
+        return;
+      }
+    }
+
     if (originalService.is_public) {
       toast({
         title: t('settings.aiService.userSettings.error'),
@@ -454,9 +504,7 @@ const AIServiceSettings = () => {
           ? t('settings.aiService.userSettings.serviceActivated')
           : t('settings.aiService.userSettings.serviceDeactivated'),
       });
-      // Success toast for update is handled by the mutation meta, but we add a specific one for toggle
     } catch (error) {
-      // Error toast is handled by the mutation meta
       console.error('Error updating AI service status:', error);
     }
   };
@@ -498,12 +546,16 @@ const AIServiceSettings = () => {
       model_name: isCustomModel ? '' : service.model_name || '',
       showCustomModelInput: isCustomModel,
       custom_model_name: service.model_name ?? '',
+      chat_tool_profile: service.chat_tool_profile ?? 'full',
     });
   };
 
   const cancelEditing = () => {
     setEditingService(null);
-    setEditData({ showCustomModelInput: false, custom_model_name: '' });
+    setEditData({
+      showCustomModelInput: false,
+      custom_model_name: '',
+    });
   };
 
   const openDeleteDialog = (serviceId: string) => {
@@ -578,29 +630,78 @@ const AIServiceSettings = () => {
                   : t('settings.aiService.userSettings.availableServices')}
               </h3>
 
+              {/* Global active-provider selector: writes active_ai_service_id,
+                  the single pointer every AI feature (chat, food-photo, label
+                  scan, unit conversion) reads. Mirrors the chat quick-switcher. */}
+              {enabledServices.length > 0 && (
+                <div className="space-y-2">
+                  <Label htmlFor="active-ai-provider-select">
+                    {t(
+                      'settings.aiService.userSettings.activeProvider',
+                      'Active AI provider'
+                    )}
+                  </Label>
+                  <Select
+                    value={activeServiceId}
+                    onValueChange={(id) =>
+                      updatePreferences({
+                        active_ai_service_id: id,
+                        auto_clear_history:
+                          preferencesData?.auto_clear_history || 'never',
+                      })
+                    }
+                  >
+                    <SelectTrigger
+                      id="active-ai-provider-select"
+                      className="max-w-sm"
+                    >
+                      <SelectValue
+                        placeholder={t(
+                          'settings.aiService.userSettings.activeProvider',
+                          'Active AI provider'
+                        )}
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {enabledServices.map((service) => (
+                        <SelectItem key={service.id} value={service.id}>
+                          {service.service_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               <div className="space-y-4">
                 {services
                   .filter((service) => isUserConfigAllowed || service.is_public)
-                  .map((service) => (
-                    <UserServiceListItem
-                      key={service.id}
-                      service={service}
-                      isEditing={editingService === service.id}
-                      editData={editData}
-                      onEditDataChange={(data) =>
-                        setEditData((prev) => ({ ...prev, ...data }))
-                      }
-                      onStartEdit={() => startEditing(service)}
-                      onCancelEdit={cancelEditing}
-                      onUpdate={() => handleUpdateService(service.id)}
-                      onDelete={() => openDeleteDialog(service.id)}
-                      onToggleActive={(isActive) =>
-                        handleToggleActive(service.id, isActive)
-                      }
-                      loading={loading}
-                      isUserConfigAllowed={isUserConfigAllowed}
-                    />
-                  ))}
+                  .map((service) => {
+                    const isOwner = service.user_id === user?.id;
+
+                    return (
+                      <UserServiceListItem
+                        key={service.id}
+                        service={service}
+                        isEditing={editingService === service.id}
+                        editData={editData}
+                        onEditDataChange={(data) =>
+                          setEditData((prev) => ({ ...prev, ...data }))
+                        }
+                        onStartEdit={() => startEditing(service)}
+                        onCancelEdit={cancelEditing}
+                        onUpdate={() => handleUpdateService(service.id)}
+                        onDelete={() => openDeleteDialog(service.id)}
+                        onToggleActive={(isActive) =>
+                          handleToggleActive(service.id, isActive)
+                        }
+                        loading={loading}
+                        isUserConfigAllowed={isUserConfigAllowed}
+                        isOwner={isOwner}
+                        isActiveProvider={service.id === activeServiceId}
+                      />
+                    );
+                  })}
               </div>
             </>
           )}

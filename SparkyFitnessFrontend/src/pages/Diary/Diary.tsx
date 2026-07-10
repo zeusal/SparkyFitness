@@ -1,17 +1,23 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useActiveUser } from '@/contexts/ActiveUserContext';
 import { usePreferences } from '@/contexts/PreferencesContext';
 import DayNavigator from '@/components/DayNavigator';
-import DiaryTopControls, { DayTotals } from './DiaryTopControls';
+import NutritionSummaryCard, { DayTotals } from './NutritionSummaryCard';
+import DailyProgress from './DailyProgress';
+import WaterIntake from './WaterIntake';
 import MealCard from './MealCard';
 import ExerciseCard from './ExerciseCard';
+import DiaryWidgetGrid, { type DiaryWidget } from './DiaryWidgetGrid';
+import { mealWidgetKey } from '@/utils/dashboardLayout';
+import { Flame, Salad, Droplet, UtensilsCrossed, Dumbbell } from 'lucide-react';
 import EditFoodEntryDialog from './EditFoodEntryDialog';
 import FoodUnitSelector from '@/components/FoodUnitSelector';
 import CopyFoodEntryDialog from '@/pages/Diary/CopyFoodEntryDialog';
 import ConvertToMealDialog from '@/pages/Diary/ConvertToMealDialog';
 import EditMealFoodEntryDialog from './EditMealFoodEntryDialog';
+import CopyFamilyEntryDialog from '@/pages/Diary/CopyFamilyEntryDialog';
 import LogMealDialog from '@/pages/Diary/LogMealDialog';
 import { debug, info, error } from '@/utils/logging';
 import {
@@ -38,6 +44,7 @@ import {
   useFoodEntryMeals,
 } from '@/hooks/Diary/useFoodEntries';
 import { todayInZone } from '@workspace/shared';
+import { useDailySummary } from '@/hooks/Diary/useDailyProgress';
 
 const Diary = () => {
   const { t } = useTranslation();
@@ -70,6 +77,9 @@ const Diary = () => {
     useState(false);
   const [convertToMealSourceMealType, setConvertToMealSourceMealType] =
     useState<string>('');
+  const [isCopyFamilyDialogOpen, setIsCopyFamilyDialogOpen] = useState(false);
+  const [copyFamilySourceMealType, setCopyFamilySourceMealType] =
+    useState<string>('');
 
   const [selectedMealType, setSelectedMealType] = useState<string>('');
   const [selectedMealTypeId, setSelectedMealTypeId] = useState<string>('');
@@ -83,15 +93,30 @@ const Diary = () => {
   const { data: availableMealTypes, isLoading: mealTypesLoading } =
     useMealTypes();
   const { data: goals, isLoading: goalsLoading } = useDiaryGoals(selectedDate);
+  const { data: summaryData, isLoading: summaryLoading } =
+    useDailySummary(selectedDate);
   const { data: fetchedFoodEntries, isLoading: foodEntriesLoading } =
     useFoodEntries(selectedDate);
   const { data: foodEntryMeals, isLoading: foodEntryMealsLoading } =
     useFoodEntryMeals(selectedDate);
 
+  const effectiveGoals = goals
+    ? summaryData?.adjustedGoals
+      ? {
+          ...goals,
+          calories: summaryData.adjustedGoals.calories,
+          protein: summaryData.adjustedGoals.protein,
+          carbs: summaryData.adjustedGoals.carbs,
+          fat: summaryData.adjustedGoals.fat,
+        }
+      : goals
+    : undefined;
+
   const loading =
     customNutrientsLoading ||
     mealTypesLoading ||
     goalsLoading ||
+    summaryLoading ||
     foodEntriesLoading ||
     foodEntryMealsLoading;
 
@@ -143,6 +168,12 @@ const Diary = () => {
     setCopySourceMealType(mealType);
     setIsCopyDialogOpen(true);
     debug(loggingLevel, 'Opening copy dialog for meal type:', mealType);
+  };
+
+  const handleCopyFamilyClick = (mealType: string) => {
+    setCopyFamilySourceMealType(mealType);
+    setIsCopyFamilyDialogOpen(true);
+    debug(loggingLevel, 'Opening family copy dialog for meal type:', mealType);
   };
 
   const handleCopyFoodEntries = async (
@@ -285,6 +316,119 @@ const Diary = () => {
     );
   };
 
+  const visibleMealTypes = useMemo(
+    () => (availableMealTypes ?? []).filter((meal) => meal.is_visible),
+    [availableMealTypes]
+  );
+
+  // Build the ordered widget registry: energy, nutrition, water, one card per
+  // visible meal type, then exercise. Keys match buildWidgetKeys() so the saved
+  // grid layout reconciles cleanly against the user's current meal types.
+  const widgets: DiaryWidget[] = useMemo(() => {
+    if (!effectiveGoals) return [];
+    const list: DiaryWidget[] = [
+      {
+        key: 'energy',
+        title: t('diary.dailyEnergyGoal', 'Daily Energy Goal'),
+        icon: Flame,
+        render: () => <DailyProgress selectedDate={selectedDate} />,
+      },
+      {
+        key: 'nutrition',
+        title: t('diary.nutritionSummary', 'Nutrition Summary'),
+        icon: Salad,
+        render: () => (
+          <NutritionSummaryCard
+            selectedDate={selectedDate}
+            dayTotals={dayTotals as unknown as DayTotals}
+            goals={effectiveGoals}
+            energyUnit={energyUnit}
+            convertEnergy={convertEnergy}
+            customNutrients={customNutrients}
+          />
+        ),
+      },
+      {
+        key: 'water',
+        title: t('diary.waterIntake', 'Water Intake'),
+        icon: Droplet,
+        render: () => <WaterIntake selectedDate={selectedDate} />,
+      },
+    ];
+
+    for (const mealTypeObj of visibleMealTypes) {
+      list.push({
+        key: mealWidgetKey(mealTypeObj.id),
+        title: mealTypeObj.name,
+        icon: UtensilsCrossed,
+        render: () => (
+          <MealCard
+            meal={{
+              ...getMealData(
+                mealTypeObj.name,
+                foodEntries,
+                foodEntryMeals ?? [],
+                effectiveGoals
+              ),
+              selectedDate: selectedDate,
+            }}
+            totals={getMealTotals(
+              mealTypeObj.name,
+              foodEntries,
+              foodEntryMeals ?? []
+            )}
+            onFoodSelect={handleFoodSelect}
+            onEditEntry={handleEditEntry}
+            selectedDate={selectedDate}
+            onRemoveEntry={(itemId, itemType) =>
+              handleRemoveEntry(itemId, itemType)
+            }
+            getEntryNutrition={getEntryNutrition}
+            onCopyClick={handleCopyClick}
+            onCopyFamilyClick={handleCopyFamilyClick}
+            onConvertToMealClick={handleConvertToMealClick}
+            energyUnit={energyUnit}
+            convertEnergy={convertEnergy}
+            customNutrients={customNutrients}
+            shouldOpenFoodSearch={
+              openFoodSearchForMealType?.toLowerCase() ===
+              mealTypeObj.name.toLowerCase()
+            }
+            onFoodSearchClose={() => setOpenFoodSearchForMealType(null)}
+          />
+        ),
+      });
+    }
+
+    list.push({
+      key: 'exercise',
+      title: t('diary.exercise', 'Exercise'),
+      icon: Dumbbell,
+      render: () => (
+        <ExerciseCard
+          selectedDate={selectedDate}
+          initialExercisesToLog={exercisesToLogFromPreset}
+          onExercisesLogged={() => setExercisesToLogFromPreset(undefined)}
+        />
+      ),
+    });
+
+    return list;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    effectiveGoals,
+    visibleMealTypes,
+    selectedDate,
+    dayTotals,
+    foodEntries,
+    foodEntryMeals,
+    energyUnit,
+    customNutrients,
+    exercisesToLogFromPreset,
+    openFoodSearchForMealType,
+    t,
+  ]);
+
   if (loading) return <div>Loading...</div>;
   return (
     <div className="space-y-6">
@@ -296,75 +440,7 @@ const Diary = () => {
         }}
       />
 
-      {/* Top Controls Section */}
-      {goals && (
-        <>
-          <DiaryTopControls
-            selectedDate={selectedDate}
-            dayTotals={dayTotals as unknown as DayTotals}
-            goals={goals}
-            energyUnit={energyUnit}
-            convertEnergy={convertEnergy}
-            customNutrients={customNutrients}
-          />
-
-          <div className="space-y-6">
-            {availableMealTypes?.length === 0 && (
-              <div className="text-center p-4 text-muted-foreground">
-                Loading meal types...
-              </div>
-            )}
-
-            {(availableMealTypes ?? [])
-              .filter((meal) => meal.is_visible)
-              .map((mealTypeObj) => (
-                <MealCard
-                  key={mealTypeObj.id}
-                  meal={{
-                    ...getMealData(
-                      mealTypeObj.name,
-                      foodEntries,
-                      foodEntryMeals ?? [],
-                      goals
-                    ),
-                    selectedDate: selectedDate,
-                  }}
-                  totals={getMealTotals(
-                    mealTypeObj.name,
-                    foodEntries,
-                    foodEntryMeals ?? []
-                  )}
-                  onFoodSelect={handleFoodSelect}
-                  onEditEntry={handleEditEntry}
-                  selectedDate={selectedDate}
-                  onRemoveEntry={(itemId, itemType) =>
-                    handleRemoveEntry(itemId, itemType)
-                  }
-                  getEntryNutrition={getEntryNutrition}
-                  onCopyClick={handleCopyClick}
-                  onConvertToMealClick={handleConvertToMealClick}
-                  energyUnit={energyUnit}
-                  convertEnergy={convertEnergy}
-                  customNutrients={customNutrients}
-                  shouldOpenFoodSearch={
-                    openFoodSearchForMealType?.toLowerCase() ===
-                    mealTypeObj.name.toLowerCase()
-                  }
-                  onFoodSearchClose={() => setOpenFoodSearchForMealType(null)}
-                />
-              ))}
-
-            {/* Exercise Section */}
-            <ExerciseCard
-              selectedDate={selectedDate}
-              initialExercisesToLog={exercisesToLogFromPreset}
-              onExercisesLogged={() => setExercisesToLogFromPreset(undefined)}
-            />
-          </div>
-
-          {/* Main Content - Meals and Exercise */}
-        </>
-      )}
+      {effectiveGoals && <DiaryWidgetGrid widgets={widgets} />}
 
       {/* Food Unit Selector Dialog */}
       {selectedFood && (
@@ -422,6 +498,16 @@ const Diary = () => {
           onClose={() => setIsConvertToMealDialogOpen(false)}
           selectedDate={selectedDate}
           mealType={convertToMealSourceMealType}
+        />
+      )}
+
+      {/* Copy Family Entry Dialog */}
+      {isCopyFamilyDialogOpen && (
+        <CopyFamilyEntryDialog
+          isOpen={isCopyFamilyDialogOpen}
+          onClose={() => setIsCopyFamilyDialogOpen(false)}
+          sourceMealType={copyFamilySourceMealType}
+          currentDate={selectedDate}
         />
       )}
     </div>

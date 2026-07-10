@@ -13,6 +13,10 @@ const translations: Record<string, string> = {
   'settings.aiService.userSettings.addNewService': 'Add New AI Service',
   'settings.aiService.userSettings.configuredServices': 'Configured Services',
   'settings.aiService.userSettings.availableServices': 'Available Services',
+  'settings.aiService.userSettings.activeProvider': 'Active AI provider',
+  'settings.aiService.userSettings.active': 'Active',
+  'settings.aiService.userSettings.global': 'Global',
+  'settings.aiService.userSettings.managedByAdmin': 'Managed by Admin',
   'settings.aiService.userSettings.noServices': 'No AI services configured yet',
   'settings.aiService.userSettings.noServicesDescription':
     'Add a service to get started.',
@@ -74,6 +78,12 @@ const translations: Record<string, string> = {
   'settings.aiService.userSettings.systemPrompt': 'System Prompt',
   'settings.aiService.userSettings.activeService': 'Active Service',
   'settings.aiService.userSettings.setAsActive': 'Set as Active Service',
+  'settings.aiService.userSettings.chatToolProfile': 'Chat Tool Set',
+  'settings.aiService.userSettings.chatToolProfileFull': 'Full (all tools)',
+  'settings.aiService.userSettings.chatToolProfileCore':
+    'Core (faster, fewer tools)',
+  'settings.aiService.userSettings.chatToolProfileDescription':
+    'Core trims the chatbot to logging essentials.',
   'settings.aiService.userSettings.chatPreferences': 'Chat Preferences',
   'settings.aiService.userSettings.autoClearHistory': 'Auto Clear Chat History',
   'settings.aiService.userSettings.neverClear': 'Never',
@@ -132,6 +142,7 @@ const mockAddAIService = jest.fn();
 const mockUpdateAIService = jest.fn();
 const mockDeleteAIService = jest.fn();
 const mockUpdateUserPreferences = jest.fn();
+const mockGetActiveAiServiceSetting = jest.fn();
 const mockIsUserAiConfigAllowed = jest.fn();
 
 jest.mock('@/api/Settings/aiServiceSettingsService', () => ({
@@ -142,6 +153,8 @@ jest.mock('@/api/Settings/aiServiceSettingsService', () => ({
   deleteAIService: (...args: unknown[]) => mockDeleteAIService(...args),
   updateUserPreferences: (...args: unknown[]) =>
     mockUpdateUserPreferences(...args),
+  getActiveAiServiceSetting: (...args: unknown[]) =>
+    mockGetActiveAiServiceSetting(...args),
 }));
 
 jest.mock('@/api/Admin/globalSettingsService', () => ({
@@ -162,6 +175,16 @@ jest.mock('@/contexts/PreferencesContext', () => ({
   }),
 }));
 
+// UserChatPreferences also renders a pure-local "Show token usage" toggle that
+// reads showTokenStats from ChatbotVisibilityContext. Stub the hook so the suite
+// doesn't need a real ChatbotVisibilityProvider.
+jest.mock('@/contexts/ChatbotVisibilityContext', () => ({
+  useChatbotVisibility: () => ({
+    showTokenStats: false,
+    setShowTokenStats: jest.fn(),
+  }),
+}));
+
 // Mock window.confirm
 const mockConfirm = jest.fn();
 window.confirm = mockConfirm;
@@ -169,7 +192,7 @@ window.confirm = mockConfirm;
 const mockUserServices: AiServiceSettingsResponse[] = [
   {
     id: 'user-service1',
-    user_id: '',
+    user_id: 'user1',
     service_name: 'My OpenAI',
     service_type: 'openai',
     custom_url: null,
@@ -191,6 +214,9 @@ describe('AIServiceSettings', () => {
     mockIsUserAiConfigAllowed.mockResolvedValue(true);
     mockGetAIServices.mockResolvedValue(mockUserServices);
     mockGetPreferences.mockResolvedValue(mockPreferences);
+    // Resolve to null so the AI-assisted-conversions row (gated on an active
+    // service) stays hidden by default, keeping switch counts predictable.
+    mockGetActiveAiServiceSetting.mockResolvedValue(null);
   });
 
   it('renders the component', async () => {
@@ -382,6 +408,33 @@ describe('AIServiceSettings', () => {
         l.textContent?.includes('Optional')
       );
       expect(optionalLabel).toBeInTheDocument();
+    });
+  });
+
+  it('shows the chat tool set selector only for Ollama services', async () => {
+    renderWithClient(<AIServiceSettings />);
+
+    const addButton = await screen.findByRole('button', {
+      name: 'Add New AI Service',
+    });
+    fireEvent.click(addButton);
+
+    // Default service type is OpenAI — the tool-set selector stays hidden.
+    expect(screen.queryByLabelText('Chat Tool Set')).not.toBeInTheDocument();
+
+    // Switch to Ollama.
+    const serviceTypeTrigger = screen.getByLabelText('Service Type', {
+      selector: 'button',
+    });
+    fireEvent.click(serviceTypeTrigger);
+    const ollamaOption = await screen.findByRole('option', { name: /ollama/i });
+    fireEvent.click(ollamaOption);
+
+    // Now the Ollama-only selector appears.
+    await waitFor(() => {
+      expect(
+        screen.getByLabelText('Chat Tool Set', { selector: 'button' })
+      ).toBeInTheDocument();
     });
   });
 
@@ -614,7 +667,10 @@ describe('AIServiceSettings', () => {
 
     await screen.findByText('My Custom Service');
 
-    const toggleSwitch = await screen.findByRole('switch');
+    // The service toggle is the unnamed switch; exclude the unrelated
+    // "Show token usage" toggle (id="show_token_stats").
+    const switches = await screen.findAllByRole('switch');
+    const toggleSwitch = switches.find((s) => s.id !== 'show_token_stats')!;
     fireEvent.click(toggleSwitch);
 
     await waitFor(() => {
@@ -628,5 +684,158 @@ describe('AIServiceSettings', () => {
         })
       );
     });
+  });
+
+  it('renders an independent ON switch for each enabled owned service', async () => {
+    // Two enabled services. The old single-select override rendered every
+    // non-selected switch as OFF; now each switch reflects its own is_active,
+    // so both stay ON even though only one is the active provider.
+    const twoServices: AiServiceSettingsResponse[] = [
+      {
+        id: 'svc-a',
+        user_id: 'user1',
+        service_name: 'Service A',
+        service_type: 'openai',
+        custom_url: null,
+        is_active: true,
+        system_prompt: null,
+        model_name: 'gpt-4o',
+        is_public: false,
+        source: 'user',
+      },
+      {
+        id: 'svc-b',
+        user_id: 'user1',
+        service_name: 'Service B',
+        service_type: 'anthropic',
+        custom_url: null,
+        is_active: true,
+        system_prompt: null,
+        model_name: 'claude-3',
+        is_public: false,
+        source: 'user',
+      },
+    ];
+    mockGetAIServices.mockResolvedValue(twoServices);
+    mockGetPreferences.mockResolvedValue({
+      auto_clear_history: '7days',
+      active_ai_service_id: 'svc-a',
+    });
+
+    renderWithClient(<AIServiceSettings />);
+
+    // Target the list-item headings; the service name also renders in the
+    // active-provider Select trigger (the selected value).
+    await screen.findByRole('heading', { name: 'Service A' });
+    await screen.findByRole('heading', { name: 'Service B' });
+
+    // Exclude the unrelated "Show token usage" toggle (id="show_token_stats");
+    // assert only the per-service active toggles.
+    const switches = screen
+      .getAllByRole('switch')
+      .filter((toggle) => toggle.id !== 'show_token_stats');
+    expect(switches).toHaveLength(2);
+    switches.forEach((toggle) => expect(toggle).toBeChecked());
+  });
+
+  it('writes active_ai_service_id when a provider is chosen in the active-provider dropdown', async () => {
+    const twoServices: AiServiceSettingsResponse[] = [
+      {
+        id: 'svc-a',
+        user_id: 'user1',
+        service_name: 'Service A',
+        service_type: 'openai',
+        custom_url: null,
+        is_active: true,
+        system_prompt: null,
+        model_name: 'gpt-4o',
+        is_public: false,
+        source: 'user',
+      },
+      {
+        id: 'svc-b',
+        user_id: 'user1',
+        service_name: 'Service B',
+        service_type: 'anthropic',
+        custom_url: null,
+        is_active: true,
+        system_prompt: null,
+        model_name: 'claude-3',
+        is_public: false,
+        source: 'user',
+      },
+    ];
+    mockGetAIServices.mockResolvedValue(twoServices);
+    mockGetPreferences.mockResolvedValue({
+      auto_clear_history: '7days',
+      active_ai_service_id: 'svc-a',
+    });
+    mockUpdateUserPreferences.mockResolvedValue({});
+
+    renderWithClient(<AIServiceSettings />);
+
+    const trigger = await screen.findByLabelText('Active AI provider');
+    fireEvent.pointerDown(trigger);
+
+    const option = await screen.findByRole('option', { name: 'Service B' });
+    fireEvent.click(option);
+
+    await waitFor(() => {
+      expect(mockUpdateUserPreferences).toHaveBeenCalledWith(
+        expect.objectContaining({ active_ai_service_id: 'svc-b' })
+      );
+    });
+  });
+
+  it('shows the Active badge on a global service only when it is the selected provider', async () => {
+    // Both globals are is_active (enabled/available); only the one the user has
+    // selected should show the green "Active" badge.
+    const globals: AiServiceSettingsResponse[] = [
+      {
+        id: 'global-1',
+        user_id: 'admin',
+        service_name: 'Global One',
+        service_type: 'openai',
+        custom_url: null,
+        is_active: true,
+        system_prompt: null,
+        model_name: 'gpt-4o',
+        is_public: true,
+        source: 'global',
+      },
+      {
+        id: 'global-2',
+        user_id: 'admin',
+        service_name: 'Global Two',
+        service_type: 'anthropic',
+        custom_url: null,
+        is_active: true,
+        system_prompt: null,
+        model_name: 'claude-3',
+        is_public: true,
+        source: 'global',
+      },
+    ];
+    mockGetAIServices.mockResolvedValue(globals);
+    mockGetPreferences.mockResolvedValue({
+      auto_clear_history: '7days',
+      active_ai_service_id: 'global-1',
+    });
+
+    renderWithClient(<AIServiceSettings />);
+
+    // Target the list-item headings; the selected name also renders in the
+    // active-provider Select trigger.
+    await screen.findByRole('heading', { name: 'Global One' });
+    await screen.findByRole('heading', { name: 'Global Two' });
+
+    // getByText asserts a single badge exists (Global Two, also is_active, must
+    // not render one); it lives inside the selected Global One card.
+    const badge = screen.getByText('Active');
+    const activeCard = badge.closest('div.border');
+    expect(activeCard).not.toBeNull();
+    expect(
+      within(activeCard as HTMLElement).getByText('Global One')
+    ).toBeInTheDocument();
   });
 });

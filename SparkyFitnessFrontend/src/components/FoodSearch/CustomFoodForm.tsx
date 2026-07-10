@@ -1,14 +1,16 @@
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-import { Plus } from 'lucide-react';
+import { Plus, Camera } from 'lucide-react';
 import { usePreferences } from '@/contexts/PreferencesContext';
 import { useIsMobile } from '@/hooks/use-mobile';
 import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
+import { BarcodeScannerDialog } from './BarcodeScannerDialog';
 import type { Food, FoodVariant } from '@/types/food';
 
 import { useCustomNutrients } from '@/hooks/Foods/useCustomNutrients';
@@ -33,6 +35,7 @@ const CustomFoodForm = ({
   initialVariants,
   visibleNutrients: passedVisibleNutrients,
 }: CustomFoodFormProps) => {
+  const { t } = useTranslation();
   const {
     nutrientDisplayPreferences,
     energyUnit,
@@ -73,12 +76,18 @@ const CustomFoodForm = ({
     applyAiEstimate,
     handleSubmit,
     handleSyncConfirmation,
+    showBarcodeConflictConfirmation,
+    setShowBarcodeConflictConfirmation,
+    barcodeConflictFoodName,
+    handleBarcodeConflictConfirm,
   } = useCustomFoodForm({
     food,
     initialVariants,
     onSave,
     aiEstimatesAvailable,
   });
+
+  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
 
   // The food's default variant is the AI estimation source. Lookup by flag
   // rather than by position — submit-time validation guarantees exactly one.
@@ -155,14 +164,18 @@ const CustomFoodForm = ({
       <Card>
         <CardHeader>
           <CardTitle>
-            {food && food.id ? 'Edit Food' : 'Add Custom Food'}
+            {food && food.id
+              ? t('customFoodForm.editFoodTitle', 'Edit Food')
+              : t('customFoodForm.addCustomFoodTitle', 'Add Custom Food')}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="name">Food Name *</Label>
+                <Label htmlFor="name">
+                  {t('customFoodForm.foodNameLabel', 'Food Name *')}
+                </Label>
                 <Input
                   id="name"
                   value={formData.name}
@@ -171,12 +184,41 @@ const CustomFoodForm = ({
                 />
               </div>
               <div>
-                <Label htmlFor="brand">Brand</Label>
+                <Label htmlFor="brand">
+                  {t('customFoodForm.brandLabel', 'Brand (optional)')}
+                </Label>
                 <Input
                   id="brand"
                   value={formData.brand}
                   onChange={(e) => updateField('brand', e.target.value)}
                 />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+              <div>
+                <Label htmlFor="barcode">Barcode</Label>
+                <div className="flex gap-2 mt-1">
+                  <Input
+                    id="barcode"
+                    placeholder="e.g. 012345678905"
+                    value={formData.barcode}
+                    onChange={(e) => updateField('barcode', e.target.value)}
+                    maxLength={14}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowBarcodeScanner(true)}
+                    className="flex items-center gap-1.5 shrink-0"
+                  >
+                    <Camera className="w-4 h-4" />
+                    <span>Scan</span>
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Standard barcodes are 8 to 14 digits.
+                </p>
               </div>
             </div>
 
@@ -189,21 +231,28 @@ const CustomFoodForm = ({
                 }
               />
               <Label htmlFor="is_quick_food" className="text-sm font-medium">
-                Quick Add (don't save to my food list for future use)
+                {t(
+                  'customFoodForm.quickAddLabel',
+                  "Quick Add (don't save to my food list for future use)"
+                )}
               </Label>
             </div>
 
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Unit Variants</h3>
+                <h3 className="text-lg font-semibold">
+                  {t('customFoodForm.unitVariantsTitle', 'Unit Variants')}
+                </h3>
                 <Button type="button" onClick={addVariant} size="sm">
                   <Plus className="w-4 h-4 mr-1" />
-                  Add Unit
+                  {t('customFoodForm.addUnitButton', 'Add Unit')}
                 </Button>
               </div>
               <p className="text-sm text-gray-600">
-                Add different unit measurements for this food with specific
-                nutrition values for each unit.
+                {t(
+                  'customFoodForm.unitVariantsDescription',
+                  'Add different unit measurements for this food with specific nutrition values for each unit.'
+                )}
               </p>
 
               <div className="space-y-6">
@@ -283,10 +332,10 @@ const CustomFoodForm = ({
 
             <Button type="submit" disabled={loading} className="w-full">
               {loading
-                ? 'Saving...'
+                ? t('customFoodForm.savingButton', 'Saving...')
                 : food && food.id
-                  ? 'Update Food'
-                  : 'Add Food'}
+                  ? t('customFoodForm.updateFoodButton', 'Update Food')
+                  : t('customFoodForm.addFoodButton', 'Add Food')}
             </Button>
           </form>
         </CardContent>
@@ -300,8 +349,38 @@ const CustomFoodForm = ({
             }
           }}
           onConfirm={() => handleSyncConfirmation(true)}
-          title="Sync Past Entries?"
-          description="Do you want to update all your past diary entries for this food with the new nutritional information?"
+          title={t('customFoodForm.syncConfirmTitle', 'Sync Past Entries?')}
+          description={t(
+            'customFoodForm.syncConfirmDescription',
+            'Do you want to update all your past diary entries for this food with the new nutritional information?'
+          )}
+        />
+      )}
+
+      {showBarcodeConflictConfirmation && (
+        <ConfirmationDialog
+          open={showBarcodeConflictConfirmation}
+          onOpenChange={(open) => {
+            if (!open) {
+              setShowBarcodeConflictConfirmation(false);
+            }
+          }}
+          onConfirm={handleBarcodeConflictConfirm}
+          title="Barcode already in use"
+          description={`This barcode is already attached to "${barcodeConflictFoodName}". Attach it to "${formData.name}" anyway?`}
+        />
+      )}
+
+      {showBarcodeScanner && (
+        <BarcodeScannerDialog
+          isOpen={showBarcodeScanner}
+          onOpenChange={setShowBarcodeScanner}
+          onBarcodeDetected={(scannedBarcode) => {
+            updateField('barcode', scannedBarcode);
+            setShowBarcodeScanner(false);
+          }}
+          hideProvider
+          hideManualInput
         />
       )}
     </>

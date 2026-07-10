@@ -12,6 +12,7 @@ import {
   LogOut,
   Dumbbell, // Used for Exercises
   Target, // Used for Goals
+  Pill, // Used for Medications
   Shield,
   Plus,
   X,
@@ -51,9 +52,13 @@ interface AddCompItem {
 
 interface MainLayoutProps {
   onShowAboutDialog: () => void;
+  onShowNewReleaseDialog: () => void;
 }
 
-const MainLayout: React.FC<MainLayoutProps> = ({ onShowAboutDialog }) => {
+const MainLayout: React.FC<MainLayoutProps> = ({
+  onShowAboutDialog,
+  onShowNewReleaseDialog,
+}) => {
   const { t } = useTranslation();
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
@@ -190,6 +195,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ onShowAboutDialog }) => {
       tabs.push(
         { value: '/', label: t('nav.diary'), icon: Home },
         { value: '/checkin', label: t('nav.checkin'), icon: Activity },
+        {
+          value: '/medications',
+          label: t('nav.medications', 'Medications'),
+          icon: Pill,
+        },
         { value: '/reports', label: t('nav.reports'), icon: BarChart3 },
         { value: '/foods', label: t('nav.foods'), icon: Utensils },
         {
@@ -475,15 +485,41 @@ const MainLayout: React.FC<MainLayoutProps> = ({ onShowAboutDialog }) => {
               <GitHubStarCounter owner="CodeWithCJ" repo="SparkyFitness" />
               <GitHubSponsorButton owner="CodeWithCJ" />
             </div>
-            <p className="cursor-pointer underline" onClick={onShowAboutDialog}>
-              SparkyFitness v{appVersion?.version ?? ''}
-            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="cursor-pointer underline bg-transparent border-0 p-0 text-inherit font-normal text-sm"
+                onClick={onShowAboutDialog}
+              >
+                SparkyFitness v{appVersion?.version ?? ''}
+              </button>
+              <span>•</span>
+              <button
+                type="button"
+                className="cursor-pointer underline hover:text-foreground bg-transparent border-0 p-0 text-inherit font-normal text-sm"
+                onClick={onShowNewReleaseDialog}
+              >
+                What's New
+              </button>
+            </div>
           </div>
         ) : (
           <div className="flex justify-center items-center gap-4">
-            <p className="cursor-pointer underline" onClick={onShowAboutDialog}>
+            <button
+              type="button"
+              className="cursor-pointer underline bg-transparent border-0 p-0 text-inherit font-normal text-sm"
+              onClick={onShowAboutDialog}
+            >
               SparkyFitness v{appVersion?.version ?? ''}
-            </p>
+            </button>
+            <span>•</span>
+            <button
+              type="button"
+              className="cursor-pointer underline hover:text-foreground bg-transparent border-0 p-0 text-inherit font-normal text-sm"
+              onClick={onShowNewReleaseDialog}
+            >
+              What's New
+            </button>
           </div>
         )}
       </footer>

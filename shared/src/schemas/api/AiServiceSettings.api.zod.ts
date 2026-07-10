@@ -9,6 +9,7 @@ import {
 export const aiServiceSettingsResponseSchema = aiServiceSettingsSchema
   .extend({
     source: z.string().optional(),
+    creator_name: z.string().nullable().optional(),
   })
   .omit({
     encrypted_api_key: true,
@@ -24,6 +25,7 @@ export const aiServiceSettingsPostResponseSchema = z.object({
 export const createAiServiceSettingsRequestSchema =
   aiServiceSettingsInitializerSchema
     .pick({
+      chat_tool_profile: true,
       custom_url: true,
       is_active: true,
       model_name: true,
@@ -38,6 +40,7 @@ export const createAiServiceSettingsRequestSchema =
 export const updateAiServiceSettingsRequestSchema =
   aiServiceSettingsMutatorSchema
     .pick({
+      chat_tool_profile: true,
       custom_url: true,
       id: true,
       is_active: true,

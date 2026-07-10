@@ -48,9 +48,22 @@ jest.mock('@kingstinct/react-native-healthkit', () => ({
   queryCategorySamples: jest.fn(),
   queryStatisticsForQuantity: jest.fn(),
   queryWorkoutSamples: jest.fn(),
-  saveQuantitySample: jest.fn().mockResolvedValue(true),
-  saveCategorySample: jest.fn().mockResolvedValue(true),
+  queryCorrelationSamples: jest.fn(),
+  // Writeback saves return the persisted sample (orchestrator reads .uuid off it);
+  // a bare `true` would make UUID-tracking assertions silently test nothing.
+  saveQuantitySample: jest.fn().mockResolvedValue({ uuid: 'hk-quantity-uuid' }),
+  saveCategorySample: jest.fn().mockResolvedValue({ uuid: 'hk-category-uuid' }),
+  saveCorrelationSample: jest.fn().mockResolvedValue({
+    uuid: 'hk-correlation-uuid',
+    objects: [{ uuid: 'hk-object-uuid', quantityType: 'HKQuantityTypeIdentifierDietaryEnergyConsumed' }],
+  }),
   saveWorkoutSample: jest.fn().mockResolvedValue({}),
+  deleteObjects: jest.fn().mockResolvedValue(0),
+  // Default sharingAuthorized (2) so unrelated suites touching the healthkit module
+  // don't change behavior; the writeback partial-auth test overrides per-type.
+  authorizationStatusFor: jest.fn(() => 2),
+  currentAppSource: jest.fn(() => ({ bundleIdentifier: 'com.sparkyfitness.mobile', name: 'SparkyFitness' })),
+  AuthorizationStatus: { notDetermined: 0, sharingDenied: 1, sharingAuthorized: 2 },
   HKQuantityTypeIdentifier: {
     stepCount: 'HKQuantityTypeIdentifierStepCount',
     activeEnergyBurned: 'HKQuantityTypeIdentifierActiveEnergyBurned',
@@ -110,6 +123,7 @@ jest.mock('expo-notifications', () => {
     requestPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
     scheduleNotificationAsync: jest.fn(async () => `mock-notif-${nextId++}`),
     cancelScheduledNotificationAsync: jest.fn().mockResolvedValue(undefined),
+    cancelAllScheduledNotificationsAsync: jest.fn().mockResolvedValue(undefined),
     AndroidImportance: { HIGH: 4, DEFAULT: 3, LOW: 2, MIN: 1, NONE: 0 },
     SchedulableTriggerInputTypes: {
       CALENDAR: 'calendar',
@@ -265,6 +279,9 @@ jest.mock('react-native-keyboard-controller', () => {
 
   return {
     KeyboardProvider: ({ children }) => React.createElement(React.Fragment, null, children),
+    KeyboardAvoidingView: React.forwardRef(({ children, behavior: _behavior, ...props }, ref) =>
+      React.createElement(View, { ...props, ref }, children),
+    ),
     KeyboardAwareScrollView: React.forwardRef(({ children, ...props }, ref) =>
       React.createElement(ScrollView, { ...props, ref }, children),
     ),
@@ -392,6 +409,17 @@ jest.mock('uniwind', () => ({
     setTheme: jest.fn(),
   },
 }));
+
+// Mock react-native-enriched-markdown (native md4c renderer). Render the
+// markdown prop as plain Text so chat tests can assert content without the
+// native component; `remend` runs for real (it's plain JS).
+jest.mock('react-native-enriched-markdown', () => {
+  const React = require('react');
+  const { Text } = require('react-native');
+  const Markdown = ({ markdown, onLinkPress }) =>
+    React.createElement(Text, { testID: 'enriched-markdown', onLinkPress }, markdown);
+  return { __esModule: true, EnrichedMarkdownText: Markdown, default: Markdown };
+});
 
 // Mock react-native-toast-message
 jest.mock('react-native-toast-message', () => {

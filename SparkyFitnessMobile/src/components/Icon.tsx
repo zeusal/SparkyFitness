@@ -11,18 +11,24 @@ import { SymbolView, SymbolViewProps } from 'expo-symbols';
 const ICON_MAP = {
   // Navigation
   'chevron-down': { sf: 'chevron.down', ion: 'chevron-down' },
+  'chevron-up': { sf: 'chevron.up', ion: 'chevron-up' },
   'chevron-forward': { sf: 'chevron.right', ion: 'chevron-forward' },
   'chevron-back': { sf: 'chevron.left', ion: 'chevron-back' },
+  'chevron-expand': { sf: 'chevron.up.chevron.down', ion: 'chevron-expand' },
 
   // Actions
   'copy': { sf: 'doc.on.doc', ion: 'copy-outline' },
+  'trash': { sf: 'trash', ion: 'trash-outline' },
   'paste': { sf: 'doc.on.clipboard', ion: 'clipboard-outline' },
+  'eye': { sf: 'eye', ion: 'eye-outline' },
+  'eye-off': { sf: 'eye.slash', ion: 'eye-off-outline' },
   'add-circle': { sf: 'plus.circle', ion: 'add-circle-outline' },
   'remove-circle': { sf: 'minus.circle', ion: 'remove-circle-outline' },
   'checkmark': { sf: 'checkmark', ion: 'checkmark' },
   'settings': { sf: 'gearshape.fill', ion: 'settings' },
   'add': { sf: 'plus', ion: 'add' },
   'remove': { sf: 'minus', ion: 'remove' },
+  'arrow-up': { sf: 'arrow.up', ion: 'arrow-up' },
   'close': { sf: 'xmark', ion: 'close' },
   'search': { sf: 'magnifyingglass', ion: 'search-outline' },
   'save': { sf: 'square.and.arrow.down', ion: 'save-outline' },
@@ -38,6 +44,7 @@ const ICON_MAP = {
   'pencil': { sf: 'pencil', ion: 'create-outline' },
   'pause': { sf: 'pause.fill', ion: 'pause' },
   'play': { sf: 'play.fill', ion: 'play' },
+  'stop': { sf: 'stop.fill', ion: 'stop' },
   'forward': { sf: 'forward.fill', ion: 'play-skip-forward' },
   'measurements': { sf: 'ruler', ion: 'analytics-outline' },
   'scale': { sf: 'scalemass', ion: 'scale-outline' },
@@ -104,10 +111,11 @@ const ICON_MAP = {
   'health-data-sync': { sf: 'heart', ion: 'heart-outline' },
   'calorie-settings': { sf: 'flame', ion: 'flame-outline' },
   'food-search-settings': { sf: 'magnifyingglass', ion: 'search-outline' },
+  'dashboard-settings': { sf: 'square.grid.2x2', ion: 'grid-outline' },
   'app-settings': { sf: 'slider.horizontal.3', ion: 'options-outline' },
   'logs': { sf: 'doc.plaintext', ion: 'document-text-outline' },
   'about': { sf: 'info.circle', ion: 'information-circle-outline' },
-  'sparkle': { sf: 'sparkles', ion: 'sparkles-outline' },
+  'whats-new': { sf: 'gift', ion: 'gift-outline' },
 
   // AI features
   'sparkles': { sf: 'sparkles', ion: 'sparkles' },

@@ -326,26 +326,76 @@ async function getLatestCheckInMeasurementsOnOrBeforeDate(
   const client = await getClient(userId); // User-specific operation
   try {
     const result = await client.query(
-      `SELECT 
-         (SELECT id FROM check_in_measurements WHERE user_id = $1 AND entry_date <= $2 ORDER BY entry_date DESC LIMIT 1) as id,
+      `WITH latest_entry AS (
+         SELECT id, entry_date, created_at, updated_at, created_by_user_id, updated_by_user_id
+         FROM check_in_measurements
+         WHERE user_id = $1 AND entry_date <= $2
+         ORDER BY entry_date DESC
+         LIMIT 1
+       )
+       SELECT
+         le.id,
          $1 as user_id,
-         (SELECT entry_date FROM check_in_measurements WHERE user_id = $1 AND entry_date <= $2 ORDER BY entry_date DESC LIMIT 1) as entry_date,
-         (SELECT weight FROM check_in_measurements WHERE user_id = $1 AND entry_date <= $2 AND weight IS NOT NULL ORDER BY entry_date DESC LIMIT 1) as weight,
-         (SELECT neck FROM check_in_measurements WHERE user_id = $1 AND entry_date <= $2 AND neck IS NOT NULL ORDER BY entry_date DESC LIMIT 1) as neck,
-         (SELECT waist FROM check_in_measurements WHERE user_id = $1 AND entry_date <= $2 AND waist IS NOT NULL ORDER BY entry_date DESC LIMIT 1) as waist,
-         (SELECT hips FROM check_in_measurements WHERE user_id = $1 AND entry_date <= $2 AND hips IS NOT NULL ORDER BY entry_date DESC LIMIT 1) as hips,
-         (SELECT steps FROM check_in_measurements WHERE user_id = $1 AND entry_date <= $2 AND steps IS NOT NULL ORDER BY entry_date DESC LIMIT 1) as steps,
-         (SELECT height FROM check_in_measurements WHERE user_id = $1 AND entry_date <= $2 AND height IS NOT NULL ORDER BY entry_date DESC LIMIT 1) as height,
-         (SELECT body_fat_percentage FROM check_in_measurements WHERE user_id = $1 AND entry_date <= $2 AND body_fat_percentage IS NOT NULL ORDER BY entry_date DESC LIMIT 1) as body_fat_percentage,
-         (SELECT created_at FROM check_in_measurements WHERE user_id = $1 AND entry_date <= $2 ORDER BY entry_date DESC LIMIT 1) as created_at,
-         (SELECT updated_at FROM check_in_measurements WHERE user_id = $1 AND entry_date <= $2 ORDER BY entry_date DESC LIMIT 1) as updated_at`,
+         le.entry_date,
+         (SELECT weight FROM check_in_measurements WHERE user_id = $1 AND entry_date <= $2 AND weight IS NOT NULL AND weight > 0 ORDER BY entry_date DESC LIMIT 1) as weight,
+         (SELECT neck FROM check_in_measurements WHERE user_id = $1 AND entry_date <= $2 AND neck IS NOT NULL AND neck > 0 ORDER BY entry_date DESC LIMIT 1) as neck,
+         (SELECT waist FROM check_in_measurements WHERE user_id = $1 AND entry_date <= $2 AND waist IS NOT NULL AND waist > 0 ORDER BY entry_date DESC LIMIT 1) as waist,
+         (SELECT hips FROM check_in_measurements WHERE user_id = $1 AND entry_date <= $2 AND hips IS NOT NULL AND hips > 0 ORDER BY entry_date DESC LIMIT 1) as hips,
+         (SELECT steps FROM check_in_measurements WHERE user_id = $1 AND entry_date = $2 AND steps IS NOT NULL LIMIT 1) as steps,
+         (SELECT height FROM check_in_measurements WHERE user_id = $1 AND entry_date <= $2 AND height IS NOT NULL AND height > 0 ORDER BY entry_date DESC LIMIT 1) as height,
+         (SELECT body_fat_percentage FROM check_in_measurements WHERE user_id = $1 AND entry_date <= $2 AND body_fat_percentage IS NOT NULL AND body_fat_percentage > 0 ORDER BY entry_date DESC LIMIT 1) as body_fat_percentage,
+         le.created_at,
+         le.updated_at,
+         le.created_by_user_id,
+         le.updated_by_user_id
+       FROM (SELECT 1) AS dummy
+       LEFT JOIN latest_entry le ON TRUE`,
       [userId, date]
     );
     const row = result.rows[0];
-    if (row && row.id === null) {
+    if (!row || row.id === null) {
       return null;
     }
     return row;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Returns the synced external BMR / resting-energy value (kcal) stored as a custom
+ * measurement for the exact given day, or null if none exists for that day.
+ *
+ * Mobile syncs this under the custom category named 'basal_metabolic_rate'
+ * (see measurementService.processHealthData default branch + getOrCreateCustomCategory).
+ * Lookup is EXACT-date (not <= date) so "no value for that day" correctly falls back to
+ * the formula BMR upstream. A single date can hold multiple rows across sources (unique
+ * key is user+category+date+source), so we apply a deterministic "latest write wins" rule.
+ */
+async function getExternalBmrForDate(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  userId: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  date: any
+): Promise<number | null> {
+  const client = await getClient(userId); // User-specific operation
+  try {
+    const result = await client.query(
+      `SELECT cm.value
+       FROM custom_measurements cm
+       JOIN custom_categories cc ON cm.category_id = cc.id
+       WHERE cm.user_id = $1
+         AND cc.name = 'basal_metabolic_rate'
+         AND cm.entry_date = $2
+       ORDER BY cm.updated_at DESC, cm.entry_timestamp DESC
+       LIMIT 1`,
+      [userId, date]
+    );
+    if (result.rows.length === 0) {
+      return null;
+    }
+    const value = parseFloat(result.rows[0].value);
+    return Number.isFinite(value) ? value : null;
   } finally {
     client.release();
   }
@@ -632,7 +682,7 @@ async function getCheckInMeasurementsByDateRange(
   endDate: any
 ) {
   log(
-    'info',
+    'debug',
     `[measurementRepository] getCheckInMeasurementsByDateRange called for userId: ${userId}, startDate: ${startDate}, endDate: ${endDate}`
   );
   const client = await getClient(userId); // User-specific operation
@@ -643,7 +693,7 @@ async function getCheckInMeasurementsByDateRange(
     );
     log(
       'debug',
-      `[measurementRepository] getCheckInMeasurementsByDateRange returning: ${JSON.stringify(result.rows)}`
+      `[measurementRepository] getCheckInMeasurementsByDateRange returning ${result.rows.length} row(s)`
     );
     return result.rows;
   } finally {
@@ -960,6 +1010,7 @@ export { deleteCustomMeasurement };
 export { getCustomMeasurementOwnerId };
 export { getLatestMeasurement };
 export { getLatestCheckInMeasurementsOnOrBeforeDate };
+export { getExternalBmrForDate };
 export { getMostRecentMeasurement };
 export { getStepCaloriesForDate };
 
@@ -1146,6 +1197,7 @@ export default {
   getCustomMeasurementOwnerId,
   getLatestMeasurement,
   getLatestCheckInMeasurementsOnOrBeforeDate,
+  getExternalBmrForDate,
   getMostRecentMeasurement,
   getStepCaloriesForDate,
 };

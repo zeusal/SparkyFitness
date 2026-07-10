@@ -1,3 +1,4 @@
+import { currentAppSource } from '@kingstinct/react-native-healthkit';
 import * as HealthKit from './healthkit/index';
 import * as HealthKitAggregation from './healthkit/dataAggregation';
 import * as HealthKitTransformation from './healthkit/dataTransformation';
@@ -15,9 +16,20 @@ import {
 import { SyncDuration } from './healthkit/preferences';
 import { migrateEnabledMetricPermissionsIfNeeded } from './shared/healthPermissionMigration';
 import { runTasksInBatches, TimeoutError, withTimeout } from '../utils/concurrency';
+import { runWriteback } from './writeback';
 
 const METRIC_FETCH_CONCURRENCY = 3;
 const METRIC_TIMEOUT_MS = 60_000; // 60s per metric query
+
+// Tell the read transformers which bundle id is "us" so they skip HealthKit records
+// this app wrote (hydration writeback feedback-loop guard). Parallels Android's
+// setOwnPackageName. currentAppSource() is a native call, so guard it — a failure just
+// disables the guard rather than crashing module load.
+try {
+  HealthKitTransformation.setOwnBundleId(currentAppSource().bundleIdentifier);
+} catch {
+  // HealthKit unavailable (e.g. unsupported device) — guard stays off.
+}
 
 export const initHealthConnect = HealthKit.initHealthConnect;
 export const requestHealthPermissions = HealthKit.requestHealthPermissions;
@@ -43,12 +55,21 @@ export const alignToLocalDayStart = (date: Date): Date => {
   return aligned;
 };
 
+// Nutrition's day-aligned rolling lookback (see processMetric). Independent of the
+// requested sync window so retroactively-logged meals — event time in the past, entered
+// today — are still picked up. Nutrition-scoped; idempotent via (source, source_id) upsert.
+const NUTRITION_LOOKBACK_DAYS = 2;
+
+const nutritionLookbackStart = (endDate: Date): Date =>
+  alignToLocalDayStart(new Date(endDate.getTime() - NUTRITION_LOOKBACK_DAYS * 24 * 60 * 60 * 1000));
+
 // Deduplicated aggregation functions (use HealthKit's statistics API)
 export const getAggregatedStepsByDate = HealthKit.getAggregatedStepsByDate;
 export const getAggregatedActiveCaloriesByDate = HealthKit.getAggregatedActiveCaloriesByDate;
 export const getAggregatedTotalCaloriesByDate = HealthKit.getAggregatedTotalCaloriesByDate;
 export const getAggregatedDistanceByDate = HealthKit.getAggregatedDistanceByDate;
 export const getAggregatedFloorsClimbedByDate = HealthKit.getAggregatedFloorsClimbedByDate;
+export const getAggregatedBasalEnergyByDate = HealthKit.getAggregatedBasalEnergyByDate;
 
 const aggregateDetailed = async (
   fetchRecords: (startDate: Date, endDate: Date) => Promise<AggregatedHealthRecord[]>,
@@ -82,6 +103,11 @@ export const getAggregatedFloorsClimbedByDateDetailed = (
   startDate: Date,
   endDate: Date,
 ) => aggregateDetailed(HealthKit.getAggregatedFloorsClimbedByDate, startDate, endDate);
+
+export const getAggregatedBasalEnergyByDateDetailed = (
+  startDate: Date,
+  endDate: Date,
+) => aggregateDetailed(HealthKit.getAggregatedBasalEnergyByDate, startDate, endDate);
 
 export const aggregateSleepSessions = HealthKitAggregation.aggregateSleepSessions;
 
@@ -147,9 +173,21 @@ async function processMetric(
     dataToTransform = await HealthKit.getAggregatedFloorsClimbedByDate(startDate, endDate);
   } else if (type === 'TotalCaloriesBurned') {
     dataToTransform = await HealthKit.getAggregatedTotalCaloriesByDate(startDate, endDate);
+  } else if (type === 'BasalMetabolicRate') {
+    // iOS BMR override source: last-complete-day Resting Energy, stamped with the day it
+    // applies to (D+1). Emits aggregated { date, value, type: 'basal_metabolic_rate' }
+    // records, which transformHealthRecords normalizes (adds unit + source) like the other
+    // aggregated metrics below.
+    dataToTransform = await HealthKit.getAggregatedBasalEnergyByDate(startDate, endDate);
   } else {
-    // For other types, read raw records
-    const rawRecords = await HealthKit.readHealthRecords(type, startDate, endDate);
+    // For other types, read raw records. Nutrition is frequently logged after the fact,
+    // so it widens to a day-aligned rolling lookback (or keeps the requested window if
+    // that already reaches further back). Idempotent: nutrition upserts by (source,
+    // source_id), so re-reading the same correlations every sync is free server-side.
+    const rawStartDate = type === 'Nutrition'
+      ? new Date(Math.min(startDate.getTime(), nutritionLookbackStart(endDate).getTime()))
+      : startDate;
+    const rawRecords = await HealthKit.readHealthRecords(type, rawStartDate, endDate);
 
     if (!rawRecords || rawRecords.length === 0) {
       return { data: [] };
@@ -230,6 +268,16 @@ export const syncHealthData = async (
       addLog(`[HealthKitService] Error processing ${type}: ${message}`, 'ERROR');
       syncErrors.push({ type, error: message });
     }
+  }
+
+  // Outbound phase: SparkyFitness diary → HealthKit. Runs before the inbound result
+  // is returned, in its own try/catch so a writeback failure never affects the inbound
+  // sync outcome.
+  try {
+    await runWriteback();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    addLog(`[HealthKitService] Writeback phase failed: ${message}`, 'ERROR');
   }
 
   if (allTransformedData.length > 0) {

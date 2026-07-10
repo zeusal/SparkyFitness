@@ -21,8 +21,8 @@ import SegmentedControl from '../components/SegmentedControl';
 import { useServerConnection, useExternalProviders, useSuggestedExercises, useExerciseSearch } from '../hooks';
 import { suggestedExercisesQueryKey } from '../hooks/queryKeys';
 import { useExternalExerciseSearch } from '../hooks/useExternalExerciseSearch';
+import { useHeaderActionColors } from '../hooks/useHeaderActionColors';
 import { importExercise } from '../services/api/externalExerciseSearchApi';
-import { EXERCISE_PROVIDER_TYPES } from '../types/externalProviders';
 import type { Exercise } from '../types/exercise';
 import type { ExternalExerciseItem } from '../types/externalExercises';
 import type { RootStackScreenProps } from '../types/navigation';
@@ -52,6 +52,7 @@ const ExerciseSearchScreen: React.FC<ExerciseSearchScreenProps> = ({ navigation,
     '--color-text-secondary',
     '--color-border-subtle',
   ]) as [string, string, string, string];
+  const { backColor } = useHeaderActionColors();
   const { isConnected } = useServerConnection();
 
   const [activeTab, setActiveTab] = useState<TabKey>('search');
@@ -69,7 +70,7 @@ const ExerciseSearchScreen: React.FC<ExerciseSearchScreenProps> = ({ navigation,
     refetch: refetchProviders,
   } = useExternalProviders({
     enabled: isConnected && activeTab === 'online',
-    filterSet: EXERCISE_PROVIDER_TYPES,
+    category: 'exercise',
   });
 
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
@@ -420,8 +421,9 @@ useEffect(() => {
   };
 
   return (
-    <View className="flex-1 bg-background" style={Platform.OS === 'android' ? { paddingTop: insets.top } : undefined}>
+      <View className="flex-1 bg-background" style={Platform.OS === 'android' ? { paddingTop: insets.top } : undefined}>
       {/* Header */}
+      {Platform.OS !== 'ios' && (
       <View className="flex-row items-center justify-between px-4 py-3 border-b border-border-subtle">
         <Button
           variant="ghost"
@@ -429,13 +431,14 @@ useEffect(() => {
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           className="z-10 p-0"
         >
-          <Icon name="close" size={22} color={accentColor} />
+          <Icon name="close" size={22} color={backColor} />
         </Button>
         <Text className="absolute left-0 right-0 text-center text-text-primary text-lg font-semibold">
           Exercises
         </Text>
         <View style={{ width: 22 }} />
       </View>
+      )}
 
       {/* Segmented control */}
       <View className="px-4 mt-2">

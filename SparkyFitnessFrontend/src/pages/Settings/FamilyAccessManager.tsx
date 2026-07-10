@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,6 +37,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { FamilyAccess } from '@/types/settings';
 
 const FamilyAccessManager = () => {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingAccess, setEditingAccess] = useState<FamilyAccess | null>(null);
@@ -59,13 +61,13 @@ const FamilyAccessManager = () => {
     useToggleFamilyAccessMutation();
 
   const rulesICreated = familyAccess.filter(
-    (access) => user && access.owner_user_id === user.id
+    (access) => user && access.owner_user_id === user.activeUserId
   );
   const rulesGivenToMe = familyAccess.filter(
     (access) =>
       user &&
-      access.family_user_id === user.id &&
-      access.owner_user_id !== user.id
+      access.family_user_id === user.activeUserId &&
+      access.owner_user_id !== user.activeUserId
   );
 
   const resetForm = () => {
@@ -143,7 +145,7 @@ const FamilyAccessManager = () => {
       if (!editingAccess && foundUserId) {
         const existingAccess = familyAccess.find(
           (access) =>
-            access.owner_user_id === user.id &&
+            access.owner_user_id === user.activeUserId &&
             access.family_user_id === foundUserId
         );
         if (existingAccess) {
@@ -163,7 +165,7 @@ const FamilyAccessManager = () => {
       const status = foundUserId ? 'active' : 'pending';
 
       const accessData = {
-        owner_user_id: user.id,
+        owner_user_id: user.activeUserId,
         family_user_id: familyUserId,
         family_email: formData.family_email,
         access_permissions: {
@@ -255,7 +257,15 @@ const FamilyAccessManager = () => {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>
-                {editingAccess ? 'Edit' : 'Add'} Family Access
+                {editingAccess
+                  ? t(
+                      'familyAccessManager.editFamilyAccess',
+                      'Edit Family Access'
+                    )
+                  : t(
+                      'familyAccessManager.addFamilyAccess',
+                      'Add Family Access'
+                    )}
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
@@ -625,9 +635,17 @@ const FamilyAccessManager = () => {
       {familyAccess.length === 0 && (
         <div className="text-center py-8 text-muted-foreground">
           <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-          <p>No family access granted yet</p>
+          <p>
+            {t(
+              'familyAccessManager.noAccessTitle',
+              'No family access granted yet'
+            )}
+          </p>
           <p className="text-sm">
-            Add family members to let them help manage your fitness data
+            {t(
+              'familyAccessManager.noAccessDescription',
+              'Add family members to let them help manage your fitness data'
+            )}
           </p>
         </div>
       )}

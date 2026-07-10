@@ -3,6 +3,9 @@ import type { ExternalDataProvider } from './ExternalProviderSettings';
 import {
   useExternalProviders,
   useUpdateExternalProviderMutation,
+  useGlobalExternalProviders,
+  useUpdateGlobalProvider,
+  type CreateGlobalProviderPayload,
 } from '@/hooks/Settings/useExternalProviderSettings';
 import { usePreferences } from '@/contexts/PreferencesContext';
 import { useMemo, useState } from 'react';
@@ -13,6 +16,7 @@ import {
   decodeYazioAppId,
   encodeYazioAppId,
   encodeYazioAppKey,
+  resolveProviderCredentialPayload,
 } from '@/utils/settings';
 
 import {
@@ -35,6 +39,7 @@ import { CSS } from '@dnd-kit/utilities';
 
 interface ExternalProviderListProps {
   showAddForm: boolean;
+  isAdminMode?: boolean;
 }
 
 interface SortableProviderRowProps {
@@ -89,7 +94,10 @@ const SortableProviderRow = ({
   );
 };
 
-const ExternalProviderList = ({ showAddForm }: ExternalProviderListProps) => {
+const ExternalProviderList = ({
+  showAddForm,
+  isAdminMode = false,
+}: ExternalProviderListProps) => {
   const [editingProvider, setEditingProvider] = useState<string | null>(null);
   const [editData, setEditData] = useState<Partial<ExternalDataProvider>>({});
 
@@ -102,13 +110,24 @@ const ExternalProviderList = ({ showAddForm }: ExternalProviderListProps) => {
     saveAllPreferences,
   } = usePreferences();
 
-  const { data: providers = [], isLoading: providersLoading } =
-    useExternalProviders(user?.activeUserId);
+  const { data: userProviders = [], isLoading: userProvidersLoading } =
+    useExternalProviders(isAdminMode ? undefined : user?.activeUserId);
+
+  const { data: globalProviders = [], isLoading: globalProvidersLoading } =
+    useGlobalExternalProviders(isAdminMode);
+
+  const providers = isAdminMode ? globalProviders : userProviders;
+  const providersLoading = isAdminMode
+    ? globalProvidersLoading
+    : userProvidersLoading;
 
   const { mutateAsync: updateExternalProvider, isPending: updatePending } =
     useUpdateExternalProviderMutation();
 
-  const loading = providersLoading || updatePending;
+  const { mutateAsync: updateGlobalProvider, isPending: globalUpdatePending } =
+    useUpdateGlobalProvider();
+
+  const loading = providersLoading || updatePending || globalUpdatePending;
 
   const [optimisticProviders, setOptimisticProviders] = useState<
     ExternalDataProvider[] | null
@@ -150,7 +169,10 @@ const ExternalProviderList = ({ showAddForm }: ExternalProviderListProps) => {
     let yazioAppId: string | undefined;
     let yazioAppKey: string | undefined;
 
-    if (editData.provider_type === 'yazio' && existingProvider) {
+    if (
+      editData.provider_type === 'yazio' &&
+      existingProvider?.provider_type === 'yazio'
+    ) {
       // Decode existing stored credentials
       const existingAppId = decodeYazioAppId(existingProvider.app_id);
       const existingAppKey = (() => {
@@ -187,7 +209,9 @@ const ExternalProviderList = ({ showAddForm }: ExternalProviderListProps) => {
       yazioAppId = encodeYazioAppId(mergedUsername, mergedClientId);
       yazioAppKey = encodeYazioAppKey(mergedPassword, mergedClientSecret);
     } else if (editData.provider_type === 'yazio') {
-      // Fallback for new provider (shouldn't happen in update path, but safe)
+      // New provider, or the type was just changed to YAZIO. Use only the
+      // entered values — never merge from a non-YAZIO row, or the old
+      // provider's credentials would be carried into the new YAZIO provider.
       yazioAppId = encodeYazioAppId(editData.app_id, editData.yazio_client_id);
       yazioAppKey = encodeYazioAppKey(
         editData.app_key,
@@ -195,48 +219,17 @@ const ExternalProviderList = ({ showAddForm }: ExternalProviderListProps) => {
       );
     }
 
+    const { app_id, app_key } = resolveProviderCredentialPayload(
+      editData,
+      yazioAppId,
+      yazioAppKey,
+      existingProvider?.provider_type
+    );
     const providerUpdateData: Partial<ExternalDataProvider> = {
       provider_name: editData.provider_name,
       provider_type: editData.provider_type,
-      app_id:
-        editData.provider_type === 'mealie' ||
-        editData.provider_type === 'tandoor' ||
-        editData.provider_type === 'norish' ||
-        editData.provider_type === 'free-exercise-db' ||
-        editData.provider_type === 'wger'
-          ? null
-          : editData.provider_type === 'openfoodfacts' ||
-              editData.provider_type === 'yazio'
-            ? editData.provider_type === 'yazio'
-              ? yazioAppId
-              : editData.app_id || undefined
-            : // OAuth providers store credentials encrypted server-side and never echo them back.
-              // Send undefined (not null) when empty so COALESCE preserves the existing value.
-              // null would trigger clearAppId=true and wipe the encrypted credential.
-              [
-                  'googlehealth',
-                  'fitbit',
-                  'withings',
-                  'strava',
-                  'polar',
-                ].includes(editData.provider_type || '')
-              ? editData.app_id?.trim() || undefined
-              : editData.app_id || null,
-      app_key:
-        editData.provider_type === 'yazio'
-          ? yazioAppKey
-          : editData.provider_type === 'openfoodfacts'
-            ? editData.app_key || undefined
-            : // Same reasoning as app_id above: undefined preserves, null wipes.
-              [
-                  'googlehealth',
-                  'fitbit',
-                  'withings',
-                  'strava',
-                  'polar',
-                ].includes(editData.provider_type || '')
-              ? editData.app_key?.trim() || undefined
-              : editData.app_key || null,
+      app_id,
+      app_key,
       is_active: editData.is_active,
       base_url:
         editData.provider_type === 'mealie' ||
@@ -288,35 +281,44 @@ const ExternalProviderList = ({ showAddForm }: ExternalProviderListProps) => {
     };
 
     try {
-      const data = await updateExternalProvider({
-        id: providerId,
-        data: providerUpdateData,
-      });
+      if (isAdminMode) {
+        await updateGlobalProvider({
+          id: providerId,
+          data: providerUpdateData as unknown as Partial<CreateGlobalProviderPayload>,
+        });
+      } else {
+        const data = await updateExternalProvider({
+          id: providerId,
+          data: providerUpdateData,
+        });
+
+        if (
+          data &&
+          data.is_active &&
+          (data.provider_type === 'openfoodfacts' ||
+            data.provider_type === 'nutritionix' ||
+            data.provider_type === 'fatsecret' ||
+            data.provider_type === 'mealie' ||
+            data.provider_type === 'tandoor' ||
+            data.provider_type === 'norish' ||
+            data.provider_type === 'usda' ||
+            data.provider_type === 'yazio')
+        ) {
+          setDefaultFoodDataProviderId(data.id);
+          saveAllPreferences({ defaultFoodDataProviderId: data.id });
+        } else if (data && defaultFoodDataProviderId === data.id) {
+          setDefaultFoodDataProviderId(null);
+          saveAllPreferences({ defaultFoodDataProviderId: null });
+        }
+
+        if (data && !data.is_active && defaultBarcodeProviderId === data.id) {
+          setDefaultBarcodeProviderId(null);
+          saveAllPreferences({ defaultBarcodeProviderId: null });
+        }
+      }
 
       setEditData({});
       setEditingProvider(null);
-
-      if (
-        data &&
-        data.is_active &&
-        (data.provider_type === 'openfoodfacts' ||
-          data.provider_type === 'nutritionix' ||
-          data.provider_type === 'fatsecret' ||
-          data.provider_type === 'mealie' ||
-          data.provider_type === 'tandoor' ||
-          data.provider_type === 'norish' ||
-          data.provider_type === 'usda' ||
-          data.provider_type === 'yazio')
-      ) {
-        setDefaultFoodDataProviderId(data.id);
-      } else if (data && defaultFoodDataProviderId === data.id) {
-        setDefaultFoodDataProviderId(null);
-      }
-
-      if (data && !data.is_active && defaultBarcodeProviderId === data.id) {
-        setDefaultBarcodeProviderId(null);
-        saveAllPreferences({ defaultBarcodeProviderId: null });
-      }
     } catch (error: unknown) {
       console.error('Error updating external data provider:', error);
     }
@@ -396,6 +398,38 @@ const ExternalProviderList = ({ showAddForm }: ExternalProviderListProps) => {
         <p className="text-sm">
           Add your first data provider to enable search from external sources.
         </p>
+      </div>
+    );
+  }
+
+  if (isAdminMode) {
+    return (
+      <div className="space-y-4">
+        {displayProviders.map((provider) => (
+          <div
+            key={provider.id}
+            className="border rounded-lg p-4 bg-background"
+          >
+            {editingProvider === provider.id ? (
+              <EditProviderForm
+                provider={provider}
+                editData={editData}
+                setEditData={setEditData}
+                onSubmit={handleUpdateProvider}
+                onCancel={cancelEditing}
+                loading={loading}
+                isAdminMode={true}
+              />
+            ) : (
+              <ProviderCard
+                provider={provider}
+                isLoading={loading}
+                startEditing={startEditing}
+                isAdminMode={true}
+              />
+            )}
+          </div>
+        ))}
       </div>
     );
   }

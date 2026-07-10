@@ -1,15 +1,22 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import * as Haptics from 'expo-haptics';
 import { Platform } from 'react-native';
 import Toast from 'react-native-toast-message';
 import {
   __resetNotificationStateForTests,
+  cancelAllScheduledNotifications,
   cancelScheduledNotification,
   ensureNotificationPermission,
   fireRestCompleteHaptic,
+  getNotificationsEnabled,
   initNotifications,
+  scheduleFastGoalNotification,
   scheduleRestNotification,
+  setNotificationsEnabled,
 } from '../../src/services/notifications';
+
+const NOTIFICATIONS_ENABLED_KEY = '@HealthConnect:notificationsEnabled';
 
 const mockGetPerms = Notifications.getPermissionsAsync as jest.MockedFunction<
   typeof Notifications.getPermissionsAsync
@@ -23,6 +30,9 @@ const mockSchedule = Notifications.scheduleNotificationAsync as jest.MockedFunct
 const mockCancel = Notifications.cancelScheduledNotificationAsync as jest.MockedFunction<
   typeof Notifications.cancelScheduledNotificationAsync
 >;
+const mockCancelAll = Notifications.cancelAllScheduledNotificationsAsync as jest.MockedFunction<
+  typeof Notifications.cancelAllScheduledNotificationsAsync
+>;
 const mockSetHandler = Notifications.setNotificationHandler as jest.MockedFunction<
   typeof Notifications.setNotificationHandler
 >;
@@ -32,12 +42,14 @@ const mockSetChannel = Notifications.setNotificationChannelAsync as jest.MockedF
 const mockToastShow = Toast.show as jest.MockedFunction<typeof Toast.show>;
 
 describe('notifications service', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await AsyncStorage.clear();
     __resetNotificationStateForTests();
     mockGetPerms.mockReset().mockResolvedValue({ status: 'granted' } as any);
     mockRequestPerms.mockReset().mockResolvedValue({ status: 'granted' } as any);
     mockSchedule.mockReset().mockResolvedValue('notif-id' as any);
     mockCancel.mockReset().mockResolvedValue(undefined as any);
+    mockCancelAll.mockReset().mockResolvedValue(undefined as any);
     mockSetHandler.mockClear();
     mockSetChannel.mockClear();
     mockToastShow.mockClear();
@@ -56,6 +68,17 @@ describe('notifications service', () => {
       await initNotifications();
       expect(mockSetChannel).toHaveBeenCalledWith(
         'workout-timer',
+        expect.objectContaining({
+          importance: Notifications.AndroidImportance.HIGH,
+        }),
+      );
+    });
+
+    it('creates a dedicated fasting Android channel', async () => {
+      Object.defineProperty(Platform, 'OS', { get: () => 'android', configurable: true });
+      await initNotifications();
+      expect(mockSetChannel).toHaveBeenCalledWith(
+        'fasting',
         expect.objectContaining({
           importance: Notifications.AndroidImportance.HIGH,
         }),
@@ -131,6 +154,44 @@ describe('notifications service', () => {
     });
   });
 
+  describe('scheduleFastGoalNotification', () => {
+    it('schedules a DATE-trigger notification on the fasting channel for a future target', async () => {
+      mockGetPerms.mockResolvedValue({ status: 'granted' } as any);
+      mockSchedule.mockResolvedValue('fast-goal-id' as any);
+      const target = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+      const id = await scheduleFastGoalNotification(target);
+
+      expect(id).toBe('fast-goal-id');
+      expect(mockSchedule).toHaveBeenCalledWith({
+        content: expect.objectContaining({ title: 'Fasting goal reached' }),
+        trigger: expect.objectContaining({
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          channelId: 'fasting',
+        }),
+      });
+    });
+
+    it('returns null and schedules nothing for a past target', async () => {
+      const target = new Date(Date.now() - 60 * 1000).toISOString();
+      const id = await scheduleFastGoalNotification(target);
+      expect(id).toBeNull();
+      expect(mockSchedule).not.toHaveBeenCalled();
+    });
+
+    it('returns null when permission is denied', async () => {
+      mockGetPerms.mockResolvedValue({ status: 'denied' } as any);
+      const target = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      expect(await scheduleFastGoalNotification(target)).toBeNull();
+      expect(mockSchedule).not.toHaveBeenCalled();
+    });
+
+    it('returns null on an invalid date string', async () => {
+      expect(await scheduleFastGoalNotification('not-a-date')).toBeNull();
+      expect(mockSchedule).not.toHaveBeenCalled();
+    });
+  });
+
   describe('fireRestCompleteHaptic', () => {
     const mockHaptic = Haptics.notificationAsync as jest.MockedFunction<
       typeof Haptics.notificationAsync
@@ -149,6 +210,54 @@ describe('notifications service', () => {
     it('swallows rejections from Haptics', () => {
       mockHaptic.mockRejectedValueOnce(new Error('boom'));
       expect(() => fireRestCompleteHaptic()).not.toThrow();
+    });
+  });
+
+  describe('notifications-enabled toggle', () => {
+    // Toggle behavior (default/restore/init-race) is covered by
+    // booleanPreference.test.ts; these verify the notifications-specific wiring
+    // (storage key) and the scheduling gate.
+    it('persists toggles under the notifications storage key', async () => {
+      await setNotificationsEnabled(false);
+      expect(getNotificationsEnabled()).toBe(false);
+      expect(await AsyncStorage.getItem(NOTIFICATIONS_ENABLED_KEY)).toBe('false');
+    });
+
+    it('skips scheduling a rest notification when disabled', async () => {
+      await setNotificationsEnabled(false);
+      expect(await scheduleRestNotification('Bench Press', 60)).toBeNull();
+      expect(mockSchedule).not.toHaveBeenCalled();
+      expect(mockGetPerms).not.toHaveBeenCalled();
+    });
+
+    it('skips scheduling a fast-goal notification when disabled', async () => {
+      await setNotificationsEnabled(false);
+      const target = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      expect(await scheduleFastGoalNotification(target)).toBeNull();
+      expect(mockSchedule).not.toHaveBeenCalled();
+      expect(mockGetPerms).not.toHaveBeenCalled();
+    });
+
+    it('cancels already-scheduled notifications when turned off', async () => {
+      await setNotificationsEnabled(false);
+      expect(mockCancelAll).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not cancel scheduled notifications when turned on', async () => {
+      await setNotificationsEnabled(true);
+      expect(mockCancelAll).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('cancelAllScheduledNotifications', () => {
+    it('calls the expo cancel-all API', async () => {
+      await cancelAllScheduledNotifications();
+      expect(mockCancelAll).toHaveBeenCalledTimes(1);
+    });
+
+    it('swallows errors', async () => {
+      mockCancelAll.mockRejectedValue(new Error('boom'));
+      await expect(cancelAllScheduledNotifications()).resolves.toBeUndefined();
     });
   });
 

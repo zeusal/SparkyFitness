@@ -2,10 +2,10 @@
 -- PostgreSQL database dump
 --
 
-\restrict MnDfCZua2AbHyHbfP3jmY5A6tLHzs46xu2mlpy8Bau6ZBPcMjGgwK8XgEr0zKcq
+\restrict dhGmLySjFGTRowxkdoNsugMJvJLlJnLFKqaQcs0DG614jCZILkcwuzPSKJ6l1bT
 
 -- Dumped from database version 18.3
--- Dumped by pg_dump version 18.0
+-- Dumped by pg_dump version 18.4 (Homebrew)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -31,48 +31,6 @@ CREATE SCHEMA auth;
 --
 
 CREATE SCHEMA system;
-
-
---
--- Name: pg_stat_statements; Type: EXTENSION; Schema: -; Owner: -
---
-
-CREATE EXTENSION IF NOT EXISTS pg_stat_statements WITH SCHEMA public;
-
-
---
--- Name: EXTENSION pg_stat_statements; Type: COMMENT; Schema: -; Owner: -
---
-
-COMMENT ON EXTENSION pg_stat_statements IS 'track planning and execution statistics of all SQL statements executed';
-
-
---
--- Name: pgcrypto; Type: EXTENSION; Schema: -; Owner: -
---
-
-CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
-
-
---
--- Name: EXTENSION pgcrypto; Type: COMMENT; Schema: -; Owner: -
---
-
-COMMENT ON EXTENSION pgcrypto IS 'cryptographic functions';
-
-
---
--- Name: uuid-ossp; Type: EXTENSION; Schema: -; Owner: -
---
-
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
-
-
---
--- Name: EXTENSION "uuid-ossp"; Type: COMMENT; Schema: -; Owner: -
---
-
-COMMENT ON EXTENSION "uuid-ossp" IS 'generate universally unique identifiers (UUIDs)';
 
 
 --
@@ -206,33 +164,9 @@ CREATE FUNCTION public.create_default_external_data_providers(p_user_id uuid) RE
     LANGUAGE plpgsql
     AS $$
 BEGIN
-  -- Insert default 'free-exercise-db' provider
-  INSERT INTO public.external_data_providers (
-    user_id, provider_name, provider_type, is_active, shared_with_public, created_at, updated_at
-  ) VALUES (
-    p_user_id, 'Free Exercise DB', 'free-exercise-db', TRUE, FALSE, now(), now()
-  ) ON CONFLICT (user_id, provider_name) DO NOTHING;
-
-  -- Insert default 'wger' provider
-  INSERT INTO public.external_data_providers (
-    user_id, provider_name, provider_type, is_active, shared_with_public, created_at, updated_at
-  ) VALUES (
-    p_user_id, 'Wger', 'wger', TRUE, FALSE, now(), now()
-  ) ON CONFLICT (user_id, provider_name) DO NOTHING;
-
-  -- Insert default 'openfoodfacts' provider
-  INSERT INTO public.external_data_providers (
-    user_id, provider_name, provider_type, is_active, shared_with_public, created_at, updated_at
-  ) VALUES (
-    p_user_id, 'Open Food Facts', 'openfoodfacts', TRUE, FALSE, now(), now()
-  ) ON CONFLICT (user_id, provider_name) DO NOTHING;
-
-  -- Insert default 'swissfood' provider
-  INSERT INTO public.external_data_providers (
-    user_id, provider_name, provider_type, is_active, shared_with_public, created_at, updated_at
-  ) VALUES (
-    p_user_id, 'Swiss Food Database', 'swissfood', TRUE, FALSE, now(), now()
-  ) ON CONFLICT (user_id, provider_name) DO NOTHING;
+  -- No-op: default providers are now instance-level global records (is_public = TRUE).
+  -- See create_global_default_providers() for the one-time seeding logic.
+  NULL;
 END;
 $$;
 
@@ -252,6 +186,45 @@ BEGIN
     USING (has_diary_access(user_id))
     WITH CHECK (has_diary_access(user_id));
   ', table_name, table_name);
+END;
+$$;
+
+
+--
+-- Name: create_global_default_providers(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.create_global_default_providers(p_admin_user_id uuid) RETURNS void
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  -- Free Exercise DB
+  INSERT INTO public.external_data_providers (
+    user_id, provider_name, provider_type, is_active, is_public, created_at, updated_at
+  ) VALUES (
+    p_admin_user_id, 'Free Exercise DB', 'free-exercise-db', TRUE, TRUE, now(), now()
+  ) ON CONFLICT (user_id, provider_name) DO UPDATE SET is_public = TRUE;
+
+  -- Wger
+  INSERT INTO public.external_data_providers (
+    user_id, provider_name, provider_type, is_active, is_public, created_at, updated_at
+  ) VALUES (
+    p_admin_user_id, 'Wger', 'wger', TRUE, TRUE, now(), now()
+  ) ON CONFLICT (user_id, provider_name) DO UPDATE SET is_public = TRUE;
+
+  -- Open Food Facts
+  INSERT INTO public.external_data_providers (
+    user_id, provider_name, provider_type, is_active, is_public, created_at, updated_at
+  ) VALUES (
+    p_admin_user_id, 'Open Food Facts', 'openfoodfacts', TRUE, TRUE, now(), now()
+  ) ON CONFLICT (user_id, provider_name) DO UPDATE SET is_public = TRUE;
+
+  -- Swiss Food Database
+  INSERT INTO public.external_data_providers (
+    user_id, provider_name, provider_type, is_active, is_public, created_at, updated_at
+  ) VALUES (
+    p_admin_user_id, 'Swiss Food Database', 'swissfood', TRUE, TRUE, now(), now()
+  ) ON CONFLICT (user_id, provider_name) DO UPDATE SET is_public = TRUE;
 END;
 $$;
 
@@ -526,13 +499,13 @@ CREATE FUNCTION public.handle_new_user() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
 BEGIN
-  -- Ensure onboarding_status exists (using ON CONFLICT to avoid errors if app-level init already did this)
+  -- Ensure onboarding_status exists
   INSERT INTO public.onboarding_status (user_id)
   VALUES (new.id)
   ON CONFLICT (user_id) DO NOTHING;
 
-  -- Create default external data providers
-  PERFORM public.create_default_external_data_providers(new.id);
+  -- NOTE: default external data providers are now global (is_public = TRUE).
+  -- They are seeded once when the first admin is created; no per-user rows needed.
 
   RETURN new;
 END;
@@ -696,6 +669,26 @@ BEGIN
   -- Remove the default goal (NULL goal_date) to avoid conflicts
   DELETE FROM public.user_goals
   WHERE user_id = p_user_id AND goal_date IS NULL;
+END;
+$$;
+
+
+--
+-- Name: seed_global_providers_for_first_admin(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.seed_global_providers_for_first_admin() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $$
+BEGIN
+  -- Only seed if this user is the admin (first ever user)
+  IF NEW.role = 'admin' AND NOT EXISTS (
+    SELECT 1 FROM public.external_data_providers WHERE is_public = TRUE LIMIT 1
+  ) THEN
+    PERFORM public.create_global_default_providers(NEW.id);
+    RAISE NOTICE 'Global default providers seeded for first admin: %', NEW.id;
+  END IF;
+  RETURN NEW;
 END;
 $$;
 
@@ -883,7 +876,7 @@ COMMENT ON TABLE public.account IS 'Better Auth account table - stores credentia
 --
 
 CREATE TABLE public.admin_activity_logs (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
     admin_user_id uuid NOT NULL,
     target_user_id uuid,
     action_type character varying(255) NOT NULL,
@@ -911,6 +904,8 @@ CREATE TABLE public.ai_service_settings (
     api_key_iv text,
     api_key_tag text,
     is_public boolean DEFAULT false NOT NULL,
+    chat_tool_profile text DEFAULT 'full'::text NOT NULL,
+    CONSTRAINT ai_service_settings_chat_tool_profile_check CHECK ((chat_tool_profile = ANY (ARRAY['full'::text, 'core'::text]))),
     CONSTRAINT check_public_settings_user_id_null CHECK ((((is_public = true) AND (user_id IS NULL)) OR ((is_public = false) AND (user_id IS NOT NULL))))
 );
 
@@ -1023,6 +1018,23 @@ CREATE TABLE public.check_in_measurements (
     body_fat_percentage numeric,
     created_by_user_id uuid,
     updated_by_user_id uuid
+);
+
+
+--
+-- Name: check_in_photos; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.check_in_photos (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    check_in_measurement_id uuid,
+    entry_date date NOT NULL,
+    photo_type character varying(5) NOT NULL,
+    file_path text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT check_in_photos_type_check CHECK (((photo_type)::text = ANY ((ARRAY['front'::character varying, 'back'::character varying, 'side'::character varying])::text[])))
 );
 
 
@@ -1169,7 +1181,8 @@ CREATE TABLE public.exercise_entries (
     avg_heart_rate integer,
     exercise_preset_entry_id uuid,
     sort_order integer DEFAULT 0,
-    steps integer
+    steps integer,
+    water_estimated integer
 );
 
 
@@ -1185,7 +1198,7 @@ COMMENT ON COLUMN public.exercise_entries.steps IS 'Number of steps recorded dur
 --
 
 CREATE TABLE public.exercise_entry_activity_details (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
     exercise_entry_id uuid,
     provider_name text NOT NULL,
     detail_type text NOT NULL,
@@ -1251,7 +1264,7 @@ ALTER SEQUENCE public.exercise_entry_sets_id_seq OWNED BY public.exercise_entry_
 --
 
 CREATE TABLE public.exercise_preset_entries (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     workout_preset_id integer,
     name character varying(255) NOT NULL,
@@ -1300,8 +1313,8 @@ CREATE TABLE public.exercises (
 --
 
 CREATE TABLE public.external_data_providers (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
-    user_id uuid NOT NULL,
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid,
     provider_name text NOT NULL,
     provider_type text NOT NULL,
     app_id text,
@@ -1321,7 +1334,6 @@ CREATE TABLE public.external_data_providers (
     encrypted_garth_dump text,
     garth_dump_iv text,
     garth_dump_tag text,
-    shared_with_public boolean DEFAULT false NOT NULL,
     encrypted_access_token text,
     access_token_iv text,
     access_token_tag text,
@@ -1332,7 +1344,8 @@ CREATE TABLE public.external_data_providers (
     last_sync_at timestamp with time zone,
     sync_frequency text DEFAULT 'manual'::text,
     oauth_state text,
-    sort_order integer
+    sort_order integer,
+    is_public boolean DEFAULT false NOT NULL
 );
 
 
@@ -1359,7 +1372,11 @@ CREATE TABLE public.external_provider_types (
     display_name character varying(100) NOT NULL,
     description text,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
-    is_strictly_private boolean DEFAULT false
+    is_strictly_private boolean DEFAULT true,
+    categories character varying(50)[],
+    required_fields character varying(50)[],
+    field_labels jsonb,
+    supports_barcode boolean DEFAULT false NOT NULL
 );
 
 
@@ -1388,7 +1405,7 @@ CREATE TABLE public.family_access (
 --
 
 CREATE TABLE public.fasting_logs (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     start_time timestamp with time zone NOT NULL,
     end_time timestamp with time zone,
@@ -1453,11 +1470,25 @@ CREATE TABLE public.food_entries (
 
 
 --
+-- Name: COLUMN food_entries.source; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.food_entries.source IS 'Provider that produced this entry (e.g. ''health_connect''). NULL for manual/web entries.';
+
+
+--
+-- Name: COLUMN food_entries.source_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.food_entries.source_id IS 'Provider-stable record id for idempotent re-sync. NULL for manual/web entries.';
+
+
+--
 -- Name: food_entry_meals; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.food_entry_meals (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     meal_template_id uuid,
     entry_date date NOT NULL,
@@ -1614,6 +1645,27 @@ CREATE TABLE public.goal_presets (
 
 
 --
+-- Name: injection_entries; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.injection_entries (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    medication_id uuid,
+    user_id uuid NOT NULL,
+    pen_id uuid,
+    injected_at timestamp with time zone DEFAULT now() NOT NULL,
+    entry_date date DEFAULT CURRENT_DATE NOT NULL,
+    site character varying(40),
+    dose_mg numeric,
+    notes text,
+    source character varying(50) DEFAULT 'manual'::character varying NOT NULL,
+    custom_fields jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: meal_foods; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1762,6 +1814,187 @@ COMMENT ON COLUMN public.meals.serving_unit IS 'Unit of measurement for the serv
 --
 
 COMMENT ON COLUMN public.meals.total_servings IS 'How many servings the recipe yields. Full recipe quantity = serving_size × total_servings.';
+
+
+--
+-- Name: medication_entries; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.medication_entries (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    medication_id uuid,
+    schedule_id uuid,
+    user_id uuid NOT NULL,
+    status character varying(20) DEFAULT 'taken'::character varying NOT NULL,
+    taken_at timestamp with time zone DEFAULT now() NOT NULL,
+    scheduled_for timestamp with time zone,
+    entry_date date DEFAULT CURRENT_DATE NOT NULL,
+    med_name_snapshot text,
+    dose_amount_snapshot numeric,
+    dose_unit_snapshot character varying(20),
+    notes text,
+    source character varying(50) DEFAULT 'manual'::character varying NOT NULL,
+    custom_fields jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: medication_pens; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.medication_pens (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    medication_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    kind character varying(10) DEFAULT 'pen'::character varying NOT NULL,
+    label text,
+    dose_mg numeric,
+    concentration_mg_ml numeric,
+    volume_ml numeric,
+    doses_total integer,
+    doses_used integer DEFAULT 0 NOT NULL,
+    status character varying(20) DEFAULT 'sealed'::character varying NOT NULL,
+    opened_at date,
+    expiry_date date,
+    bud_date date,
+    reorder_flag boolean DEFAULT false NOT NULL,
+    reorder_threshold integer,
+    notes text,
+    source character varying(50) DEFAULT 'manual'::character varying NOT NULL,
+    custom_fields jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: medication_route_types; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.medication_route_types (
+    id character varying(50) NOT NULL,
+    display_name character varying(100) NOT NULL,
+    sort_order integer DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: medication_schedule_types; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.medication_schedule_types (
+    id character varying(50) NOT NULL,
+    display_name character varying(100) NOT NULL,
+    description text,
+    sort_order integer DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: medication_schedules; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.medication_schedules (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    medication_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    schedule_type_id character varying(50) NOT NULL,
+    time_of_day time without time zone,
+    dose_amount numeric,
+    days_of_week integer[],
+    interval_days integer,
+    day_of_month integer,
+    cycle_on_days integer,
+    cycle_off_days integer,
+    with_meal character varying(20),
+    prn_reason text,
+    prn_max_per_day integer,
+    start_date date,
+    end_date date,
+    active boolean DEFAULT true NOT NULL,
+    source character varying(50) DEFAULT 'manual'::character varying NOT NULL,
+    custom_fields jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: medication_titration_steps; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.medication_titration_steps (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    medication_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    dose_mg numeric NOT NULL,
+    dose_unit character varying(20) DEFAULT 'mg'::character varying NOT NULL,
+    start_date date,
+    planned_weeks integer,
+    step_order integer DEFAULT 0 NOT NULL,
+    status character varying(20) DEFAULT 'planned'::character varying NOT NULL,
+    is_taper boolean DEFAULT false NOT NULL,
+    note text,
+    source character varying(50) DEFAULT 'manual'::character varying NOT NULL,
+    custom_fields jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: medication_types; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.medication_types (
+    id character varying(50) NOT NULL,
+    display_name character varying(100) NOT NULL,
+    description text,
+    is_injectable boolean DEFAULT false NOT NULL,
+    counting_unit_default character varying(20),
+    sort_order integer DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: medications; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.medications (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    name text NOT NULL,
+    display_name text,
+    type_id character varying(50),
+    route_id character varying(50),
+    strength_value numeric,
+    strength_unit character varying(20),
+    dose_amount numeric,
+    dose_unit character varying(20),
+    rxnorm_rxcui character varying(20),
+    ndc character varying(20),
+    prescriber text,
+    pharmacy text,
+    rx_number text,
+    reason_text text,
+    effectiveness_rating smallint,
+    color character varying(20),
+    icon character varying(50),
+    photo_path text,
+    is_active boolean DEFAULT true NOT NULL,
+    is_quick boolean DEFAULT false NOT NULL,
+    is_glp1 boolean DEFAULT false NOT NULL,
+    notes text,
+    source character varying(50) DEFAULT 'manual'::character varying NOT NULL,
+    custom_fields jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
 
 
 --
@@ -1992,7 +2225,7 @@ COMMENT ON TABLE public.session IS 'Better Auth session table';
 --
 
 CREATE TABLE public.sleep_entries (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     entry_date date NOT NULL,
     bedtime timestamp with time zone NOT NULL,
@@ -2029,7 +2262,7 @@ CREATE TABLE public.sleep_entries (
 --
 
 CREATE TABLE public.sleep_entry_stages (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
     entry_id uuid NOT NULL,
     user_id uuid NOT NULL,
     stage_type character varying(50) NOT NULL,
@@ -2128,6 +2361,30 @@ CREATE TABLE public.sso_provider (
 
 
 --
+-- Name: symptom_entries; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.symptom_entries (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    medication_id uuid,
+    symptom_id uuid,
+    symptom_name_snapshot text NOT NULL,
+    severity numeric,
+    severity_label character varying(40),
+    logged_at timestamp with time zone DEFAULT now() NOT NULL,
+    entry_date date DEFAULT CURRENT_DATE NOT NULL,
+    body_location character varying(60),
+    context_text text,
+    bristol_type smallint,
+    source character varying(50) DEFAULT 'manual'::character varying NOT NULL,
+    custom_fields jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: two_factor; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2208,6 +2465,51 @@ CREATE TABLE public.user_custom_nutrients (
 
 
 --
+-- Name: user_custom_symptom_locations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_custom_symptom_locations (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    name text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: user_custom_symptoms; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_custom_symptoms (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    name text NOT NULL,
+    display_name text,
+    scale_type character varying(20) DEFAULT '1-10'::character varying NOT NULL,
+    unit character varying(20),
+    is_glp1_flagged boolean DEFAULT false NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: user_dashboard_layouts; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_dashboard_layouts (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    page_key text NOT NULL,
+    layout jsonb NOT NULL,
+    hidden jsonb DEFAULT '[]'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: user_goals; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2270,6 +2572,21 @@ CREATE TABLE public.user_meal_visibilities (
     is_visible boolean DEFAULT true,
     created_at timestamp with time zone DEFAULT now(),
     show_in_quick_log boolean DEFAULT true
+);
+
+
+--
+-- Name: user_medication_display_preferences; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_medication_display_preferences (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    view_group character varying(255) NOT NULL,
+    platform character varying(50) DEFAULT 'web'::character varying NOT NULL,
+    visible_items jsonb DEFAULT '[]'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -2385,6 +2702,10 @@ CREATE TABLE public.user_preferences (
     goal_mode character varying(50) DEFAULT 'maintain'::character varying NOT NULL,
     goal_mode_calculation_method character varying(50) DEFAULT 'manual'::character varying NOT NULL,
     goal_mode_custom_percentage integer DEFAULT 0 NOT NULL,
+    use_external_bmr boolean DEFAULT false NOT NULL,
+    active_ai_service_id uuid,
+    add_exercise_water_to_goal boolean DEFAULT false NOT NULL,
+    measurement_decimal_places integer DEFAULT 0 NOT NULL,
     CONSTRAINT check_energy_unit CHECK (((energy_unit)::text = ANY (ARRAY[('kcal'::character varying)::text, ('kJ'::character varying)::text]))),
     CONSTRAINT logging_level_check CHECK ((logging_level = ANY (ARRAY['DEBUG'::text, 'INFO'::text, 'WARN'::text, 'ERROR'::text, 'SILENT'::text]))),
     CONSTRAINT user_preferences_timezone_not_empty CHECK (((timezone IS NULL) OR (timezone <> ''::text)))
@@ -2998,6 +3319,14 @@ ALTER TABLE ONLY public.admin_activity_logs
 
 
 --
+-- Name: ai_service_settings ai_service_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_service_settings
+    ADD CONSTRAINT ai_service_settings_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: api_key api_key_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3011,6 +3340,30 @@ ALTER TABLE ONLY public.api_key
 
 ALTER TABLE ONLY public.backup_settings
     ADD CONSTRAINT backup_settings_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: check_in_measurements check_in_measurements_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.check_in_measurements
+    ADD CONSTRAINT check_in_measurements_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: check_in_photos check_in_photos_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.check_in_photos
+    ADD CONSTRAINT check_in_photos_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: check_in_photos check_in_photos_user_date_type_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.check_in_photos
+    ADD CONSTRAINT check_in_photos_user_date_type_unique UNIQUE (user_id, entry_date, photo_type);
 
 
 --
@@ -3158,6 +3511,14 @@ ALTER TABLE ONLY public.goal_presets
 
 
 --
+-- Name: injection_entries injection_entries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.injection_entries
+    ADD CONSTRAINT injection_entries_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: meal_foods meal_foods_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3211,6 +3572,70 @@ ALTER TABLE ONLY public.meal_types
 
 ALTER TABLE ONLY public.meals
     ADD CONSTRAINT meals_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: medication_entries medication_entries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.medication_entries
+    ADD CONSTRAINT medication_entries_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: medication_pens medication_pens_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.medication_pens
+    ADD CONSTRAINT medication_pens_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: medication_route_types medication_route_types_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.medication_route_types
+    ADD CONSTRAINT medication_route_types_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: medication_schedule_types medication_schedule_types_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.medication_schedule_types
+    ADD CONSTRAINT medication_schedule_types_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: medication_schedules medication_schedules_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.medication_schedules
+    ADD CONSTRAINT medication_schedules_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: medication_titration_steps medication_titration_steps_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.medication_titration_steps
+    ADD CONSTRAINT medication_titration_steps_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: medication_types medication_types_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.medication_types
+    ADD CONSTRAINT medication_types_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: medications medications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.medications
+    ADD CONSTRAINT medications_pkey PRIMARY KEY (id);
 
 
 --
@@ -3326,6 +3751,14 @@ ALTER TABLE ONLY public.sso_provider
 
 
 --
+-- Name: symptom_entries symptom_entries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.symptom_entries
+    ADD CONSTRAINT symptom_entries_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: two_factor two_factor_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3350,6 +3783,14 @@ ALTER TABLE ONLY public.mood_entries
 
 
 --
+-- Name: user_medication_display_preferences unique_user_med_display; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_medication_display_preferences
+    ADD CONSTRAINT unique_user_med_display UNIQUE (user_id, view_group, platform);
+
+
+--
 -- Name: user_custom_nutrients unique_user_nutrient_name; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3363,6 +3804,22 @@ ALTER TABLE ONLY public.user_custom_nutrients
 
 ALTER TABLE ONLY public.external_data_providers
     ADD CONSTRAINT unique_user_provider UNIQUE (user_id, provider_name);
+
+
+--
+-- Name: user_custom_symptom_locations unique_user_symptom_location_name; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_custom_symptom_locations
+    ADD CONSTRAINT unique_user_symptom_location_name UNIQUE (user_id, name);
+
+
+--
+-- Name: user_custom_symptoms unique_user_symptom_name; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_custom_symptoms
+    ADD CONSTRAINT unique_user_symptom_name UNIQUE (user_id, name);
 
 
 --
@@ -3390,6 +3847,38 @@ ALTER TABLE ONLY public.user_custom_nutrients
 
 
 --
+-- Name: user_custom_symptom_locations user_custom_symptom_locations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_custom_symptom_locations
+    ADD CONSTRAINT user_custom_symptom_locations_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_custom_symptoms user_custom_symptoms_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_custom_symptoms
+    ADD CONSTRAINT user_custom_symptoms_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_dashboard_layouts user_dashboard_layouts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_dashboard_layouts
+    ADD CONSTRAINT user_dashboard_layouts_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_dashboard_layouts user_dashboard_layouts_user_page_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_dashboard_layouts
+    ADD CONSTRAINT user_dashboard_layouts_user_page_unique UNIQUE (user_id, page_key);
+
+
+--
 -- Name: user user_email_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3411,6 +3900,14 @@ ALTER TABLE ONLY public.user_ignored_updates
 
 ALTER TABLE ONLY public.user_meal_visibilities
     ADD CONSTRAINT user_meal_visibilities_pkey PRIMARY KEY (user_id, meal_type_id);
+
+
+--
+-- Name: user_medication_display_preferences user_medication_display_preferences_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_medication_display_preferences
+    ADD CONSTRAINT user_medication_display_preferences_pkey PRIMARY KEY (id);
 
 
 --
@@ -3748,6 +4245,13 @@ CREATE UNIQUE INDEX idx_exercises_user_source_source_id_unique ON public.exercis
 
 
 --
+-- Name: idx_external_data_providers_is_public; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_external_data_providers_is_public ON public.external_data_providers USING btree (is_public);
+
+
+--
 -- Name: idx_food_entries_food_entry_meal_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -3787,6 +4291,104 @@ CREATE INDEX idx_foods_provider_external_id_provider_type ON public.foods USING 
 --
 
 CREATE INDEX idx_foods_provider_type_user_id ON public.foods USING btree (provider_type, user_id) WHERE (provider_type IS NOT NULL);
+
+
+--
+-- Name: idx_injection_entries_injected_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_injection_entries_injected_at ON public.injection_entries USING btree (user_id, injected_at);
+
+
+--
+-- Name: idx_injection_entries_medication_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_injection_entries_medication_id ON public.injection_entries USING btree (medication_id);
+
+
+--
+-- Name: idx_injection_entries_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_injection_entries_user_id ON public.injection_entries USING btree (user_id);
+
+
+--
+-- Name: idx_medication_entries_entry_date; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_medication_entries_entry_date ON public.medication_entries USING btree (user_id, entry_date);
+
+
+--
+-- Name: idx_medication_entries_medication_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_medication_entries_medication_id ON public.medication_entries USING btree (medication_id);
+
+
+--
+-- Name: idx_medication_entries_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_medication_entries_user_id ON public.medication_entries USING btree (user_id);
+
+
+--
+-- Name: idx_medication_pens_medication_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_medication_pens_medication_id ON public.medication_pens USING btree (medication_id);
+
+
+--
+-- Name: idx_medication_pens_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_medication_pens_user_id ON public.medication_pens USING btree (user_id);
+
+
+--
+-- Name: idx_medication_schedules_medication_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_medication_schedules_medication_id ON public.medication_schedules USING btree (medication_id);
+
+
+--
+-- Name: idx_medication_schedules_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_medication_schedules_user_id ON public.medication_schedules USING btree (user_id);
+
+
+--
+-- Name: idx_medication_titration_steps_medication_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_medication_titration_steps_medication_id ON public.medication_titration_steps USING btree (medication_id);
+
+
+--
+-- Name: idx_medication_titration_steps_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_medication_titration_steps_user_id ON public.medication_titration_steps USING btree (user_id);
+
+
+--
+-- Name: idx_medications_is_glp1; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_medications_is_glp1 ON public.medications USING btree (user_id, is_glp1) WHERE is_glp1;
+
+
+--
+-- Name: idx_medications_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_medications_user_id ON public.medications USING btree (user_id);
 
 
 --
@@ -3867,6 +4469,41 @@ CREATE INDEX idx_sparky_chat_history_user_id ON public.sparky_chat_history USING
 
 
 --
+-- Name: idx_symptom_entries_entry_date; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_symptom_entries_entry_date ON public.symptom_entries USING btree (user_id, entry_date);
+
+
+--
+-- Name: idx_symptom_entries_medication_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_symptom_entries_medication_id ON public.symptom_entries USING btree (medication_id);
+
+
+--
+-- Name: idx_symptom_entries_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_symptom_entries_user_id ON public.symptom_entries USING btree (user_id);
+
+
+--
+-- Name: idx_user_custom_symptom_locations_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_user_custom_symptom_locations_user_id ON public.user_custom_symptom_locations USING btree (user_id);
+
+
+--
+-- Name: idx_user_custom_symptoms_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_user_custom_symptoms_user_id ON public.user_custom_symptoms USING btree (user_id);
+
+
+--
 -- Name: idx_user_goals_unique_user_date; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -3892,6 +4529,13 @@ CREATE INDEX idx_user_goals_user_date_asc ON public.user_goals USING btree (user
 --
 
 CREATE INDEX idx_user_ignored_updates_variant_id ON public.user_ignored_updates USING btree (variant_id);
+
+
+--
+-- Name: idx_user_medication_display_preferences_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_user_medication_display_preferences_user_id ON public.user_medication_display_preferences USING btree (user_id);
 
 
 --
@@ -3937,6 +4581,13 @@ CREATE UNIQUE INDEX unique_backup_settings_row ON public.backup_settings USING b
 
 
 --
+-- Name: unique_global_provider_type; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX unique_global_provider_type ON public.external_data_providers USING btree (provider_type) WHERE (is_public = true);
+
+
+--
 -- Name: user ensure_first_user_is_admin; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -3965,6 +4616,55 @@ COMMENT ON TRIGGER on_public_user_created ON public."user" IS 'Initializes onboa
 
 
 --
+-- Name: user seed_global_providers_on_first_admin; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER seed_global_providers_on_first_admin AFTER INSERT OR UPDATE OF role ON public."user" FOR EACH ROW EXECUTE FUNCTION public.seed_global_providers_for_first_admin();
+
+
+--
+-- Name: injection_entries set_timestamp; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER set_timestamp BEFORE UPDATE ON public.injection_entries FOR EACH ROW EXECUTE FUNCTION public.trigger_set_timestamp();
+
+
+--
+-- Name: medication_entries set_timestamp; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER set_timestamp BEFORE UPDATE ON public.medication_entries FOR EACH ROW EXECUTE FUNCTION public.trigger_set_timestamp();
+
+
+--
+-- Name: medication_pens set_timestamp; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER set_timestamp BEFORE UPDATE ON public.medication_pens FOR EACH ROW EXECUTE FUNCTION public.trigger_set_timestamp();
+
+
+--
+-- Name: medication_schedules set_timestamp; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER set_timestamp BEFORE UPDATE ON public.medication_schedules FOR EACH ROW EXECUTE FUNCTION public.trigger_set_timestamp();
+
+
+--
+-- Name: medication_titration_steps set_timestamp; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER set_timestamp BEFORE UPDATE ON public.medication_titration_steps FOR EACH ROW EXECUTE FUNCTION public.trigger_set_timestamp();
+
+
+--
+-- Name: medications set_timestamp; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER set_timestamp BEFORE UPDATE ON public.medications FOR EACH ROW EXECUTE FUNCTION public.trigger_set_timestamp();
+
+
+--
 -- Name: mood_entries set_timestamp; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -3972,10 +4672,38 @@ CREATE TRIGGER set_timestamp BEFORE UPDATE ON public.mood_entries FOR EACH ROW E
 
 
 --
+-- Name: symptom_entries set_timestamp; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER set_timestamp BEFORE UPDATE ON public.symptom_entries FOR EACH ROW EXECUTE FUNCTION public.trigger_set_timestamp();
+
+
+--
 -- Name: user_custom_nutrients set_timestamp; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER set_timestamp BEFORE UPDATE ON public.user_custom_nutrients FOR EACH ROW EXECUTE FUNCTION public.trigger_set_timestamp();
+
+
+--
+-- Name: user_custom_symptom_locations set_timestamp; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER set_timestamp BEFORE UPDATE ON public.user_custom_symptom_locations FOR EACH ROW EXECUTE FUNCTION public.trigger_set_timestamp();
+
+
+--
+-- Name: user_custom_symptoms set_timestamp; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER set_timestamp BEFORE UPDATE ON public.user_custom_symptoms FOR EACH ROW EXECUTE FUNCTION public.trigger_set_timestamp();
+
+
+--
+-- Name: user_medication_display_preferences set_timestamp; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER set_timestamp BEFORE UPDATE ON public.user_medication_display_preferences FOR EACH ROW EXECUTE FUNCTION public.trigger_set_timestamp();
 
 
 --
@@ -4143,6 +4871,22 @@ ALTER TABLE ONLY public.check_in_measurements
 
 ALTER TABLE ONLY public.check_in_measurements
     ADD CONSTRAINT check_in_measurements_updated_by_user_id_fkey FOREIGN KEY (updated_by_user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: check_in_photos check_in_photos_check_in_measurement_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.check_in_photos
+    ADD CONSTRAINT check_in_photos_check_in_measurement_id_fkey FOREIGN KEY (check_in_measurement_id) REFERENCES public.check_in_measurements(id) ON DELETE SET NULL;
+
+
+--
+-- Name: check_in_photos check_in_photos_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.check_in_photos
+    ADD CONSTRAINT check_in_photos_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
 
 
 --
@@ -4474,6 +5218,30 @@ ALTER TABLE ONLY public.goal_presets
 
 
 --
+-- Name: injection_entries injection_entries_medication_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.injection_entries
+    ADD CONSTRAINT injection_entries_medication_id_fkey FOREIGN KEY (medication_id) REFERENCES public.medications(id) ON DELETE SET NULL;
+
+
+--
+-- Name: injection_entries injection_entries_pen_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.injection_entries
+    ADD CONSTRAINT injection_entries_pen_id_fkey FOREIGN KEY (pen_id) REFERENCES public.medication_pens(id) ON DELETE SET NULL;
+
+
+--
+-- Name: injection_entries injection_entries_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.injection_entries
+    ADD CONSTRAINT injection_entries_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
 -- Name: meal_foods meal_foods_food_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4575,6 +5343,110 @@ ALTER TABLE ONLY public.meal_types
 
 ALTER TABLE ONLY public.meals
     ADD CONSTRAINT meals_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: medication_entries medication_entries_medication_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.medication_entries
+    ADD CONSTRAINT medication_entries_medication_id_fkey FOREIGN KEY (medication_id) REFERENCES public.medications(id) ON DELETE SET NULL;
+
+
+--
+-- Name: medication_entries medication_entries_schedule_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.medication_entries
+    ADD CONSTRAINT medication_entries_schedule_id_fkey FOREIGN KEY (schedule_id) REFERENCES public.medication_schedules(id) ON DELETE SET NULL;
+
+
+--
+-- Name: medication_entries medication_entries_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.medication_entries
+    ADD CONSTRAINT medication_entries_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: medication_pens medication_pens_medication_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.medication_pens
+    ADD CONSTRAINT medication_pens_medication_id_fkey FOREIGN KEY (medication_id) REFERENCES public.medications(id) ON DELETE CASCADE;
+
+
+--
+-- Name: medication_pens medication_pens_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.medication_pens
+    ADD CONSTRAINT medication_pens_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: medication_schedules medication_schedules_medication_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.medication_schedules
+    ADD CONSTRAINT medication_schedules_medication_id_fkey FOREIGN KEY (medication_id) REFERENCES public.medications(id) ON DELETE CASCADE;
+
+
+--
+-- Name: medication_schedules medication_schedules_schedule_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.medication_schedules
+    ADD CONSTRAINT medication_schedules_schedule_type_id_fkey FOREIGN KEY (schedule_type_id) REFERENCES public.medication_schedule_types(id);
+
+
+--
+-- Name: medication_schedules medication_schedules_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.medication_schedules
+    ADD CONSTRAINT medication_schedules_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: medication_titration_steps medication_titration_steps_medication_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.medication_titration_steps
+    ADD CONSTRAINT medication_titration_steps_medication_id_fkey FOREIGN KEY (medication_id) REFERENCES public.medications(id) ON DELETE CASCADE;
+
+
+--
+-- Name: medication_titration_steps medication_titration_steps_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.medication_titration_steps
+    ADD CONSTRAINT medication_titration_steps_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: medications medications_route_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.medications
+    ADD CONSTRAINT medications_route_id_fkey FOREIGN KEY (route_id) REFERENCES public.medication_route_types(id);
+
+
+--
+-- Name: medications medications_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.medications
+    ADD CONSTRAINT medications_type_id_fkey FOREIGN KEY (type_id) REFERENCES public.medication_types(id);
+
+
+--
+-- Name: medications medications_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.medications
+    ADD CONSTRAINT medications_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
 
 
 --
@@ -4714,6 +5586,30 @@ ALTER TABLE ONLY public.sleep_need_calculations
 
 
 --
+-- Name: symptom_entries symptom_entries_medication_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.symptom_entries
+    ADD CONSTRAINT symptom_entries_medication_id_fkey FOREIGN KEY (medication_id) REFERENCES public.medications(id) ON DELETE SET NULL;
+
+
+--
+-- Name: symptom_entries symptom_entries_symptom_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.symptom_entries
+    ADD CONSTRAINT symptom_entries_symptom_id_fkey FOREIGN KEY (symptom_id) REFERENCES public.user_custom_symptoms(id) ON DELETE SET NULL;
+
+
+--
+-- Name: symptom_entries symptom_entries_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.symptom_entries
+    ADD CONSTRAINT symptom_entries_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
 -- Name: two_factor two_factor_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4735,6 +5631,30 @@ ALTER TABLE ONLY public.user_allergen_preferences
 
 ALTER TABLE ONLY public.user_custom_nutrients
     ADD CONSTRAINT user_custom_nutrients_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: user_custom_symptom_locations user_custom_symptom_locations_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_custom_symptom_locations
+    ADD CONSTRAINT user_custom_symptom_locations_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: user_custom_symptoms user_custom_symptoms_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_custom_symptoms
+    ADD CONSTRAINT user_custom_symptoms_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: user_dashboard_layouts user_dashboard_layouts_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_dashboard_layouts
+    ADD CONSTRAINT user_dashboard_layouts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
 
 
 --
@@ -4762,6 +5682,14 @@ ALTER TABLE ONLY public.user_meal_visibilities
 
 
 --
+-- Name: user_medication_display_preferences user_medication_display_preferences_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_medication_display_preferences
+    ADD CONSTRAINT user_medication_display_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
 -- Name: user_nutrient_display_preferences user_nutrient_display_preferences_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4783,6 +5711,14 @@ ALTER TABLE ONLY public.user_oidc_links
 
 ALTER TABLE ONLY public.user_oidc_links
     ADD CONSTRAINT user_oidc_links_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: user_preferences user_preferences_active_ai_service_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_preferences
+    ADD CONSTRAINT user_preferences_active_ai_service_id_fkey FOREIGN KEY (active_ai_service_id) REFERENCES public.ai_service_settings(id) ON DELETE SET NULL;
 
 
 --
@@ -5013,7 +5949,7 @@ CREATE POLICY ai_service_settings_insert_policy ON public.ai_service_settings FO
 -- Name: ai_service_settings ai_service_settings_select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY ai_service_settings_select_policy ON public.ai_service_settings FOR SELECT USING (((is_public = true) OR ((is_public = false) AND (user_id = public.current_user_id()))));
+CREATE POLICY ai_service_settings_select_policy ON public.ai_service_settings FOR SELECT USING ((((is_public = true) AND (public.authenticated_user_id() IS NOT NULL)) OR ((is_public = false) AND (user_id = public.current_user_id()))));
 
 
 --
@@ -5034,6 +5970,12 @@ ALTER TABLE public.api_key ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE public.check_in_measurements ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: check_in_photos; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.check_in_photos ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: custom_categories; Type: ROW SECURITY; Schema: public; Owner: -
@@ -5058,6 +6000,13 @@ ALTER TABLE public.daily_sleep_need ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE public.day_classification_cache ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: external_data_providers delete_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY delete_policy ON public.external_data_providers FOR DELETE USING ((((is_public = false) AND (user_id = public.current_user_id())) OR ((is_public = true) AND public.is_admin())));
+
 
 --
 -- Name: food_entries delete_policy; Type: POLICY; Schema: public; Owner: -
@@ -5145,6 +6094,19 @@ ALTER TABLE public.foods ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.goal_presets ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: injection_entries; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.injection_entries ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: external_data_providers insert_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY insert_policy ON public.external_data_providers FOR INSERT WITH CHECK ((((is_public = false) AND (user_id = public.current_user_id())) OR ((is_public = true) AND public.is_admin())));
+
+
+--
 -- Name: family_access insert_policy; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -5199,10 +6161,47 @@ ALTER TABLE public.meal_types ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.meals ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: medication_entries; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.medication_entries ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: medication_pens; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.medication_pens ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: medication_schedules; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.medication_schedules ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: medication_titration_steps; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.medication_titration_steps ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: medications; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.medications ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: check_in_measurements modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY modify_policy ON public.check_in_measurements USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+
+
+--
+-- Name: check_in_photos modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.check_in_photos USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
 
 
 --
@@ -5267,13 +6266,6 @@ CREATE POLICY modify_policy ON public.exercises USING ((public.current_user_id()
 
 
 --
--- Name: external_data_providers modify_policy; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY modify_policy ON public.external_data_providers USING ((public.current_user_id() = user_id)) WITH CHECK ((public.current_user_id() = user_id));
-
-
---
 -- Name: family_access modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -5288,10 +6280,28 @@ CREATE POLICY modify_policy ON public.food_entry_meals USING (public.has_diary_a
 
 
 --
+-- Name: food_variants modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.food_variants USING ((EXISTS ( SELECT 1
+   FROM public.foods f
+  WHERE ((f.id = food_variants.food_id) AND public.has_diary_access(f.user_id))))) WITH CHECK ((EXISTS ( SELECT 1
+   FROM public.foods f
+  WHERE ((f.id = food_variants.food_id) AND public.has_diary_access(f.user_id)))));
+
+
+--
 -- Name: foods modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY modify_policy ON public.foods USING ((public.current_user_id() = user_id)) WITH CHECK ((public.current_user_id() = user_id));
+
+
+--
+-- Name: injection_entries modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.injection_entries USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
 
 
 --
@@ -5331,6 +6341,41 @@ CREATE POLICY modify_policy ON public.meals USING ((public.current_user_id() = u
 
 
 --
+-- Name: medication_entries modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.medication_entries USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+
+
+--
+-- Name: medication_pens modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.medication_pens USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+
+
+--
+-- Name: medication_schedules modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.medication_schedules USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+
+
+--
+-- Name: medication_titration_steps modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.medication_titration_steps USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+
+
+--
+-- Name: medications modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.medications USING ((public.current_user_id() = user_id)) WITH CHECK ((public.current_user_id() = user_id));
+
+
+--
 -- Name: sleep_entries modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -5342,6 +6387,27 @@ CREATE POLICY modify_policy ON public.sleep_entries USING (public.has_diary_acce
 --
 
 CREATE POLICY modify_policy ON public.sleep_entry_stages USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+
+
+--
+-- Name: symptom_entries modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.symptom_entries USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+
+
+--
+-- Name: user_custom_symptom_locations modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.user_custom_symptom_locations USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+
+
+--
+-- Name: user_custom_symptoms modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.user_custom_symptoms USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
 
 
 --
@@ -5363,6 +6429,30 @@ CREATE POLICY modify_policy ON public.water_intake_entries USING (public.has_dia
 --
 
 CREATE POLICY modify_policy ON public.workout_plan_templates USING ((public.current_user_id() = user_id)) WITH CHECK ((public.current_user_id() = user_id));
+
+
+--
+-- Name: workout_preset_exercise_sets modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.workout_preset_exercise_sets USING ((EXISTS ( SELECT 1
+   FROM (public.workout_preset_exercises wpe
+     JOIN public.workout_presets wp ON ((wp.id = wpe.workout_preset_id)))
+  WHERE ((wpe.id = workout_preset_exercise_sets.workout_preset_exercise_id) AND (public.current_user_id() = wp.user_id))))) WITH CHECK ((EXISTS ( SELECT 1
+   FROM (public.workout_preset_exercises wpe
+     JOIN public.workout_presets wp ON ((wp.id = wpe.workout_preset_id)))
+  WHERE ((wpe.id = workout_preset_exercise_sets.workout_preset_exercise_id) AND (public.current_user_id() = wp.user_id)))));
+
+
+--
+-- Name: workout_preset_exercises modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.workout_preset_exercises USING ((EXISTS ( SELECT 1
+   FROM public.workout_presets wp
+  WHERE ((wp.id = workout_preset_exercises.workout_preset_id) AND (public.current_user_id() = wp.user_id))))) WITH CHECK ((EXISTS ( SELECT 1
+   FROM public.workout_presets wp
+  WHERE ((wp.id = workout_preset_exercises.workout_preset_id) AND (public.current_user_id() = wp.user_id)))));
 
 
 --
@@ -5508,6 +6598,13 @@ CREATE POLICY owner_policy ON public.user_custom_nutrients USING ((user_id = pub
 
 
 --
+-- Name: user_dashboard_layouts owner_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY owner_policy ON public.user_dashboard_layouts USING ((user_id = public.current_user_id())) WITH CHECK ((user_id = public.current_user_id()));
+
+
+--
 -- Name: user_goals owner_policy; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -5526,6 +6623,13 @@ CREATE POLICY owner_policy ON public.user_ignored_updates USING ((user_id = publ
 --
 
 CREATE POLICY owner_policy ON public.user_meal_visibilities USING ((user_id = public.current_user_id())) WITH CHECK ((user_id = public.current_user_id()));
+
+
+--
+-- Name: user_medication_display_preferences owner_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY owner_policy ON public.user_medication_display_preferences USING ((user_id = public.current_user_id())) WITH CHECK ((user_id = public.current_user_id()));
 
 
 --
@@ -5586,43 +6690,10 @@ CREATE POLICY owner_policy ON public.workout_plan_template_assignments USING ((E
 
 
 --
--- Name: workout_preset_exercise_sets owner_policy; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY owner_policy ON public.workout_preset_exercise_sets USING ((EXISTS ( SELECT 1
-   FROM public.workout_preset_exercises wpe
-  WHERE (wpe.id = workout_preset_exercise_sets.workout_preset_exercise_id)))) WITH CHECK ((EXISTS ( SELECT 1
-   FROM public.workout_preset_exercises wpe
-  WHERE (wpe.id = workout_preset_exercise_sets.workout_preset_exercise_id))));
-
-
---
--- Name: workout_preset_exercises owner_policy; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY owner_policy ON public.workout_preset_exercises USING ((EXISTS ( SELECT 1
-   FROM public.workout_presets wp
-  WHERE (wp.id = workout_preset_exercises.workout_preset_id)))) WITH CHECK ((EXISTS ( SELECT 1
-   FROM public.workout_presets wp
-  WHERE (wp.id = workout_preset_exercises.workout_preset_id))));
-
-
---
 -- Name: profiles; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-
---
--- Name: food_variants select_and_modify_policy; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY select_and_modify_policy ON public.food_variants USING ((EXISTS ( SELECT 1
-   FROM public.foods f
-  WHERE ((f.id = food_variants.food_id) AND public.has_library_access_with_public(f.user_id, f.shared_with_public, ARRAY['can_view_food_library'::text, 'can_manage_diary'::text]))))) WITH CHECK ((EXISTS ( SELECT 1
-   FROM public.foods f
-  WHERE ((f.id = food_variants.food_id) AND public.has_diary_access(f.user_id)))));
-
 
 --
 -- Name: exercise_entries select_exercise_preset_entry_linked_policy; Type: POLICY; Schema: public; Owner: -
@@ -5638,6 +6709,13 @@ CREATE POLICY select_exercise_preset_entry_linked_policy ON public.exercise_entr
 --
 
 CREATE POLICY select_policy ON public.check_in_measurements FOR SELECT USING (public.has_diary_access(user_id));
+
+
+--
+-- Name: check_in_photos select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.check_in_photos FOR SELECT USING (public.has_diary_access(user_id));
 
 
 --
@@ -5699,9 +6777,9 @@ CREATE POLICY select_policy ON public.exercises FOR SELECT USING (public.has_lib
 -- Name: external_data_providers select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY select_policy ON public.external_data_providers FOR SELECT USING (((public.current_user_id() = user_id) OR ((EXISTS ( SELECT 1
+CREATE POLICY select_policy ON public.external_data_providers FOR SELECT USING ((((is_public = true) AND (is_active = true) AND (public.authenticated_user_id() IS NOT NULL)) OR ((is_public = false) AND (public.current_user_id() = user_id)) OR ((is_public = false) AND (is_active = true) AND public.has_family_access(user_id, 'share_external_providers'::text) AND (EXISTS ( SELECT 1
    FROM public.external_provider_types ept
-  WHERE (((ept.id)::text = external_data_providers.provider_type) AND (ept.is_strictly_private = false)))) AND (shared_with_public OR public.has_family_access_or(user_id, ARRAY['can_view_food_library'::text, 'can_view_exercise_library'::text])))));
+  WHERE (((ept.id)::text = external_data_providers.provider_type) AND (ept.is_strictly_private = false)))))));
 
 
 --
@@ -5726,10 +6804,26 @@ CREATE POLICY select_policy ON public.food_entry_meals FOR SELECT USING (public.
 
 
 --
+-- Name: food_variants select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.food_variants FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM public.foods f
+  WHERE ((f.id = food_variants.food_id) AND public.has_library_access_with_public(f.user_id, f.shared_with_public, ARRAY['can_view_food_library'::text, 'can_manage_diary'::text])))));
+
+
+--
 -- Name: foods select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY select_policy ON public.foods FOR SELECT USING (public.has_library_access_with_public(user_id, shared_with_public, ARRAY['can_view_food_library'::text, 'can_manage_diary'::text]));
+
+
+--
+-- Name: injection_entries select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.injection_entries FOR SELECT USING (public.has_diary_access(user_id));
 
 
 --
@@ -5763,6 +6857,41 @@ CREATE POLICY select_policy ON public.meals FOR SELECT USING (public.has_library
 
 
 --
+-- Name: medication_entries select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.medication_entries FOR SELECT USING (public.has_diary_access(user_id));
+
+
+--
+-- Name: medication_pens select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.medication_pens FOR SELECT USING (public.has_diary_access(user_id));
+
+
+--
+-- Name: medication_schedules select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.medication_schedules FOR SELECT USING (public.has_diary_access(user_id));
+
+
+--
+-- Name: medication_titration_steps select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.medication_titration_steps FOR SELECT USING (public.has_diary_access(user_id));
+
+
+--
+-- Name: medications select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.medications FOR SELECT USING (public.has_library_access_with_public(user_id, false, ARRAY['can_manage_diary'::text]));
+
+
+--
 -- Name: sleep_entries select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -5774,6 +6903,27 @@ CREATE POLICY select_policy ON public.sleep_entries FOR SELECT USING (public.has
 --
 
 CREATE POLICY select_policy ON public.sleep_entry_stages FOR SELECT USING (public.has_diary_access(user_id));
+
+
+--
+-- Name: symptom_entries select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.symptom_entries FOR SELECT USING (public.has_diary_access(user_id));
+
+
+--
+-- Name: user_custom_symptom_locations select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.user_custom_symptom_locations FOR SELECT USING (public.has_diary_access(user_id));
+
+
+--
+-- Name: user_custom_symptoms select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.user_custom_symptoms FOR SELECT USING (public.has_diary_access(user_id));
 
 
 --
@@ -5795,6 +6945,24 @@ CREATE POLICY select_policy ON public.water_intake_entries FOR SELECT USING (pub
 --
 
 CREATE POLICY select_policy ON public.workout_plan_templates FOR SELECT USING (public.has_library_access_with_public(user_id, false, ARRAY['can_view_exercise_library'::text]));
+
+
+--
+-- Name: workout_preset_exercise_sets select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.workout_preset_exercise_sets FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM public.workout_preset_exercises wpe
+  WHERE (wpe.id = workout_preset_exercise_sets.workout_preset_exercise_id))));
+
+
+--
+-- Name: workout_preset_exercises select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.workout_preset_exercises FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM public.workout_presets wp
+  WHERE (wp.id = workout_preset_exercises.workout_preset_id))));
 
 
 --
@@ -5829,6 +6997,19 @@ ALTER TABLE public.sleep_need_calculations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sparky_chat_history ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: symptom_entries; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.symptom_entries ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: external_data_providers update_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY update_policy ON public.external_data_providers FOR UPDATE USING ((((is_public = false) AND (user_id = public.current_user_id())) OR ((is_public = true) AND public.is_admin()))) WITH CHECK ((((is_public = false) AND (user_id = public.current_user_id())) OR ((is_public = true) AND public.is_admin())));
+
+
+--
 -- Name: food_entries update_policy; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -5848,6 +7029,24 @@ ALTER TABLE public.user_allergen_preferences ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_custom_nutrients ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: user_custom_symptom_locations; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.user_custom_symptom_locations ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: user_custom_symptoms; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.user_custom_symptoms ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: user_dashboard_layouts; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.user_dashboard_layouts ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: user_goals; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -5864,6 +7063,12 @@ ALTER TABLE public.user_ignored_updates ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE public.user_meal_visibilities ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: user_medication_display_preferences; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.user_medication_display_preferences ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: user_nutrient_display_preferences; Type: ROW SECURITY; Schema: public; Owner: -
@@ -5971,24 +7176,6 @@ GRANT USAGE ON SCHEMA system TO "sparky uat";
 
 
 --
--- Name: FUNCTION armor(bytea); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.armor(bytea) TO sparky_uat;
-GRANT ALL ON FUNCTION public.armor(bytea) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.armor(bytea) TO "sparky uat";
-
-
---
--- Name: FUNCTION armor(bytea, text[], text[]); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.armor(bytea, text[], text[]) TO sparky_uat;
-GRANT ALL ON FUNCTION public.armor(bytea, text[], text[]) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.armor(bytea, text[], text[]) TO "sparky uat";
-
-
---
 -- Name: FUNCTION authenticated_user_id(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -6052,6 +7239,15 @@ GRANT ALL ON FUNCTION public.create_diary_policy(table_name text) TO "sparky uat
 
 
 --
+-- Name: FUNCTION create_global_default_providers(p_admin_user_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.create_global_default_providers(p_admin_user_id uuid) TO "sparky uat";
+GRANT ALL ON FUNCTION public.create_global_default_providers(p_admin_user_id uuid) TO "sparky-uat";
+GRANT ALL ON FUNCTION public.create_global_default_providers(p_admin_user_id uuid) TO sparky_uat;
+
+
+--
 -- Name: FUNCTION create_library_policy(table_name text, shared_column text, permissions text[]); Type: ACL; Schema: public; Owner: -
 --
 
@@ -6106,15 +7302,6 @@ GRANT ALL ON FUNCTION public.create_user_preferences() TO "sparky uat";
 
 
 --
--- Name: FUNCTION crypt(text, text); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.crypt(text, text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.crypt(text, text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.crypt(text, text) TO "sparky uat";
-
-
---
 -- Name: FUNCTION current_user_id(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -6124,82 +7311,12 @@ GRANT ALL ON FUNCTION public.current_user_id() TO "sparky uat";
 
 
 --
--- Name: FUNCTION dearmor(text); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.dearmor(text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.dearmor(text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.dearmor(text) TO "sparky uat";
-
-
---
--- Name: FUNCTION decrypt(bytea, bytea, text); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.decrypt(bytea, bytea, text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.decrypt(bytea, bytea, text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.decrypt(bytea, bytea, text) TO "sparky uat";
-
-
---
--- Name: FUNCTION decrypt_iv(bytea, bytea, bytea, text); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.decrypt_iv(bytea, bytea, bytea, text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.decrypt_iv(bytea, bytea, bytea, text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.decrypt_iv(bytea, bytea, bytea, text) TO "sparky uat";
-
-
---
--- Name: FUNCTION digest(bytea, text); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.digest(bytea, text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.digest(bytea, text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.digest(bytea, text) TO "sparky uat";
-
-
---
--- Name: FUNCTION digest(text, text); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.digest(text, text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.digest(text, text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.digest(text, text) TO "sparky uat";
-
-
---
--- Name: FUNCTION encrypt(bytea, bytea, text); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.encrypt(bytea, bytea, text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.encrypt(bytea, bytea, text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.encrypt(bytea, bytea, text) TO "sparky uat";
-
-
---
--- Name: FUNCTION encrypt_iv(bytea, bytea, bytea, text); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.encrypt_iv(bytea, bytea, bytea, text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.encrypt_iv(bytea, bytea, bytea, text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.encrypt_iv(bytea, bytea, bytea, text) TO "sparky uat";
-
-
---
 -- Name: FUNCTION find_user_by_email(p_email text); Type: ACL; Schema: public; Owner: -
 --
 
 GRANT ALL ON FUNCTION public.find_user_by_email(p_email text) TO sparky_uat;
 GRANT ALL ON FUNCTION public.find_user_by_email(p_email text) TO "sparky-uat";
 GRANT ALL ON FUNCTION public.find_user_by_email(p_email text) TO "sparky uat";
-
-
---
--- Name: FUNCTION fips_mode(); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.fips_mode() TO "sparky uat";
 
 
 --
@@ -6218,42 +7335,6 @@ GRANT ALL ON FUNCTION public.fn_sync_mfa_totp_flag() TO sparky_uat;
 GRANT ALL ON FUNCTION public.fn_sync_user_mfa_global() TO "sparky uat";
 GRANT ALL ON FUNCTION public.fn_sync_user_mfa_global() TO "sparky-uat";
 GRANT ALL ON FUNCTION public.fn_sync_user_mfa_global() TO sparky_uat;
-
-
---
--- Name: FUNCTION gen_random_bytes(integer); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.gen_random_bytes(integer) TO sparky_uat;
-GRANT ALL ON FUNCTION public.gen_random_bytes(integer) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.gen_random_bytes(integer) TO "sparky uat";
-
-
---
--- Name: FUNCTION gen_random_uuid(); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.gen_random_uuid() TO sparky_uat;
-GRANT ALL ON FUNCTION public.gen_random_uuid() TO "sparky-uat";
-GRANT ALL ON FUNCTION public.gen_random_uuid() TO "sparky uat";
-
-
---
--- Name: FUNCTION gen_salt(text); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.gen_salt(text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.gen_salt(text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.gen_salt(text) TO "sparky uat";
-
-
---
--- Name: FUNCTION gen_salt(text, integer); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.gen_salt(text, integer) TO sparky_uat;
-GRANT ALL ON FUNCTION public.gen_salt(text, integer) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.gen_salt(text, integer) TO "sparky uat";
 
 
 --
@@ -6320,24 +7401,6 @@ GRANT ALL ON FUNCTION public.has_library_access_with_public(owner_uuid uuid, is_
 
 
 --
--- Name: FUNCTION hmac(bytea, bytea, text); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.hmac(bytea, bytea, text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.hmac(bytea, bytea, text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.hmac(bytea, bytea, text) TO "sparky uat";
-
-
---
--- Name: FUNCTION hmac(text, text, text); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.hmac(text, text, text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.hmac(text, text, text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.hmac(text, text, text) TO "sparky uat";
-
-
---
 -- Name: FUNCTION is_admin(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -6356,208 +7419,12 @@ GRANT ALL ON FUNCTION public.manage_goal_timeline(p_user_id uuid, p_start_date d
 
 
 --
--- Name: FUNCTION pg_stat_statements(showtext boolean, OUT userid oid, OUT dbid oid, OUT toplevel boolean, OUT queryid bigint, OUT query text, OUT plans bigint, OUT total_plan_time double precision, OUT min_plan_time double precision, OUT max_plan_time double precision, OUT mean_plan_time double precision, OUT stddev_plan_time double precision, OUT calls bigint, OUT total_exec_time double precision, OUT min_exec_time double precision, OUT max_exec_time double precision, OUT mean_exec_time double precision, OUT stddev_exec_time double precision, OUT rows bigint, OUT shared_blks_hit bigint, OUT shared_blks_read bigint, OUT shared_blks_dirtied bigint, OUT shared_blks_written bigint, OUT local_blks_hit bigint, OUT local_blks_read bigint, OUT local_blks_dirtied bigint, OUT local_blks_written bigint, OUT temp_blks_read bigint, OUT temp_blks_written bigint, OUT shared_blk_read_time double precision, OUT shared_blk_write_time double precision, OUT local_blk_read_time double precision, OUT local_blk_write_time double precision, OUT temp_blk_read_time double precision, OUT temp_blk_write_time double precision, OUT wal_records bigint, OUT wal_fpi bigint, OUT wal_bytes numeric, OUT wal_buffers_full bigint, OUT jit_functions bigint, OUT jit_generation_time double precision, OUT jit_inlining_count bigint, OUT jit_inlining_time double precision, OUT jit_optimization_count bigint, OUT jit_optimization_time double precision, OUT jit_emission_count bigint, OUT jit_emission_time double precision, OUT jit_deform_count bigint, OUT jit_deform_time double precision, OUT parallel_workers_to_launch bigint, OUT parallel_workers_launched bigint, OUT stats_since timestamp with time zone, OUT minmax_stats_since timestamp with time zone); Type: ACL; Schema: public; Owner: -
+-- Name: FUNCTION seed_global_providers_for_first_admin(); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.pg_stat_statements(showtext boolean, OUT userid oid, OUT dbid oid, OUT toplevel boolean, OUT queryid bigint, OUT query text, OUT plans bigint, OUT total_plan_time double precision, OUT min_plan_time double precision, OUT max_plan_time double precision, OUT mean_plan_time double precision, OUT stddev_plan_time double precision, OUT calls bigint, OUT total_exec_time double precision, OUT min_exec_time double precision, OUT max_exec_time double precision, OUT mean_exec_time double precision, OUT stddev_exec_time double precision, OUT rows bigint, OUT shared_blks_hit bigint, OUT shared_blks_read bigint, OUT shared_blks_dirtied bigint, OUT shared_blks_written bigint, OUT local_blks_hit bigint, OUT local_blks_read bigint, OUT local_blks_dirtied bigint, OUT local_blks_written bigint, OUT temp_blks_read bigint, OUT temp_blks_written bigint, OUT shared_blk_read_time double precision, OUT shared_blk_write_time double precision, OUT local_blk_read_time double precision, OUT local_blk_write_time double precision, OUT temp_blk_read_time double precision, OUT temp_blk_write_time double precision, OUT wal_records bigint, OUT wal_fpi bigint, OUT wal_bytes numeric, OUT wal_buffers_full bigint, OUT jit_functions bigint, OUT jit_generation_time double precision, OUT jit_inlining_count bigint, OUT jit_inlining_time double precision, OUT jit_optimization_count bigint, OUT jit_optimization_time double precision, OUT jit_emission_count bigint, OUT jit_emission_time double precision, OUT jit_deform_count bigint, OUT jit_deform_time double precision, OUT parallel_workers_to_launch bigint, OUT parallel_workers_launched bigint, OUT stats_since timestamp with time zone, OUT minmax_stats_since timestamp with time zone) TO sparky_uat;
-GRANT ALL ON FUNCTION public.pg_stat_statements(showtext boolean, OUT userid oid, OUT dbid oid, OUT toplevel boolean, OUT queryid bigint, OUT query text, OUT plans bigint, OUT total_plan_time double precision, OUT min_plan_time double precision, OUT max_plan_time double precision, OUT mean_plan_time double precision, OUT stddev_plan_time double precision, OUT calls bigint, OUT total_exec_time double precision, OUT min_exec_time double precision, OUT max_exec_time double precision, OUT mean_exec_time double precision, OUT stddev_exec_time double precision, OUT rows bigint, OUT shared_blks_hit bigint, OUT shared_blks_read bigint, OUT shared_blks_dirtied bigint, OUT shared_blks_written bigint, OUT local_blks_hit bigint, OUT local_blks_read bigint, OUT local_blks_dirtied bigint, OUT local_blks_written bigint, OUT temp_blks_read bigint, OUT temp_blks_written bigint, OUT shared_blk_read_time double precision, OUT shared_blk_write_time double precision, OUT local_blk_read_time double precision, OUT local_blk_write_time double precision, OUT temp_blk_read_time double precision, OUT temp_blk_write_time double precision, OUT wal_records bigint, OUT wal_fpi bigint, OUT wal_bytes numeric, OUT wal_buffers_full bigint, OUT jit_functions bigint, OUT jit_generation_time double precision, OUT jit_inlining_count bigint, OUT jit_inlining_time double precision, OUT jit_optimization_count bigint, OUT jit_optimization_time double precision, OUT jit_emission_count bigint, OUT jit_emission_time double precision, OUT jit_deform_count bigint, OUT jit_deform_time double precision, OUT parallel_workers_to_launch bigint, OUT parallel_workers_launched bigint, OUT stats_since timestamp with time zone, OUT minmax_stats_since timestamp with time zone) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.pg_stat_statements(showtext boolean, OUT userid oid, OUT dbid oid, OUT toplevel boolean, OUT queryid bigint, OUT query text, OUT plans bigint, OUT total_plan_time double precision, OUT min_plan_time double precision, OUT max_plan_time double precision, OUT mean_plan_time double precision, OUT stddev_plan_time double precision, OUT calls bigint, OUT total_exec_time double precision, OUT min_exec_time double precision, OUT max_exec_time double precision, OUT mean_exec_time double precision, OUT stddev_exec_time double precision, OUT rows bigint, OUT shared_blks_hit bigint, OUT shared_blks_read bigint, OUT shared_blks_dirtied bigint, OUT shared_blks_written bigint, OUT local_blks_hit bigint, OUT local_blks_read bigint, OUT local_blks_dirtied bigint, OUT local_blks_written bigint, OUT temp_blks_read bigint, OUT temp_blks_written bigint, OUT shared_blk_read_time double precision, OUT shared_blk_write_time double precision, OUT local_blk_read_time double precision, OUT local_blk_write_time double precision, OUT temp_blk_read_time double precision, OUT temp_blk_write_time double precision, OUT wal_records bigint, OUT wal_fpi bigint, OUT wal_bytes numeric, OUT wal_buffers_full bigint, OUT jit_functions bigint, OUT jit_generation_time double precision, OUT jit_inlining_count bigint, OUT jit_inlining_time double precision, OUT jit_optimization_count bigint, OUT jit_optimization_time double precision, OUT jit_emission_count bigint, OUT jit_emission_time double precision, OUT jit_deform_count bigint, OUT jit_deform_time double precision, OUT parallel_workers_to_launch bigint, OUT parallel_workers_launched bigint, OUT stats_since timestamp with time zone, OUT minmax_stats_since timestamp with time zone) TO "sparky uat";
-
-
---
--- Name: FUNCTION pg_stat_statements_info(OUT dealloc bigint, OUT stats_reset timestamp with time zone); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.pg_stat_statements_info(OUT dealloc bigint, OUT stats_reset timestamp with time zone) TO sparky_uat;
-GRANT ALL ON FUNCTION public.pg_stat_statements_info(OUT dealloc bigint, OUT stats_reset timestamp with time zone) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.pg_stat_statements_info(OUT dealloc bigint, OUT stats_reset timestamp with time zone) TO "sparky uat";
-
-
---
--- Name: FUNCTION pg_stat_statements_reset(userid oid, dbid oid, queryid bigint, minmax_only boolean); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.pg_stat_statements_reset(userid oid, dbid oid, queryid bigint, minmax_only boolean) TO "sparky uat";
-
-
---
--- Name: FUNCTION pgp_armor_headers(text, OUT key text, OUT value text); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.pgp_armor_headers(text, OUT key text, OUT value text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.pgp_armor_headers(text, OUT key text, OUT value text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.pgp_armor_headers(text, OUT key text, OUT value text) TO "sparky uat";
-
-
---
--- Name: FUNCTION pgp_key_id(bytea); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.pgp_key_id(bytea) TO sparky_uat;
-GRANT ALL ON FUNCTION public.pgp_key_id(bytea) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.pgp_key_id(bytea) TO "sparky uat";
-
-
---
--- Name: FUNCTION pgp_pub_decrypt(bytea, bytea); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.pgp_pub_decrypt(bytea, bytea) TO sparky_uat;
-GRANT ALL ON FUNCTION public.pgp_pub_decrypt(bytea, bytea) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.pgp_pub_decrypt(bytea, bytea) TO "sparky uat";
-
-
---
--- Name: FUNCTION pgp_pub_decrypt(bytea, bytea, text); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.pgp_pub_decrypt(bytea, bytea, text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.pgp_pub_decrypt(bytea, bytea, text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.pgp_pub_decrypt(bytea, bytea, text) TO "sparky uat";
-
-
---
--- Name: FUNCTION pgp_pub_decrypt(bytea, bytea, text, text); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.pgp_pub_decrypt(bytea, bytea, text, text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.pgp_pub_decrypt(bytea, bytea, text, text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.pgp_pub_decrypt(bytea, bytea, text, text) TO "sparky uat";
-
-
---
--- Name: FUNCTION pgp_pub_decrypt_bytea(bytea, bytea); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.pgp_pub_decrypt_bytea(bytea, bytea) TO sparky_uat;
-GRANT ALL ON FUNCTION public.pgp_pub_decrypt_bytea(bytea, bytea) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.pgp_pub_decrypt_bytea(bytea, bytea) TO "sparky uat";
-
-
---
--- Name: FUNCTION pgp_pub_decrypt_bytea(bytea, bytea, text); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.pgp_pub_decrypt_bytea(bytea, bytea, text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.pgp_pub_decrypt_bytea(bytea, bytea, text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.pgp_pub_decrypt_bytea(bytea, bytea, text) TO "sparky uat";
-
-
---
--- Name: FUNCTION pgp_pub_decrypt_bytea(bytea, bytea, text, text); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.pgp_pub_decrypt_bytea(bytea, bytea, text, text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.pgp_pub_decrypt_bytea(bytea, bytea, text, text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.pgp_pub_decrypt_bytea(bytea, bytea, text, text) TO "sparky uat";
-
-
---
--- Name: FUNCTION pgp_pub_encrypt(text, bytea); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.pgp_pub_encrypt(text, bytea) TO sparky_uat;
-GRANT ALL ON FUNCTION public.pgp_pub_encrypt(text, bytea) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.pgp_pub_encrypt(text, bytea) TO "sparky uat";
-
-
---
--- Name: FUNCTION pgp_pub_encrypt(text, bytea, text); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.pgp_pub_encrypt(text, bytea, text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.pgp_pub_encrypt(text, bytea, text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.pgp_pub_encrypt(text, bytea, text) TO "sparky uat";
-
-
---
--- Name: FUNCTION pgp_pub_encrypt_bytea(bytea, bytea); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.pgp_pub_encrypt_bytea(bytea, bytea) TO sparky_uat;
-GRANT ALL ON FUNCTION public.pgp_pub_encrypt_bytea(bytea, bytea) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.pgp_pub_encrypt_bytea(bytea, bytea) TO "sparky uat";
-
-
---
--- Name: FUNCTION pgp_pub_encrypt_bytea(bytea, bytea, text); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.pgp_pub_encrypt_bytea(bytea, bytea, text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.pgp_pub_encrypt_bytea(bytea, bytea, text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.pgp_pub_encrypt_bytea(bytea, bytea, text) TO "sparky uat";
-
-
---
--- Name: FUNCTION pgp_sym_decrypt(bytea, text); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.pgp_sym_decrypt(bytea, text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.pgp_sym_decrypt(bytea, text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.pgp_sym_decrypt(bytea, text) TO "sparky uat";
-
-
---
--- Name: FUNCTION pgp_sym_decrypt(bytea, text, text); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.pgp_sym_decrypt(bytea, text, text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.pgp_sym_decrypt(bytea, text, text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.pgp_sym_decrypt(bytea, text, text) TO "sparky uat";
-
-
---
--- Name: FUNCTION pgp_sym_decrypt_bytea(bytea, text); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.pgp_sym_decrypt_bytea(bytea, text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.pgp_sym_decrypt_bytea(bytea, text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.pgp_sym_decrypt_bytea(bytea, text) TO "sparky uat";
-
-
---
--- Name: FUNCTION pgp_sym_decrypt_bytea(bytea, text, text); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.pgp_sym_decrypt_bytea(bytea, text, text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.pgp_sym_decrypt_bytea(bytea, text, text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.pgp_sym_decrypt_bytea(bytea, text, text) TO "sparky uat";
-
-
---
--- Name: FUNCTION pgp_sym_encrypt(text, text); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.pgp_sym_encrypt(text, text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.pgp_sym_encrypt(text, text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.pgp_sym_encrypt(text, text) TO "sparky uat";
-
-
---
--- Name: FUNCTION pgp_sym_encrypt(text, text, text); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.pgp_sym_encrypt(text, text, text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.pgp_sym_encrypt(text, text, text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.pgp_sym_encrypt(text, text, text) TO "sparky uat";
-
-
---
--- Name: FUNCTION pgp_sym_encrypt_bytea(bytea, text); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.pgp_sym_encrypt_bytea(bytea, text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.pgp_sym_encrypt_bytea(bytea, text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.pgp_sym_encrypt_bytea(bytea, text) TO "sparky uat";
-
-
---
--- Name: FUNCTION pgp_sym_encrypt_bytea(bytea, text, text); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.pgp_sym_encrypt_bytea(bytea, text, text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.pgp_sym_encrypt_bytea(bytea, text, text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.pgp_sym_encrypt_bytea(bytea, text, text) TO "sparky uat";
+GRANT ALL ON FUNCTION public.seed_global_providers_for_first_admin() TO "sparky uat";
+GRANT ALL ON FUNCTION public.seed_global_providers_for_first_admin() TO "sparky-uat";
+GRANT ALL ON FUNCTION public.seed_global_providers_for_first_admin() TO sparky_uat;
 
 
 --
@@ -6633,96 +7500,6 @@ GRANT ALL ON FUNCTION public.update_updated_at_column() TO "sparky uat";
 
 
 --
--- Name: FUNCTION uuid_generate_v1(); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.uuid_generate_v1() TO sparky_uat;
-GRANT ALL ON FUNCTION public.uuid_generate_v1() TO "sparky-uat";
-GRANT ALL ON FUNCTION public.uuid_generate_v1() TO "sparky uat";
-
-
---
--- Name: FUNCTION uuid_generate_v1mc(); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.uuid_generate_v1mc() TO sparky_uat;
-GRANT ALL ON FUNCTION public.uuid_generate_v1mc() TO "sparky-uat";
-GRANT ALL ON FUNCTION public.uuid_generate_v1mc() TO "sparky uat";
-
-
---
--- Name: FUNCTION uuid_generate_v3(namespace uuid, name text); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.uuid_generate_v3(namespace uuid, name text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.uuid_generate_v3(namespace uuid, name text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.uuid_generate_v3(namespace uuid, name text) TO "sparky uat";
-
-
---
--- Name: FUNCTION uuid_generate_v4(); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.uuid_generate_v4() TO sparky_uat;
-GRANT ALL ON FUNCTION public.uuid_generate_v4() TO "sparky-uat";
-GRANT ALL ON FUNCTION public.uuid_generate_v4() TO "sparky uat";
-
-
---
--- Name: FUNCTION uuid_generate_v5(namespace uuid, name text); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.uuid_generate_v5(namespace uuid, name text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.uuid_generate_v5(namespace uuid, name text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.uuid_generate_v5(namespace uuid, name text) TO "sparky uat";
-
-
---
--- Name: FUNCTION uuid_nil(); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.uuid_nil() TO sparky_uat;
-GRANT ALL ON FUNCTION public.uuid_nil() TO "sparky-uat";
-GRANT ALL ON FUNCTION public.uuid_nil() TO "sparky uat";
-
-
---
--- Name: FUNCTION uuid_ns_dns(); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.uuid_ns_dns() TO sparky_uat;
-GRANT ALL ON FUNCTION public.uuid_ns_dns() TO "sparky-uat";
-GRANT ALL ON FUNCTION public.uuid_ns_dns() TO "sparky uat";
-
-
---
--- Name: FUNCTION uuid_ns_oid(); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.uuid_ns_oid() TO sparky_uat;
-GRANT ALL ON FUNCTION public.uuid_ns_oid() TO "sparky-uat";
-GRANT ALL ON FUNCTION public.uuid_ns_oid() TO "sparky uat";
-
-
---
--- Name: FUNCTION uuid_ns_url(); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.uuid_ns_url() TO sparky_uat;
-GRANT ALL ON FUNCTION public.uuid_ns_url() TO "sparky-uat";
-GRANT ALL ON FUNCTION public.uuid_ns_url() TO "sparky uat";
-
-
---
--- Name: FUNCTION uuid_ns_x500(); Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON FUNCTION public.uuid_ns_x500() TO sparky_uat;
-GRANT ALL ON FUNCTION public.uuid_ns_x500() TO "sparky-uat";
-GRANT ALL ON FUNCTION public.uuid_ns_x500() TO "sparky uat";
-
-
---
 -- Name: TABLE users; Type: ACL; Schema: auth; Owner: -
 --
 
@@ -6792,6 +7569,15 @@ GRANT SELECT,USAGE ON SEQUENCE public.backup_settings_id_seq TO "sparky uat";
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.check_in_measurements TO sparky_uat;
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.check_in_measurements TO "sparky-uat";
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.check_in_measurements TO "sparky uat";
+
+
+--
+-- Name: TABLE check_in_photos; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.check_in_photos TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.check_in_photos TO "sparky-uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.check_in_photos TO sparky_uat;
 
 
 --
@@ -6975,6 +7761,15 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.goal_presets TO "sparky uat";
 
 
 --
+-- Name: TABLE injection_entries; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.injection_entries TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.injection_entries TO "sparky-uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.injection_entries TO sparky_uat;
+
+
+--
 -- Name: TABLE meal_foods; Type: ACL; Schema: public; Owner: -
 --
 
@@ -7029,6 +7824,78 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.meals TO "sparky uat";
 
 
 --
+-- Name: TABLE medication_entries; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_entries TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_entries TO "sparky-uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_entries TO sparky_uat;
+
+
+--
+-- Name: TABLE medication_pens; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_pens TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_pens TO "sparky-uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_pens TO sparky_uat;
+
+
+--
+-- Name: TABLE medication_route_types; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_route_types TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_route_types TO "sparky-uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_route_types TO sparky_uat;
+
+
+--
+-- Name: TABLE medication_schedule_types; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_schedule_types TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_schedule_types TO "sparky-uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_schedule_types TO sparky_uat;
+
+
+--
+-- Name: TABLE medication_schedules; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_schedules TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_schedules TO "sparky-uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_schedules TO sparky_uat;
+
+
+--
+-- Name: TABLE medication_titration_steps; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_titration_steps TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_titration_steps TO "sparky-uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_titration_steps TO sparky_uat;
+
+
+--
+-- Name: TABLE medication_types; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_types TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_types TO "sparky-uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_types TO sparky_uat;
+
+
+--
+-- Name: TABLE medications; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medications TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medications TO "sparky-uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medications TO sparky_uat;
+
+
+--
 -- Name: TABLE mood_entries; Type: ACL; Schema: public; Owner: -
 --
 
@@ -7080,24 +7947,6 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.onboarding_status TO "sparky u
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.passkey TO sparky_uat;
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.passkey TO "sparky-uat";
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.passkey TO "sparky uat";
-
-
---
--- Name: TABLE pg_stat_statements; Type: ACL; Schema: public; Owner: -
---
-
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.pg_stat_statements TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.pg_stat_statements TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.pg_stat_statements TO "sparky uat";
-
-
---
--- Name: TABLE pg_stat_statements_info; Type: ACL; Schema: public; Owner: -
---
-
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.pg_stat_statements_info TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.pg_stat_statements_info TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.pg_stat_statements_info TO "sparky uat";
 
 
 --
@@ -7164,6 +8013,15 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.sso_provider TO "sparky uat";
 
 
 --
+-- Name: TABLE symptom_entries; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.symptom_entries TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.symptom_entries TO "sparky-uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.symptom_entries TO sparky_uat;
+
+
+--
 -- Name: TABLE two_factor; Type: ACL; Schema: public; Owner: -
 --
 
@@ -7200,6 +8058,33 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_custom_nutrients TO "spar
 
 
 --
+-- Name: TABLE user_custom_symptom_locations; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_custom_symptom_locations TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_custom_symptom_locations TO "sparky-uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_custom_symptom_locations TO sparky_uat;
+
+
+--
+-- Name: TABLE user_custom_symptoms; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_custom_symptoms TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_custom_symptoms TO "sparky-uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_custom_symptoms TO sparky_uat;
+
+
+--
+-- Name: TABLE user_dashboard_layouts; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_dashboard_layouts TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_dashboard_layouts TO "sparky-uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_dashboard_layouts TO sparky_uat;
+
+
+--
 -- Name: TABLE user_goals; Type: ACL; Schema: public; Owner: -
 --
 
@@ -7224,6 +8109,15 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_ignored_updates TO "spark
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_meal_visibilities TO sparky_uat;
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_meal_visibilities TO "sparky-uat";
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_meal_visibilities TO "sparky uat";
+
+
+--
+-- Name: TABLE user_medication_display_preferences; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_medication_display_preferences TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_medication_display_preferences TO "sparky-uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_medication_display_preferences TO sparky_uat;
 
 
 --
@@ -7509,5 +8403,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE sparky IN SCHEMA public GRANT SELECT,INSERT,DE
 -- PostgreSQL database dump complete
 --
 
-\unrestrict MnDfCZua2AbHyHbfP3jmY5A6tLHzs46xu2mlpy8Bau6ZBPcMjGgwK8XgEr0zKcq
+\unrestrict dhGmLySjFGTRowxkdoNsugMJvJLlJnLFKqaQcs0DG614jCZILkcwuzPSKJ6l1bT
 

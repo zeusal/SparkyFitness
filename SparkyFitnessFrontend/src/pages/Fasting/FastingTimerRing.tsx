@@ -1,5 +1,6 @@
 import type React from 'react';
-import { useEffect, useState, useMemo, useId } from 'react';
+import { useEffect, useState, useId } from 'react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { Flame } from 'lucide-react';
 
@@ -16,6 +17,7 @@ const FastingTimerRing: React.FC<FastingTimerRingProps> = ({
   targetEndTime,
   size = 220,
 }) => {
+  const { t } = useTranslation();
   const [now, setNow] = useState<Date>(new Date());
 
   useEffect(() => {
@@ -41,30 +43,30 @@ const FastingTimerRing: React.FC<FastingTimerRingProps> = ({
   const getZone = (hours: number) => {
     if (hours < 4)
       return {
-        name: 'Anabolic',
+        name: t('fasting.zones.anabolic', 'Anabolic'),
         color: 'from-blue-400 to-blue-600',
         icon: null,
       };
     if (hours < 16)
       return {
-        name: 'Catabolic',
+        name: t('fasting.zones.catabolic', 'Catabolic'),
         color: 'from-yellow-400 to-orange-500',
         icon: null,
       };
     if (hours < 24)
       return {
-        name: 'Fat Burning',
+        name: t('fasting.zones.fatBurning', 'Fat Burning'),
         color: 'from-red-400 to-red-600',
         icon: <Flame className="w-4 h-4 inline" />,
       };
     return {
-      name: 'Ketosis',
+      name: t('fasting.zones.ketosis', 'Ketosis'),
       color: 'from-violet-400 to-violet-600',
       icon: <Flame className="w-4 h-4 inline" />,
     };
   };
 
-  const zone = useMemo(() => getZone(hoursFasted), [hoursFasted]);
+  const zone = getZone(hoursFasted);
 
   const radius = size / 2 - 14;
   const circumference = 2 * Math.PI * radius;
@@ -229,7 +231,9 @@ const FastingTimerRing: React.FC<FastingTimerRingProps> = ({
           <span>{zone.name}</span>
         </div>
         <div className="text-xs text-muted-foreground mt-2">
-          {progress >= 100 ? 'Goal Reached' : `${Math.round(progress)}%`}
+          {progress >= 100
+            ? t('fasting.goalReached', 'Goal Reached')
+            : `${Math.round(progress)}%`}
         </div>
       </div>
     </div>

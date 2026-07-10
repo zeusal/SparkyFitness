@@ -1,6 +1,7 @@
 import path from 'path';
 
 import fs from 'fs';
+import type { ServerResponse } from 'http';
 import express from 'express';
 // @ts-expect-error TS7016
 import cors from 'cors';
@@ -22,9 +23,11 @@ import foodEntryRoutes from './routes/foodEntryRoutes.js';
 import foodEntryMealRoutes from './routes/foodEntryMealRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
 import preferenceRoutes from './routes/preferenceRoutes.js';
+import dashboardLayoutRoutes from './routes/dashboardLayoutRoutes.js';
 import nutrientDisplayPreferenceRoutes from './routes/nutrientDisplayPreferenceRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import measurementRoutes from './routes/measurementRoutes.js';
+import checkInPhotoRoutes from './routes/checkInPhotoRoutes.js';
 import goalRoutes from './routes/goalRoutes.js';
 import goalPresetRoutes from './routes/goalPresetRoutes.js';
 // @ts-expect-error TS1192
@@ -62,6 +65,8 @@ import { applyMigrations } from './utils/dbMigrations.js';
 import { applyRlsPolicies } from './utils/applyRlsPolicies.js';
 import waterContainerRoutes from './routes/waterContainerRoutes.js';
 import waterIntakeRoutesV2 from './routes/v2/waterIntakeRoutes.js';
+import medicationRoutesV2 from './routes/v2/medicationRoutes.js';
+import symptomRoutesV2 from './routes/v2/symptomRoutes.js';
 import backupRoutes from './routes/backupRoutes.js';
 import errorHandler from './middleware/errorHandler.js';
 import reviewRoutes from './routes/reviewRoutes.js';
@@ -87,6 +92,7 @@ import { toNodeHandler } from 'better-auth/node';
 import freeExerciseDBService from './integrations/freeexercisedb/FreeExerciseDBService.js';
 import { downloadImage } from './utils/imageDownloader.js';
 import authRoutes from './routes/authRoutes.js';
+import mcpRoutes from './routes/mcpRoutes.js';
 import identityRoutes from './routes/identityRoutes.js';
 import oidcSettingsRoutes from './routes/oidcSettingsRoutes.js';
 import adminAuthRoutes from './routes/adminAuthRoutes.js';
@@ -140,7 +146,13 @@ app.use(
             'x-api-key',
             'x-client-id',
             'x-requested-with',
+            // MCP StreamableHTTP headers; browser clients fail CORS preflight
+            // without them.
+            'mcp-protocol-version',
+            'mcp-session-id',
+            'last-event-id',
           ],
+          exposedHeaders: ['mcp-session-id'],
           credentials: true,
           maxAge: 86400,
         });
@@ -148,6 +160,19 @@ app.use(
       req
     );
   })
+);
+// External MCP endpoint — a self-contained chain mounted top-level (not /api)
+// to skip the /api/auth interceptor and cache-control middleware. It sits
+// before the global 50mb parser so its route-local 1mb parser wins (the global
+// parser would set req._body first and no-op the local one). cookieParser is
+// local because the global one also runs after the 50mb parser, and
+// authenticate reads req.cookies.
+app.use(
+  '/mcp',
+  express.json({ limit: '1mb' }),
+  cookieParser(),
+  authenticate,
+  mcpRoutes
 );
 // Middleware to parse JSON bodies for all incoming requests
 // Increased limit to 50mb to accommodate image uploads
@@ -189,7 +214,8 @@ app.use(async (req, res, next) => {
       );
       applySignOutCookieCleanup(res);
     }
-    console.log(
+    log(
+      'debug',
       `[AUTH HANDLER] Intercepted request: ${req.method} ${req.originalUrl}`
     );
     return betterAuthHandlerInstance(req, res);
@@ -214,7 +240,24 @@ console.log('SparkyFitnessServer UPLOADS_BASE_DIR:', UPLOADS_BASE_DIR);
 // Disable etag/lastModified — iOS CFNetwork mis-handles the resulting 304s
 // on freshly uploaded images (#1353). Filenames embed Date.now() so URLs
 // are already effectively immutable; clients still cache by URL.
-const uploadsStaticOptions = { etag: false, lastModified: false };
+// Stored uploads are user-supplied; send `X-Content-Type-Options: nosniff` so a
+// disguised file (e.g. HTML/JS carrying an image extension) can't be MIME-sniffed
+// by the browser into an executable type and run in our origin. express.static
+// reads `setHeaders`; res.sendFile (the on-demand route below) reads `headers`.
+const uploadsStaticOptions = {
+  etag: false,
+  lastModified: false,
+  setHeaders: (res: ServerResponse) =>
+    res.setHeader('X-Content-Type-Options', 'nosniff'),
+  headers: { 'X-Content-Type-Options': 'nosniff' },
+};
+// Check-in progress photos are sensitive. Block direct access via the public
+// static mounts so they can only be reached through the authenticated,
+// ownership-checked route (GET /api/measurements/check-in-photos/file/:id).
+// 404 (not 403) so we don't confirm whether a given path exists.
+app.use(['/uploads/check-in', '/api/uploads/check-in'], (_req, res) => {
+  res.status(404).end();
+});
 app.use('/api/uploads', express.static(UPLOADS_BASE_DIR, uploadsStaticOptions));
 app.use('/uploads', express.static(UPLOADS_BASE_DIR, uploadsStaticOptions));
 // Mounted after uploads so static image Cache-Control isn't clobbered.
@@ -396,8 +439,10 @@ app.use('/api/daily-summary', dailySummaryRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/user-preferences', preferenceRoutes);
+app.use('/api/dashboard-layouts', dashboardLayoutRoutes);
 app.use('/api/preferences/nutrient-display', nutrientDisplayPreferenceRoutes);
 app.use('/api/measurements', measurementRoutes);
+app.use('/api/measurements/check-in-photos', checkInPhotoRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/user-goals', goalRoutes);
 app.use('/api/goal-presets', goalPresetRoutes);
@@ -435,6 +480,8 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/admin/auth', (req, res, next) => adminAuthRoutes(req, res, next));
 app.use('/api/water-containers', waterContainerRoutes);
 app.use('/api/v2/measurements', waterIntakeRoutesV2);
+app.use('/api/v2/medications', medicationRoutesV2);
+app.use('/api/v2/symptoms', symptomRoutesV2);
 app.use('/api/workout-presets', workoutPresetRoutes);
 app.use('/api/workout-plan-templates', workoutPlanTemplateRoutes);
 app.use('/api/review', reviewRoutes);

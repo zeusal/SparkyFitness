@@ -16,30 +16,6 @@
       "npx prettier --write"
     ]
   },
-  "pnpm": {
-    "supportedArchitectures": {
-      "os": ["current", "linux"],
-      "cpu": ["current", "x64", "arm64"]
-    },
-    "overrides": {
-      "side-channel": "1.0.6",
-      "tailwindcss": "4.2.1"
-    },
-    "onlyBuiltDependencies": [
-      "@scarf/scarf",
-      "@shopify/react-native-skia",
-      "@swc/core",
-      "@parcel/watcher",
-      "bcrypt",
-      "sharp",
-      "esbuild",
-      "unrs-resolver",
-      "vue-demi"
-    ],
-    "patchedDependencies": {
-      "react-native-health-connect@3.5.3": "patches/react-native-health-connect@3.5.3.patch"
-    }
-  },
   "dependencies": {
     "js-yaml": "^4.1.0"
   }

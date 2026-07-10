@@ -1,5 +1,6 @@
 import type React from 'react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { UserCustomNutrient } from '../../types/customNutrient';
 import { useToast } from '../../hooks/use-toast';
 import { Button } from '../../components/ui/button';
@@ -35,6 +36,7 @@ import {
 import { usePreferences } from '@/contexts/PreferencesContext';
 
 const CustomNutrientsSettings: React.FC = () => {
+  const { t } = useTranslation();
   const { loadNutrientDisplayPreferences } = usePreferences();
   const [newNutrientName, setNewNutrientName] = useState('');
   const [newNutrientUnit, setNewNutrientUnit] = useState('');
@@ -93,7 +95,9 @@ const CustomNutrientsSettings: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold">Custom Nutrients Management</h2>
+      <h2 className="text-2xl font-bold">
+        {t('customNutrientsManagement.title', 'Custom Nutrients Management')}
+      </h2>
 
       <div className="p-4 border rounded-md shadow-sm">
         <h3 className="text-xl font-semibold mb-4">Add New Custom Nutrient</h3>

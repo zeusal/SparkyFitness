@@ -24,6 +24,7 @@ BEGIN
   FOR table_name IN SELECT unnest(ARRAY[
     'ai_service_settings',
     'check_in_measurements',
+    'check_in_photos',
     'custom_categories',
     'custom_measurements',
     'exercise_entries',
@@ -72,9 +73,20 @@ BEGIN
     'fasting_logs',
     'user_custom_nutrients',
     'user_allergen_preferences',
+    'user_dashboard_layouts',
     'sleep_need_calculations',
     'daily_sleep_need',
-    'day_classification_cache'
+    'day_classification_cache',
+    'medications',
+    'medication_schedules',
+    'medication_entries',
+    'medication_pens',
+    'injection_entries',
+    'medication_titration_steps',
+    'user_custom_symptoms',
+    'symptom_entries',
+    'user_medication_display_preferences',
+    'user_custom_symptom_locations'
   ]::text[])
   LOOP
     EXECUTE 'ALTER TABLE public.' || quote_ident(table_name) || ' ENABLE ROW LEVEL SECURITY;';
@@ -293,13 +305,19 @@ END;
 $_$;
 
 -- Step 5: Apply policies to all tables.
--- Custom policy for ai_service_settings to support public settings
--- Drop existing policy if it exists
+-- Custom policy for ai_service_settings to support admin-global + user-owned settings
+-- Drop ALL possible old policy names before recreating
 DROP POLICY IF EXISTS owner_policy ON public.ai_service_settings;
--- SELECT policy: All authenticated users can read public settings, users can read their own
+DROP POLICY IF EXISTS select_policy ON public.ai_service_settings;
+DROP POLICY IF EXISTS modify_policy ON public.ai_service_settings;
+DROP POLICY IF EXISTS ai_service_settings_select_policy ON public.ai_service_settings;
+DROP POLICY IF EXISTS ai_service_settings_insert_policy ON public.ai_service_settings;
+DROP POLICY IF EXISTS ai_service_settings_update_policy ON public.ai_service_settings;
+DROP POLICY IF EXISTS ai_service_settings_delete_policy ON public.ai_service_settings;
+-- SELECT policy: All authenticated users can read public settings, users can read their own or shared ones
 CREATE POLICY ai_service_settings_select_policy ON public.ai_service_settings FOR SELECT TO PUBLIC
 USING (
-  (is_public = TRUE) OR 
+  (is_public = TRUE AND authenticated_user_id() IS NOT NULL) OR 
   (is_public = FALSE AND user_id = current_user_id())
 );
 -- INSERT policy: Users can create their own settings, admins can create public settings
@@ -340,6 +358,7 @@ SELECT create_owner_policy('user_water_containers');
 SELECT create_owner_policy('weekly_goal_plans');
 SELECT create_owner_policy('user_custom_nutrients');
 SELECT create_owner_policy('user_allergen_preferences');
+SELECT create_owner_policy('user_dashboard_layouts');
 
 -- Admin Activity Logs: Only the admin who performed the action or other admins can view
 CREATE POLICY admin_only_select ON public.admin_activity_logs FOR SELECT TO PUBLIC
@@ -349,6 +368,7 @@ WITH CHECK (admin_user_id = current_user_id() AND is_admin());
 
 -- Diary access tables
 SELECT create_diary_policy('check_in_measurements');
+SELECT create_diary_policy('check_in_photos');
 SELECT create_diary_policy('custom_categories');
 SELECT create_diary_policy('custom_measurements');
 SELECT create_diary_policy('exercise_entries');
@@ -377,6 +397,20 @@ SELECT create_library_policy('meal_plan_templates', 'false', ARRAY['can_view_foo
 SELECT create_library_policy('workout_plan_templates', 'false', ARRAY['can_view_exercise_library']);
 SELECT create_library_policy('workout_presets', 'is_public', ARRAY['can_view_exercise_library']);
 
+-- Medication & GLP-1 tracker (see migration 20260624000000_add_medication_glp1_schema.sql).
+-- `medications` is PRIVATE: sharing disabled ('false'); owner-only writes; caregivers act via
+-- onBehalfOfMiddleware. Entry/child tables use the diary policy (owner + family diary access).
+SELECT create_library_policy('medications', 'false', ARRAY['can_manage_diary']);
+SELECT create_diary_policy('medication_schedules');
+SELECT create_diary_policy('medication_entries');
+SELECT create_diary_policy('medication_pens');
+SELECT create_diary_policy('injection_entries');
+SELECT create_diary_policy('medication_titration_steps');
+SELECT create_diary_policy('user_custom_symptoms');
+SELECT create_diary_policy('symptom_entries');
+SELECT create_diary_policy('user_custom_symptom_locations');
+SELECT create_owner_policy('user_medication_display_preferences');
+
 
 -- Custom policies for special cases
 CREATE POLICY select_policy ON public.exercise_entry_sets FOR SELECT TO PUBLIC
@@ -385,21 +419,56 @@ CREATE POLICY modify_policy ON public.exercise_entry_sets FOR ALL TO PUBLIC
 USING (EXISTS (SELECT 1 FROM public.exercise_entries ee WHERE ee.id = exercise_entry_sets.exercise_entry_id AND has_diary_access(ee.user_id)))
 WITH CHECK (EXISTS (SELECT 1 FROM public.exercise_entries ee WHERE ee.id = exercise_entry_sets.exercise_entry_id AND has_diary_access(ee.user_id)));
 
+-- Provider configs: admin-global (is_public) OR own OR family delegation
+-- Drop any old policy names first (idempotent)
+DROP POLICY IF EXISTS select_policy ON public.external_data_providers;
+DROP POLICY IF EXISTS modify_policy ON public.external_data_providers;
+DROP POLICY IF EXISTS insert_policy ON public.external_data_providers;
+DROP POLICY IF EXISTS update_policy ON public.external_data_providers;
+DROP POLICY IF EXISTS delete_policy ON public.external_data_providers;
+
+-- SELECT: admin-global (authenticated users), own, or explicit family delegation
 CREATE POLICY select_policy ON public.external_data_providers FOR SELECT TO PUBLIC
 USING (
-  current_user_id() = user_id OR (
-    EXISTS (
+  -- Admin-created global providers: all authenticated users can see them if active
+  (is_public = TRUE AND is_active = TRUE AND authenticated_user_id() IS NOT NULL)
+  -- Owner always sees their own providers
+  OR (is_public = FALSE AND current_user_id() = user_id)
+  OR (
+    -- Explicit family delegation: share_external_providers permission, non-strictly-private only, must be active
+    is_public = FALSE AND is_active = TRUE AND has_family_access(user_id, 'share_external_providers') AND EXISTS (
       SELECT 1 FROM public.external_provider_types ept
       WHERE ept.id = external_data_providers.provider_type
-      AND ept.is_strictly_private = false
-    ) AND (
-      shared_with_public OR has_family_access_or(user_id, ARRAY['can_view_food_library', 'can_view_exercise_library'])
+      AND ept.is_strictly_private = FALSE
     )
   )
 );
-CREATE POLICY modify_policy ON public.external_data_providers FOR ALL TO PUBLIC
-USING (current_user_id() = user_id)
-WITH CHECK (current_user_id() = user_id);
+
+-- INSERT: users create their own (is_public=FALSE), admins create global (is_public=TRUE)
+CREATE POLICY insert_policy ON public.external_data_providers FOR INSERT TO PUBLIC
+WITH CHECK (
+  (is_public = FALSE AND user_id = current_user_id()) OR
+  (is_public = TRUE AND is_admin())
+);
+
+-- UPDATE: users update own, admins update global
+CREATE POLICY update_policy ON public.external_data_providers FOR UPDATE TO PUBLIC
+USING (
+  (is_public = FALSE AND user_id = current_user_id()) OR
+  (is_public = TRUE AND is_admin())
+)
+WITH CHECK (
+  (is_public = FALSE AND user_id = current_user_id()) OR
+  (is_public = TRUE AND is_admin())
+);
+
+-- DELETE: users delete own, admins delete global
+CREATE POLICY delete_policy ON public.external_data_providers FOR DELETE TO PUBLIC
+USING (
+  (is_public = FALSE AND user_id = current_user_id()) OR
+  (is_public = TRUE AND is_admin())
+);
+
 
 CREATE POLICY select_policy ON public.family_access FOR SELECT TO PUBLIC
 USING (current_user_id() = owner_user_id OR current_user_id() = family_user_id);
@@ -424,12 +493,20 @@ WITH CHECK (has_diary_access(user_id));
 CREATE POLICY delete_policy ON public.food_entries FOR DELETE TO PUBLIC
 USING (has_diary_access(user_id));
 
-CREATE POLICY select_and_modify_policy ON public.food_variants FOR ALL TO PUBLIC
+CREATE POLICY select_policy ON public.food_variants FOR SELECT TO PUBLIC
 USING (
   EXISTS (
     SELECT 1 FROM public.foods f
     WHERE f.id = food_variants.food_id
       AND has_library_access_with_public(f.user_id, f.shared_with_public, ARRAY['can_view_food_library', 'can_manage_diary'])
+  )
+);
+CREATE POLICY modify_policy ON public.food_variants FOR ALL TO PUBLIC
+USING (
+  EXISTS (
+    SELECT 1 FROM public.foods f
+    WHERE f.id = food_variants.food_id
+      AND has_diary_access(f.user_id)
   )
 )
 WITH CHECK (
@@ -462,13 +539,35 @@ CREATE POLICY owner_policy ON public.workout_plan_template_assignments FOR ALL T
 USING (EXISTS (SELECT 1 FROM public.workout_plan_templates wpt WHERE wpt.id = workout_plan_template_assignments.template_id AND current_user_id() = wpt.user_id))
 WITH CHECK (EXISTS (SELECT 1 FROM public.workout_plan_templates wpt WHERE wpt.id = workout_plan_template_assignments.template_id AND current_user_id() = wpt.user_id));
 
-CREATE POLICY owner_policy ON public.workout_preset_exercise_sets FOR ALL TO PUBLIC
-USING (EXISTS (SELECT 1 FROM public.workout_preset_exercises wpe WHERE wpe.id = workout_preset_exercise_sets.workout_preset_exercise_id))
-WITH CHECK (EXISTS (SELECT 1 FROM public.workout_preset_exercises wpe WHERE wpe.id = workout_preset_exercise_sets.workout_preset_exercise_id));
+CREATE POLICY select_policy ON public.workout_preset_exercise_sets FOR SELECT TO PUBLIC
+USING (EXISTS (SELECT 1 FROM public.workout_preset_exercises wpe WHERE wpe.id = workout_preset_exercise_sets.workout_preset_exercise_id));
+CREATE POLICY modify_policy ON public.workout_preset_exercise_sets FOR ALL TO PUBLIC
+USING (EXISTS (
+  SELECT 1 FROM public.workout_preset_exercises wpe
+  JOIN public.workout_presets wp ON wp.id = wpe.workout_preset_id
+  WHERE wpe.id = workout_preset_exercise_sets.workout_preset_exercise_id
+    AND current_user_id() = wp.user_id
+))
+WITH CHECK (EXISTS (
+  SELECT 1 FROM public.workout_preset_exercises wpe
+  JOIN public.workout_presets wp ON wp.id = wpe.workout_preset_id
+  WHERE wpe.id = workout_preset_exercise_sets.workout_preset_exercise_id
+    AND current_user_id() = wp.user_id
+));
 
-CREATE POLICY owner_policy ON public.workout_preset_exercises FOR ALL TO PUBLIC
-USING (EXISTS (SELECT 1 FROM public.workout_presets wp WHERE wp.id = workout_preset_exercises.workout_preset_id))
-WITH CHECK (EXISTS (SELECT 1 FROM public.workout_presets wp WHERE wp.id = workout_preset_exercises.workout_preset_id));
+CREATE POLICY select_policy ON public.workout_preset_exercises FOR SELECT TO PUBLIC
+USING (EXISTS (SELECT 1 FROM public.workout_presets wp WHERE wp.id = workout_preset_exercises.workout_preset_id));
+CREATE POLICY modify_policy ON public.workout_preset_exercises FOR ALL TO PUBLIC
+USING (EXISTS (
+  SELECT 1 FROM public.workout_presets wp
+  WHERE wp.id = workout_preset_exercises.workout_preset_id
+    AND current_user_id() = wp.user_id
+))
+WITH CHECK (EXISTS (
+  SELECT 1 FROM public.workout_presets wp
+  WHERE wp.id = workout_preset_exercises.workout_preset_id
+    AND current_user_id() = wp.user_id
+));
 
 SELECT create_owner_policy('user_ignored_updates');
 SELECT create_owner_policy('fasting_logs');

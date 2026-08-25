@@ -2,7 +2,55 @@ import { getClient } from '../db/poolManager.js';
 import { log } from '../config/logging.js';
 import { v4 as uuidv4 } from 'uuid';
 import { loadUserTimezone } from '../utils/timezoneLoader.js';
-import { todayInZone } from '@workspace/shared';
+import {
+  todayInZone,
+  getMicronutrientById,
+  normalizeNutrientName,
+  SUPPLEMENT_NUTRIENT_VIEW_GROUPS,
+} from '@workspace/shared';
+
+interface CreateCustomNutrientPayload {
+  name: string;
+  unit: string;
+  aliases?: string[];
+  /**
+   * Seeds the nutrient's daily target on the user's goals/presets. Catalog-seeded
+   * nutrients pass their FDA Daily Value so %DV is meaningful immediately; a
+   * free-text nutrient has no published target and defaults to 0.
+   */
+  defaultTarget?: number | null;
+  /**
+   * Which display view groups the nutrient becomes visible in. Omitted = the settings
+   * page's default (food_database + goal + reports). Supplement nutrients pass
+   * SUPPLEMENT_NUTRIENT_VIEW_GROUPS to stay off the food surfaces.
+   */
+  viewGroups?: string[];
+}
+
+interface UpdateCustomNutrientPayload {
+  name?: string;
+  unit?: string;
+  aliases?: string[];
+}
+
+// Coerce arbitrary input into a clean string[] of aliases: drop non-strings,
+// trim, and remove blanks/duplicates. Returns [] for any non-array input.
+function sanitizeAliases(aliases: unknown): string[] {
+  if (!Array.isArray(aliases)) return [];
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const alias of aliases) {
+    if (typeof alias !== 'string') continue;
+    const trimmed = alias.trim();
+    if (!trimmed) continue;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(trimmed);
+  }
+  return result;
+}
+
 class CustomNutrientService {
   /**
    * Creates a new custom nutrient for a user.
@@ -12,23 +60,46 @@ class CustomNutrientService {
    */
 
   static async createCustomNutrient(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    userId: any,
+    userId: string,
     {
       name,
       unit,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    }: any
+      aliases,
+      defaultTarget,
+      viewGroups,
+    }: CreateCustomNutrientPayload
   ) {
     const client = await getClient(userId);
     try {
       const id = uuidv4();
       const result = await client.query(
-        `INSERT INTO user_custom_nutrients (id, user_id, name, unit)
-                     VALUES ($1, $2, $3, $4)
-                     RETURNING *`,
-        [id, userId, name, unit]
+        // ON CONFLICT keeps this idempotent under concurrency. Catalog provisioning
+        // does a read-before-create, so two simultaneous requests for the same nutrient
+        // can both see nothing and race to insert; without this the unique
+        // (user_id, name) constraint fails one of them instead of returning the row
+        // that now exists. The no-op DO UPDATE is what makes RETURNING yield it.
+        //
+        // `xmax = 0` distinguishes a real insert from a conflict. It matters: the setup
+        // below seeds display views and goal targets, and re-running it for a nutrient
+        // the user already has would overwrite a target they had tuned and un-hide it
+        // from views they had deliberately hidden it from. The racing writers both
+        // supply identical values, so the loser simply skips the setup the winner did.
+        `INSERT INTO user_custom_nutrients (id, user_id, name, unit, aliases)
+                     VALUES ($1, $2, $3, $4, $5::jsonb)
+                     ON CONFLICT (user_id, name)
+                     DO UPDATE SET name = EXCLUDED.name
+                     RETURNING *, (xmax = 0) AS inserted`,
+        [id, userId, name, unit, JSON.stringify(sanitizeAliases(aliases))]
       );
+      const wasInserted = result.rows[0]?.inserted === true;
+      if (!wasInserted) {
+        log(
+          'info',
+          `Custom nutrient already existed: ${name} for user ${userId}; skipping view and goal setup`
+        );
+        const { inserted: _inserted, ...row } = result.rows[0];
+        return row;
+      }
       log('info', `Custom nutrient created: ${name} for user ${userId}`);
       // Automatically add to specific views (Food Database, Goal, Reports)
       try {
@@ -36,35 +107,46 @@ class CustomNutrientService {
         const { default: nutrientDisplayPreferenceService } = await import(
           prefServicePath
         );
+        // `viewGroups` lets the caller narrow where the nutrient becomes visible. The
+        // supplement picker passes the report/goal groups only: a nutrient added to a
+        // multivitamin should surface where its contribution and %DV are meaningful, not
+        // as another always-0.0 column on every food search row.
         await nutrientDisplayPreferenceService.addNutrientToSpecificViews(
           userId,
-          name
+          name,
+          viewGroups
         );
-        // Also add to goal_presets and future user_goals with 0 value
-        // This ensures they show up in the goal editing and progress tracking
+        // Also add to goal_presets and future user_goals so they show up in goal
+        // editing and progress tracking. Catalog-seeded nutrients start at their
+        // Daily Value; free-text ones start at 0 for the user to fill in.
+        const target =
+          typeof defaultTarget === 'number' && Number.isFinite(defaultTarget)
+            ? defaultTarget
+            : 0;
         await client.query(
-          `UPDATE goal_presets 
-           SET custom_nutrients = jsonb_set(custom_nutrients, ARRAY[$1], '0'::jsonb) 
-           WHERE user_id = $2`,
-          [name, userId]
+          `UPDATE goal_presets
+           SET custom_nutrients = jsonb_set(custom_nutrients, ARRAY[$1], to_jsonb($2::numeric))
+           WHERE user_id = $3`,
+          [name, target, userId]
         );
         const tz = await loadUserTimezone(userId);
         const today = todayInZone(tz);
         await client.query(
           `UPDATE user_goals
-           SET custom_nutrients = jsonb_set(custom_nutrients, ARRAY[$1], '0'::jsonb)
-           WHERE user_id = $2 AND (goal_date >= $3 OR goal_date IS NULL)`,
-          [name, userId, today]
+           SET custom_nutrients = jsonb_set(custom_nutrients, ARRAY[$1], to_jsonb($2::numeric))
+           WHERE user_id = $3 AND (goal_date >= $4 OR goal_date IS NULL)`,
+          [name, target, userId, today]
         );
       } catch (autoAddError) {
         log(
           'error',
-          // @ts-expect-error TS(2571): Object is of type 'unknown'.
-          `Failed to automatically add custom nutrient ${name} to views or goals: ${autoAddError.message}`
+          `Failed to automatically add custom nutrient ${name} to views or goals: ${autoAddError instanceof Error ? autoAddError.message : String(autoAddError)}`
         );
         // We don't want to fail the whole creation if preference/goal update fails
       }
-      return result.rows[0];
+      // Strip the synthetic discriminator so callers see a plain nutrient row.
+      const { inserted: _created, ...created } = result.rows[0];
+      return created;
     } finally {
       client.release();
     }
@@ -74,8 +156,7 @@ class CustomNutrientService {
    * @param {string} userId - The ID of the user.
    * @returns {Array<object>} An array of custom nutrient objects.
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  static async getCustomNutrients(userId: any) {
+  static async getCustomNutrients(userId: string) {
     const client = await getClient(userId);
     try {
       const result = await client.query(
@@ -93,13 +174,109 @@ class CustomNutrientService {
     }
   }
   /**
+   * Find-or-create the user's custom nutrients for a set of canonical catalog ids.
+   *
+   * Used by the supplement nutrient picker: picking "Vitamin D" must materialize a
+   * `user_custom_nutrients` row with the catalog's canonical name, unit, aliases and
+   * Daily Value, so that (a) %DV works immediately and (b) the provider-import
+   * matcher can later map label/provider spellings onto it.
+   *
+   * Idempotent. A catalog entry is skipped when:
+   *  - it is already a first-class `food_variants` column (`fixedField`) — creating a
+   *    custom "Vitamin C" alongside the built-in one would double-count it; or
+   *  - the user already has a nutrient whose name OR alias matches it (normalized),
+   *    so we never create a second "Magnesium".
+   *
+   * @returns `resolved` (each catalog id mapped to the nutrient key the caller should
+   *   store — a fixed field name, or the custom nutrient's actual name, which may be a
+   *   pre-existing spelling such as "Vit D"), plus what was created and the full list.
+   */
+  static async ensureCatalogNutrients(userId: string, catalogIds: string[]) {
+    const existing = await this.getCustomNutrients(userId);
+    // Normalized index of everything the user already has, by name AND alias, mapped
+    // back to that nutrient's actual name — so a catalog pick collapses onto the
+    // existing row (and reports its real name) instead of duplicating it. First match
+    // wins on alias collisions, matching the provider-import matcher's behaviour.
+    const claimed = new Map<string, string>();
+    for (const row of existing) {
+      claimed.set(normalizeNutrientName(row.name), row.name);
+      if (Array.isArray(row.aliases)) {
+        for (const alias of row.aliases) {
+          if (typeof alias !== 'string') continue;
+          const key = normalizeNutrientName(alias);
+          if (!claimed.has(key)) claimed.set(key, row.name);
+        }
+      }
+    }
+
+    const created = [];
+    const resolved: {
+      catalogId: string;
+      name: string;
+      fixedField?: string;
+    }[] = [];
+
+    for (const catalogId of catalogIds) {
+      const entry = getMicronutrientById(catalogId);
+      if (!entry) {
+        log(
+          'warn',
+          `Unknown micronutrient catalog id "${catalogId}" requested`,
+          { userId }
+        );
+        continue;
+      }
+      // Already a first-class nutrient column — the caller stores it there, and we
+      // must not shadow it with a custom nutrient of the same name.
+      if (entry.fixedField) {
+        resolved.push({
+          catalogId,
+          name: entry.displayName,
+          fixedField: entry.fixedField,
+        });
+        continue;
+      }
+
+      const keys = [entry.displayName, ...entry.aliases].map(
+        normalizeNutrientName
+      );
+      const existingName = keys
+        .map((key) => claimed.get(key))
+        .find((name) => name !== undefined);
+      if (existingName !== undefined) {
+        resolved.push({ catalogId, name: existingName });
+        continue;
+      }
+
+      const row = await this.createCustomNutrient(userId, {
+        name: entry.displayName,
+        unit: entry.unit,
+        aliases: entry.aliases,
+        defaultTarget: entry.rdi,
+        viewGroups: SUPPLEMENT_NUTRIENT_VIEW_GROUPS,
+      });
+      created.push(row);
+      for (const key of keys) {
+        if (!claimed.has(key)) claimed.set(key, entry.displayName);
+      }
+      resolved.push({ catalogId, name: entry.displayName });
+    }
+
+    // createCustomNutrient returns the full inserted row, so the post-seed list is just
+    // the old rows plus the new ones — no need to re-SELECT.
+    return {
+      created,
+      resolved,
+      nutrients: created.length > 0 ? [...existing, ...created] : existing,
+    };
+  }
+  /**
    * Retrieves a specific custom nutrient by its ID for a given user.
    * @param {string} userId - The ID of the user.
    * @param {string} id - The ID of the custom nutrient.
    * @returns {object|null} The custom nutrient object if found, otherwise null.
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  static async getCustomNutrientById(userId: any, id: any) {
+  static async getCustomNutrientById(userId: string, id: string) {
     const client = await getClient(userId);
     try {
       const result = await client.query(
@@ -121,29 +298,49 @@ class CustomNutrientService {
    */
 
   static async updateCustomNutrient(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    userId: any,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    id: any,
-    {
-      name,
-      unit,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    }: any
+    userId: string,
+    id: string,
+    { name, unit, aliases }: UpdateCustomNutrientPayload
   ) {
     const client = await getClient(userId);
     try {
+      const previousRes = await client.query(
+        'SELECT name FROM user_custom_nutrients WHERE id = $1 AND user_id = $2',
+        [id, userId]
+      );
+      const previousName = previousRes.rows[0]?.name;
+      // `aliases` omitted (undefined) keeps the existing value; an explicit
+      // array (including []) replaces it.
+      const aliasesParam =
+        aliases === undefined ? null : JSON.stringify(sanitizeAliases(aliases));
       const result = await client.query(
         `UPDATE user_custom_nutrients
                      SET name = COALESCE($1, name),
                          unit = COALESCE($2, unit),
+                         aliases = COALESCE($3::jsonb, aliases),
                          updated_at = NOW()
-                     WHERE id = $3 AND user_id = $4
+                     WHERE id = $4 AND user_id = $5
                      RETURNING *`,
-        [name, unit, id, userId]
+        [name, unit, aliasesParam, id, userId]
       );
       if (result.rows.length > 0) {
         log('info', `Custom nutrient updated: ${id} for user ${userId}`);
+        if (name && previousName && name !== previousName) {
+          try {
+            const { default: nutrientGoalPreferenceService } =
+              await import('./nutrientGoalPreferenceService.js');
+            await nutrientGoalPreferenceService.renameGoalPreferenceKey(
+              userId,
+              previousName,
+              name
+            );
+          } catch (renameError) {
+            log(
+              'error',
+              `Failed to rename goal-direction preference for custom nutrient ${id}: ${renameError instanceof Error ? renameError.message : String(renameError)}`
+            );
+          }
+        }
         return result.rows[0];
       }
       return null;
@@ -160,10 +357,8 @@ class CustomNutrientService {
    */
 
   static async deleteCustomNutrient(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    userId: any,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    id: any,
+    userId: string,
+    id: string,
     deleteAllHistory = false
   ) {
     const client = await getClient(userId);
@@ -188,6 +383,11 @@ class CustomNutrientService {
         'DELETE FROM user_custom_nutrients WHERE id = $1 AND user_id = $2',
         [id, userId]
       );
+      // Remove from nutrient goal direction preferences (Always)
+      await client.query(
+        'DELETE FROM user_nutrient_goal_preferences WHERE user_id = $1 AND nutrient_key = $2',
+        [userId, nutrientName]
+      );
       // 3. Remove from UI Display Preferences (Always)
       const prefServicePath = './nutrientDisplayPreferenceService.js';
       const { default: nutrientDisplayPreferenceService } = await import(
@@ -204,8 +404,17 @@ class CustomNutrientService {
       );
       // 5. Remove from Food Database (Always - standardizes the library)
       await client.query(
-        `UPDATE food_variants SET custom_nutrients = custom_nutrients - $1 
+        `UPDATE food_variants SET custom_nutrients = custom_nutrients - $1
          WHERE food_id IN (SELECT id FROM foods WHERE user_id = $2)`,
+        [nutrientName, userId]
+      );
+      // 5b. Remove from supplement per-dose payloads (Always) - the medication-definition
+      // library tier, mirroring food_variants. The custom value lives under the nested
+      // `custom_nutrients` object of medications.nutrients.
+      await client.query(
+        `UPDATE medications
+            SET nutrients = jsonb_set(nutrients, '{custom_nutrients}', (nutrients->'custom_nutrients') - $1)
+          WHERE user_id = $2 AND nutrients->'custom_nutrients' ? $1`,
         [nutrientName, userId]
       );
       // 6. Remove from Future Goals (Always - date >= today)
@@ -226,6 +435,14 @@ class CustomNutrientService {
           'UPDATE food_entries SET custom_nutrients = custom_nutrients - $1 WHERE user_id = $2',
           [nutrientName, userId]
         );
+        // Remove from supplement log snapshots too (immutable history) — only when the
+        // caller opts into purging history, mirroring food_entries above.
+        await client.query(
+          `UPDATE medication_entries
+              SET nutrients_snapshot = jsonb_set(nutrients_snapshot, '{custom_nutrients}', (nutrients_snapshot->'custom_nutrients') - $1)
+            WHERE user_id = $2 AND nutrients_snapshot->'custom_nutrients' ? $1`,
+          [nutrientName, userId]
+        );
         // Remove from all Past Goals
         await client.query(
           'UPDATE user_goals SET custom_nutrients = custom_nutrients - $1 WHERE user_id = $2 AND goal_date < $3',
@@ -242,8 +459,7 @@ class CustomNutrientService {
       await client.query('ROLLBACK');
       log(
         'error',
-        // @ts-expect-error TS(2571): Object is of type 'unknown'.
-        `Failed to delete custom nutrient ${id} for user ${userId}: ${error.message}`
+        `Failed to delete custom nutrient ${id} for user ${userId}: ${error instanceof Error ? error.message : String(error)}`
       );
       throw error;
     } finally {

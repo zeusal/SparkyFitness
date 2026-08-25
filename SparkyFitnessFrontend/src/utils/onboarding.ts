@@ -6,10 +6,12 @@ import {
   MineralCalculationAlgorithm,
   VitaminCalculationAlgorithm,
   SugarCalculationAlgorithm,
+  AddedSugarAlgorithm,
 } from '@/types/nutrientAlgorithms';
 import { calculateBasePlan } from './nutritionCalculations';
 import { EnergyUnit } from '@/contexts/PreferencesContext';
 import { OnboardingData } from '@/types/onboarding';
+import type { CalorieSafetyFloorMode } from '@workspace/shared';
 
 export const createInitialPlan = (
   formData: OnboardingData,
@@ -24,14 +26,19 @@ export const createInitialPlan = (
     value: number,
     fromUnit: EnergyUnit,
     toUnit: EnergyUnit
-  ) => number
+  ) => number,
+  safetyFloor: {
+    calorieSafetyFloorMode: CalorieSafetyFloorMode;
+    calorieSafetyFloorValue: number;
+  }
 ): ExpandedGoals | null => {
   // 1. Basis Plan berechnen
   // formData is already in Metric (kg/cm) from UnitInput
   const plan = calculateBasePlan(
     formData,
     localSelectedDiet,
-    customPercentages
+    customPercentages,
+    safetyFloor
   );
 
   if (!plan) return null;
@@ -53,7 +60,7 @@ export const createInitialPlan = (
     weightKg,
     calories: plan.finalDailyCalories,
     totalFatGrams: plan.macros.fat,
-    activityLevel: formData.activityLevel as 'light' | 'moderate' | 'heavy',
+    activityLevel: formData.activityLevel || undefined,
   };
 
   const advancedNutrients = calculateAllAdvancedNutrients(userData, {
@@ -61,6 +68,10 @@ export const createInitialPlan = (
     minerals: localMineralAlgorithm,
     vitamins: localVitaminAlgorithm,
     sugar: localSugarAlgorithm,
+    // Onboarding doesn't collect an Added Sugars preference (no custom
+    // nutrient exists yet at this point) — calculateAllAdvancedNutrients
+    // never reads this field, it's only required for AlgorithmBundle's shape.
+    addedSugar: AddedSugarAlgorithm.WHO_IDEAL,
   });
 
   return {

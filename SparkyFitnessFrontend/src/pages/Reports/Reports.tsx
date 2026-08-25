@@ -8,8 +8,14 @@ import ZoomableChart from '@/components/ZoomableChart';
 import ReportsControls from '@/pages/Reports/ReportsControls';
 import NutritionPeriodSummary from '@/pages/Reports/NutritionPeriodSummary';
 import NutritionChartsGrid from '@/pages/Reports/NutritionChartsGrid';
-import MeasurementChartsGrid from '@/pages/Reports/MeasurementChartsGrid';
-import ReportsTables from '@/pages/Reports/ReportsTables';
+import WidgetGrid from '@/components/widgets/WidgetGrid';
+import {
+  generateReportsMeasurementsDefaultLayouts,
+  useMeasurementChartWidgets,
+} from '@/pages/Reports/MeasurementChartsGrid';
+import ReportsTables, {
+  type TableFilterValue,
+} from '@/pages/Reports/ReportsTables';
 import ExerciseReportsDashboard from '@/pages/Reports/ExerciseReportsDashboard';
 import SleepReport from '@/pages/Reports/SleepReport';
 import BodyBatteryCard from '@/pages/Reports/BodyBatteryCard';
@@ -22,6 +28,7 @@ import MoodChart from '@/pages/Reports/MoodChart';
 import { useCustomNutrients } from '@/hooks/Foods/useCustomNutrients';
 import { useMoodEntries } from '@/hooks/CheckIn/useMood';
 import {
+  useCalorieBalanceRange,
   useExerciseDashboardData,
   useRawStressData,
   useReportsData,
@@ -92,6 +99,8 @@ const Reports = () => {
     searchParams.get('tab') || 'charts'
   );
 
+  const [selectedTable, setSelectedTable] = useState<TableFilterValue>('all');
+
   const handleTabChange = (value: string) => {
     setActiveTab(value);
     setSearchParams((prev) => {
@@ -119,6 +128,11 @@ const Reports = () => {
     activeUserId
   );
 
+  // Folded into `loading` below so the calorie chart never paints raw goals first and
+  // then jumps once the balance lands.
+  const { data: calorieBalanceByDate, isLoading: calorieBalanceLoading } =
+    useCalorieBalanceRange(startDate, endDate, activeUserId);
+
   // Der globale Ladezustand
   const loading =
     !startDate ||
@@ -128,7 +142,8 @@ const Reports = () => {
     stressLoading ||
     dashboardLoading ||
     fastingLoading ||
-    reportsLoading;
+    reportsLoading ||
+    calorieBalanceLoading;
 
   const {
     nutritionData = [],
@@ -146,6 +161,14 @@ const Reports = () => {
   } = reportsData || {};
 
   const { data: goalData } = useDailyGoalsRange(startDate, endDate, true, true);
+
+  const measurementChartWidgets = useMeasurementChartWidgets({
+    // Pass the raw (possibly undefined) value so the hook's stable
+    // EMPTY_MEASUREMENTS fallback is used while loading. The destructured
+    // `measurementData` above defaults to a fresh `[]` each render, which
+    // would defeat that and re-compute every widget.
+    measurementData: reportsData?.measurementData,
+  });
 
   const handleStartDateChange = (date: string) => {
     debug(loggingLevel, 'Reports: Start date change handler called:', {
@@ -183,12 +206,14 @@ const Reports = () => {
                 nutritionData={nutritionData}
                 customNutrients={customNutrients}
                 goals={goalData}
+                calorieBalanceByDate={calorieBalanceByDate}
               />
             </ChartErrorBoundary>
             <ChartErrorBoundary>
               <NutritionChartsGrid
                 nutritionData={nutritionData}
                 customNutrients={customNutrients}
+                calorieBalanceByDate={calorieBalanceByDate}
                 goals={goalData}
               />
             </ChartErrorBoundary>
@@ -198,7 +223,13 @@ const Reports = () => {
         return (
           <div className="space-y-6">
             <ChartErrorBoundary>
-              <MeasurementChartsGrid measurementData={measurementData ?? []} />
+              <WidgetGrid
+                pageKey="reports-measurements"
+                widgets={measurementChartWidgets}
+                generateDefaultLayouts={
+                  generateReportsMeasurementsDefaultLayouts
+                }
+              />
             </ChartErrorBoundary>
             <ChartErrorBoundary>
               <BodyBatteryCard
@@ -285,6 +316,8 @@ const Reports = () => {
               customCategories={customCategories}
               customMeasurementsData={customMeasurementsData}
               prData={exerciseDashboardData?.prData}
+              selectedTable={selectedTable}
+              onSelectedTableChange={setSelectedTable}
               onExportFoodDiary={() =>
                 exportFoodDiary({
                   loggingLevel,
@@ -345,7 +378,10 @@ const Reports = () => {
               nutritionData={nutritionData}
               tabularData={tabularData}
               exerciseEntries={exerciseEntries}
-              measurementData={measurementData}
+              measurementData={measurementData.map((m) => ({
+                entry_date: m.entry_date,
+                weight: m.weight ?? null,
+              }))}
               customCategories={customCategories}
               customMeasurementsData={customMeasurementsData}
               sleepAnalyticsData={sleepAnalyticsData}

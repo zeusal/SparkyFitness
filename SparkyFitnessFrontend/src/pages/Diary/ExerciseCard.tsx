@@ -33,7 +33,10 @@ import {
   useDeleteExercisePresetEntryMutation,
   useExerciseEntries,
 } from '@/hooks/Exercises/useExerciseEntries';
-import { resolveExerciseCalories } from '@workspace/shared';
+import {
+  resolveExerciseCalories,
+  setsDurationMinutes,
+} from '@workspace/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { exerciseByIdOptions } from '@/hooks/Exercises/useExercises';
 import { createWorkoutPlaybackRouteState } from '@/utils/workoutPlayback';
@@ -361,10 +364,11 @@ const ExerciseCard = ({
         // Duration & Sets
         if (entry.sets && entry.sets.length > 0) {
           setsCount += entry.sets.length;
-          duration += entry.sets.reduce<number>(
-            (sum, set) => sum + (set.duration || 0) + (set.rest_time || 0) / 60,
-            0
-          );
+          const setsDuration = setsDurationMinutes(entry.sets);
+          // Fall back to the entry-level duration when the sets carry no
+          // per-set timers (e.g. rep-based sets synced from Hevy).
+          duration +=
+            setsDuration > 0 ? setsDuration : entry.duration_minutes || 0;
         } else if (entry.duration_minutes) {
           duration += entry.duration_minutes;
         }

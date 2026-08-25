@@ -1,35 +1,86 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { renderHook } from '@testing-library/react-native';
 import {
-  initializeLiquidGlassTabBar,
-  setLiquidGlassTabBarEnabled,
-  getLiquidGlassTabBarEnabled,
-  __resetLiquidGlassTabBarForTests,
+  useNativeIOSTabsActive,
+  useNativeIOSHeadersActive,
 } from '../../src/services/nativeTabBarPreference';
+import {
+  useAppPreferencesStore,
+  __resetAppPreferencesStoreForTests,
+} from '../../src/stores/appPreferencesStore';
+import { canUseLiquidGlass } from '../../src/utils/liquidGlass';
 
-// Behavior is covered by booleanPreference.test.ts; this verifies the wrapper is
-// wired to the right storage key and default.
-const STORAGE_KEY = '@HealthConnect:liquidGlassTabBarEnabled';
+jest.mock('../../src/utils/liquidGlass', () => ({
+  canUseLiquidGlass: jest.fn(),
+}));
 
-describe('nativeTabBarPreference service', () => {
+const mockCanUseLiquidGlass = canUseLiquidGlass as jest.MockedFunction<
+  typeof canUseLiquidGlass
+>;
+
+describe('useNativeIOSTabsActive', () => {
   beforeEach(async () => {
     await AsyncStorage.clear();
-    __resetLiquidGlassTabBarForTests();
+    __resetAppPreferencesStoreForTests();
+    mockCanUseLiquidGlass.mockReset();
   });
 
-  it('defaults to off when nothing is persisted', async () => {
-    await initializeLiquidGlassTabBar();
-    expect(getLiquidGlassTabBarEnabled()).toBe(false);
+  it('is false when liquid glass is unavailable, even if enabled', () => {
+    mockCanUseLiquidGlass.mockReturnValue(false);
+    useAppPreferencesStore.getState().setLiquidGlassTabBarEnabled(true);
+
+    const { result } = renderHook(() => useNativeIOSTabsActive());
+
+    expect(result.current).toBe(false);
   });
 
-  it('persists toggles under the liquid-glass storage key', async () => {
-    await setLiquidGlassTabBarEnabled(true);
-    expect(getLiquidGlassTabBarEnabled()).toBe(true);
-    expect(await AsyncStorage.getItem(STORAGE_KEY)).toBe('true');
+  it('is false when liquid glass is available but the toggle is disabled', () => {
+    mockCanUseLiquidGlass.mockReturnValue(true);
+
+    const { result } = renderHook(() => useNativeIOSTabsActive());
+
+    expect(result.current).toBe(false);
   });
 
-  it('restores the saved enabled value on init', async () => {
-    await AsyncStorage.setItem(STORAGE_KEY, 'true');
-    await initializeLiquidGlassTabBar();
-    expect(getLiquidGlassTabBarEnabled()).toBe(true);
+  it('is true only when liquid glass is available and the toggle is enabled', () => {
+    mockCanUseLiquidGlass.mockReturnValue(true);
+    useAppPreferencesStore.getState().setLiquidGlassTabBarEnabled(true);
+
+    const { result } = renderHook(() => useNativeIOSTabsActive());
+
+    expect(result.current).toBe(true);
+  });
+});
+
+describe('useNativeIOSHeadersActive', () => {
+  beforeEach(async () => {
+    await AsyncStorage.clear();
+    __resetAppPreferencesStoreForTests();
+    mockCanUseLiquidGlass.mockReset();
+  });
+
+  it('is true when liquid glass is unavailable (classic native header)', () => {
+    mockCanUseLiquidGlass.mockReturnValue(false);
+
+    const { result } = renderHook(() => useNativeIOSHeadersActive());
+
+    expect(result.current).toBe(true);
+  });
+
+  it('is false when liquid glass is available but the toggle is disabled', () => {
+    mockCanUseLiquidGlass.mockReturnValue(true);
+
+    const { result } = renderHook(() => useNativeIOSHeadersActive());
+
+    expect(result.current).toBe(false);
+  });
+
+  it('is true when liquid glass is available and the toggle is enabled', () => {
+    mockCanUseLiquidGlass.mockReturnValue(true);
+    useAppPreferencesStore.getState().setLiquidGlassTabBarEnabled(true);
+
+    const { result } = renderHook(() => useNativeIOSHeadersActive());
+
+    expect(result.current).toBe(true);
   });
 });

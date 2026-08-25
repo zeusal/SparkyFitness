@@ -2,10 +2,10 @@
 -- PostgreSQL database dump
 --
 
-\restrict dhGmLySjFGTRowxkdoNsugMJvJLlJnLFKqaQcs0DG614jCZILkcwuzPSKJ6l1bT
+\restrict SparkyFitnessSchemaBackup
 
 -- Dumped from database version 18.3
--- Dumped by pg_dump version 18.4 (Homebrew)
+-- Dumped by pg_dump version 18.3
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -157,6 +157,28 @@ $$;
 
 
 --
+-- Name: create_checkin_policy(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.create_checkin_policy(table_name text) RETURNS void
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  EXECUTE format('DROP POLICY IF EXISTS select_policy ON public.%I;', table_name);
+  EXECUTE format('DROP POLICY IF EXISTS modify_policy ON public.%I;', table_name);
+
+  EXECUTE format('
+    CREATE POLICY select_policy ON public.%I FOR SELECT TO PUBLIC
+    USING (has_checkin_read_access(user_id));
+    CREATE POLICY modify_policy ON public.%I FOR ALL TO PUBLIC
+    USING (authenticated_user_id() = user_id OR has_family_access(user_id, ''can_manage_checkin''))
+    WITH CHECK (authenticated_user_id() = user_id OR has_family_access(user_id, ''can_manage_checkin''));
+  ', table_name, table_name);
+END;
+$$;
+
+
+--
 -- Name: create_default_external_data_providers(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -179,9 +201,12 @@ CREATE FUNCTION public.create_diary_policy(table_name text) RETURNS void
     LANGUAGE plpgsql
     AS $$
 BEGIN
+  EXECUTE format('DROP POLICY IF EXISTS select_policy ON public.%I;', table_name);
+  EXECUTE format('DROP POLICY IF EXISTS modify_policy ON public.%I;', table_name);
+
   EXECUTE format('
     CREATE POLICY select_policy ON public.%I FOR SELECT TO PUBLIC
-    USING (has_diary_access(user_id));
+    USING (has_diary_read_access(user_id));
     CREATE POLICY modify_policy ON public.%I FOR ALL TO PUBLIC
     USING (has_diary_access(user_id))
     WITH CHECK (has_diary_access(user_id));
@@ -256,9 +281,31 @@ BEGIN
     CREATE POLICY select_policy ON public.%I FOR SELECT TO PUBLIC
     USING (has_library_access_with_public(user_id, %s, ARRAY[%s]));
     CREATE POLICY modify_policy ON public.%I FOR ALL TO PUBLIC
-    USING (current_user_id() = user_id)
-    WITH CHECK (current_user_id() = user_id);
+    USING (authenticated_user_id() = user_id)
+    WITH CHECK (authenticated_user_id() = user_id);
   ', table_name, shared_expression, quoted_permissions, table_name);
+END;
+$$;
+
+
+--
+-- Name: create_medication_policy(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.create_medication_policy(table_name text) RETURNS void
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  EXECUTE format('DROP POLICY IF EXISTS select_policy ON public.%I;', table_name);
+  EXECUTE format('DROP POLICY IF EXISTS modify_policy ON public.%I;', table_name);
+
+  EXECUTE format('
+    CREATE POLICY select_policy ON public.%I FOR SELECT TO PUBLIC
+    USING (has_medication_read_access(user_id));
+    CREATE POLICY modify_policy ON public.%I FOR ALL TO PUBLIC
+    USING (has_medication_access(user_id))
+    WITH CHECK (has_medication_access(user_id));
+  ', table_name, table_name);
 END;
 $$;
 
@@ -311,10 +358,44 @@ CREATE FUNCTION public.create_owner_policy(table_name text, id_column text DEFAU
     LANGUAGE plpgsql
     AS $$
 BEGIN
+  EXECUTE format('DROP POLICY IF EXISTS owner_policy ON public.%I;', table_name);
+  EXECUTE format('DROP POLICY IF EXISTS owner_select_policy ON public.%I;', table_name);
+  EXECUTE format('DROP POLICY IF EXISTS owner_modify_policy ON public.%I;', table_name);
+  EXECUTE format('DROP POLICY IF EXISTS select_policy ON public.%I;', table_name);
+  EXECUTE format('DROP POLICY IF EXISTS modify_policy ON public.%I;', table_name);
+
   EXECUTE format('
     CREATE POLICY owner_policy ON public.%I FOR ALL TO PUBLIC
-    USING (%I = current_user_id())
-    WITH CHECK (%I = current_user_id());
+    USING (%I = authenticated_user_id())
+    WITH CHECK (%I = authenticated_user_id());
+  ', table_name, id_column, id_column);
+END;
+$$;
+
+
+--
+-- Name: create_shared_owner_policy(text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.create_shared_owner_policy(table_name text, id_column text DEFAULT 'user_id'::text) RETURNS void
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  EXECUTE format('DROP POLICY IF EXISTS owner_policy ON public.%I;', table_name);
+  EXECUTE format('DROP POLICY IF EXISTS owner_select_policy ON public.%I;', table_name);
+  EXECUTE format('DROP POLICY IF EXISTS owner_modify_policy ON public.%I;', table_name);
+  EXECUTE format('DROP POLICY IF EXISTS select_policy ON public.%I;', table_name);
+  EXECUTE format('DROP POLICY IF EXISTS modify_policy ON public.%I;', table_name);
+
+  EXECUTE format('
+    CREATE POLICY select_policy ON public.%I FOR SELECT TO PUBLIC
+    USING (%I = current_user_id());
+  ', table_name, id_column);
+
+  EXECUTE format('
+    CREATE POLICY modify_policy ON public.%I FOR ALL TO PUBLIC
+    USING (%I = authenticated_user_id())
+    WITH CHECK (%I = authenticated_user_id());
   ', table_name, id_column, id_column);
 END;
 $$;
@@ -362,7 +443,7 @@ $$;
 CREATE FUNCTION public.current_user_id() RETURNS uuid
     LANGUAGE sql STABLE
     AS $$
-  SELECT (current_setting('app.user_id'::text))::uuid;
+  SELECT NULLIF(current_setting('app.user_id', true), '')::uuid;
 $$;
 
 
@@ -442,7 +523,8 @@ CREATE FUNCTION public.get_accessible_users(p_user_id uuid) RETURNS TABLE(user_i
       JOIN public."user" u ON u.id = fa.owner_user_id
       WHERE fa.family_user_id = p_user_id
         AND fa.is_active = true
-        AND (fa.access_end_date IS NULL OR fa.access_end_date > now());
+        AND (fa.access_end_date IS NULL OR fa.access_end_date > now())
+        AND has_any_meaningful_permission(fa.access_permissions);
     END;
     $$;
 
@@ -513,13 +595,78 @@ $$;
 
 
 --
+-- Name: has_any_meaningful_permission(jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.has_any_meaningful_permission(perms jsonb) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    AS $$
+  SELECT (
+    (perms->>'can_manage_diary')::boolean = true OR
+    (perms->>'can_manage_checkin')::boolean = true OR
+    (perms->>'can_view_reports')::boolean = true OR
+    (perms->>'can_manage_medications')::boolean = true
+  );
+$$;
+
+
+--
+-- Name: has_checkin_read_access(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.has_checkin_read_access(owner_uuid uuid) RETURNS boolean
+    LANGUAGE sql STABLE
+    AS $$
+  SELECT authenticated_user_id() = owner_uuid OR EXISTS (
+    SELECT 1 FROM public.family_access fa
+    WHERE fa.owner_user_id = owner_uuid
+    AND fa.family_user_id = authenticated_user_id()
+    AND fa.is_active = true
+    AND (fa.access_end_date IS NULL OR fa.access_end_date > now())
+    AND (
+      (fa.access_permissions->>'can_manage_checkin')::boolean = true OR
+      (fa.access_permissions->>'can_view_reports')::boolean = true
+    )
+  );
+$$;
+
+
+--
 -- Name: has_diary_access(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
 CREATE FUNCTION public.has_diary_access(owner_uuid uuid) RETURNS boolean
     LANGUAGE sql STABLE
     AS $$
-  SELECT authenticated_user_id() = owner_uuid OR has_family_access(owner_uuid, 'can_manage_diary');
+  SELECT authenticated_user_id() = owner_uuid OR EXISTS (
+    SELECT 1 FROM public.family_access fa
+    WHERE fa.owner_user_id = owner_uuid
+    AND fa.family_user_id = authenticated_user_id()
+    AND fa.is_active = true
+    AND (fa.access_end_date IS NULL OR fa.access_end_date > now())
+    AND (fa.access_permissions->>'can_manage_diary')::boolean = true
+  );
+$$;
+
+
+--
+-- Name: has_diary_read_access(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.has_diary_read_access(owner_uuid uuid) RETURNS boolean
+    LANGUAGE sql STABLE
+    AS $$
+  SELECT authenticated_user_id() = owner_uuid OR EXISTS (
+    SELECT 1 FROM public.family_access fa
+    WHERE fa.owner_user_id = owner_uuid
+    AND fa.family_user_id = authenticated_user_id()
+    AND fa.is_active = true
+    AND (fa.access_end_date IS NULL OR fa.access_end_date > now())
+    AND (
+      (fa.access_permissions->>'can_manage_diary')::boolean = true OR
+      (fa.access_permissions->>'can_view_reports')::boolean = true
+    )
+  );
 $$;
 
 
@@ -569,7 +716,86 @@ $$;
 CREATE FUNCTION public.has_library_access_with_public(owner_uuid uuid, is_shared boolean, perms text[]) RETURNS boolean
     LANGUAGE sql STABLE
     AS $$
-  SELECT authenticated_user_id() = owner_uuid OR is_shared OR has_family_access_or(owner_uuid, perms);
+  SELECT authenticated_user_id() = owner_uuid 
+      OR is_shared 
+      OR EXISTS (
+        SELECT 1 FROM public.family_access fa
+        WHERE fa.owner_user_id = owner_uuid
+        AND fa.family_user_id = authenticated_user_id()
+        AND fa.is_active = true
+        AND (fa.access_end_date IS NULL OR fa.access_end_date > now())
+        AND (
+          (fa.access_permissions->>'can_view_reports')::boolean = true OR
+          EXISTS (
+            SELECT 1 FROM unnest(perms) p
+            WHERE (fa.access_permissions ->> p)::boolean = true
+            AND (
+              p <> 'can_manage_diary'
+              OR current_user_id() = owner_uuid
+            )
+          )
+        )
+      );
+$$;
+
+
+--
+-- Name: has_medication_access(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.has_medication_access(owner_uuid uuid) RETURNS boolean
+    LANGUAGE sql STABLE
+    AS $$
+  SELECT authenticated_user_id() = owner_uuid OR EXISTS (
+    SELECT 1 FROM public.family_access fa
+    WHERE fa.owner_user_id = owner_uuid
+    AND fa.family_user_id = authenticated_user_id()
+    AND fa.is_active = true
+    AND (fa.access_end_date IS NULL OR fa.access_end_date > now())
+    AND (fa.access_permissions->>'can_manage_medications')::boolean = true
+  );
+$$;
+
+
+--
+-- Name: has_medication_read_access(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.has_medication_read_access(owner_uuid uuid) RETURNS boolean
+    LANGUAGE sql STABLE
+    AS $$
+  SELECT authenticated_user_id() = owner_uuid OR EXISTS (
+    SELECT 1 FROM public.family_access fa
+    WHERE fa.owner_user_id = owner_uuid
+    AND fa.family_user_id = authenticated_user_id()
+    AND fa.is_active = true
+    AND (fa.access_end_date IS NULL OR fa.access_end_date > now())
+    AND (
+      (fa.access_permissions->>'can_manage_medications')::boolean = true OR
+      (fa.access_permissions->>'can_view_reports')::boolean = true
+    )
+  );
+$$;
+
+
+--
+-- Name: has_profile_read_access(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.has_profile_read_access(owner_uuid uuid) RETURNS boolean
+    LANGUAGE sql STABLE
+    AS $$
+  -- Owner always has access. Family delegates require at least one meaningful permission
+  -- (diary, checkin, medications, or reports) to read profile/layout/onboarding data.
+  -- A bare family_access row with no permissions does not grant read access.
+  SELECT authenticated_user_id() = owner_uuid OR EXISTS (
+    SELECT 1 FROM public.family_access fa
+    WHERE fa.owner_user_id = owner_uuid
+    AND fa.family_user_id = authenticated_user_id()
+    AND fa.is_active = true
+    AND (fa.access_end_date IS NULL OR fa.access_end_date > now())
+    AND has_any_meaningful_permission(fa.access_permissions)
+  );
 $$;
 
 
@@ -756,6 +982,24 @@ $$;
 
 
 --
+-- Name: sf_try_numeric(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.sf_try_numeric(txt text) RETURNS numeric
+    LANGUAGE sql IMMUTABLE
+    AS $_$
+-- The regex alone is not enough: it accepts values like '1e1000000' whose ::numeric
+-- cast raises out-of-range, which would error the whole report this helper exists to
+-- protect. Bound the exponent so the cast can never overflow.
+SELECT CASE
+    WHEN txt ~ '^[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]{1,4})?$'
+     AND length(txt) <= 64 THEN txt::numeric
+    ELSE NULL
+END;
+$_$;
+
+
+--
 -- Name: trigger_set_timestamp(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -903,7 +1147,7 @@ CREATE TABLE public.ai_service_settings (
     encrypted_api_key text,
     api_key_iv text,
     api_key_tag text,
-    is_public boolean DEFAULT false NOT NULL,
+    is_public boolean DEFAULT false CONSTRAINT ai_service_settings_is_global_not_null NOT NULL,
     chat_tool_profile text DEFAULT 'full'::text NOT NULL,
     CONSTRAINT ai_service_settings_chat_tool_profile_check CHECK ((chat_tool_profile = ANY (ARRAY['full'::text, 'core'::text]))),
     CONSTRAINT check_public_settings_user_id_null CHECK ((((is_public = true) AND (user_id IS NULL)) OR ((is_public = false) AND (user_id IS NOT NULL))))
@@ -918,7 +1162,7 @@ CREATE TABLE public.api_key (
     id text NOT NULL,
     name text,
     key text NOT NULL,
-    reference_id uuid NOT NULL,
+    reference_id uuid CONSTRAINT api_key_user_id_not_null NOT NULL,
     metadata text,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
@@ -1017,7 +1261,10 @@ CREATE TABLE public.check_in_measurements (
     height numeric,
     body_fat_percentage numeric,
     created_by_user_id uuid,
-    updated_by_user_id uuid
+    updated_by_user_id uuid,
+    muscle_mass_kg numeric(5,2),
+    bone_mass_kg numeric(5,2),
+    body_water_percentage numeric(5,2)
 );
 
 
@@ -1087,6 +1334,146 @@ CREATE TABLE public.custom_measurements (
 
 
 --
+-- Name: cycle_daily_entries; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.cycle_daily_entries (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    entry_date date NOT NULL,
+    flow_level character varying(20),
+    product_usage jsonb DEFAULT '{}'::jsonb NOT NULL,
+    cervical_mucus character varying(20),
+    unusual_discharge text[] DEFAULT '{}'::text[] NOT NULL,
+    energy smallint,
+    libido smallint,
+    notes text,
+    custom_fields jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    intercourse boolean,
+    intercourse_protected boolean,
+    cervical_position character varying(30)
+);
+
+
+--
+-- Name: cycle_settings; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.cycle_settings (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    enabled boolean DEFAULT true NOT NULL,
+    mode character varying(20) DEFAULT 'standard'::character varying NOT NULL,
+    avg_cycle_length_override smallint,
+    avg_period_length_override smallint,
+    luteal_phase_length smallint DEFAULT 14 NOT NULL,
+    birth_control_method character varying(20) DEFAULT 'none'::character varying NOT NULL,
+    conditions text[] DEFAULT '{}'::text[] NOT NULL,
+    show_fertile_window boolean DEFAULT true NOT NULL,
+    preferred_products text[] DEFAULT '{pad,tampon}'::text[] NOT NULL,
+    dismissed_prompts text[] DEFAULT '{}'::text[] NOT NULL,
+    terminology character varying(20) DEFAULT 'default'::character varying NOT NULL,
+    discreet_mode boolean DEFAULT false NOT NULL,
+    onboarded_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: cycle_test_entries; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.cycle_test_entries (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    entry_date date NOT NULL,
+    tested_at timestamp with time zone DEFAULT now() NOT NULL,
+    test_type character varying(10) NOT NULL,
+    result character varying(10) NOT NULL,
+    notes text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: cycles; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.cycles (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    start_date date NOT NULL,
+    end_date date,
+    period_length smallint,
+    cycle_length smallint,
+    is_excluded boolean DEFAULT false NOT NULL,
+    source character varying(20) DEFAULT 'derived'::character varying NOT NULL,
+    birth_control_method character varying(20),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: daily_health_metrics; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.daily_health_metrics (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    entry_date date NOT NULL,
+    source_provider text NOT NULL,
+    device_name text,
+    total_steps integer,
+    step_goal integer,
+    total_distance_meters numeric(10,2),
+    floors_ascended integer,
+    floors_descended integer,
+    active_calories numeric(8,2),
+    bmr_calories numeric(8,2),
+    total_calories numeric(8,2),
+    highly_active_seconds integer,
+    active_seconds integer,
+    sedentary_seconds integer,
+    moderate_intensity_minutes integer,
+    vigorous_intensity_minutes integer,
+    exercise_minutes integer,
+    stand_hours integer,
+    resting_heart_rate integer,
+    heart_rate_recovery_1min integer,
+    vo2_max numeric(4,1),
+    fitness_age numeric(4,1),
+    lactate_threshold_bpm integer,
+    lactate_threshold_speed_mps numeric(6,2),
+    walking_asymmetry_percentage numeric(5,2),
+    hill_score integer,
+    race_prediction_5k_seconds integer,
+    race_prediction_10k_seconds integer,
+    race_prediction_half_marathon_seconds integer,
+    race_prediction_marathon_seconds integer,
+    recovery_time_hours integer,
+    training_readiness_score integer,
+    endurance_score integer,
+    weekly_training_load numeric(7,2),
+    acute_training_load numeric(7,2),
+    chronic_training_load numeric(7,2),
+    acwr_ratio numeric(4,2),
+    avg_stress_level integer,
+    max_stress_level integer,
+    body_battery_charged integer,
+    body_battery_drained integer,
+    body_battery_highest integer,
+    body_battery_lowest integer,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
+);
+
+
+--
 -- Name: daily_sleep_need; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1127,7 +1514,7 @@ CREATE TABLE public.day_classification_cache (
     variance_minutes numeric(6,2),
     sample_count integer,
     last_updated timestamp with time zone DEFAULT now(),
-    CONSTRAINT day_classification_cache_classified_as_check CHECK (((classified_as)::text = ANY (ARRAY[('workday'::character varying)::text, ('freeday'::character varying)::text]))),
+    CONSTRAINT day_classification_cache_classified_as_check CHECK (((classified_as)::text = ANY ((ARRAY['workday'::character varying, 'freeday'::character varying])::text[]))),
     CONSTRAINT day_classification_cache_day_of_week_check CHECK (((day_of_week >= 0) AND (day_of_week <= 6)))
 );
 
@@ -1178,11 +1565,55 @@ CREATE TABLE public.exercise_entries (
     instructions text,
     images text,
     distance numeric,
-    avg_heart_rate integer,
+    avg_heart_rate numeric,
     exercise_preset_entry_id uuid,
     sort_order integer DEFAULT 0,
     steps integer,
-    water_estimated integer
+    water_estimated integer,
+    superset_group integer,
+    entry_time time without time zone,
+    modality text,
+    max_heart_rate numeric,
+    heart_rate_recovery_1min integer,
+    avg_respiration_brpm numeric(5,2),
+    max_respiration_brpm numeric(5,2),
+    avg_speed_mps numeric(6,2),
+    max_speed_mps numeric(6,2),
+    avg_cadence numeric,
+    max_cadence numeric,
+    avg_power_watts numeric(6,2),
+    max_power_watts numeric(6,2),
+    normalized_power_watts numeric(6,2),
+    tss_score numeric(6,2),
+    intensity_factor numeric(4,3),
+    ground_contact_time_ms numeric(5,1),
+    vertical_oscillation_mm numeric(5,1),
+    stride_length_cm numeric(5,1),
+    avg_temperature_celsius numeric(4,1),
+    max_temperature_celsius numeric(4,1),
+    elevation_gain_meters numeric(7,2),
+    elevation_loss_meters numeric(7,2),
+    floors_climbed numeric,
+    stroke_count integer,
+    training_load numeric(6,2),
+    aerobic_training_effect numeric(3,1),
+    anaerobic_training_effect numeric(3,1),
+    vo2_max_estimate numeric(4,1),
+    moving_time_seconds integer,
+    elapsed_time_seconds integer,
+    work_time_seconds integer,
+    resting_calories numeric(8,2),
+    active_calories numeric(8,2),
+    avg_moving_speed_mps numeric(6,2),
+    min_elevation_meters numeric(7,2),
+    max_elevation_meters numeric(7,2),
+    weather_temp_celsius numeric(4,1),
+    weather_condition text,
+    weather_wind_speed_mps numeric(5,2),
+    weather_humidity_percentage numeric(5,2),
+    gear_name text,
+    gear_external_id text,
+    CONSTRAINT exercise_entries_modality_check CHECK ((modality = ANY (ARRAY['weight_reps'::text, 'reps_only'::text, 'duration'::text, 'duration_distance'::text])))
 );
 
 
@@ -1191,6 +1622,20 @@ CREATE TABLE public.exercise_entries (
 --
 
 COMMENT ON COLUMN public.exercise_entries.steps IS 'Number of steps recorded during this activity, sourced from Garmin or other providers.';
+
+
+--
+-- Name: COLUMN exercise_entries.superset_group; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.exercise_entries.superset_group IS 'Client-assigned superset group key, scoped to the parent exercise_preset_entry. NULL = not in a superset. Members share the value and are kept adjacent via sort_order.';
+
+
+--
+-- Name: COLUMN exercise_entries.entry_time; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.exercise_entries.entry_time IS 'Optional wall-clock local start time of the exercise session (no timezone). NULL = not recorded.';
 
 
 --
@@ -1213,6 +1658,69 @@ CREATE TABLE public.exercise_entry_activity_details (
 
 
 --
+-- Name: exercise_entry_gps_points; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.exercise_entry_gps_points (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    exercise_entry_id uuid NOT NULL,
+    entry_date date NOT NULL,
+    points jsonb DEFAULT '[]'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
+);
+
+
+--
+-- Name: exercise_entry_hr_zones; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.exercise_entry_hr_zones (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    exercise_entry_id uuid NOT NULL,
+    entry_date date NOT NULL,
+    zone_index integer NOT NULL,
+    zone_lower_bpm integer,
+    zone_upper_bpm integer,
+    seconds_in_zone integer NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
+);
+
+
+--
+-- Name: exercise_entry_laps; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.exercise_entry_laps (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    exercise_entry_id uuid NOT NULL,
+    entry_date date NOT NULL,
+    lap_index integer NOT NULL,
+    start_time timestamp with time zone NOT NULL,
+    end_time timestamp with time zone NOT NULL,
+    duration_seconds integer NOT NULL,
+    distance_meters numeric(10,2),
+    calories numeric(8,2),
+    avg_heart_rate numeric,
+    max_heart_rate numeric,
+    avg_respiration_brpm numeric(5,2),
+    max_respiration_brpm numeric(5,2),
+    avg_speed_mps numeric(6,2),
+    max_speed_mps numeric(6,2),
+    avg_cadence numeric,
+    avg_power_watts numeric(6,2),
+    elevation_gain_meters numeric(7,2),
+    elevation_loss_meters numeric(7,2),
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
+);
+
+
+--
 -- Name: exercise_entry_sets; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1228,7 +1736,10 @@ CREATE TABLE public.exercise_entry_sets (
     notes text,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
-    rpe numeric(3,1)
+    rpe numeric(3,1),
+    completed_at timestamp with time zone,
+    is_pr boolean DEFAULT false NOT NULL,
+    distance numeric
 );
 
 
@@ -1237,6 +1748,20 @@ CREATE TABLE public.exercise_entry_sets (
 --
 
 COMMENT ON COLUMN public.exercise_entry_sets.rpe IS 'Rate of Perceived Exertion (usually 1-10 scale)';
+
+
+--
+-- Name: COLUMN exercise_entry_sets.completed_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.exercise_entry_sets.completed_at IS 'Client-recorded moment the set was checked off during a live workout. NULL = not completed.';
+
+
+--
+-- Name: COLUMN exercise_entry_sets.is_pr; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.exercise_entry_sets.is_pr IS 'Whether this set was a personal record (heavier than the prior best weight, or more reps at the top weight) when checked off during a live workout. Warmup sets never earn PRs.';
 
 
 --
@@ -1304,7 +1829,9 @@ CREATE TABLE public.exercises (
     secondary_muscles text,
     instructions text,
     images text,
-    is_quick_exercise boolean DEFAULT false
+    is_quick_exercise boolean DEFAULT false,
+    modality text DEFAULT 'weight_reps'::text NOT NULL,
+    CONSTRAINT exercises_modality_check CHECK ((modality = ANY (ARRAY['weight_reps'::text, 'reps_only'::text, 'duration'::text, 'duration_distance'::text])))
 );
 
 
@@ -1313,10 +1840,10 @@ CREATE TABLE public.exercises (
 --
 
 CREATE TABLE public.external_data_providers (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    user_id uuid,
-    provider_name text NOT NULL,
-    provider_type text NOT NULL,
+    id uuid DEFAULT gen_random_uuid() CONSTRAINT food_data_providers_id_not_null NOT NULL,
+    user_id uuid CONSTRAINT food_data_providers_user_id_not_null NOT NULL,
+    provider_name text CONSTRAINT food_data_providers_provider_name_not_null NOT NULL,
+    provider_type text CONSTRAINT food_data_providers_provider_type_not_null NOT NULL,
     app_id text,
     app_key text,
     is_active boolean DEFAULT false,
@@ -1415,7 +1942,7 @@ CREATE TABLE public.fasting_logs (
     status character varying(20),
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now(),
-    CONSTRAINT fasting_logs_status_check CHECK (((status)::text = ANY (ARRAY[('ACTIVE'::character varying)::text, ('COMPLETED'::character varying)::text, ('CANCELLED'::character varying)::text])))
+    CONSTRAINT fasting_logs_status_check CHECK (((status)::text = ANY ((ARRAY['ACTIVE'::character varying, 'COMPLETED'::character varying, 'CANCELLED'::character varying])::text[])))
 );
 
 
@@ -1465,7 +1992,11 @@ CREATE TABLE public.food_entries (
     traces text[],
     source character varying(50),
     source_id character varying(255),
-    CONSTRAINT chk_food_or_meal_id CHECK ((((food_id IS NOT NULL) AND (meal_id IS NULL)) OR ((food_id IS NULL) AND (meal_id IS NOT NULL))))
+    entry_time time without time zone,
+    images jsonb DEFAULT '[]'::jsonb NOT NULL,
+    CONSTRAINT chk_food_or_meal_id CHECK ((((food_id IS NOT NULL) AND (meal_id IS NULL)) OR ((food_id IS NULL) AND (meal_id IS NOT NULL)))),
+    CONSTRAINT food_entries_images_is_array CHECK ((jsonb_typeof(images) = 'array'::text)),
+    CONSTRAINT food_entries_serving_size_positive CHECK ((serving_size > (0)::numeric))
 );
 
 
@@ -1481,6 +2012,13 @@ COMMENT ON COLUMN public.food_entries.source IS 'Provider that produced this ent
 --
 
 COMMENT ON COLUMN public.food_entries.source_id IS 'Provider-stable record id for idempotent re-sync. NULL for manual/web entries.';
+
+
+--
+-- Name: COLUMN food_entries.entry_time; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.food_entries.entry_time IS 'Optional wall-clock local time of day the food was eaten (no timezone). NULL = not recorded.';
 
 
 --
@@ -1501,7 +2039,10 @@ CREATE TABLE public.food_entry_meals (
     quantity numeric DEFAULT 1.0 NOT NULL,
     unit text DEFAULT 'serving'::text,
     meal_type_id uuid NOT NULL,
-    legacy_serving_unit_math boolean DEFAULT false NOT NULL
+    legacy_serving_unit_math boolean DEFAULT false NOT NULL,
+    entry_time time without time zone,
+    images jsonb DEFAULT '[]'::jsonb NOT NULL,
+    CONSTRAINT food_entry_meals_images_is_array CHECK ((jsonb_typeof(images) = 'array'::text))
 );
 
 
@@ -1524,6 +2065,27 @@ COMMENT ON COLUMN public.food_entry_meals.unit IS 'Unit of measurement for the c
 --
 
 COMMENT ON COLUMN public.food_entry_meals.legacy_serving_unit_math IS 'TRUE for diary entries logged before the serving-model migration where unit=''serving'' had special-case multiplier semantics. Read by foodEntryService recompute/unscale paths.';
+
+
+--
+-- Name: COLUMN food_entry_meals.entry_time; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.food_entry_meals.entry_time IS 'Optional wall-clock local time of day the logged meal was eaten (no timezone). NULL = not recorded.';
+
+
+--
+-- Name: food_favorites; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.food_favorites (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    food_id uuid,
+    meal_id uuid,
+    created_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT food_favorites_one_target CHECK ((((food_id IS NOT NULL) AND (meal_id IS NULL)) OR ((food_id IS NULL) AND (meal_id IS NOT NULL))))
+);
 
 
 --
@@ -1563,6 +2125,7 @@ CREATE TABLE public.food_variants (
     traces text[],
     CONSTRAINT food_variants_ai_confidence_check CHECK (((ai_confidence = ANY (ARRAY['high'::text, 'medium'::text, 'low'::text])) OR (ai_confidence IS NULL))),
     CONSTRAINT food_variants_glycemic_index_check CHECK ((glycemic_index = ANY (ARRAY['None'::text, 'Very Low'::text, 'Low'::text, 'Medium'::text, 'High'::text, 'Very High'::text]))),
+    CONSTRAINT food_variants_serving_size_positive CHECK ((serving_size > (0)::numeric)),
     CONSTRAINT food_variants_source_check CHECK ((source = ANY (ARRAY['manual'::text, 'ai_estimate'::text, 'imported'::text])))
 );
 
@@ -1583,7 +2146,10 @@ CREATE TABLE public.foods (
     updated_at timestamp with time zone DEFAULT now(),
     shared_with_public boolean DEFAULT false,
     provider_type text,
-    is_quick_food boolean DEFAULT false NOT NULL
+    is_quick_food boolean DEFAULT false NOT NULL,
+    provider_verified boolean DEFAULT false NOT NULL,
+    images jsonb DEFAULT '[]'::jsonb NOT NULL,
+    CONSTRAINT foods_images_is_array CHECK ((jsonb_typeof(images) = 'array'::text))
 );
 
 
@@ -1598,6 +2164,7 @@ CREATE TABLE public.global_settings (
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
     mfa_mandatory boolean DEFAULT false,
     allow_user_ai_config boolean DEFAULT true NOT NULL,
+    default_vision_ai_service_id uuid,
     CONSTRAINT single_row_check CHECK ((id = 1))
 );
 
@@ -1645,6 +2212,43 @@ CREATE TABLE public.goal_presets (
 
 
 --
+-- Name: health_appointments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.health_appointments (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    pregnancy_id uuid,
+    scheduled_at timestamp with time zone NOT NULL,
+    appointment_type character varying(50) DEFAULT 'other'::character varying NOT NULL,
+    title text,
+    location text,
+    notes text,
+    outcome jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: health_metric_samples; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.health_metric_samples (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    metric text NOT NULL,
+    entry_date date NOT NULL,
+    source_provider text NOT NULL,
+    device_name text,
+    samples jsonb DEFAULT '[]'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT chk_health_metric_samples_metric CHECK ((metric = ANY (ARRAY['heart_rate'::text, 'hrv'::text, 'respiration'::text, 'spo2'::text, 'stress'::text, 'body_battery'::text])))
+);
+
+
+--
 -- Name: injection_entries; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1672,7 +2276,7 @@ CREATE TABLE public.injection_entries (
 CREATE TABLE public.meal_foods (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     meal_id uuid NOT NULL,
-    food_id uuid NOT NULL,
+    food_id uuid,
     variant_id uuid,
     quantity numeric NOT NULL,
     unit character varying(50) NOT NULL,
@@ -1698,7 +2302,10 @@ CREATE TABLE public.meal_foods (
     calcium numeric,
     iron numeric,
     glycemic_index text,
-    custom_nutrients jsonb
+    custom_nutrients jsonb,
+    child_meal_id uuid,
+    item_type character varying(50) DEFAULT 'food'::character varying NOT NULL,
+    CONSTRAINT chk_meal_foods_item_type CHECK (((((item_type)::text = 'food'::text) AND (food_id IS NOT NULL) AND (child_meal_id IS NULL)) OR (((item_type)::text = 'meal'::text) AND (food_id IS NULL))))
 );
 
 
@@ -1772,8 +2379,16 @@ CREATE TABLE public.meal_types (
     sort_order integer DEFAULT 0,
     created_at timestamp with time zone DEFAULT now(),
     is_visible boolean DEFAULT true NOT NULL,
-    show_in_quick_log boolean DEFAULT true
+    show_in_quick_log boolean DEFAULT true,
+    default_time time without time zone
 );
+
+
+--
+-- Name: COLUMN meal_types.default_time; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.meal_types.default_time IS 'Base default time of day for this meal slot, used to prefill diary entry times. For system meal types this is a global base; per-user values live in user_meal_visibilities.default_time.';
 
 
 --
@@ -1791,7 +2406,9 @@ CREATE TABLE public.meals (
     shared_with_public boolean DEFAULT false,
     serving_size numeric DEFAULT 1.0 NOT NULL,
     serving_unit text DEFAULT 'serving'::text NOT NULL,
-    total_servings numeric DEFAULT 1.0 NOT NULL
+    total_servings numeric DEFAULT 1.0 NOT NULL,
+    images jsonb DEFAULT '[]'::jsonb NOT NULL,
+    CONSTRAINT meals_images_is_array CHECK ((jsonb_typeof(images) = 'array'::text))
 );
 
 
@@ -1836,8 +2453,17 @@ CREATE TABLE public.medication_entries (
     source character varying(50) DEFAULT 'manual'::character varying NOT NULL,
     custom_fields jsonb DEFAULT '{}'::jsonb NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    nutrients_snapshot jsonb,
+    CONSTRAINT medication_entries_nutrients_snapshot_is_object CHECK (((nutrients_snapshot IS NULL) OR (jsonb_typeof(nutrients_snapshot) = 'object'::text)))
 );
+
+
+--
+-- Name: COLUMN medication_entries.nutrients_snapshot; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.medication_entries.nutrients_snapshot IS 'Per-dose nutrient payload snapshotted at log time so daily nutrient history is immutable and independent of later edits to the medication. NULL for non-supplement entries (e.g. GLP-1 injections).';
 
 
 --
@@ -1993,8 +2619,18 @@ CREATE TABLE public.medications (
     source character varying(50) DEFAULT 'manual'::character varying NOT NULL,
     custom_fields jsonb DEFAULT '{}'::jsonb NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    is_supplement boolean DEFAULT false NOT NULL,
+    nutrients jsonb DEFAULT '{}'::jsonb NOT NULL,
+    CONSTRAINT medications_nutrients_is_object CHECK ((jsonb_typeof(nutrients) = 'object'::text))
 );
+
+
+--
+-- Name: COLUMN medications.nutrients; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.medications.nutrients IS 'Fixed-key and custom nutrient amounts per one dose; custom nutrients are stored under custom_nutrients.';
 
 
 --
@@ -2010,7 +2646,8 @@ CREATE TABLE public.mood_entries (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     created_by_user_id uuid,
-    updated_by_user_id uuid
+    updated_by_user_id uuid,
+    mood_tags text[] DEFAULT '{}'::text[] NOT NULL
 );
 
 
@@ -2092,7 +2729,8 @@ CREATE TABLE public.onboarding_status (
     full_name text,
     onboarding_complete boolean DEFAULT false NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
-    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    onboarding_skipped boolean DEFAULT false NOT NULL
 );
 
 
@@ -2112,6 +2750,112 @@ CREATE TABLE public.passkey (
     transports text,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
     aaguid text
+);
+
+
+--
+-- Name: passkey_registration_tickets; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.passkey_registration_tickets (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    ticket_hash text NOT NULL,
+    user_id uuid NOT NULL,
+    session_token text NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    used_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: pregnancies; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.pregnancies (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    due_date date NOT NULL,
+    due_date_basis character varying(20) DEFAULT 'lmp'::character varying NOT NULL,
+    lmp_date date,
+    conception_date date,
+    fetus_count smallint DEFAULT 1 NOT NULL,
+    status character varying(20) DEFAULT 'active'::character varying NOT NULL,
+    ended_on date,
+    outcome character varying(30),
+    prenatal_medication_id uuid,
+    supplement_medication_id uuid,
+    notes text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: pregnancy_checklist_state; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.pregnancy_checklist_state (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    pregnancy_id uuid NOT NULL,
+    template_key text,
+    custom_title text,
+    week smallint DEFAULT 0 NOT NULL,
+    completed_at timestamp with time zone,
+    dismissed boolean DEFAULT false NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: pregnancy_contractions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.pregnancy_contractions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    pregnancy_id uuid NOT NULL,
+    started_at timestamp with time zone DEFAULT now() NOT NULL,
+    ended_at timestamp with time zone,
+    intensity smallint,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: pregnancy_kick_sessions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.pregnancy_kick_sessions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    pregnancy_id uuid NOT NULL,
+    started_at timestamp with time zone DEFAULT now() NOT NULL,
+    ended_at timestamp with time zone,
+    kick_count smallint DEFAULT 0 NOT NULL,
+    kick_times timestamp with time zone[] DEFAULT '{}'::timestamp with time zone[] NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: pregnancy_photos; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.pregnancy_photos (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    pregnancy_id uuid NOT NULL,
+    week smallint NOT NULL,
+    entry_date date DEFAULT CURRENT_DATE NOT NULL,
+    file_path text NOT NULL,
+    notes text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -2253,8 +2997,24 @@ CREATE TABLE public.sleep_entries (
     body_battery_change numeric,
     resting_heart_rate numeric,
     created_by_user_id uuid,
-    updated_by_user_id uuid
+    updated_by_user_id uuid,
+    record_timezone text,
+    record_utc_offset_minutes integer
 );
+
+
+--
+-- Name: COLUMN sleep_entries.record_timezone; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.sleep_entries.record_timezone IS 'IANA timezone the entry was recorded in (e.g. America/New_York). NULL when the source provided no zone; read paths fall back to record_utc_offset_minutes, then the profile timezone.';
+
+
+--
+-- Name: COLUMN sleep_entries.record_utc_offset_minutes; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.sleep_entries.record_utc_offset_minutes IS 'UTC offset in minutes at recording time (e.g. -300). Used when record_timezone is absent; NULL when the source provided no zone information.';
 
 
 --
@@ -2451,6 +3211,22 @@ CREATE TABLE public.user_allergen_preferences (
 
 
 --
+-- Name: user_custom_moods; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_custom_moods (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    name text NOT NULL,
+    display_name text,
+    icon character varying(40),
+    color character varying(20),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: user_custom_nutrients; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2460,7 +3236,8 @@ CREATE TABLE public.user_custom_nutrients (
     name text NOT NULL,
     unit text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    aliases jsonb DEFAULT '[]'::jsonb NOT NULL
 );
 
 
@@ -2489,6 +3266,21 @@ CREATE TABLE public.user_custom_symptoms (
     scale_type character varying(20) DEFAULT '1-10'::character varying NOT NULL,
     unit character varying(20),
     is_glp1_flagged boolean DEFAULT false NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: user_cycle_display_preferences; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_cycle_display_preferences (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    view_group character varying(255) NOT NULL,
+    platform character varying(50) DEFAULT 'web'::character varying NOT NULL,
+    visible_items jsonb DEFAULT '[]'::jsonb NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -2571,8 +3363,16 @@ CREATE TABLE public.user_meal_visibilities (
     meal_type_id uuid NOT NULL,
     is_visible boolean DEFAULT true,
     created_at timestamp with time zone DEFAULT now(),
-    show_in_quick_log boolean DEFAULT true
+    show_in_quick_log boolean DEFAULT true,
+    default_time time without time zone
 );
+
+
+--
+-- Name: COLUMN user_meal_visibilities.default_time; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.user_meal_visibilities.default_time IS 'Per-user override of meal_types.default_time (same pattern as is_visible/show_in_quick_log).';
 
 
 --
@@ -2585,6 +3385,20 @@ CREATE TABLE public.user_medication_display_preferences (
     view_group character varying(255) NOT NULL,
     platform character varying(50) DEFAULT 'web'::character varying NOT NULL,
     visible_items jsonb DEFAULT '[]'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: user_mood_display_preferences; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_mood_display_preferences (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    platform character varying(50) DEFAULT 'web'::character varying NOT NULL,
+    hidden_moods text[] DEFAULT '{}'::text[] NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -2623,6 +3437,24 @@ CREATE SEQUENCE public.user_nutrient_display_preferences_id_seq
 --
 
 ALTER SEQUENCE public.user_nutrient_display_preferences_id_seq OWNED BY public.user_nutrient_display_preferences.id;
+
+
+--
+-- Name: user_nutrient_goal_preferences; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_nutrient_goal_preferences (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    nutrient_key text NOT NULL,
+    goal_type text NOT NULL,
+    target_min numeric,
+    target_max numeric,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT user_nutrient_goal_preferences_goal_type_check CHECK ((goal_type = ANY (ARRAY['minimum'::text, 'maximum'::text, 'target'::text]))),
+    CONSTRAINT user_nutrient_goal_preferences_target_band CHECK (((goal_type <> 'target'::text) OR ((target_min IS NOT NULL) AND (target_max IS NOT NULL) AND (target_min <= target_max))))
+);
 
 
 --
@@ -2671,12 +3503,11 @@ CREATE TABLE public.user_preferences (
     default_measurement_unit text DEFAULT 'cm'::text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    system_prompt text DEFAULT 'You are Sparky, a helpful AI assistant for health and fitness tracking. Be friendly, encouraging, and provide accurate information about nutrition, exercise, and wellness.'::text,
     auto_clear_history text DEFAULT 'never'::text,
     logging_level text DEFAULT 'ERROR'::text,
     timezone text,
     default_food_data_provider_id uuid,
-    item_display_limit integer DEFAULT 10 NOT NULL,
+    item_display_limit integer DEFAULT 10 CONSTRAINT user_preferences_food_display_limit_not_null NOT NULL,
     water_display_unit character varying(50) DEFAULT 'ml'::character varying,
     bmr_algorithm text DEFAULT 'Mifflin-St Jeor'::text NOT NULL,
     body_fat_algorithm text DEFAULT 'U.S. Navy'::text NOT NULL,
@@ -2699,15 +3530,23 @@ CREATE TABLE public.user_preferences (
     barcode_fallback_open_food_facts boolean DEFAULT true,
     show_net_carbs boolean DEFAULT false NOT NULL,
     ai_assisted_conversions boolean DEFAULT true NOT NULL,
+    use_external_bmr boolean DEFAULT false NOT NULL,
     goal_mode character varying(50) DEFAULT 'maintain'::character varying NOT NULL,
     goal_mode_calculation_method character varying(50) DEFAULT 'manual'::character varying NOT NULL,
     goal_mode_custom_percentage integer DEFAULT 0 NOT NULL,
-    use_external_bmr boolean DEFAULT false NOT NULL,
     active_ai_service_id uuid,
     add_exercise_water_to_goal boolean DEFAULT false NOT NULL,
     measurement_decimal_places integer DEFAULT 0 NOT NULL,
-    CONSTRAINT check_energy_unit CHECK (((energy_unit)::text = ANY (ARRAY[('kcal'::character varying)::text, ('kJ'::character varying)::text]))),
+    active_vision_ai_service_id uuid,
+    added_sugar_algorithm text DEFAULT 'WHO_IDEAL'::text NOT NULL,
+    time_format text DEFAULT 'h:mm A'::text NOT NULL,
+    calorie_safety_floor_mode text DEFAULT 'standard'::text NOT NULL,
+    calorie_safety_floor_value integer DEFAULT 1200 NOT NULL,
+    CONSTRAINT check_energy_unit CHECK (((energy_unit)::text = ANY ((ARRAY['kcal'::character varying, 'kJ'::character varying])::text[]))),
     CONSTRAINT logging_level_check CHECK ((logging_level = ANY (ARRAY['DEBUG'::text, 'INFO'::text, 'WARN'::text, 'ERROR'::text, 'SILENT'::text]))),
+    CONSTRAINT user_preferences_calorie_safety_floor_mode_check CHECK ((calorie_safety_floor_mode = ANY (ARRAY['standard'::text, 'custom'::text, 'disabled'::text]))),
+    CONSTRAINT user_preferences_calorie_safety_floor_value_check CHECK (((calorie_safety_floor_value >= 800) AND (calorie_safety_floor_value <= 5000))),
+    CONSTRAINT user_preferences_time_format_check CHECK ((time_format = ANY (ARRAY['HH:mm'::text, 'h:mm A'::text, 'h:mm a'::text]))),
     CONSTRAINT user_preferences_timezone_not_empty CHECK (((timezone IS NULL) OR (timezone <> ''::text)))
 );
 
@@ -2731,6 +3570,20 @@ COMMENT ON COLUMN public.user_preferences.auto_scale_online_imports IS 'When ena
 --
 
 COMMENT ON COLUMN public.user_preferences.first_day_of_week IS 'Start day of the week: 0 for Sunday (USA standard), 1 for Monday (ISO 8601).';
+
+
+--
+-- Name: COLUMN user_preferences.calorie_safety_floor_mode; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.user_preferences.calorie_safety_floor_mode IS 'Controls adaptive calorie target clamping: standard, custom, or disabled.';
+
+
+--
+-- Name: COLUMN user_preferences.calorie_safety_floor_value; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.user_preferences.calorie_safety_floor_value IS 'Custom calorie safety floor in kcal when calorie_safety_floor_mode is custom.';
 
 
 --
@@ -2885,6 +3738,28 @@ COMMENT ON TABLE public.verification IS 'Better Auth verification table';
 
 
 --
+-- Name: vitals_entries; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.vitals_entries (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    entry_date date NOT NULL,
+    "timestamp" timestamp with time zone NOT NULL,
+    systolic_mmhg numeric(5,1),
+    diastolic_mmhg numeric(5,1),
+    blood_glucose_mgdl numeric(5,1),
+    body_temperature_celsius numeric(4,2),
+    meal_context text,
+    source_provider text NOT NULL,
+    device_name text,
+    external_id text,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
+);
+
+
+--
 -- Name: water_intake; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2915,8 +3790,16 @@ CREATE TABLE public.water_intake_entries (
     source character varying(50) DEFAULT 'manual'::character varying NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     created_by_user_id uuid,
-    logged_at timestamp with time zone DEFAULT now() NOT NULL
+    logged_at timestamp with time zone DEFAULT now() NOT NULL,
+    source_id character varying(255)
 );
+
+
+--
+-- Name: COLUMN water_intake_entries.source_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.water_intake_entries.source_id IS 'Provider-stable record id for idempotent re-sync (e.g. HealthKit uuid, Health Connect metadata.id). NULL for manual or pre-migration synced entries.';
 
 
 --
@@ -3070,7 +3953,8 @@ CREATE TABLE public.workout_preset_exercise_sets (
     rest_time integer,
     notes text,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
-    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    distance numeric
 );
 
 
@@ -3105,8 +3989,16 @@ CREATE TABLE public.workout_preset_exercises (
     image_url text,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
-    sort_order integer DEFAULT 0
+    sort_order integer DEFAULT 0,
+    superset_group integer
 );
+
+
+--
+-- Name: COLUMN workout_preset_exercises.superset_group; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.workout_preset_exercises.superset_group IS 'Client-assigned superset group key, scoped to the parent workout preset. NULL = not in a superset. Members share the value and are kept adjacent via sort_order.';
 
 
 --
@@ -3193,6 +4085,17 @@ CREATE SEQUENCE system.schema_migrations_id_seq
 --
 
 ALTER SEQUENCE system.schema_migrations_id_seq OWNED BY system.schema_migrations.id;
+
+
+--
+-- Name: set_duration_premigration_backup; Type: TABLE; Schema: system; Owner: -
+--
+
+CREATE TABLE system.set_duration_premigration_backup (
+    table_name text NOT NULL,
+    set_id integer NOT NULL,
+    duration_old numeric NOT NULL
+);
 
 
 --
@@ -3367,6 +4270,54 @@ ALTER TABLE ONLY public.check_in_photos
 
 
 --
+-- Name: cycle_daily_entries cycle_daily_entries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cycle_daily_entries
+    ADD CONSTRAINT cycle_daily_entries_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: cycle_settings cycle_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cycle_settings
+    ADD CONSTRAINT cycle_settings_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: cycle_settings cycle_settings_user_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cycle_settings
+    ADD CONSTRAINT cycle_settings_user_id_key UNIQUE (user_id);
+
+
+--
+-- Name: cycle_test_entries cycle_test_entries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cycle_test_entries
+    ADD CONSTRAINT cycle_test_entries_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: cycles cycles_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cycles
+    ADD CONSTRAINT cycles_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: daily_health_metrics daily_health_metrics_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.daily_health_metrics
+    ADD CONSTRAINT daily_health_metrics_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: daily_sleep_need daily_sleep_need_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3412,6 +4363,30 @@ ALTER TABLE ONLY public.exercise_entries
 
 ALTER TABLE ONLY public.exercise_entry_activity_details
     ADD CONSTRAINT exercise_entry_activity_details_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: exercise_entry_gps_points exercise_entry_gps_points_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.exercise_entry_gps_points
+    ADD CONSTRAINT exercise_entry_gps_points_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: exercise_entry_hr_zones exercise_entry_hr_zones_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.exercise_entry_hr_zones
+    ADD CONSTRAINT exercise_entry_hr_zones_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: exercise_entry_laps exercise_entry_laps_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.exercise_entry_laps
+    ADD CONSTRAINT exercise_entry_laps_pkey PRIMARY KEY (id);
 
 
 --
@@ -3471,6 +4446,30 @@ ALTER TABLE ONLY public.food_entry_meals
 
 
 --
+-- Name: food_favorites food_favorites_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.food_favorites
+    ADD CONSTRAINT food_favorites_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: food_favorites food_favorites_unique_food; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.food_favorites
+    ADD CONSTRAINT food_favorites_unique_food UNIQUE (user_id, food_id);
+
+
+--
+-- Name: food_favorites food_favorites_unique_meal; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.food_favorites
+    ADD CONSTRAINT food_favorites_unique_meal UNIQUE (user_id, meal_id);
+
+
+--
 -- Name: food_variants food_variants_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3508,6 +4507,22 @@ ALTER TABLE ONLY public.goal_presets
 
 ALTER TABLE ONLY public.goal_presets
     ADD CONSTRAINT goal_presets_unique_name_per_user UNIQUE (user_id, preset_name);
+
+
+--
+-- Name: health_appointments health_appointments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.health_appointments
+    ADD CONSTRAINT health_appointments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: health_metric_samples health_metric_samples_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.health_metric_samples
+    ADD CONSTRAINT health_metric_samples_pkey PRIMARY KEY (id);
 
 
 --
@@ -3695,6 +4710,62 @@ ALTER TABLE ONLY public.passkey
 
 
 --
+-- Name: passkey_registration_tickets passkey_registration_tickets_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.passkey_registration_tickets
+    ADD CONSTRAINT passkey_registration_tickets_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: passkey_registration_tickets passkey_registration_tickets_ticket_hash_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.passkey_registration_tickets
+    ADD CONSTRAINT passkey_registration_tickets_ticket_hash_key UNIQUE (ticket_hash);
+
+
+--
+-- Name: pregnancies pregnancies_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pregnancies
+    ADD CONSTRAINT pregnancies_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: pregnancy_checklist_state pregnancy_checklist_state_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pregnancy_checklist_state
+    ADD CONSTRAINT pregnancy_checklist_state_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: pregnancy_contractions pregnancy_contractions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pregnancy_contractions
+    ADD CONSTRAINT pregnancy_contractions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: pregnancy_kick_sessions pregnancy_kick_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pregnancy_kick_sessions
+    ADD CONSTRAINT pregnancy_kick_sessions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: pregnancy_photos pregnancy_photos_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pregnancy_photos
+    ADD CONSTRAINT pregnancy_photos_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: session session_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3775,6 +4846,30 @@ ALTER TABLE ONLY public.two_factor
 
 
 --
+-- Name: cycle_daily_entries unique_user_cycle_day; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cycle_daily_entries
+    ADD CONSTRAINT unique_user_cycle_day UNIQUE (user_id, entry_date);
+
+
+--
+-- Name: user_cycle_display_preferences unique_user_cycle_display; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_cycle_display_preferences
+    ADD CONSTRAINT unique_user_cycle_display UNIQUE (user_id, view_group, platform);
+
+
+--
+-- Name: cycles unique_user_cycle_start; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cycles
+    ADD CONSTRAINT unique_user_cycle_start UNIQUE (user_id, start_date);
+
+
+--
 -- Name: mood_entries unique_user_date; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3788,6 +4883,22 @@ ALTER TABLE ONLY public.mood_entries
 
 ALTER TABLE ONLY public.user_medication_display_preferences
     ADD CONSTRAINT unique_user_med_display UNIQUE (user_id, view_group, platform);
+
+
+--
+-- Name: user_mood_display_preferences unique_user_mood_display; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_mood_display_preferences
+    ADD CONSTRAINT unique_user_mood_display UNIQUE (user_id, platform);
+
+
+--
+-- Name: user_custom_moods unique_user_mood_name; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_custom_moods
+    ADD CONSTRAINT unique_user_mood_name UNIQUE (user_id, name);
 
 
 --
@@ -3823,6 +4934,54 @@ ALTER TABLE ONLY public.user_custom_symptoms
 
 
 --
+-- Name: daily_health_metrics uq_daily_health_metrics; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.daily_health_metrics
+    ADD CONSTRAINT uq_daily_health_metrics UNIQUE (user_id, entry_date, source_provider);
+
+
+--
+-- Name: exercise_entry_gps_points uq_exercise_entry_gps_points; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.exercise_entry_gps_points
+    ADD CONSTRAINT uq_exercise_entry_gps_points UNIQUE (exercise_entry_id);
+
+
+--
+-- Name: exercise_entry_hr_zones uq_exercise_entry_hr_zone; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.exercise_entry_hr_zones
+    ADD CONSTRAINT uq_exercise_entry_hr_zone UNIQUE (exercise_entry_id, zone_index);
+
+
+--
+-- Name: exercise_entry_laps uq_exercise_entry_lap; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.exercise_entry_laps
+    ADD CONSTRAINT uq_exercise_entry_lap UNIQUE (exercise_entry_id, lap_index);
+
+
+--
+-- Name: health_metric_samples uq_health_metric_samples; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.health_metric_samples
+    ADD CONSTRAINT uq_health_metric_samples UNIQUE (user_id, metric, entry_date, source_provider);
+
+
+--
+-- Name: vitals_entries uq_vitals_entry; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.vitals_entries
+    ADD CONSTRAINT uq_vitals_entry UNIQUE (user_id, source_provider, "timestamp");
+
+
+--
 -- Name: user_allergen_preferences user_allergen_preferences_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3836,6 +4995,14 @@ ALTER TABLE ONLY public.user_allergen_preferences
 
 ALTER TABLE ONLY public.user_allergen_preferences
     ADD CONSTRAINT user_allergen_preferences_user_id_allergen_name_key UNIQUE (user_id, allergen_name);
+
+
+--
+-- Name: user_custom_moods user_custom_moods_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_custom_moods
+    ADD CONSTRAINT user_custom_moods_pkey PRIMARY KEY (id);
 
 
 --
@@ -3860,6 +5027,14 @@ ALTER TABLE ONLY public.user_custom_symptom_locations
 
 ALTER TABLE ONLY public.user_custom_symptoms
     ADD CONSTRAINT user_custom_symptoms_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_cycle_display_preferences user_cycle_display_preferences_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_cycle_display_preferences
+    ADD CONSTRAINT user_cycle_display_preferences_pkey PRIMARY KEY (id);
 
 
 --
@@ -3911,6 +5086,14 @@ ALTER TABLE ONLY public.user_medication_display_preferences
 
 
 --
+-- Name: user_mood_display_preferences user_mood_display_preferences_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_mood_display_preferences
+    ADD CONSTRAINT user_mood_display_preferences_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: user_nutrient_display_preferences user_nutrient_display_preferenc_user_id_view_group_platform_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3924,6 +5107,22 @@ ALTER TABLE ONLY public.user_nutrient_display_preferences
 
 ALTER TABLE ONLY public.user_nutrient_display_preferences
     ADD CONSTRAINT user_nutrient_display_preferences_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_nutrient_goal_preferences user_nutrient_goal_preferences_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_nutrient_goal_preferences
+    ADD CONSTRAINT user_nutrient_goal_preferences_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_nutrient_goal_preferences user_nutrient_goal_preferences_user_key_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_nutrient_goal_preferences
+    ADD CONSTRAINT user_nutrient_goal_preferences_user_key_unique UNIQUE (user_id, nutrient_key);
 
 
 --
@@ -3972,6 +5171,14 @@ ALTER TABLE ONLY public.user_water_containers
 
 ALTER TABLE ONLY public.verification
     ADD CONSTRAINT verification_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: vitals_entries vitals_entries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.vitals_entries
+    ADD CONSTRAINT vitals_entries_pkey PRIMARY KEY (id);
 
 
 --
@@ -4060,6 +5267,14 @@ ALTER TABLE ONLY system.schema_migrations
 
 ALTER TABLE ONLY system.schema_migrations
     ADD CONSTRAINT schema_migrations_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: set_duration_premigration_backup set_duration_premigration_backup_pkey; Type: CONSTRAINT; Schema: system; Owner: -
+--
+
+ALTER TABLE ONLY system.set_duration_premigration_backup
+    ADD CONSTRAINT set_duration_premigration_backup_pkey PRIMARY KEY (table_name, set_id);
 
 
 --
@@ -4168,6 +5383,55 @@ CREATE INDEX idx_custom_measurements_user_id ON public.custom_measurements USING
 
 
 --
+-- Name: idx_cycle_daily_entries_user_date; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_cycle_daily_entries_user_date ON public.cycle_daily_entries USING btree (user_id, entry_date);
+
+
+--
+-- Name: idx_cycle_daily_entries_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_cycle_daily_entries_user_id ON public.cycle_daily_entries USING btree (user_id);
+
+
+--
+-- Name: idx_cycle_settings_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_cycle_settings_user_id ON public.cycle_settings USING btree (user_id);
+
+
+--
+-- Name: idx_cycle_test_entries_user_date; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_cycle_test_entries_user_date ON public.cycle_test_entries USING btree (user_id, entry_date);
+
+
+--
+-- Name: idx_cycle_test_entries_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_cycle_test_entries_user_id ON public.cycle_test_entries USING btree (user_id);
+
+
+--
+-- Name: idx_cycles_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_cycles_user_id ON public.cycles USING btree (user_id);
+
+
+--
+-- Name: idx_cycles_user_start; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_cycles_user_start ON public.cycles USING btree (user_id, start_date);
+
+
+--
 -- Name: idx_daily_sleep_need_lookup; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -4200,6 +5464,27 @@ CREATE INDEX idx_exercise_entry_activity_details_entry_id ON public.exercise_ent
 --
 
 CREATE INDEX idx_exercise_entry_activity_details_provider_type ON public.exercise_entry_activity_details USING btree (provider_name, detail_type);
+
+
+--
+-- Name: idx_exercise_entry_gps_points_user_date; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_exercise_entry_gps_points_user_date ON public.exercise_entry_gps_points USING btree (user_id, entry_date DESC);
+
+
+--
+-- Name: idx_exercise_entry_hr_zones_user_date; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_exercise_entry_hr_zones_user_date ON public.exercise_entry_hr_zones USING btree (user_id, entry_date DESC);
+
+
+--
+-- Name: idx_exercise_entry_laps_user_date; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_exercise_entry_laps_user_date ON public.exercise_entry_laps USING btree (user_id, entry_date DESC);
 
 
 --
@@ -4280,6 +5565,27 @@ CREATE INDEX idx_food_entry_meals_user_id_entry_date ON public.food_entry_meals 
 
 
 --
+-- Name: idx_food_favorites_food_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_food_favorites_food_id ON public.food_favorites USING btree (food_id) WHERE (food_id IS NOT NULL);
+
+
+--
+-- Name: idx_food_favorites_meal_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_food_favorites_meal_id ON public.food_favorites USING btree (meal_id) WHERE (meal_id IS NOT NULL);
+
+
+--
+-- Name: idx_food_favorites_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_food_favorites_user_id ON public.food_favorites USING btree (user_id);
+
+
+--
 -- Name: idx_foods_provider_external_id_provider_type; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -4291,6 +5597,20 @@ CREATE INDEX idx_foods_provider_external_id_provider_type ON public.foods USING 
 --
 
 CREATE INDEX idx_foods_provider_type_user_id ON public.foods USING btree (provider_type, user_id) WHERE (provider_type IS NOT NULL);
+
+
+--
+-- Name: idx_health_appointments_scheduled; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_health_appointments_scheduled ON public.health_appointments USING btree (user_id, scheduled_at);
+
+
+--
+-- Name: idx_health_appointments_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_health_appointments_user_id ON public.health_appointments USING btree (user_id);
 
 
 --
@@ -4312,6 +5632,13 @@ CREATE INDEX idx_injection_entries_medication_id ON public.injection_entries USI
 --
 
 CREATE INDEX idx_injection_entries_user_id ON public.injection_entries USING btree (user_id);
+
+
+--
+-- Name: idx_meal_foods_child_meal_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_meal_foods_child_meal_id ON public.meal_foods USING btree (child_meal_id);
 
 
 --
@@ -4385,10 +5712,87 @@ CREATE INDEX idx_medications_is_glp1 ON public.medications USING btree (user_id,
 
 
 --
+-- Name: idx_medications_is_supplement; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_medications_is_supplement ON public.medications USING btree (user_id, is_supplement) WHERE is_supplement;
+
+
+--
 -- Name: idx_medications_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_medications_user_id ON public.medications USING btree (user_id);
+
+
+--
+-- Name: idx_passkey_reg_tickets_expires_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_passkey_reg_tickets_expires_at ON public.passkey_registration_tickets USING btree (expires_at);
+
+
+--
+-- Name: idx_pregnancies_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_pregnancies_user_id ON public.pregnancies USING btree (user_id);
+
+
+--
+-- Name: idx_pregnancy_checklist_pregnancy; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_pregnancy_checklist_pregnancy ON public.pregnancy_checklist_state USING btree (pregnancy_id);
+
+
+--
+-- Name: idx_pregnancy_checklist_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_pregnancy_checklist_user_id ON public.pregnancy_checklist_state USING btree (user_id);
+
+
+--
+-- Name: idx_pregnancy_contractions_pregnancy; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_pregnancy_contractions_pregnancy ON public.pregnancy_contractions USING btree (pregnancy_id);
+
+
+--
+-- Name: idx_pregnancy_contractions_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_pregnancy_contractions_user_id ON public.pregnancy_contractions USING btree (user_id);
+
+
+--
+-- Name: idx_pregnancy_kick_sessions_pregnancy; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_pregnancy_kick_sessions_pregnancy ON public.pregnancy_kick_sessions USING btree (pregnancy_id);
+
+
+--
+-- Name: idx_pregnancy_kick_sessions_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_pregnancy_kick_sessions_user_id ON public.pregnancy_kick_sessions USING btree (user_id);
+
+
+--
+-- Name: idx_pregnancy_photos_pregnancy; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_pregnancy_photos_pregnancy ON public.pregnancy_photos USING btree (pregnancy_id);
+
+
+--
+-- Name: idx_pregnancy_photos_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_pregnancy_photos_user_id ON public.pregnancy_photos USING btree (user_id);
 
 
 --
@@ -4490,6 +5894,13 @@ CREATE INDEX idx_symptom_entries_user_id ON public.symptom_entries USING btree (
 
 
 --
+-- Name: idx_user_custom_moods_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_user_custom_moods_user_id ON public.user_custom_moods USING btree (user_id);
+
+
+--
 -- Name: idx_user_custom_symptom_locations_user_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -4501,6 +5912,13 @@ CREATE INDEX idx_user_custom_symptom_locations_user_id ON public.user_custom_sym
 --
 
 CREATE INDEX idx_user_custom_symptoms_user_id ON public.user_custom_symptoms USING btree (user_id);
+
+
+--
+-- Name: idx_user_cycle_display_preferences_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_user_cycle_display_preferences_user_id ON public.user_cycle_display_preferences USING btree (user_id);
 
 
 --
@@ -4539,10 +5957,31 @@ CREATE INDEX idx_user_medication_display_preferences_user_id ON public.user_medi
 
 
 --
+-- Name: idx_user_mood_display_preferences_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_user_mood_display_preferences_user_id ON public.user_mood_display_preferences USING btree (user_id);
+
+
+--
+-- Name: idx_user_nutrient_goal_preferences_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_user_nutrient_goal_preferences_user_id ON public.user_nutrient_goal_preferences USING btree (user_id);
+
+
+--
 -- Name: idx_verification_identifier; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_verification_identifier ON public.verification USING btree (identifier);
+
+
+--
+-- Name: idx_vitals_user_date; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_vitals_user_date ON public.vitals_entries USING btree (user_id, entry_date DESC, "timestamp" DESC);
 
 
 --
@@ -4553,17 +5992,17 @@ CREATE INDEX idx_water_intake_entries_user_date ON public.water_intake_entries U
 
 
 --
+-- Name: idx_water_intake_entries_user_source_source_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_water_intake_entries_user_source_source_id ON public.water_intake_entries USING btree (user_id, source, source_id) WHERE ((source IS NOT NULL) AND (source_id IS NOT NULL));
+
+
+--
 -- Name: idx_workout_preset_exercise_sets_preset_exercise_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_workout_preset_exercise_sets_preset_exercise_id ON public.workout_preset_exercise_sets USING btree (workout_preset_exercise_id);
-
-
---
--- Name: one_active_meal_plan_per_user; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX one_active_meal_plan_per_user ON public.meal_plan_templates USING btree (user_id) WHERE (is_active = true);
 
 
 --
@@ -4574,17 +6013,17 @@ CREATE UNIQUE INDEX sleep_entry_stages_entry_natural_key_idx ON public.sleep_ent
 
 
 --
+-- Name: unique_active_pregnancy; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX unique_active_pregnancy ON public.pregnancies USING btree (user_id) WHERE ((status)::text = 'active'::text);
+
+
+--
 -- Name: unique_backup_settings_row; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX unique_backup_settings_row ON public.backup_settings USING btree (((id IS NOT NULL)));
-
-
---
--- Name: unique_global_provider_type; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX unique_global_provider_type ON public.external_data_providers USING btree (provider_type) WHERE (is_public = true);
 
 
 --
@@ -4620,6 +6059,41 @@ COMMENT ON TRIGGER on_public_user_created ON public."user" IS 'Initializes onboa
 --
 
 CREATE TRIGGER seed_global_providers_on_first_admin AFTER INSERT OR UPDATE OF role ON public."user" FOR EACH ROW EXECUTE FUNCTION public.seed_global_providers_for_first_admin();
+
+
+--
+-- Name: cycle_daily_entries set_timestamp; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER set_timestamp BEFORE UPDATE ON public.cycle_daily_entries FOR EACH ROW EXECUTE FUNCTION public.trigger_set_timestamp();
+
+
+--
+-- Name: cycle_settings set_timestamp; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER set_timestamp BEFORE UPDATE ON public.cycle_settings FOR EACH ROW EXECUTE FUNCTION public.trigger_set_timestamp();
+
+
+--
+-- Name: cycle_test_entries set_timestamp; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER set_timestamp BEFORE UPDATE ON public.cycle_test_entries FOR EACH ROW EXECUTE FUNCTION public.trigger_set_timestamp();
+
+
+--
+-- Name: cycles set_timestamp; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER set_timestamp BEFORE UPDATE ON public.cycles FOR EACH ROW EXECUTE FUNCTION public.trigger_set_timestamp();
+
+
+--
+-- Name: health_appointments set_timestamp; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER set_timestamp BEFORE UPDATE ON public.health_appointments FOR EACH ROW EXECUTE FUNCTION public.trigger_set_timestamp();
 
 
 --
@@ -4672,10 +6146,52 @@ CREATE TRIGGER set_timestamp BEFORE UPDATE ON public.mood_entries FOR EACH ROW E
 
 
 --
+-- Name: pregnancies set_timestamp; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER set_timestamp BEFORE UPDATE ON public.pregnancies FOR EACH ROW EXECUTE FUNCTION public.trigger_set_timestamp();
+
+
+--
+-- Name: pregnancy_checklist_state set_timestamp; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER set_timestamp BEFORE UPDATE ON public.pregnancy_checklist_state FOR EACH ROW EXECUTE FUNCTION public.trigger_set_timestamp();
+
+
+--
+-- Name: pregnancy_contractions set_timestamp; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER set_timestamp BEFORE UPDATE ON public.pregnancy_contractions FOR EACH ROW EXECUTE FUNCTION public.trigger_set_timestamp();
+
+
+--
+-- Name: pregnancy_kick_sessions set_timestamp; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER set_timestamp BEFORE UPDATE ON public.pregnancy_kick_sessions FOR EACH ROW EXECUTE FUNCTION public.trigger_set_timestamp();
+
+
+--
+-- Name: pregnancy_photos set_timestamp; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER set_timestamp BEFORE UPDATE ON public.pregnancy_photos FOR EACH ROW EXECUTE FUNCTION public.trigger_set_timestamp();
+
+
+--
 -- Name: symptom_entries set_timestamp; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER set_timestamp BEFORE UPDATE ON public.symptom_entries FOR EACH ROW EXECUTE FUNCTION public.trigger_set_timestamp();
+
+
+--
+-- Name: user_custom_moods set_timestamp; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER set_timestamp BEFORE UPDATE ON public.user_custom_moods FOR EACH ROW EXECUTE FUNCTION public.trigger_set_timestamp();
 
 
 --
@@ -4700,10 +6216,24 @@ CREATE TRIGGER set_timestamp BEFORE UPDATE ON public.user_custom_symptoms FOR EA
 
 
 --
+-- Name: user_cycle_display_preferences set_timestamp; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER set_timestamp BEFORE UPDATE ON public.user_cycle_display_preferences FOR EACH ROW EXECUTE FUNCTION public.trigger_set_timestamp();
+
+
+--
 -- Name: user_medication_display_preferences set_timestamp; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER set_timestamp BEFORE UPDATE ON public.user_medication_display_preferences FOR EACH ROW EXECUTE FUNCTION public.trigger_set_timestamp();
+
+
+--
+-- Name: user_mood_display_preferences set_timestamp; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER set_timestamp BEFORE UPDATE ON public.user_mood_display_preferences FOR EACH ROW EXECUTE FUNCTION public.trigger_set_timestamp();
 
 
 --
@@ -4725,6 +6255,34 @@ CREATE TRIGGER trg_sync_mfa_totp AFTER INSERT OR DELETE ON public.two_factor FOR
 --
 
 CREATE TRIGGER trg_sync_user_mfa_global BEFORE UPDATE OF two_factor_enabled ON public."user" FOR EACH ROW EXECUTE FUNCTION public.fn_sync_user_mfa_global();
+
+
+--
+-- Name: daily_health_metrics update_daily_health_metrics_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER update_daily_health_metrics_updated_at BEFORE UPDATE ON public.daily_health_metrics FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+
+--
+-- Name: exercise_entry_gps_points update_exercise_entry_gps_points_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER update_exercise_entry_gps_points_updated_at BEFORE UPDATE ON public.exercise_entry_gps_points FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+
+--
+-- Name: exercise_entry_hr_zones update_exercise_entry_hr_zones_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER update_exercise_entry_hr_zones_updated_at BEFORE UPDATE ON public.exercise_entry_hr_zones FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+
+--
+-- Name: exercise_entry_laps update_exercise_entry_laps_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER update_exercise_entry_laps_updated_at BEFORE UPDATE ON public.exercise_entry_laps FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 
 --
@@ -4763,6 +6321,13 @@ CREATE TRIGGER update_global_settings_updated_at BEFORE UPDATE ON public.global_
 
 
 --
+-- Name: health_metric_samples update_health_metric_samples_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER update_health_metric_samples_updated_at BEFORE UPDATE ON public.health_metric_samples FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+
+--
 -- Name: meal_foods update_meal_foods_timestamp; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -4781,6 +6346,13 @@ CREATE TRIGGER update_oidc_providers_updated_at BEFORE UPDATE ON public.oidc_pro
 --
 
 CREATE TRIGGER update_user_oidc_links_updated_at BEFORE UPDATE ON public.user_oidc_links FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+
+--
+-- Name: vitals_entries update_vitals_entries_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER update_vitals_entries_updated_at BEFORE UPDATE ON public.vitals_entries FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 
 --
@@ -4922,6 +6494,46 @@ ALTER TABLE ONLY public.custom_measurements
 
 
 --
+-- Name: cycle_daily_entries cycle_daily_entries_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cycle_daily_entries
+    ADD CONSTRAINT cycle_daily_entries_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: cycle_settings cycle_settings_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cycle_settings
+    ADD CONSTRAINT cycle_settings_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: cycle_test_entries cycle_test_entries_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cycle_test_entries
+    ADD CONSTRAINT cycle_test_entries_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: cycles cycles_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cycles
+    ADD CONSTRAINT cycles_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: daily_health_metrics daily_health_metrics_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.daily_health_metrics
+    ADD CONSTRAINT daily_health_metrics_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
 -- Name: daily_sleep_need daily_sleep_need_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4999,6 +6611,54 @@ ALTER TABLE ONLY public.exercise_entry_activity_details
 
 ALTER TABLE ONLY public.exercise_entry_activity_details
     ADD CONSTRAINT exercise_entry_activity_details_updated_by_user_id_fkey FOREIGN KEY (updated_by_user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: exercise_entry_gps_points exercise_entry_gps_points_exercise_entry_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.exercise_entry_gps_points
+    ADD CONSTRAINT exercise_entry_gps_points_exercise_entry_id_fkey FOREIGN KEY (exercise_entry_id) REFERENCES public.exercise_entries(id) ON DELETE CASCADE;
+
+
+--
+-- Name: exercise_entry_gps_points exercise_entry_gps_points_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.exercise_entry_gps_points
+    ADD CONSTRAINT exercise_entry_gps_points_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: exercise_entry_hr_zones exercise_entry_hr_zones_exercise_entry_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.exercise_entry_hr_zones
+    ADD CONSTRAINT exercise_entry_hr_zones_exercise_entry_id_fkey FOREIGN KEY (exercise_entry_id) REFERENCES public.exercise_entries(id) ON DELETE CASCADE;
+
+
+--
+-- Name: exercise_entry_hr_zones exercise_entry_hr_zones_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.exercise_entry_hr_zones
+    ADD CONSTRAINT exercise_entry_hr_zones_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: exercise_entry_laps exercise_entry_laps_exercise_entry_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.exercise_entry_laps
+    ADD CONSTRAINT exercise_entry_laps_exercise_entry_id_fkey FOREIGN KEY (exercise_entry_id) REFERENCES public.exercise_entries(id) ON DELETE CASCADE;
+
+
+--
+-- Name: exercise_entry_laps exercise_entry_laps_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.exercise_entry_laps
+    ADD CONSTRAINT exercise_entry_laps_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
 
 
 --
@@ -5210,11 +6870,67 @@ ALTER TABLE ONLY public.food_entry_meals
 
 
 --
+-- Name: food_favorites food_favorites_food_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.food_favorites
+    ADD CONSTRAINT food_favorites_food_id_fkey FOREIGN KEY (food_id) REFERENCES public.foods(id) ON DELETE CASCADE;
+
+
+--
+-- Name: food_favorites food_favorites_meal_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.food_favorites
+    ADD CONSTRAINT food_favorites_meal_id_fkey FOREIGN KEY (meal_id) REFERENCES public.meals(id) ON DELETE CASCADE;
+
+
+--
+-- Name: food_favorites food_favorites_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.food_favorites
+    ADD CONSTRAINT food_favorites_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: global_settings global_settings_default_vision_ai_service_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.global_settings
+    ADD CONSTRAINT global_settings_default_vision_ai_service_id_fkey FOREIGN KEY (default_vision_ai_service_id) REFERENCES public.ai_service_settings(id) ON DELETE SET NULL;
+
+
+--
 -- Name: goal_presets goal_presets_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.goal_presets
     ADD CONSTRAINT goal_presets_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: health_appointments health_appointments_pregnancy_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.health_appointments
+    ADD CONSTRAINT health_appointments_pregnancy_id_fkey FOREIGN KEY (pregnancy_id) REFERENCES public.pregnancies(id) ON DELETE SET NULL;
+
+
+--
+-- Name: health_appointments health_appointments_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.health_appointments
+    ADD CONSTRAINT health_appointments_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: health_metric_samples health_metric_samples_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.health_metric_samples
+    ADD CONSTRAINT health_metric_samples_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
 
 
 --
@@ -5239,6 +6955,14 @@ ALTER TABLE ONLY public.injection_entries
 
 ALTER TABLE ONLY public.injection_entries
     ADD CONSTRAINT injection_entries_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: meal_foods meal_foods_child_meal_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.meal_foods
+    ADD CONSTRAINT meal_foods_child_meal_id_fkey FOREIGN KEY (child_meal_id) REFERENCES public.meals(id) ON DELETE SET NULL;
 
 
 --
@@ -5498,11 +7222,107 @@ ALTER TABLE ONLY public.onboarding_status
 
 
 --
+-- Name: passkey_registration_tickets passkey_registration_tickets_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.passkey_registration_tickets
+    ADD CONSTRAINT passkey_registration_tickets_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
 -- Name: passkey passkey_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.passkey
     ADD CONSTRAINT passkey_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: pregnancies pregnancies_prenatal_medication_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pregnancies
+    ADD CONSTRAINT pregnancies_prenatal_medication_id_fkey FOREIGN KEY (prenatal_medication_id) REFERENCES public.medications(id) ON DELETE SET NULL;
+
+
+--
+-- Name: pregnancies pregnancies_supplement_medication_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pregnancies
+    ADD CONSTRAINT pregnancies_supplement_medication_id_fkey FOREIGN KEY (supplement_medication_id) REFERENCES public.medications(id) ON DELETE SET NULL;
+
+
+--
+-- Name: pregnancies pregnancies_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pregnancies
+    ADD CONSTRAINT pregnancies_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: pregnancy_checklist_state pregnancy_checklist_state_pregnancy_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pregnancy_checklist_state
+    ADD CONSTRAINT pregnancy_checklist_state_pregnancy_id_fkey FOREIGN KEY (pregnancy_id) REFERENCES public.pregnancies(id) ON DELETE CASCADE;
+
+
+--
+-- Name: pregnancy_checklist_state pregnancy_checklist_state_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pregnancy_checklist_state
+    ADD CONSTRAINT pregnancy_checklist_state_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: pregnancy_contractions pregnancy_contractions_pregnancy_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pregnancy_contractions
+    ADD CONSTRAINT pregnancy_contractions_pregnancy_id_fkey FOREIGN KEY (pregnancy_id) REFERENCES public.pregnancies(id) ON DELETE CASCADE;
+
+
+--
+-- Name: pregnancy_contractions pregnancy_contractions_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pregnancy_contractions
+    ADD CONSTRAINT pregnancy_contractions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: pregnancy_kick_sessions pregnancy_kick_sessions_pregnancy_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pregnancy_kick_sessions
+    ADD CONSTRAINT pregnancy_kick_sessions_pregnancy_id_fkey FOREIGN KEY (pregnancy_id) REFERENCES public.pregnancies(id) ON DELETE CASCADE;
+
+
+--
+-- Name: pregnancy_kick_sessions pregnancy_kick_sessions_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pregnancy_kick_sessions
+    ADD CONSTRAINT pregnancy_kick_sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: pregnancy_photos pregnancy_photos_pregnancy_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pregnancy_photos
+    ADD CONSTRAINT pregnancy_photos_pregnancy_id_fkey FOREIGN KEY (pregnancy_id) REFERENCES public.pregnancies(id) ON DELETE CASCADE;
+
+
+--
+-- Name: pregnancy_photos pregnancy_photos_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pregnancy_photos
+    ADD CONSTRAINT pregnancy_photos_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
 
 
 --
@@ -5626,6 +7446,14 @@ ALTER TABLE ONLY public.user_allergen_preferences
 
 
 --
+-- Name: user_custom_moods user_custom_moods_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_custom_moods
+    ADD CONSTRAINT user_custom_moods_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
 -- Name: user_custom_nutrients user_custom_nutrients_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5647,6 +7475,14 @@ ALTER TABLE ONLY public.user_custom_symptom_locations
 
 ALTER TABLE ONLY public.user_custom_symptoms
     ADD CONSTRAINT user_custom_symptoms_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: user_cycle_display_preferences user_cycle_display_preferences_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_cycle_display_preferences
+    ADD CONSTRAINT user_cycle_display_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
 
 
 --
@@ -5690,11 +7526,27 @@ ALTER TABLE ONLY public.user_medication_display_preferences
 
 
 --
+-- Name: user_mood_display_preferences user_mood_display_preferences_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_mood_display_preferences
+    ADD CONSTRAINT user_mood_display_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
 -- Name: user_nutrient_display_preferences user_nutrient_display_preferences_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_nutrient_display_preferences
     ADD CONSTRAINT user_nutrient_display_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: user_nutrient_goal_preferences user_nutrient_goal_preferences_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_nutrient_goal_preferences
+    ADD CONSTRAINT user_nutrient_goal_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
 
 
 --
@@ -5722,11 +7574,27 @@ ALTER TABLE ONLY public.user_preferences
 
 
 --
+-- Name: user_preferences user_preferences_active_vision_ai_service_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_preferences
+    ADD CONSTRAINT user_preferences_active_vision_ai_service_id_fkey FOREIGN KEY (active_vision_ai_service_id) REFERENCES public.ai_service_settings(id) ON DELETE SET NULL;
+
+
+--
 -- Name: user_water_containers user_water_containers_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.user_water_containers
     ADD CONSTRAINT user_water_containers_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
+
+
+--
+-- Name: vitals_entries vitals_entries_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.vitals_entries
+    ADD CONSTRAINT vitals_entries_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id) ON DELETE CASCADE;
 
 
 --
@@ -5935,28 +7803,28 @@ ALTER TABLE public.ai_service_settings ENABLE ROW LEVEL SECURITY;
 -- Name: ai_service_settings ai_service_settings_delete_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY ai_service_settings_delete_policy ON public.ai_service_settings FOR DELETE USING ((((is_public = false) AND (user_id = public.current_user_id())) OR ((is_public = true) AND public.is_admin())));
+CREATE POLICY ai_service_settings_delete_policy ON public.ai_service_settings FOR DELETE USING ((((is_public = false) AND (user_id = public.authenticated_user_id())) OR ((is_public = true) AND public.is_admin())));
 
 
 --
 -- Name: ai_service_settings ai_service_settings_insert_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY ai_service_settings_insert_policy ON public.ai_service_settings FOR INSERT WITH CHECK ((((is_public = false) AND (user_id = public.current_user_id())) OR ((is_public = true) AND public.is_admin())));
+CREATE POLICY ai_service_settings_insert_policy ON public.ai_service_settings FOR INSERT WITH CHECK ((((is_public = false) AND (user_id = public.authenticated_user_id())) OR ((is_public = true) AND public.is_admin())));
 
 
 --
 -- Name: ai_service_settings ai_service_settings_select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY ai_service_settings_select_policy ON public.ai_service_settings FOR SELECT USING ((((is_public = true) AND (public.authenticated_user_id() IS NOT NULL)) OR ((is_public = false) AND (user_id = public.current_user_id()))));
+CREATE POLICY ai_service_settings_select_policy ON public.ai_service_settings FOR SELECT USING ((((is_public = true) AND (public.authenticated_user_id() IS NOT NULL)) OR ((is_public = false) AND (user_id = public.authenticated_user_id()))));
 
 
 --
 -- Name: ai_service_settings ai_service_settings_update_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY ai_service_settings_update_policy ON public.ai_service_settings FOR UPDATE USING ((((is_public = false) AND (user_id = public.current_user_id())) OR ((is_public = true) AND public.is_admin()))) WITH CHECK ((((is_public = false) AND (user_id = public.current_user_id())) OR ((is_public = true) AND public.is_admin())));
+CREATE POLICY ai_service_settings_update_policy ON public.ai_service_settings FOR UPDATE USING ((((is_public = false) AND (user_id = public.authenticated_user_id())) OR ((is_public = true) AND public.is_admin()))) WITH CHECK ((((is_public = false) AND (user_id = public.authenticated_user_id())) OR ((is_public = true) AND public.is_admin())));
 
 
 --
@@ -5990,6 +7858,36 @@ ALTER TABLE public.custom_categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.custom_measurements ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: cycle_daily_entries; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.cycle_daily_entries ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: cycle_settings; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.cycle_settings ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: cycle_test_entries; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.cycle_test_entries ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: cycles; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.cycles ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: daily_health_metrics; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.daily_health_metrics ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: daily_sleep_need; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -6005,7 +7903,7 @@ ALTER TABLE public.day_classification_cache ENABLE ROW LEVEL SECURITY;
 -- Name: external_data_providers delete_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY delete_policy ON public.external_data_providers FOR DELETE USING ((((is_public = false) AND (user_id = public.current_user_id())) OR ((is_public = true) AND public.is_admin())));
+CREATE POLICY delete_policy ON public.external_data_providers FOR DELETE USING ((((is_public = false) AND (user_id = public.authenticated_user_id())) OR ((is_public = true) AND public.is_admin())));
 
 
 --
@@ -6013,6 +7911,13 @@ CREATE POLICY delete_policy ON public.external_data_providers FOR DELETE USING (
 --
 
 CREATE POLICY delete_policy ON public.food_entries FOR DELETE USING (public.has_diary_access(user_id));
+
+
+--
+-- Name: passkey_registration_tickets deny_all_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY deny_all_policy ON public.passkey_registration_tickets USING (false) WITH CHECK (false);
 
 
 --
@@ -6026,6 +7931,24 @@ ALTER TABLE public.exercise_entries ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE public.exercise_entry_activity_details ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: exercise_entry_gps_points; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.exercise_entry_gps_points ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: exercise_entry_hr_zones; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.exercise_entry_hr_zones ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: exercise_entry_laps; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.exercise_entry_laps ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: exercise_entry_sets; Type: ROW SECURITY; Schema: public; Owner: -
@@ -6076,6 +7999,12 @@ ALTER TABLE public.food_entries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.food_entry_meals ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: food_favorites; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.food_favorites ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: food_variants; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -6094,6 +8023,18 @@ ALTER TABLE public.foods ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.goal_presets ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: health_appointments; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.health_appointments ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: health_metric_samples; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.health_metric_samples ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: injection_entries; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -6103,14 +8044,14 @@ ALTER TABLE public.injection_entries ENABLE ROW LEVEL SECURITY;
 -- Name: external_data_providers insert_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY insert_policy ON public.external_data_providers FOR INSERT WITH CHECK ((((is_public = false) AND (user_id = public.current_user_id())) OR ((is_public = true) AND public.is_admin())));
+CREATE POLICY insert_policy ON public.external_data_providers FOR INSERT WITH CHECK ((((is_public = false) AND (user_id = public.authenticated_user_id())) OR ((is_public = true) AND public.is_admin())));
 
 
 --
 -- Name: family_access insert_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY insert_policy ON public.family_access FOR INSERT WITH CHECK ((public.current_user_id() = owner_user_id));
+CREATE POLICY insert_policy ON public.family_access FOR INSERT WITH CHECK ((public.authenticated_user_id() = owner_user_id));
 
 
 --
@@ -6194,28 +8135,49 @@ ALTER TABLE public.medications ENABLE ROW LEVEL SECURITY;
 -- Name: check_in_measurements modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY modify_policy ON public.check_in_measurements USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+CREATE POLICY modify_policy ON public.check_in_measurements USING (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text))) WITH CHECK (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text)));
 
 
 --
 -- Name: check_in_photos modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY modify_policy ON public.check_in_photos USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+CREATE POLICY modify_policy ON public.check_in_photos USING (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text))) WITH CHECK (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text)));
 
 
 --
 -- Name: custom_categories modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY modify_policy ON public.custom_categories USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+CREATE POLICY modify_policy ON public.custom_categories USING (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text))) WITH CHECK (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text)));
 
 
 --
 -- Name: custom_measurements modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY modify_policy ON public.custom_measurements USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+CREATE POLICY modify_policy ON public.custom_measurements USING (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text))) WITH CHECK (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text)));
+
+
+--
+-- Name: daily_health_metrics modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.daily_health_metrics USING (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text))) WITH CHECK (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text)));
+
+
+--
+-- Name: daily_sleep_need modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.daily_sleep_need USING (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text))) WITH CHECK (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text)));
+
+
+--
+-- Name: day_classification_cache modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.day_classification_cache USING (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text))) WITH CHECK (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text)));
 
 
 --
@@ -6231,13 +8193,34 @@ CREATE POLICY modify_policy ON public.exercise_entries USING (public.has_diary_a
 
 CREATE POLICY modify_policy ON public.exercise_entry_activity_details USING ((((exercise_entry_id IS NOT NULL) AND (EXISTS ( SELECT 1
    FROM public.exercise_entries ee
-  WHERE ((ee.id = exercise_entry_activity_details.exercise_entry_id) AND (public.current_user_id() = ee.user_id))))) OR ((exercise_preset_entry_id IS NOT NULL) AND (EXISTS ( SELECT 1
+  WHERE ((ee.id = exercise_entry_activity_details.exercise_entry_id) AND public.has_diary_access(ee.user_id))))) OR ((exercise_preset_entry_id IS NOT NULL) AND (EXISTS ( SELECT 1
    FROM public.exercise_preset_entries epe
-  WHERE ((epe.id = exercise_entry_activity_details.exercise_preset_entry_id) AND (public.current_user_id() = epe.user_id))))))) WITH CHECK ((((exercise_entry_id IS NOT NULL) AND (EXISTS ( SELECT 1
+  WHERE ((epe.id = exercise_entry_activity_details.exercise_preset_entry_id) AND public.has_diary_access(epe.user_id))))))) WITH CHECK ((((exercise_entry_id IS NOT NULL) AND (EXISTS ( SELECT 1
    FROM public.exercise_entries ee
-  WHERE ((ee.id = exercise_entry_activity_details.exercise_entry_id) AND (public.current_user_id() = ee.user_id))))) OR ((exercise_preset_entry_id IS NOT NULL) AND (EXISTS ( SELECT 1
+  WHERE ((ee.id = exercise_entry_activity_details.exercise_entry_id) AND public.has_diary_access(ee.user_id))))) OR ((exercise_preset_entry_id IS NOT NULL) AND (EXISTS ( SELECT 1
    FROM public.exercise_preset_entries epe
-  WHERE ((epe.id = exercise_entry_activity_details.exercise_preset_entry_id) AND (public.current_user_id() = epe.user_id)))))));
+  WHERE ((epe.id = exercise_entry_activity_details.exercise_preset_entry_id) AND public.has_diary_access(epe.user_id)))))));
+
+
+--
+-- Name: exercise_entry_gps_points modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.exercise_entry_gps_points USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+
+
+--
+-- Name: exercise_entry_hr_zones modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.exercise_entry_hr_zones USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+
+
+--
+-- Name: exercise_entry_laps modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.exercise_entry_laps USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
 
 
 --
@@ -6262,14 +8245,21 @@ CREATE POLICY modify_policy ON public.exercise_preset_entries USING (public.has_
 -- Name: exercises modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY modify_policy ON public.exercises USING ((public.current_user_id() = user_id)) WITH CHECK ((public.current_user_id() = user_id));
+CREATE POLICY modify_policy ON public.exercises USING ((public.authenticated_user_id() = user_id)) WITH CHECK ((public.authenticated_user_id() = user_id));
 
 
 --
 -- Name: family_access modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY modify_policy ON public.family_access USING ((public.current_user_id() = owner_user_id)) WITH CHECK ((public.current_user_id() = owner_user_id));
+CREATE POLICY modify_policy ON public.family_access USING ((public.authenticated_user_id() = owner_user_id)) WITH CHECK ((public.authenticated_user_id() = owner_user_id));
+
+
+--
+-- Name: fasting_logs modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.fasting_logs USING (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text))) WITH CHECK (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text)));
 
 
 --
@@ -6280,28 +8270,49 @@ CREATE POLICY modify_policy ON public.food_entry_meals USING (public.has_diary_a
 
 
 --
+-- Name: food_favorites modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.food_favorites USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+
+
+--
 -- Name: food_variants modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY modify_policy ON public.food_variants USING ((EXISTS ( SELECT 1
    FROM public.foods f
-  WHERE ((f.id = food_variants.food_id) AND public.has_diary_access(f.user_id))))) WITH CHECK ((EXISTS ( SELECT 1
+  WHERE ((f.id = food_variants.food_id) AND (public.authenticated_user_id() = f.user_id))))) WITH CHECK ((EXISTS ( SELECT 1
    FROM public.foods f
-  WHERE ((f.id = food_variants.food_id) AND public.has_diary_access(f.user_id)))));
+  WHERE ((f.id = food_variants.food_id) AND (public.authenticated_user_id() = f.user_id)))));
 
 
 --
 -- Name: foods modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY modify_policy ON public.foods USING ((public.current_user_id() = user_id)) WITH CHECK ((public.current_user_id() = user_id));
+CREATE POLICY modify_policy ON public.foods USING ((public.authenticated_user_id() = user_id)) WITH CHECK ((public.authenticated_user_id() = user_id));
+
+
+--
+-- Name: goal_presets modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.goal_presets USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+
+
+--
+-- Name: health_metric_samples modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.health_metric_samples USING (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text))) WITH CHECK (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text)));
 
 
 --
 -- Name: injection_entries modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY modify_policy ON public.injection_entries USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+CREATE POLICY modify_policy ON public.injection_entries USING (public.has_medication_access(user_id)) WITH CHECK (public.has_medication_access(user_id));
 
 
 --
@@ -6310,104 +8321,230 @@ CREATE POLICY modify_policy ON public.injection_entries USING (public.has_diary_
 
 CREATE POLICY modify_policy ON public.meal_foods USING ((EXISTS ( SELECT 1
    FROM public.meals m
-  WHERE ((m.id = meal_foods.meal_id) AND (public.current_user_id() = m.user_id) AND (EXISTS ( SELECT 1
-           FROM public.foods f
-          WHERE (f.id = meal_foods.food_id))))))) WITH CHECK ((EXISTS ( SELECT 1
+  WHERE ((m.id = meal_foods.meal_id) AND (public.authenticated_user_id() = m.user_id))))) WITH CHECK (((EXISTS ( SELECT 1
    FROM public.meals m
-  WHERE ((m.id = meal_foods.meal_id) AND (public.current_user_id() = m.user_id) AND (EXISTS ( SELECT 1
-           FROM public.foods f
-          WHERE (f.id = meal_foods.food_id)))))));
+  WHERE ((m.id = meal_foods.meal_id) AND (public.authenticated_user_id() = m.user_id)))) AND (((food_id IS NOT NULL) AND (EXISTS ( SELECT 1
+   FROM public.foods f
+  WHERE (f.id = meal_foods.food_id)))) OR ((child_meal_id IS NOT NULL) AND (EXISTS ( SELECT 1
+   FROM public.meals cm
+  WHERE ((cm.id = meal_foods.child_meal_id) AND public.has_library_access_with_public(cm.user_id, cm.is_public, ARRAY['can_view_food_library'::text, 'can_manage_diary'::text]))))))));
 
 
 --
 -- Name: meal_plan_templates modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY modify_policy ON public.meal_plan_templates USING ((public.current_user_id() = user_id)) WITH CHECK ((public.current_user_id() = user_id));
+CREATE POLICY modify_policy ON public.meal_plan_templates USING ((public.authenticated_user_id() = user_id)) WITH CHECK ((public.authenticated_user_id() = user_id));
+
+
+--
+-- Name: meal_plans modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.meal_plans USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
 
 
 --
 -- Name: meal_types modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY modify_policy ON public.meal_types USING ((user_id = public.current_user_id())) WITH CHECK ((user_id = public.current_user_id()));
+CREATE POLICY modify_policy ON public.meal_types USING ((user_id = public.authenticated_user_id())) WITH CHECK ((user_id = public.authenticated_user_id()));
 
 
 --
 -- Name: meals modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY modify_policy ON public.meals USING ((public.current_user_id() = user_id)) WITH CHECK ((public.current_user_id() = user_id));
+CREATE POLICY modify_policy ON public.meals USING ((public.authenticated_user_id() = user_id)) WITH CHECK ((public.authenticated_user_id() = user_id));
 
 
 --
 -- Name: medication_entries modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY modify_policy ON public.medication_entries USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+CREATE POLICY modify_policy ON public.medication_entries USING (public.has_medication_access(user_id)) WITH CHECK (public.has_medication_access(user_id));
 
 
 --
 -- Name: medication_pens modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY modify_policy ON public.medication_pens USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+CREATE POLICY modify_policy ON public.medication_pens USING (public.has_medication_access(user_id)) WITH CHECK (public.has_medication_access(user_id));
 
 
 --
 -- Name: medication_schedules modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY modify_policy ON public.medication_schedules USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+CREATE POLICY modify_policy ON public.medication_schedules USING (public.has_medication_access(user_id)) WITH CHECK (public.has_medication_access(user_id));
 
 
 --
 -- Name: medication_titration_steps modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY modify_policy ON public.medication_titration_steps USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+CREATE POLICY modify_policy ON public.medication_titration_steps USING (public.has_medication_access(user_id)) WITH CHECK (public.has_medication_access(user_id));
 
 
 --
 -- Name: medications modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY modify_policy ON public.medications USING ((public.current_user_id() = user_id)) WITH CHECK ((public.current_user_id() = user_id));
+CREATE POLICY modify_policy ON public.medications USING (public.has_medication_access(user_id)) WITH CHECK (public.has_medication_access(user_id));
+
+
+--
+-- Name: mood_entries modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.mood_entries USING (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text))) WITH CHECK (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text)));
+
+
+--
+-- Name: onboarding_data modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.onboarding_data USING ((public.authenticated_user_id() = user_id)) WITH CHECK ((public.authenticated_user_id() = user_id));
+
+
+--
+-- Name: onboarding_status modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.onboarding_status USING ((public.authenticated_user_id() = user_id)) WITH CHECK ((public.authenticated_user_id() = user_id));
+
+
+--
+-- Name: profiles modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.profiles USING ((public.authenticated_user_id() = id)) WITH CHECK ((public.authenticated_user_id() = id));
 
 
 --
 -- Name: sleep_entries modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY modify_policy ON public.sleep_entries USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+CREATE POLICY modify_policy ON public.sleep_entries USING (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text))) WITH CHECK (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text)));
 
 
 --
 -- Name: sleep_entry_stages modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY modify_policy ON public.sleep_entry_stages USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+CREATE POLICY modify_policy ON public.sleep_entry_stages USING (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text))) WITH CHECK (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text)));
+
+
+--
+-- Name: sleep_need_calculations modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.sleep_need_calculations USING (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text))) WITH CHECK (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text)));
 
 
 --
 -- Name: symptom_entries modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY modify_policy ON public.symptom_entries USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+CREATE POLICY modify_policy ON public.symptom_entries USING (public.has_medication_access(user_id)) WITH CHECK (public.has_medication_access(user_id));
+
+
+--
+-- Name: user_allergen_preferences modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.user_allergen_preferences USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+
+
+--
+-- Name: user_custom_moods modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.user_custom_moods USING (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text))) WITH CHECK (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text)));
+
+
+--
+-- Name: user_custom_nutrients modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.user_custom_nutrients USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
 
 
 --
 -- Name: user_custom_symptom_locations modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY modify_policy ON public.user_custom_symptom_locations USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+CREATE POLICY modify_policy ON public.user_custom_symptom_locations USING (public.has_medication_access(user_id)) WITH CHECK (public.has_medication_access(user_id));
 
 
 --
 -- Name: user_custom_symptoms modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY modify_policy ON public.user_custom_symptoms USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+CREATE POLICY modify_policy ON public.user_custom_symptoms USING (public.has_medication_access(user_id)) WITH CHECK (public.has_medication_access(user_id));
+
+
+--
+-- Name: user_dashboard_layouts modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.user_dashboard_layouts USING ((public.authenticated_user_id() = user_id)) WITH CHECK ((public.authenticated_user_id() = user_id));
+
+
+--
+-- Name: user_goals modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.user_goals USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+
+
+--
+-- Name: user_meal_visibilities modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.user_meal_visibilities USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+
+
+--
+-- Name: user_medication_display_preferences modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.user_medication_display_preferences USING ((public.authenticated_user_id() = user_id)) WITH CHECK ((public.authenticated_user_id() = user_id));
+
+
+--
+-- Name: user_nutrient_display_preferences modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.user_nutrient_display_preferences USING ((public.authenticated_user_id() = user_id)) WITH CHECK ((public.authenticated_user_id() = user_id));
+
+
+--
+-- Name: user_nutrient_goal_preferences modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.user_nutrient_goal_preferences USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+
+
+--
+-- Name: user_preferences modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.user_preferences USING ((public.authenticated_user_id() = user_id)) WITH CHECK ((public.authenticated_user_id() = user_id));
+
+
+--
+-- Name: user_water_containers modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.user_water_containers USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+
+
+--
+-- Name: vitals_entries modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.vitals_entries USING (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text))) WITH CHECK (((public.authenticated_user_id() = user_id) OR public.has_family_access(user_id, 'can_manage_checkin'::text)));
 
 
 --
@@ -6425,10 +8562,17 @@ CREATE POLICY modify_policy ON public.water_intake_entries USING (public.has_dia
 
 
 --
+-- Name: weekly_goal_plans modify_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY modify_policy ON public.weekly_goal_plans USING (public.has_diary_access(user_id)) WITH CHECK (public.has_diary_access(user_id));
+
+
+--
 -- Name: workout_plan_templates modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY modify_policy ON public.workout_plan_templates USING ((public.current_user_id() = user_id)) WITH CHECK ((public.current_user_id() = user_id));
+CREATE POLICY modify_policy ON public.workout_plan_templates USING ((public.authenticated_user_id() = user_id)) WITH CHECK ((public.authenticated_user_id() = user_id));
 
 
 --
@@ -6438,10 +8582,10 @@ CREATE POLICY modify_policy ON public.workout_plan_templates USING ((public.curr
 CREATE POLICY modify_policy ON public.workout_preset_exercise_sets USING ((EXISTS ( SELECT 1
    FROM (public.workout_preset_exercises wpe
      JOIN public.workout_presets wp ON ((wp.id = wpe.workout_preset_id)))
-  WHERE ((wpe.id = workout_preset_exercise_sets.workout_preset_exercise_id) AND (public.current_user_id() = wp.user_id))))) WITH CHECK ((EXISTS ( SELECT 1
+  WHERE ((wpe.id = workout_preset_exercise_sets.workout_preset_exercise_id) AND (public.authenticated_user_id() = wp.user_id))))) WITH CHECK ((EXISTS ( SELECT 1
    FROM (public.workout_preset_exercises wpe
      JOIN public.workout_presets wp ON ((wp.id = wpe.workout_preset_id)))
-  WHERE ((wpe.id = workout_preset_exercise_sets.workout_preset_exercise_id) AND (public.current_user_id() = wp.user_id)))));
+  WHERE ((wpe.id = workout_preset_exercise_sets.workout_preset_exercise_id) AND (public.authenticated_user_id() = wp.user_id)))));
 
 
 --
@@ -6450,16 +8594,16 @@ CREATE POLICY modify_policy ON public.workout_preset_exercise_sets USING ((EXIST
 
 CREATE POLICY modify_policy ON public.workout_preset_exercises USING ((EXISTS ( SELECT 1
    FROM public.workout_presets wp
-  WHERE ((wp.id = workout_preset_exercises.workout_preset_id) AND (public.current_user_id() = wp.user_id))))) WITH CHECK ((EXISTS ( SELECT 1
+  WHERE ((wp.id = workout_preset_exercises.workout_preset_id) AND (public.authenticated_user_id() = wp.user_id))))) WITH CHECK ((EXISTS ( SELECT 1
    FROM public.workout_presets wp
-  WHERE ((wp.id = workout_preset_exercises.workout_preset_id) AND (public.current_user_id() = wp.user_id)))));
+  WHERE ((wp.id = workout_preset_exercises.workout_preset_id) AND (public.authenticated_user_id() = wp.user_id)))));
 
 
 --
 -- Name: workout_presets modify_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY modify_policy ON public.workout_presets USING ((public.current_user_id() = user_id)) WITH CHECK ((public.current_user_id() = user_id));
+CREATE POLICY modify_policy ON public.workout_presets USING ((public.authenticated_user_id() = user_id)) WITH CHECK ((public.authenticated_user_id() = user_id));
 
 
 --
@@ -6484,35 +8628,42 @@ ALTER TABLE public.onboarding_status ENABLE ROW LEVEL SECURITY;
 -- Name: api_key owner_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY owner_policy ON public.api_key USING ((reference_id = public.current_user_id())) WITH CHECK ((reference_id = public.current_user_id()));
+CREATE POLICY owner_policy ON public.api_key USING ((reference_id = public.authenticated_user_id())) WITH CHECK ((reference_id = public.authenticated_user_id()));
 
 
 --
--- Name: daily_sleep_need owner_policy; Type: POLICY; Schema: public; Owner: -
+-- Name: cycle_daily_entries owner_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY owner_policy ON public.daily_sleep_need USING ((user_id = public.current_user_id())) WITH CHECK ((user_id = public.current_user_id()));
-
-
---
--- Name: day_classification_cache owner_policy; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY owner_policy ON public.day_classification_cache USING ((user_id = public.current_user_id())) WITH CHECK ((user_id = public.current_user_id()));
+CREATE POLICY owner_policy ON public.cycle_daily_entries USING ((user_id = public.authenticated_user_id())) WITH CHECK ((user_id = public.authenticated_user_id()));
 
 
 --
--- Name: fasting_logs owner_policy; Type: POLICY; Schema: public; Owner: -
+-- Name: cycle_settings owner_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY owner_policy ON public.fasting_logs USING ((user_id = public.current_user_id())) WITH CHECK ((user_id = public.current_user_id()));
+CREATE POLICY owner_policy ON public.cycle_settings USING ((user_id = public.authenticated_user_id())) WITH CHECK ((user_id = public.authenticated_user_id()));
 
 
 --
--- Name: goal_presets owner_policy; Type: POLICY; Schema: public; Owner: -
+-- Name: cycle_test_entries owner_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY owner_policy ON public.goal_presets USING ((user_id = public.current_user_id())) WITH CHECK ((user_id = public.current_user_id()));
+CREATE POLICY owner_policy ON public.cycle_test_entries USING ((user_id = public.authenticated_user_id())) WITH CHECK ((user_id = public.authenticated_user_id()));
+
+
+--
+-- Name: cycles owner_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY owner_policy ON public.cycles USING ((user_id = public.authenticated_user_id())) WITH CHECK ((user_id = public.authenticated_user_id()));
+
+
+--
+-- Name: health_appointments owner_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY owner_policy ON public.health_appointments USING ((user_id = public.authenticated_user_id())) WITH CHECK ((user_id = public.authenticated_user_id()));
 
 
 --
@@ -6521,13 +8672,13 @@ CREATE POLICY owner_policy ON public.goal_presets USING ((user_id = public.curre
 
 CREATE POLICY owner_policy ON public.meal_plan_template_assignments USING (((EXISTS ( SELECT 1
    FROM public.meal_plan_templates mpt
-  WHERE ((mpt.id = meal_plan_template_assignments.template_id) AND (public.current_user_id() = mpt.user_id)))) AND ((((item_type)::text = 'food'::text) AND (EXISTS ( SELECT 1
+  WHERE ((mpt.id = meal_plan_template_assignments.template_id) AND public.has_diary_access(mpt.user_id)))) AND ((((item_type)::text = 'food'::text) AND (EXISTS ( SELECT 1
    FROM public.foods f
   WHERE (f.id = meal_plan_template_assignments.food_id)))) OR (((item_type)::text = 'meal'::text) AND (EXISTS ( SELECT 1
    FROM public.meals m
   WHERE (m.id = meal_plan_template_assignments.meal_id))))))) WITH CHECK (((EXISTS ( SELECT 1
    FROM public.meal_plan_templates mpt
-  WHERE ((mpt.id = meal_plan_template_assignments.template_id) AND (public.current_user_id() = mpt.user_id)))) AND ((((item_type)::text = 'food'::text) AND (EXISTS ( SELECT 1
+  WHERE ((mpt.id = meal_plan_template_assignments.template_id) AND public.has_diary_access(mpt.user_id)))) AND ((((item_type)::text = 'food'::text) AND (EXISTS ( SELECT 1
    FROM public.foods f
   WHERE (f.id = meal_plan_template_assignments.food_id)))) OR (((item_type)::text = 'meal'::text) AND (EXISTS ( SELECT 1
    FROM public.meals m
@@ -6535,136 +8686,80 @@ CREATE POLICY owner_policy ON public.meal_plan_template_assignments USING (((EXI
 
 
 --
--- Name: meal_plans owner_policy; Type: POLICY; Schema: public; Owner: -
+-- Name: pregnancies owner_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY owner_policy ON public.meal_plans USING ((user_id = public.current_user_id())) WITH CHECK ((user_id = public.current_user_id()));
-
-
---
--- Name: mood_entries owner_policy; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY owner_policy ON public.mood_entries USING ((user_id = public.current_user_id())) WITH CHECK ((user_id = public.current_user_id()));
+CREATE POLICY owner_policy ON public.pregnancies USING ((user_id = public.authenticated_user_id())) WITH CHECK ((user_id = public.authenticated_user_id()));
 
 
 --
--- Name: onboarding_data owner_policy; Type: POLICY; Schema: public; Owner: -
+-- Name: pregnancy_checklist_state owner_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY owner_policy ON public.onboarding_data USING ((user_id = public.current_user_id())) WITH CHECK ((user_id = public.current_user_id()));
-
-
---
--- Name: onboarding_status owner_policy; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY owner_policy ON public.onboarding_status USING ((user_id = public.current_user_id())) WITH CHECK ((user_id = public.current_user_id()));
+CREATE POLICY owner_policy ON public.pregnancy_checklist_state USING ((user_id = public.authenticated_user_id())) WITH CHECK ((user_id = public.authenticated_user_id()));
 
 
 --
--- Name: profiles owner_policy; Type: POLICY; Schema: public; Owner: -
+-- Name: pregnancy_contractions owner_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY owner_policy ON public.profiles USING ((id = public.current_user_id())) WITH CHECK ((id = public.current_user_id()));
+CREATE POLICY owner_policy ON public.pregnancy_contractions USING ((user_id = public.authenticated_user_id())) WITH CHECK ((user_id = public.authenticated_user_id()));
 
 
 --
--- Name: sleep_need_calculations owner_policy; Type: POLICY; Schema: public; Owner: -
+-- Name: pregnancy_kick_sessions owner_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY owner_policy ON public.sleep_need_calculations USING ((user_id = public.current_user_id())) WITH CHECK ((user_id = public.current_user_id()));
+CREATE POLICY owner_policy ON public.pregnancy_kick_sessions USING ((user_id = public.authenticated_user_id())) WITH CHECK ((user_id = public.authenticated_user_id()));
+
+
+--
+-- Name: pregnancy_photos owner_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY owner_policy ON public.pregnancy_photos USING ((user_id = public.authenticated_user_id())) WITH CHECK ((user_id = public.authenticated_user_id()));
 
 
 --
 -- Name: sparky_chat_history owner_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY owner_policy ON public.sparky_chat_history USING ((user_id = public.current_user_id())) WITH CHECK ((user_id = public.current_user_id()));
+CREATE POLICY owner_policy ON public.sparky_chat_history USING ((user_id = public.authenticated_user_id())) WITH CHECK ((user_id = public.authenticated_user_id()));
 
 
 --
--- Name: user_allergen_preferences owner_policy; Type: POLICY; Schema: public; Owner: -
+-- Name: user_cycle_display_preferences owner_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY owner_policy ON public.user_allergen_preferences USING ((user_id = public.current_user_id())) WITH CHECK ((user_id = public.current_user_id()));
-
-
---
--- Name: user_custom_nutrients owner_policy; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY owner_policy ON public.user_custom_nutrients USING ((user_id = public.current_user_id())) WITH CHECK ((user_id = public.current_user_id()));
-
-
---
--- Name: user_dashboard_layouts owner_policy; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY owner_policy ON public.user_dashboard_layouts USING ((user_id = public.current_user_id())) WITH CHECK ((user_id = public.current_user_id()));
-
-
---
--- Name: user_goals owner_policy; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY owner_policy ON public.user_goals USING ((user_id = public.current_user_id())) WITH CHECK ((user_id = public.current_user_id()));
+CREATE POLICY owner_policy ON public.user_cycle_display_preferences USING ((user_id = public.authenticated_user_id())) WITH CHECK ((user_id = public.authenticated_user_id()));
 
 
 --
 -- Name: user_ignored_updates owner_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY owner_policy ON public.user_ignored_updates USING ((user_id = public.current_user_id())) WITH CHECK ((user_id = public.current_user_id()));
-
-
---
--- Name: user_meal_visibilities owner_policy; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY owner_policy ON public.user_meal_visibilities USING ((user_id = public.current_user_id())) WITH CHECK ((user_id = public.current_user_id()));
+CREATE POLICY owner_policy ON public.user_ignored_updates USING ((user_id = public.authenticated_user_id())) WITH CHECK ((user_id = public.authenticated_user_id()));
 
 
 --
 -- Name: user_medication_display_preferences owner_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY owner_policy ON public.user_medication_display_preferences USING ((user_id = public.current_user_id())) WITH CHECK ((user_id = public.current_user_id()));
+CREATE POLICY owner_policy ON public.user_medication_display_preferences USING ((user_id = public.authenticated_user_id())) WITH CHECK ((user_id = public.authenticated_user_id()));
 
 
 --
--- Name: user_nutrient_display_preferences owner_policy; Type: POLICY; Schema: public; Owner: -
+-- Name: user_mood_display_preferences owner_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY owner_policy ON public.user_nutrient_display_preferences USING ((user_id = public.current_user_id())) WITH CHECK ((user_id = public.current_user_id()));
+CREATE POLICY owner_policy ON public.user_mood_display_preferences USING ((user_id = public.authenticated_user_id())) WITH CHECK ((user_id = public.authenticated_user_id()));
 
 
 --
 -- Name: user_oidc_links owner_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY owner_policy ON public.user_oidc_links USING ((user_id = public.current_user_id())) WITH CHECK ((user_id = public.current_user_id()));
-
-
---
--- Name: user_preferences owner_policy; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY owner_policy ON public.user_preferences USING ((user_id = public.current_user_id())) WITH CHECK ((user_id = public.current_user_id()));
-
-
---
--- Name: user_water_containers owner_policy; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY owner_policy ON public.user_water_containers USING ((user_id = public.current_user_id())) WITH CHECK ((user_id = public.current_user_id()));
-
-
---
--- Name: weekly_goal_plans owner_policy; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY owner_policy ON public.weekly_goal_plans USING ((user_id = public.current_user_id())) WITH CHECK ((user_id = public.current_user_id()));
+CREATE POLICY owner_policy ON public.user_oidc_links USING ((user_id = public.authenticated_user_id())) WITH CHECK ((user_id = public.authenticated_user_id()));
 
 
 --
@@ -6684,10 +8779,46 @@ CREATE POLICY owner_policy ON public.workout_plan_assignment_sets USING ((EXISTS
 
 CREATE POLICY owner_policy ON public.workout_plan_template_assignments USING ((EXISTS ( SELECT 1
    FROM public.workout_plan_templates wpt
-  WHERE ((wpt.id = workout_plan_template_assignments.template_id) AND (public.current_user_id() = wpt.user_id))))) WITH CHECK ((EXISTS ( SELECT 1
+  WHERE ((wpt.id = workout_plan_template_assignments.template_id) AND public.has_diary_access(wpt.user_id))))) WITH CHECK ((EXISTS ( SELECT 1
    FROM public.workout_plan_templates wpt
-  WHERE ((wpt.id = workout_plan_template_assignments.template_id) AND (public.current_user_id() = wpt.user_id)))));
+  WHERE ((wpt.id = workout_plan_template_assignments.template_id) AND public.has_diary_access(wpt.user_id)))));
 
+
+--
+-- Name: passkey_registration_tickets; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.passkey_registration_tickets ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: pregnancies; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.pregnancies ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: pregnancy_checklist_state; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.pregnancy_checklist_state ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: pregnancy_contractions; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.pregnancy_contractions ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: pregnancy_kick_sessions; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.pregnancy_kick_sessions ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: pregnancy_photos; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.pregnancy_photos ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: profiles; Type: ROW SECURITY; Schema: public; Owner: -
@@ -6701,42 +8832,63 @@ ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY select_exercise_preset_entry_linked_policy ON public.exercise_entries FOR SELECT USING (((exercise_preset_entry_id IS NOT NULL) AND (EXISTS ( SELECT 1
    FROM public.exercise_preset_entries epe
-  WHERE ((epe.id = exercise_entries.exercise_preset_entry_id) AND public.has_diary_access(epe.user_id))))));
+  WHERE ((epe.id = exercise_entries.exercise_preset_entry_id) AND public.has_diary_read_access(epe.user_id))))));
 
 
 --
 -- Name: check_in_measurements select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY select_policy ON public.check_in_measurements FOR SELECT USING (public.has_diary_access(user_id));
+CREATE POLICY select_policy ON public.check_in_measurements FOR SELECT USING (public.has_checkin_read_access(user_id));
 
 
 --
 -- Name: check_in_photos select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY select_policy ON public.check_in_photos FOR SELECT USING (public.has_diary_access(user_id));
+CREATE POLICY select_policy ON public.check_in_photos FOR SELECT USING (public.has_checkin_read_access(user_id));
 
 
 --
 -- Name: custom_categories select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY select_policy ON public.custom_categories FOR SELECT USING (public.has_diary_access(user_id));
+CREATE POLICY select_policy ON public.custom_categories FOR SELECT USING (public.has_checkin_read_access(user_id));
 
 
 --
 -- Name: custom_measurements select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY select_policy ON public.custom_measurements FOR SELECT USING (public.has_diary_access(user_id));
+CREATE POLICY select_policy ON public.custom_measurements FOR SELECT USING (public.has_checkin_read_access(user_id));
+
+
+--
+-- Name: daily_health_metrics select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.daily_health_metrics FOR SELECT USING (public.has_checkin_read_access(user_id));
+
+
+--
+-- Name: daily_sleep_need select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.daily_sleep_need FOR SELECT USING (public.has_checkin_read_access(user_id));
+
+
+--
+-- Name: day_classification_cache select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.day_classification_cache FOR SELECT USING (public.has_checkin_read_access(user_id));
 
 
 --
 -- Name: exercise_entries select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY select_policy ON public.exercise_entries FOR SELECT USING (public.has_diary_access(user_id));
+CREATE POLICY select_policy ON public.exercise_entries FOR SELECT USING (public.has_diary_read_access(user_id));
 
 
 --
@@ -6745,9 +8897,30 @@ CREATE POLICY select_policy ON public.exercise_entries FOR SELECT USING (public.
 
 CREATE POLICY select_policy ON public.exercise_entry_activity_details FOR SELECT USING ((((exercise_entry_id IS NOT NULL) AND (EXISTS ( SELECT 1
    FROM public.exercise_entries ee
-  WHERE ((ee.id = exercise_entry_activity_details.exercise_entry_id) AND public.has_diary_access(ee.user_id))))) OR ((exercise_preset_entry_id IS NOT NULL) AND (EXISTS ( SELECT 1
+  WHERE ((ee.id = exercise_entry_activity_details.exercise_entry_id) AND public.has_diary_read_access(ee.user_id))))) OR ((exercise_preset_entry_id IS NOT NULL) AND (EXISTS ( SELECT 1
    FROM public.exercise_preset_entries epe
-  WHERE ((epe.id = exercise_entry_activity_details.exercise_preset_entry_id) AND public.has_diary_access(epe.user_id)))))));
+  WHERE ((epe.id = exercise_entry_activity_details.exercise_preset_entry_id) AND public.has_diary_read_access(epe.user_id)))))));
+
+
+--
+-- Name: exercise_entry_gps_points select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.exercise_entry_gps_points FOR SELECT USING (public.has_diary_read_access(user_id));
+
+
+--
+-- Name: exercise_entry_hr_zones select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.exercise_entry_hr_zones FOR SELECT USING (public.has_diary_read_access(user_id));
+
+
+--
+-- Name: exercise_entry_laps select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.exercise_entry_laps FOR SELECT USING (public.has_diary_read_access(user_id));
 
 
 --
@@ -6756,14 +8929,14 @@ CREATE POLICY select_policy ON public.exercise_entry_activity_details FOR SELECT
 
 CREATE POLICY select_policy ON public.exercise_entry_sets FOR SELECT USING ((EXISTS ( SELECT 1
    FROM public.exercise_entries ee
-  WHERE ((ee.id = exercise_entry_sets.exercise_entry_id) AND public.has_diary_access(ee.user_id)))));
+  WHERE ((ee.id = exercise_entry_sets.exercise_entry_id) AND public.has_diary_read_access(ee.user_id)))));
 
 
 --
 -- Name: exercise_preset_entries select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY select_policy ON public.exercise_preset_entries FOR SELECT USING (public.has_diary_access(user_id));
+CREATE POLICY select_policy ON public.exercise_preset_entries FOR SELECT USING (public.has_diary_read_access(user_id));
 
 
 --
@@ -6786,21 +8959,35 @@ CREATE POLICY select_policy ON public.external_data_providers FOR SELECT USING (
 -- Name: family_access select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY select_policy ON public.family_access FOR SELECT USING (((public.current_user_id() = owner_user_id) OR (public.current_user_id() = family_user_id)));
+CREATE POLICY select_policy ON public.family_access FOR SELECT USING (((public.authenticated_user_id() = owner_user_id) OR (public.authenticated_user_id() = family_user_id)));
+
+
+--
+-- Name: fasting_logs select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.fasting_logs FOR SELECT USING (public.has_checkin_read_access(user_id));
 
 
 --
 -- Name: food_entries select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY select_policy ON public.food_entries FOR SELECT USING (public.has_diary_access(user_id));
+CREATE POLICY select_policy ON public.food_entries FOR SELECT USING (public.has_diary_read_access(user_id));
 
 
 --
 -- Name: food_entry_meals select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY select_policy ON public.food_entry_meals FOR SELECT USING (public.has_diary_access(user_id));
+CREATE POLICY select_policy ON public.food_entry_meals FOR SELECT USING (public.has_diary_read_access(user_id));
+
+
+--
+-- Name: food_favorites select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.food_favorites FOR SELECT USING (public.has_diary_read_access(user_id));
 
 
 --
@@ -6820,10 +9007,24 @@ CREATE POLICY select_policy ON public.foods FOR SELECT USING (public.has_library
 
 
 --
+-- Name: goal_presets select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.goal_presets FOR SELECT USING (public.has_diary_read_access(user_id));
+
+
+--
+-- Name: health_metric_samples select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.health_metric_samples FOR SELECT USING (public.has_checkin_read_access(user_id));
+
+
+--
 -- Name: injection_entries select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY select_policy ON public.injection_entries FOR SELECT USING (public.has_diary_access(user_id));
+CREATE POLICY select_policy ON public.injection_entries FOR SELECT USING (public.has_medication_read_access(user_id));
 
 
 --
@@ -6843,10 +9044,17 @@ CREATE POLICY select_policy ON public.meal_plan_templates FOR SELECT USING (publ
 
 
 --
+-- Name: meal_plans select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.meal_plans FOR SELECT USING (public.has_diary_read_access(user_id));
+
+
+--
 -- Name: meal_types select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY select_policy ON public.meal_types FOR SELECT USING (((user_id IS NULL) OR public.has_diary_access(user_id)));
+CREATE POLICY select_policy ON public.meal_types FOR SELECT USING (((user_id IS NULL) OR public.has_diary_read_access(user_id)));
 
 
 --
@@ -6860,84 +9068,210 @@ CREATE POLICY select_policy ON public.meals FOR SELECT USING (public.has_library
 -- Name: medication_entries select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY select_policy ON public.medication_entries FOR SELECT USING (public.has_diary_access(user_id));
+CREATE POLICY select_policy ON public.medication_entries FOR SELECT USING (public.has_medication_read_access(user_id));
 
 
 --
 -- Name: medication_pens select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY select_policy ON public.medication_pens FOR SELECT USING (public.has_diary_access(user_id));
+CREATE POLICY select_policy ON public.medication_pens FOR SELECT USING (public.has_medication_read_access(user_id));
 
 
 --
 -- Name: medication_schedules select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY select_policy ON public.medication_schedules FOR SELECT USING (public.has_diary_access(user_id));
+CREATE POLICY select_policy ON public.medication_schedules FOR SELECT USING (public.has_medication_read_access(user_id));
 
 
 --
 -- Name: medication_titration_steps select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY select_policy ON public.medication_titration_steps FOR SELECT USING (public.has_diary_access(user_id));
+CREATE POLICY select_policy ON public.medication_titration_steps FOR SELECT USING (public.has_medication_read_access(user_id));
 
 
 --
 -- Name: medications select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY select_policy ON public.medications FOR SELECT USING (public.has_library_access_with_public(user_id, false, ARRAY['can_manage_diary'::text]));
+CREATE POLICY select_policy ON public.medications FOR SELECT USING (public.has_medication_read_access(user_id));
+
+
+--
+-- Name: mood_entries select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.mood_entries FOR SELECT USING (public.has_checkin_read_access(user_id));
+
+
+--
+-- Name: onboarding_data select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.onboarding_data FOR SELECT USING (public.has_profile_read_access(user_id));
+
+
+--
+-- Name: onboarding_status select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.onboarding_status FOR SELECT USING (public.has_profile_read_access(user_id));
+
+
+--
+-- Name: profiles select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.profiles FOR SELECT USING (public.has_profile_read_access(id));
 
 
 --
 -- Name: sleep_entries select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY select_policy ON public.sleep_entries FOR SELECT USING (public.has_diary_access(user_id));
+CREATE POLICY select_policy ON public.sleep_entries FOR SELECT USING (public.has_checkin_read_access(user_id));
 
 
 --
 -- Name: sleep_entry_stages select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY select_policy ON public.sleep_entry_stages FOR SELECT USING (public.has_diary_access(user_id));
+CREATE POLICY select_policy ON public.sleep_entry_stages FOR SELECT USING (public.has_checkin_read_access(user_id));
+
+
+--
+-- Name: sleep_need_calculations select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.sleep_need_calculations FOR SELECT USING (public.has_checkin_read_access(user_id));
 
 
 --
 -- Name: symptom_entries select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY select_policy ON public.symptom_entries FOR SELECT USING (public.has_diary_access(user_id));
+CREATE POLICY select_policy ON public.symptom_entries FOR SELECT USING (public.has_medication_read_access(user_id));
+
+
+--
+-- Name: user_allergen_preferences select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.user_allergen_preferences FOR SELECT USING (public.has_diary_read_access(user_id));
+
+
+--
+-- Name: user_custom_moods select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.user_custom_moods FOR SELECT USING (public.has_checkin_read_access(user_id));
+
+
+--
+-- Name: user_custom_nutrients select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.user_custom_nutrients FOR SELECT USING (public.has_diary_read_access(user_id));
 
 
 --
 -- Name: user_custom_symptom_locations select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY select_policy ON public.user_custom_symptom_locations FOR SELECT USING (public.has_diary_access(user_id));
+CREATE POLICY select_policy ON public.user_custom_symptom_locations FOR SELECT USING (public.has_medication_read_access(user_id));
 
 
 --
 -- Name: user_custom_symptoms select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY select_policy ON public.user_custom_symptoms FOR SELECT USING (public.has_diary_access(user_id));
+CREATE POLICY select_policy ON public.user_custom_symptoms FOR SELECT USING (public.has_medication_read_access(user_id));
+
+
+--
+-- Name: user_dashboard_layouts select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.user_dashboard_layouts FOR SELECT USING (public.has_profile_read_access(user_id));
+
+
+--
+-- Name: user_goals select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.user_goals FOR SELECT USING (public.has_diary_read_access(user_id));
+
+
+--
+-- Name: user_meal_visibilities select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.user_meal_visibilities FOR SELECT USING (public.has_diary_read_access(user_id));
+
+
+--
+-- Name: user_medication_display_preferences select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.user_medication_display_preferences FOR SELECT USING (public.has_medication_read_access(user_id));
+
+
+--
+-- Name: user_nutrient_display_preferences select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.user_nutrient_display_preferences FOR SELECT USING (public.has_profile_read_access(user_id));
+
+
+--
+-- Name: user_nutrient_goal_preferences select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.user_nutrient_goal_preferences FOR SELECT USING (public.has_diary_read_access(user_id));
+
+
+--
+-- Name: user_preferences select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.user_preferences FOR SELECT USING (public.has_profile_read_access(user_id));
+
+
+--
+-- Name: user_water_containers select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.user_water_containers FOR SELECT USING (public.has_diary_read_access(user_id));
+
+
+--
+-- Name: vitals_entries select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.vitals_entries FOR SELECT USING (public.has_checkin_read_access(user_id));
 
 
 --
 -- Name: water_intake select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY select_policy ON public.water_intake FOR SELECT USING (public.has_diary_access(user_id));
+CREATE POLICY select_policy ON public.water_intake FOR SELECT USING (public.has_diary_read_access(user_id));
 
 
 --
 -- Name: water_intake_entries select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY select_policy ON public.water_intake_entries FOR SELECT USING (public.has_diary_access(user_id));
+CREATE POLICY select_policy ON public.water_intake_entries FOR SELECT USING (public.has_diary_read_access(user_id));
+
+
+--
+-- Name: weekly_goal_plans select_policy; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY select_policy ON public.weekly_goal_plans FOR SELECT USING (public.has_diary_read_access(user_id));
 
 
 --
@@ -6969,7 +9303,7 @@ CREATE POLICY select_policy ON public.workout_preset_exercises FOR SELECT USING 
 -- Name: workout_presets select_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY select_policy ON public.workout_presets FOR SELECT USING (public.has_library_access_with_public(user_id, is_public, ARRAY['can_view_exercise_library'::text]));
+CREATE POLICY select_policy ON public.workout_presets FOR SELECT USING (public.has_library_access_with_public(user_id, is_public, ARRAY['can_view_exercise_library'::text, 'can_manage_diary'::text]));
 
 
 --
@@ -7006,7 +9340,7 @@ ALTER TABLE public.symptom_entries ENABLE ROW LEVEL SECURITY;
 -- Name: external_data_providers update_policy; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY update_policy ON public.external_data_providers FOR UPDATE USING ((((is_public = false) AND (user_id = public.current_user_id())) OR ((is_public = true) AND public.is_admin()))) WITH CHECK ((((is_public = false) AND (user_id = public.current_user_id())) OR ((is_public = true) AND public.is_admin())));
+CREATE POLICY update_policy ON public.external_data_providers FOR UPDATE USING ((((is_public = false) AND (user_id = public.authenticated_user_id())) OR ((is_public = true) AND public.is_admin()))) WITH CHECK ((((is_public = false) AND (user_id = public.authenticated_user_id())) OR ((is_public = true) AND public.is_admin())));
 
 
 --
@@ -7021,6 +9355,12 @@ CREATE POLICY update_policy ON public.food_entries FOR UPDATE USING (public.has_
 --
 
 ALTER TABLE public.user_allergen_preferences ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: user_custom_moods; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.user_custom_moods ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: user_custom_nutrients; Type: ROW SECURITY; Schema: public; Owner: -
@@ -7039,6 +9379,12 @@ ALTER TABLE public.user_custom_symptom_locations ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE public.user_custom_symptoms ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: user_cycle_display_preferences; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.user_cycle_display_preferences ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: user_dashboard_layouts; Type: ROW SECURITY; Schema: public; Owner: -
@@ -7071,10 +9417,22 @@ ALTER TABLE public.user_meal_visibilities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_medication_display_preferences ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: user_mood_display_preferences; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.user_mood_display_preferences ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: user_nutrient_display_preferences; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.user_nutrient_display_preferences ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: user_nutrient_goal_preferences; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.user_nutrient_goal_preferences ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: user_oidc_links; Type: ROW SECURITY; Schema: public; Owner: -
@@ -7093,6 +9451,12 @@ ALTER TABLE public.user_preferences ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE public.user_water_containers ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: vitals_entries; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.vitals_entries ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: water_intake; Type: ROW SECURITY; Schema: public; Owner: -
@@ -7152,1256 +9516,1202 @@ ALTER TABLE public.workout_presets ENABLE ROW LEVEL SECURITY;
 -- Name: SCHEMA auth; Type: ACL; Schema: -; Owner: -
 --
 
-GRANT USAGE ON SCHEMA auth TO sparky_uat;
-GRANT USAGE ON SCHEMA auth TO "sparky-uat";
-GRANT USAGE ON SCHEMA auth TO "sparky uat";
+GRANT USAGE ON SCHEMA auth TO sparky_app;
 
 
 --
 -- Name: SCHEMA public; Type: ACL; Schema: -; Owner: -
 --
 
-GRANT USAGE ON SCHEMA public TO sparky_uat;
-GRANT USAGE ON SCHEMA public TO "sparky-uat";
-GRANT USAGE ON SCHEMA public TO "sparky uat";
+GRANT USAGE ON SCHEMA public TO sparky_app;
 
 
 --
 -- Name: SCHEMA system; Type: ACL; Schema: -; Owner: -
 --
 
-GRANT USAGE ON SCHEMA system TO sparky_uat;
-GRANT USAGE ON SCHEMA system TO "sparky-uat";
-GRANT USAGE ON SCHEMA system TO "sparky uat";
+GRANT USAGE ON SCHEMA system TO sparky_app;
 
 
 --
 -- Name: FUNCTION authenticated_user_id(); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.authenticated_user_id() TO sparky_uat;
-GRANT ALL ON FUNCTION public.authenticated_user_id() TO "sparky-uat";
-GRANT ALL ON FUNCTION public.authenticated_user_id() TO "sparky uat";
+GRANT ALL ON FUNCTION public.authenticated_user_id() TO sparky_app;
 
 
 --
 -- Name: FUNCTION calculate_mid_sleep(sleep_start_ts bigint, sleep_end_ts bigint); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.calculate_mid_sleep(sleep_start_ts bigint, sleep_end_ts bigint) TO sparky_uat;
-GRANT ALL ON FUNCTION public.calculate_mid_sleep(sleep_start_ts bigint, sleep_end_ts bigint) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.calculate_mid_sleep(sleep_start_ts bigint, sleep_end_ts bigint) TO "sparky uat";
+GRANT ALL ON FUNCTION public.calculate_mid_sleep(sleep_start_ts bigint, sleep_end_ts bigint) TO sparky_app;
 
 
 --
 -- Name: FUNCTION can_access_user_data(target_user_id uuid, permission_type text, auth_user_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.can_access_user_data(target_user_id uuid, permission_type text, auth_user_id uuid) TO "sparky uat";
-GRANT ALL ON FUNCTION public.can_access_user_data(target_user_id uuid, permission_type text, auth_user_id uuid) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.can_access_user_data(target_user_id uuid, permission_type text, auth_user_id uuid) TO sparky_uat;
+GRANT ALL ON FUNCTION public.can_access_user_data(target_user_id uuid, permission_type text, auth_user_id uuid) TO sparky_app;
 
 
 --
 -- Name: FUNCTION check_family_access(p_family_user_id uuid, p_owner_user_id uuid, p_permission text); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.check_family_access(p_family_user_id uuid, p_owner_user_id uuid, p_permission text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.check_family_access(p_family_user_id uuid, p_owner_user_id uuid, p_permission text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.check_family_access(p_family_user_id uuid, p_owner_user_id uuid, p_permission text) TO "sparky uat";
+GRANT ALL ON FUNCTION public.check_family_access(p_family_user_id uuid, p_owner_user_id uuid, p_permission text) TO sparky_app;
 
 
 --
 -- Name: FUNCTION clear_old_chat_history(); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.clear_old_chat_history() TO sparky_uat;
-GRANT ALL ON FUNCTION public.clear_old_chat_history() TO "sparky-uat";
-GRANT ALL ON FUNCTION public.clear_old_chat_history() TO "sparky uat";
+GRANT ALL ON FUNCTION public.clear_old_chat_history() TO sparky_app;
+
+
+--
+-- Name: FUNCTION create_checkin_policy(table_name text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.create_checkin_policy(table_name text) TO sparky_app;
 
 
 --
 -- Name: FUNCTION create_default_external_data_providers(p_user_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.create_default_external_data_providers(p_user_id uuid) TO sparky_uat;
-GRANT ALL ON FUNCTION public.create_default_external_data_providers(p_user_id uuid) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.create_default_external_data_providers(p_user_id uuid) TO "sparky uat";
+GRANT ALL ON FUNCTION public.create_default_external_data_providers(p_user_id uuid) TO sparky_app;
 
 
 --
 -- Name: FUNCTION create_diary_policy(table_name text); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.create_diary_policy(table_name text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.create_diary_policy(table_name text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.create_diary_policy(table_name text) TO "sparky uat";
+GRANT ALL ON FUNCTION public.create_diary_policy(table_name text) TO sparky_app;
 
 
 --
 -- Name: FUNCTION create_global_default_providers(p_admin_user_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.create_global_default_providers(p_admin_user_id uuid) TO "sparky uat";
-GRANT ALL ON FUNCTION public.create_global_default_providers(p_admin_user_id uuid) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.create_global_default_providers(p_admin_user_id uuid) TO sparky_uat;
+GRANT ALL ON FUNCTION public.create_global_default_providers(p_admin_user_id uuid) TO sparky_app;
 
 
 --
 -- Name: FUNCTION create_library_policy(table_name text, shared_column text, permissions text[]); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.create_library_policy(table_name text, shared_column text, permissions text[]) TO sparky_uat;
-GRANT ALL ON FUNCTION public.create_library_policy(table_name text, shared_column text, permissions text[]) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.create_library_policy(table_name text, shared_column text, permissions text[]) TO "sparky uat";
+GRANT ALL ON FUNCTION public.create_library_policy(table_name text, shared_column text, permissions text[]) TO sparky_app;
+
+
+--
+-- Name: FUNCTION create_medication_policy(table_name text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.create_medication_policy(table_name text) TO sparky_app;
 
 
 --
 -- Name: FUNCTION create_owner_centric_all_policy(table_name text); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.create_owner_centric_all_policy(table_name text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.create_owner_centric_all_policy(table_name text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.create_owner_centric_all_policy(table_name text) TO "sparky uat";
+GRANT ALL ON FUNCTION public.create_owner_centric_all_policy(table_name text) TO sparky_app;
 
 
 --
 -- Name: FUNCTION create_owner_centric_id_policy(table_name text); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.create_owner_centric_id_policy(table_name text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.create_owner_centric_id_policy(table_name text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.create_owner_centric_id_policy(table_name text) TO "sparky uat";
+GRANT ALL ON FUNCTION public.create_owner_centric_id_policy(table_name text) TO sparky_app;
 
 
 --
 -- Name: FUNCTION create_owner_policy(table_name text, id_column text); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.create_owner_policy(table_name text, id_column text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.create_owner_policy(table_name text, id_column text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.create_owner_policy(table_name text, id_column text) TO "sparky uat";
+GRANT ALL ON FUNCTION public.create_owner_policy(table_name text, id_column text) TO sparky_app;
+
+
+--
+-- Name: FUNCTION create_shared_owner_policy(table_name text, id_column text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.create_shared_owner_policy(table_name text, id_column text) TO sparky_app;
 
 
 --
 -- Name: FUNCTION create_user_centric_policy(table_name text); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.create_user_centric_policy(table_name text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.create_user_centric_policy(table_name text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.create_user_centric_policy(table_name text) TO "sparky uat";
+GRANT ALL ON FUNCTION public.create_user_centric_policy(table_name text) TO sparky_app;
 
 
 --
 -- Name: FUNCTION create_user_preferences(); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.create_user_preferences() TO sparky_uat;
-GRANT ALL ON FUNCTION public.create_user_preferences() TO "sparky-uat";
-GRANT ALL ON FUNCTION public.create_user_preferences() TO "sparky uat";
+GRANT ALL ON FUNCTION public.create_user_preferences() TO sparky_app;
 
 
 --
 -- Name: FUNCTION current_user_id(); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.current_user_id() TO sparky_uat;
-GRANT ALL ON FUNCTION public.current_user_id() TO "sparky-uat";
-GRANT ALL ON FUNCTION public.current_user_id() TO "sparky uat";
+GRANT ALL ON FUNCTION public.current_user_id() TO sparky_app;
 
 
 --
 -- Name: FUNCTION find_user_by_email(p_email text); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.find_user_by_email(p_email text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.find_user_by_email(p_email text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.find_user_by_email(p_email text) TO "sparky uat";
+GRANT ALL ON FUNCTION public.find_user_by_email(p_email text) TO sparky_app;
 
 
 --
 -- Name: FUNCTION fn_sync_mfa_totp_flag(); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.fn_sync_mfa_totp_flag() TO "sparky uat";
-GRANT ALL ON FUNCTION public.fn_sync_mfa_totp_flag() TO "sparky-uat";
-GRANT ALL ON FUNCTION public.fn_sync_mfa_totp_flag() TO sparky_uat;
+GRANT ALL ON FUNCTION public.fn_sync_mfa_totp_flag() TO sparky_app;
 
 
 --
 -- Name: FUNCTION fn_sync_user_mfa_global(); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.fn_sync_user_mfa_global() TO "sparky uat";
-GRANT ALL ON FUNCTION public.fn_sync_user_mfa_global() TO "sparky-uat";
-GRANT ALL ON FUNCTION public.fn_sync_user_mfa_global() TO sparky_uat;
+GRANT ALL ON FUNCTION public.fn_sync_user_mfa_global() TO sparky_app;
 
 
 --
 -- Name: FUNCTION get_accessible_users(p_user_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.get_accessible_users(p_user_id uuid) TO sparky_uat;
-GRANT ALL ON FUNCTION public.get_accessible_users(p_user_id uuid) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.get_accessible_users(p_user_id uuid) TO "sparky uat";
+GRANT ALL ON FUNCTION public.get_accessible_users(p_user_id uuid) TO sparky_app;
 
 
 --
 -- Name: FUNCTION get_goals_for_date(p_user_id uuid, p_date date); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.get_goals_for_date(p_user_id uuid, p_date date) TO sparky_uat;
-GRANT ALL ON FUNCTION public.get_goals_for_date(p_user_id uuid, p_date date) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.get_goals_for_date(p_user_id uuid, p_date date) TO "sparky uat";
+GRANT ALL ON FUNCTION public.get_goals_for_date(p_user_id uuid, p_date date) TO sparky_app;
 
 
 --
 -- Name: FUNCTION handle_new_user(); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.handle_new_user() TO sparky_uat;
-GRANT ALL ON FUNCTION public.handle_new_user() TO "sparky-uat";
-GRANT ALL ON FUNCTION public.handle_new_user() TO "sparky uat";
+GRANT ALL ON FUNCTION public.handle_new_user() TO sparky_app;
+
+
+--
+-- Name: FUNCTION has_any_meaningful_permission(perms jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.has_any_meaningful_permission(perms jsonb) TO sparky_app;
+
+
+--
+-- Name: FUNCTION has_checkin_read_access(owner_uuid uuid); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.has_checkin_read_access(owner_uuid uuid) TO sparky_app;
 
 
 --
 -- Name: FUNCTION has_diary_access(owner_uuid uuid); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.has_diary_access(owner_uuid uuid) TO sparky_uat;
-GRANT ALL ON FUNCTION public.has_diary_access(owner_uuid uuid) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.has_diary_access(owner_uuid uuid) TO "sparky uat";
+GRANT ALL ON FUNCTION public.has_diary_access(owner_uuid uuid) TO sparky_app;
+
+
+--
+-- Name: FUNCTION has_diary_read_access(owner_uuid uuid); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.has_diary_read_access(owner_uuid uuid) TO sparky_app;
 
 
 --
 -- Name: FUNCTION has_family_access(owner_uuid uuid, perm text); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.has_family_access(owner_uuid uuid, perm text) TO sparky_uat;
-GRANT ALL ON FUNCTION public.has_family_access(owner_uuid uuid, perm text) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.has_family_access(owner_uuid uuid, perm text) TO "sparky uat";
+GRANT ALL ON FUNCTION public.has_family_access(owner_uuid uuid, perm text) TO sparky_app;
 
 
 --
 -- Name: FUNCTION has_family_access_or(owner_uuid uuid, perms text[]); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.has_family_access_or(owner_uuid uuid, perms text[]) TO sparky_uat;
-GRANT ALL ON FUNCTION public.has_family_access_or(owner_uuid uuid, perms text[]) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.has_family_access_or(owner_uuid uuid, perms text[]) TO "sparky uat";
+GRANT ALL ON FUNCTION public.has_family_access_or(owner_uuid uuid, perms text[]) TO sparky_app;
 
 
 --
 -- Name: FUNCTION has_library_access_with_public(owner_uuid uuid, is_shared boolean, perms text[]); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.has_library_access_with_public(owner_uuid uuid, is_shared boolean, perms text[]) TO sparky_uat;
-GRANT ALL ON FUNCTION public.has_library_access_with_public(owner_uuid uuid, is_shared boolean, perms text[]) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.has_library_access_with_public(owner_uuid uuid, is_shared boolean, perms text[]) TO "sparky uat";
+GRANT ALL ON FUNCTION public.has_library_access_with_public(owner_uuid uuid, is_shared boolean, perms text[]) TO sparky_app;
+
+
+--
+-- Name: FUNCTION has_medication_access(owner_uuid uuid); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.has_medication_access(owner_uuid uuid) TO sparky_app;
+
+
+--
+-- Name: FUNCTION has_medication_read_access(owner_uuid uuid); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.has_medication_read_access(owner_uuid uuid) TO sparky_app;
+
+
+--
+-- Name: FUNCTION has_profile_read_access(owner_uuid uuid); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.has_profile_read_access(owner_uuid uuid) TO sparky_app;
 
 
 --
 -- Name: FUNCTION is_admin(); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.is_admin() TO sparky_uat;
-GRANT ALL ON FUNCTION public.is_admin() TO "sparky-uat";
-GRANT ALL ON FUNCTION public.is_admin() TO "sparky uat";
+GRANT ALL ON FUNCTION public.is_admin() TO sparky_app;
 
 
 --
 -- Name: FUNCTION manage_goal_timeline(p_user_id uuid, p_start_date date, p_calories numeric, p_protein numeric, p_carbs numeric, p_fat numeric, p_water_goal integer, p_saturated_fat numeric, p_polyunsaturated_fat numeric, p_monounsaturated_fat numeric, p_trans_fat numeric, p_cholesterol numeric, p_sodium numeric, p_potassium numeric, p_dietary_fiber numeric, p_sugars numeric, p_vitamin_a numeric, p_vitamin_c numeric, p_calcium numeric, p_iron numeric); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.manage_goal_timeline(p_user_id uuid, p_start_date date, p_calories numeric, p_protein numeric, p_carbs numeric, p_fat numeric, p_water_goal integer, p_saturated_fat numeric, p_polyunsaturated_fat numeric, p_monounsaturated_fat numeric, p_trans_fat numeric, p_cholesterol numeric, p_sodium numeric, p_potassium numeric, p_dietary_fiber numeric, p_sugars numeric, p_vitamin_a numeric, p_vitamin_c numeric, p_calcium numeric, p_iron numeric) TO sparky_uat;
-GRANT ALL ON FUNCTION public.manage_goal_timeline(p_user_id uuid, p_start_date date, p_calories numeric, p_protein numeric, p_carbs numeric, p_fat numeric, p_water_goal integer, p_saturated_fat numeric, p_polyunsaturated_fat numeric, p_monounsaturated_fat numeric, p_trans_fat numeric, p_cholesterol numeric, p_sodium numeric, p_potassium numeric, p_dietary_fiber numeric, p_sugars numeric, p_vitamin_a numeric, p_vitamin_c numeric, p_calcium numeric, p_iron numeric) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.manage_goal_timeline(p_user_id uuid, p_start_date date, p_calories numeric, p_protein numeric, p_carbs numeric, p_fat numeric, p_water_goal integer, p_saturated_fat numeric, p_polyunsaturated_fat numeric, p_monounsaturated_fat numeric, p_trans_fat numeric, p_cholesterol numeric, p_sodium numeric, p_potassium numeric, p_dietary_fiber numeric, p_sugars numeric, p_vitamin_a numeric, p_vitamin_c numeric, p_calcium numeric, p_iron numeric) TO "sparky uat";
+GRANT ALL ON FUNCTION public.manage_goal_timeline(p_user_id uuid, p_start_date date, p_calories numeric, p_protein numeric, p_carbs numeric, p_fat numeric, p_water_goal integer, p_saturated_fat numeric, p_polyunsaturated_fat numeric, p_monounsaturated_fat numeric, p_trans_fat numeric, p_cholesterol numeric, p_sodium numeric, p_potassium numeric, p_dietary_fiber numeric, p_sugars numeric, p_vitamin_a numeric, p_vitamin_c numeric, p_calcium numeric, p_iron numeric) TO sparky_app;
 
 
 --
 -- Name: FUNCTION seed_global_providers_for_first_admin(); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.seed_global_providers_for_first_admin() TO "sparky uat";
-GRANT ALL ON FUNCTION public.seed_global_providers_for_first_admin() TO "sparky-uat";
-GRANT ALL ON FUNCTION public.seed_global_providers_for_first_admin() TO sparky_uat;
+GRANT ALL ON FUNCTION public.seed_global_providers_for_first_admin() TO sparky_app;
 
 
 --
 -- Name: FUNCTION set_app_context(p_user_id uuid, p_authenticated_user_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.set_app_context(p_user_id uuid, p_authenticated_user_id uuid) TO sparky_uat;
-GRANT ALL ON FUNCTION public.set_app_context(p_user_id uuid, p_authenticated_user_id uuid) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.set_app_context(p_user_id uuid, p_authenticated_user_id uuid) TO "sparky uat";
+GRANT ALL ON FUNCTION public.set_app_context(p_user_id uuid, p_authenticated_user_id uuid) TO sparky_app;
 
 
 --
 -- Name: FUNCTION set_first_user_as_admin(); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.set_first_user_as_admin() TO sparky_uat;
-GRANT ALL ON FUNCTION public.set_first_user_as_admin() TO "sparky-uat";
-GRANT ALL ON FUNCTION public.set_first_user_as_admin() TO "sparky uat";
+GRANT ALL ON FUNCTION public.set_first_user_as_admin() TO sparky_app;
 
 
 --
 -- Name: FUNCTION set_updated_at_timestamp(); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.set_updated_at_timestamp() TO sparky_uat;
-GRANT ALL ON FUNCTION public.set_updated_at_timestamp() TO "sparky-uat";
-GRANT ALL ON FUNCTION public.set_updated_at_timestamp() TO "sparky uat";
+GRANT ALL ON FUNCTION public.set_updated_at_timestamp() TO sparky_app;
 
 
 --
 -- Name: FUNCTION set_user_id(user_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.set_user_id(user_id uuid) TO sparky_uat;
-GRANT ALL ON FUNCTION public.set_user_id(user_id uuid) TO "sparky-uat";
-GRANT ALL ON FUNCTION public.set_user_id(user_id uuid) TO "sparky uat";
+GRANT ALL ON FUNCTION public.set_user_id(user_id uuid) TO sparky_app;
+
+
+--
+-- Name: FUNCTION sf_try_numeric(txt text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.sf_try_numeric(txt text) TO sparky_app;
 
 
 --
 -- Name: FUNCTION trigger_set_timestamp(); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.trigger_set_timestamp() TO sparky_uat;
-GRANT ALL ON FUNCTION public.trigger_set_timestamp() TO "sparky-uat";
-GRANT ALL ON FUNCTION public.trigger_set_timestamp() TO "sparky uat";
+GRANT ALL ON FUNCTION public.trigger_set_timestamp() TO sparky_app;
 
 
 --
 -- Name: FUNCTION update_external_data_providers_updated_at(); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.update_external_data_providers_updated_at() TO sparky_uat;
-GRANT ALL ON FUNCTION public.update_external_data_providers_updated_at() TO "sparky-uat";
-GRANT ALL ON FUNCTION public.update_external_data_providers_updated_at() TO "sparky uat";
+GRANT ALL ON FUNCTION public.update_external_data_providers_updated_at() TO sparky_app;
 
 
 --
 -- Name: FUNCTION update_timestamp(); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.update_timestamp() TO sparky_uat;
-GRANT ALL ON FUNCTION public.update_timestamp() TO "sparky-uat";
-GRANT ALL ON FUNCTION public.update_timestamp() TO "sparky uat";
+GRANT ALL ON FUNCTION public.update_timestamp() TO sparky_app;
 
 
 --
 -- Name: FUNCTION update_updated_at_column(); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.update_updated_at_column() TO sparky_uat;
-GRANT ALL ON FUNCTION public.update_updated_at_column() TO "sparky-uat";
-GRANT ALL ON FUNCTION public.update_updated_at_column() TO "sparky uat";
+GRANT ALL ON FUNCTION public.update_updated_at_column() TO sparky_app;
 
 
 --
 -- Name: TABLE users; Type: ACL; Schema: auth; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE auth.users TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE auth.users TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE auth.users TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE auth.users TO sparky_app;
 
 
 --
 -- Name: TABLE account; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.account TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.account TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.account TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.account TO sparky_app;
 
 
 --
 -- Name: TABLE admin_activity_logs; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.admin_activity_logs TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.admin_activity_logs TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.admin_activity_logs TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.admin_activity_logs TO sparky_app;
 
 
 --
 -- Name: TABLE ai_service_settings; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.ai_service_settings TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.ai_service_settings TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.ai_service_settings TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.ai_service_settings TO sparky_app;
 
 
 --
 -- Name: TABLE api_key; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.api_key TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.api_key TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.api_key TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.api_key TO sparky_app;
 
 
 --
 -- Name: TABLE backup_settings; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.backup_settings TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.backup_settings TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.backup_settings TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.backup_settings TO sparky_app;
 
 
 --
 -- Name: SEQUENCE backup_settings_id_seq; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,USAGE ON SEQUENCE public.backup_settings_id_seq TO sparky_uat;
-GRANT SELECT,USAGE ON SEQUENCE public.backup_settings_id_seq TO "sparky-uat";
-GRANT SELECT,USAGE ON SEQUENCE public.backup_settings_id_seq TO "sparky uat";
+GRANT SELECT,USAGE ON SEQUENCE public.backup_settings_id_seq TO sparky_app;
 
 
 --
 -- Name: TABLE check_in_measurements; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.check_in_measurements TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.check_in_measurements TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.check_in_measurements TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.check_in_measurements TO sparky_app;
 
 
 --
 -- Name: TABLE check_in_photos; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.check_in_photos TO "sparky uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.check_in_photos TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.check_in_photos TO sparky_uat;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.check_in_photos TO sparky_app;
 
 
 --
 -- Name: TABLE custom_categories; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.custom_categories TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.custom_categories TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.custom_categories TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.custom_categories TO sparky_app;
 
 
 --
 -- Name: TABLE custom_measurements; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.custom_measurements TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.custom_measurements TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.custom_measurements TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.custom_measurements TO sparky_app;
+
+
+--
+-- Name: TABLE cycle_daily_entries; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.cycle_daily_entries TO sparky_app;
+
+
+--
+-- Name: TABLE cycle_settings; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.cycle_settings TO sparky_app;
+
+
+--
+-- Name: TABLE cycle_test_entries; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.cycle_test_entries TO sparky_app;
+
+
+--
+-- Name: TABLE cycles; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.cycles TO sparky_app;
+
+
+--
+-- Name: TABLE daily_health_metrics; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.daily_health_metrics TO sparky_app;
 
 
 --
 -- Name: TABLE daily_sleep_need; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.daily_sleep_need TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.daily_sleep_need TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.daily_sleep_need TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.daily_sleep_need TO sparky_app;
 
 
 --
 -- Name: TABLE day_classification_cache; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.day_classification_cache TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.day_classification_cache TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.day_classification_cache TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.day_classification_cache TO sparky_app;
 
 
 --
 -- Name: TABLE exercise_entries; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.exercise_entries TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.exercise_entries TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.exercise_entries TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.exercise_entries TO sparky_app;
 
 
 --
 -- Name: TABLE exercise_entry_activity_details; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.exercise_entry_activity_details TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.exercise_entry_activity_details TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.exercise_entry_activity_details TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.exercise_entry_activity_details TO sparky_app;
+
+
+--
+-- Name: TABLE exercise_entry_gps_points; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.exercise_entry_gps_points TO sparky_app;
+
+
+--
+-- Name: TABLE exercise_entry_hr_zones; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.exercise_entry_hr_zones TO sparky_app;
+
+
+--
+-- Name: TABLE exercise_entry_laps; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.exercise_entry_laps TO sparky_app;
 
 
 --
 -- Name: TABLE exercise_entry_sets; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.exercise_entry_sets TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.exercise_entry_sets TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.exercise_entry_sets TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.exercise_entry_sets TO sparky_app;
 
 
 --
 -- Name: SEQUENCE exercise_entry_sets_id_seq; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,USAGE ON SEQUENCE public.exercise_entry_sets_id_seq TO sparky_uat;
-GRANT SELECT,USAGE ON SEQUENCE public.exercise_entry_sets_id_seq TO "sparky-uat";
-GRANT SELECT,USAGE ON SEQUENCE public.exercise_entry_sets_id_seq TO "sparky uat";
+GRANT SELECT,USAGE ON SEQUENCE public.exercise_entry_sets_id_seq TO sparky_app;
 
 
 --
 -- Name: TABLE exercise_preset_entries; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.exercise_preset_entries TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.exercise_preset_entries TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.exercise_preset_entries TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.exercise_preset_entries TO sparky_app;
 
 
 --
 -- Name: TABLE exercises; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.exercises TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.exercises TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.exercises TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.exercises TO sparky_app;
 
 
 --
 -- Name: TABLE external_data_providers; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.external_data_providers TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.external_data_providers TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.external_data_providers TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.external_data_providers TO sparky_app;
 
 
 --
 -- Name: TABLE external_provider_types; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.external_provider_types TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.external_provider_types TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.external_provider_types TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.external_provider_types TO sparky_app;
 
 
 --
 -- Name: TABLE family_access; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.family_access TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.family_access TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.family_access TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.family_access TO sparky_app;
 
 
 --
 -- Name: TABLE fasting_logs; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.fasting_logs TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.fasting_logs TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.fasting_logs TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.fasting_logs TO sparky_app;
 
 
 --
 -- Name: TABLE food_entries; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.food_entries TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.food_entries TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.food_entries TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.food_entries TO sparky_app;
 
 
 --
 -- Name: TABLE food_entry_meals; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.food_entry_meals TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.food_entry_meals TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.food_entry_meals TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.food_entry_meals TO sparky_app;
+
+
+--
+-- Name: TABLE food_favorites; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.food_favorites TO sparky_app;
 
 
 --
 -- Name: TABLE food_variants; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.food_variants TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.food_variants TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.food_variants TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.food_variants TO sparky_app;
 
 
 --
 -- Name: TABLE foods; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.foods TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.foods TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.foods TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.foods TO sparky_app;
 
 
 --
 -- Name: TABLE global_settings; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.global_settings TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.global_settings TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.global_settings TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.global_settings TO sparky_app;
 
 
 --
 -- Name: TABLE goal_presets; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.goal_presets TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.goal_presets TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.goal_presets TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.goal_presets TO sparky_app;
+
+
+--
+-- Name: TABLE health_appointments; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.health_appointments TO sparky_app;
+
+
+--
+-- Name: TABLE health_metric_samples; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.health_metric_samples TO sparky_app;
 
 
 --
 -- Name: TABLE injection_entries; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.injection_entries TO "sparky uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.injection_entries TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.injection_entries TO sparky_uat;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.injection_entries TO sparky_app;
 
 
 --
 -- Name: TABLE meal_foods; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.meal_foods TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.meal_foods TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.meal_foods TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.meal_foods TO sparky_app;
 
 
 --
 -- Name: TABLE meal_plan_template_assignments; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.meal_plan_template_assignments TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.meal_plan_template_assignments TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.meal_plan_template_assignments TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.meal_plan_template_assignments TO sparky_app;
 
 
 --
 -- Name: TABLE meal_plan_templates; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.meal_plan_templates TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.meal_plan_templates TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.meal_plan_templates TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.meal_plan_templates TO sparky_app;
 
 
 --
 -- Name: TABLE meal_plans; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.meal_plans TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.meal_plans TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.meal_plans TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.meal_plans TO sparky_app;
 
 
 --
 -- Name: TABLE meal_types; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.meal_types TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.meal_types TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.meal_types TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.meal_types TO sparky_app;
 
 
 --
 -- Name: TABLE meals; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.meals TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.meals TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.meals TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.meals TO sparky_app;
 
 
 --
 -- Name: TABLE medication_entries; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_entries TO "sparky uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_entries TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_entries TO sparky_uat;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_entries TO sparky_app;
 
 
 --
 -- Name: TABLE medication_pens; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_pens TO "sparky uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_pens TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_pens TO sparky_uat;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_pens TO sparky_app;
 
 
 --
 -- Name: TABLE medication_route_types; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_route_types TO "sparky uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_route_types TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_route_types TO sparky_uat;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_route_types TO sparky_app;
 
 
 --
 -- Name: TABLE medication_schedule_types; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_schedule_types TO "sparky uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_schedule_types TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_schedule_types TO sparky_uat;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_schedule_types TO sparky_app;
 
 
 --
 -- Name: TABLE medication_schedules; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_schedules TO "sparky uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_schedules TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_schedules TO sparky_uat;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_schedules TO sparky_app;
 
 
 --
 -- Name: TABLE medication_titration_steps; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_titration_steps TO "sparky uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_titration_steps TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_titration_steps TO sparky_uat;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_titration_steps TO sparky_app;
 
 
 --
 -- Name: TABLE medication_types; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_types TO "sparky uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_types TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_types TO sparky_uat;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medication_types TO sparky_app;
 
 
 --
 -- Name: TABLE medications; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medications TO "sparky uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medications TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medications TO sparky_uat;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.medications TO sparky_app;
 
 
 --
 -- Name: TABLE mood_entries; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.mood_entries TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.mood_entries TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.mood_entries TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.mood_entries TO sparky_app;
 
 
 --
 -- Name: TABLE oidc_providers; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.oidc_providers TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.oidc_providers TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.oidc_providers TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.oidc_providers TO sparky_app;
 
 
 --
 -- Name: SEQUENCE oidc_providers_id_seq; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,USAGE ON SEQUENCE public.oidc_providers_id_seq TO sparky_uat;
-GRANT SELECT,USAGE ON SEQUENCE public.oidc_providers_id_seq TO "sparky-uat";
-GRANT SELECT,USAGE ON SEQUENCE public.oidc_providers_id_seq TO "sparky uat";
+GRANT SELECT,USAGE ON SEQUENCE public.oidc_providers_id_seq TO sparky_app;
 
 
 --
 -- Name: TABLE onboarding_data; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.onboarding_data TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.onboarding_data TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.onboarding_data TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.onboarding_data TO sparky_app;
 
 
 --
 -- Name: TABLE onboarding_status; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.onboarding_status TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.onboarding_status TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.onboarding_status TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.onboarding_status TO sparky_app;
 
 
 --
 -- Name: TABLE passkey; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.passkey TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.passkey TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.passkey TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.passkey TO sparky_app;
+
+
+--
+-- Name: TABLE passkey_registration_tickets; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.passkey_registration_tickets TO sparky_app;
+
+
+--
+-- Name: TABLE pregnancies; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.pregnancies TO sparky_app;
+
+
+--
+-- Name: TABLE pregnancy_checklist_state; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.pregnancy_checklist_state TO sparky_app;
+
+
+--
+-- Name: TABLE pregnancy_contractions; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.pregnancy_contractions TO sparky_app;
+
+
+--
+-- Name: TABLE pregnancy_kick_sessions; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.pregnancy_kick_sessions TO sparky_app;
+
+
+--
+-- Name: TABLE pregnancy_photos; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.pregnancy_photos TO sparky_app;
 
 
 --
 -- Name: TABLE profiles; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.profiles TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.profiles TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.profiles TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.profiles TO sparky_app;
 
 
 --
 -- Name: TABLE session; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.session TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.session TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.session TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.session TO sparky_app;
 
 
 --
 -- Name: TABLE sleep_entries; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.sleep_entries TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.sleep_entries TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.sleep_entries TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.sleep_entries TO sparky_app;
 
 
 --
 -- Name: TABLE sleep_entry_stages; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.sleep_entry_stages TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.sleep_entry_stages TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.sleep_entry_stages TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.sleep_entry_stages TO sparky_app;
 
 
 --
 -- Name: TABLE sleep_need_calculations; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.sleep_need_calculations TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.sleep_need_calculations TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.sleep_need_calculations TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.sleep_need_calculations TO sparky_app;
 
 
 --
 -- Name: TABLE sparky_chat_history; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.sparky_chat_history TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.sparky_chat_history TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.sparky_chat_history TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.sparky_chat_history TO sparky_app;
 
 
 --
 -- Name: TABLE sso_provider; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.sso_provider TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.sso_provider TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.sso_provider TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.sso_provider TO sparky_app;
 
 
 --
 -- Name: TABLE symptom_entries; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.symptom_entries TO "sparky uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.symptom_entries TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.symptom_entries TO sparky_uat;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.symptom_entries TO sparky_app;
 
 
 --
 -- Name: TABLE two_factor; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.two_factor TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.two_factor TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.two_factor TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.two_factor TO sparky_app;
 
 
 --
 -- Name: TABLE "user"; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public."user" TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public."user" TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public."user" TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public."user" TO sparky_app;
 
 
 --
 -- Name: TABLE user_allergen_preferences; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_allergen_preferences TO "sparky uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_allergen_preferences TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_allergen_preferences TO sparky_uat;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_allergen_preferences TO sparky_app;
+
+
+--
+-- Name: TABLE user_custom_moods; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_custom_moods TO sparky_app;
 
 
 --
 -- Name: TABLE user_custom_nutrients; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_custom_nutrients TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_custom_nutrients TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_custom_nutrients TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_custom_nutrients TO sparky_app;
 
 
 --
 -- Name: TABLE user_custom_symptom_locations; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_custom_symptom_locations TO "sparky uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_custom_symptom_locations TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_custom_symptom_locations TO sparky_uat;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_custom_symptom_locations TO sparky_app;
 
 
 --
 -- Name: TABLE user_custom_symptoms; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_custom_symptoms TO "sparky uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_custom_symptoms TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_custom_symptoms TO sparky_uat;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_custom_symptoms TO sparky_app;
+
+
+--
+-- Name: TABLE user_cycle_display_preferences; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_cycle_display_preferences TO sparky_app;
 
 
 --
 -- Name: TABLE user_dashboard_layouts; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_dashboard_layouts TO "sparky uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_dashboard_layouts TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_dashboard_layouts TO sparky_uat;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_dashboard_layouts TO sparky_app;
 
 
 --
 -- Name: TABLE user_goals; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_goals TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_goals TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_goals TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_goals TO sparky_app;
 
 
 --
 -- Name: TABLE user_ignored_updates; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_ignored_updates TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_ignored_updates TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_ignored_updates TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_ignored_updates TO sparky_app;
 
 
 --
 -- Name: TABLE user_meal_visibilities; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_meal_visibilities TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_meal_visibilities TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_meal_visibilities TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_meal_visibilities TO sparky_app;
 
 
 --
 -- Name: TABLE user_medication_display_preferences; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_medication_display_preferences TO "sparky uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_medication_display_preferences TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_medication_display_preferences TO sparky_uat;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_medication_display_preferences TO sparky_app;
+
+
+--
+-- Name: TABLE user_mood_display_preferences; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_mood_display_preferences TO sparky_app;
 
 
 --
 -- Name: TABLE user_nutrient_display_preferences; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_nutrient_display_preferences TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_nutrient_display_preferences TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_nutrient_display_preferences TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_nutrient_display_preferences TO sparky_app;
 
 
 --
 -- Name: SEQUENCE user_nutrient_display_preferences_id_seq; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,USAGE ON SEQUENCE public.user_nutrient_display_preferences_id_seq TO sparky_uat;
-GRANT SELECT,USAGE ON SEQUENCE public.user_nutrient_display_preferences_id_seq TO "sparky-uat";
-GRANT SELECT,USAGE ON SEQUENCE public.user_nutrient_display_preferences_id_seq TO "sparky uat";
+GRANT SELECT,USAGE ON SEQUENCE public.user_nutrient_display_preferences_id_seq TO sparky_app;
+
+
+--
+-- Name: TABLE user_nutrient_goal_preferences; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_nutrient_goal_preferences TO sparky_app;
 
 
 --
 -- Name: TABLE user_oidc_links; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_oidc_links TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_oidc_links TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_oidc_links TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_oidc_links TO sparky_app;
 
 
 --
 -- Name: SEQUENCE user_oidc_links_id_seq; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,USAGE ON SEQUENCE public.user_oidc_links_id_seq TO sparky_uat;
-GRANT SELECT,USAGE ON SEQUENCE public.user_oidc_links_id_seq TO "sparky-uat";
-GRANT SELECT,USAGE ON SEQUENCE public.user_oidc_links_id_seq TO "sparky uat";
+GRANT SELECT,USAGE ON SEQUENCE public.user_oidc_links_id_seq TO sparky_app;
 
 
 --
 -- Name: TABLE user_preferences; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_preferences TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_preferences TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_preferences TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_preferences TO sparky_app;
 
 
 --
 -- Name: TABLE user_water_containers; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_water_containers TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_water_containers TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_water_containers TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_water_containers TO sparky_app;
 
 
 --
 -- Name: SEQUENCE user_water_containers_id_seq; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,USAGE ON SEQUENCE public.user_water_containers_id_seq TO sparky_uat;
-GRANT SELECT,USAGE ON SEQUENCE public.user_water_containers_id_seq TO "sparky-uat";
-GRANT SELECT,USAGE ON SEQUENCE public.user_water_containers_id_seq TO "sparky uat";
+GRANT SELECT,USAGE ON SEQUENCE public.user_water_containers_id_seq TO sparky_app;
 
 
 --
 -- Name: TABLE v_mctq_analysis; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.v_mctq_analysis TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.v_mctq_analysis TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.v_mctq_analysis TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.v_mctq_analysis TO sparky_app;
 
 
 --
 -- Name: TABLE v_mctq_stats; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.v_mctq_stats TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.v_mctq_stats TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.v_mctq_stats TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.v_mctq_stats TO sparky_app;
 
 
 --
 -- Name: TABLE verification; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.verification TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.verification TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.verification TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.verification TO sparky_app;
+
+
+--
+-- Name: TABLE vitals_entries; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.vitals_entries TO sparky_app;
 
 
 --
 -- Name: TABLE water_intake; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.water_intake TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.water_intake TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.water_intake TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.water_intake TO sparky_app;
 
 
 --
 -- Name: TABLE water_intake_entries; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.water_intake_entries TO "sparky uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.water_intake_entries TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.water_intake_entries TO sparky_uat;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.water_intake_entries TO sparky_app;
 
 
 --
 -- Name: TABLE weekly_goal_plans; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.weekly_goal_plans TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.weekly_goal_plans TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.weekly_goal_plans TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.weekly_goal_plans TO sparky_app;
 
 
 --
 -- Name: TABLE workout_plan_assignment_sets; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workout_plan_assignment_sets TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workout_plan_assignment_sets TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workout_plan_assignment_sets TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workout_plan_assignment_sets TO sparky_app;
 
 
 --
 -- Name: SEQUENCE workout_plan_assignment_sets_id_seq; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,USAGE ON SEQUENCE public.workout_plan_assignment_sets_id_seq TO sparky_uat;
-GRANT SELECT,USAGE ON SEQUENCE public.workout_plan_assignment_sets_id_seq TO "sparky-uat";
-GRANT SELECT,USAGE ON SEQUENCE public.workout_plan_assignment_sets_id_seq TO "sparky uat";
+GRANT SELECT,USAGE ON SEQUENCE public.workout_plan_assignment_sets_id_seq TO sparky_app;
 
 
 --
 -- Name: TABLE workout_plan_template_assignments; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workout_plan_template_assignments TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workout_plan_template_assignments TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workout_plan_template_assignments TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workout_plan_template_assignments TO sparky_app;
 
 
 --
 -- Name: SEQUENCE workout_plan_template_assignments_id_seq; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,USAGE ON SEQUENCE public.workout_plan_template_assignments_id_seq TO sparky_uat;
-GRANT SELECT,USAGE ON SEQUENCE public.workout_plan_template_assignments_id_seq TO "sparky-uat";
-GRANT SELECT,USAGE ON SEQUENCE public.workout_plan_template_assignments_id_seq TO "sparky uat";
+GRANT SELECT,USAGE ON SEQUENCE public.workout_plan_template_assignments_id_seq TO sparky_app;
 
 
 --
 -- Name: TABLE workout_plan_templates; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workout_plan_templates TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workout_plan_templates TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workout_plan_templates TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workout_plan_templates TO sparky_app;
 
 
 --
 -- Name: SEQUENCE workout_plan_templates_id_seq; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,USAGE ON SEQUENCE public.workout_plan_templates_id_seq TO sparky_uat;
-GRANT SELECT,USAGE ON SEQUENCE public.workout_plan_templates_id_seq TO "sparky-uat";
-GRANT SELECT,USAGE ON SEQUENCE public.workout_plan_templates_id_seq TO "sparky uat";
+GRANT SELECT,USAGE ON SEQUENCE public.workout_plan_templates_id_seq TO sparky_app;
 
 
 --
 -- Name: TABLE workout_preset_exercise_sets; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workout_preset_exercise_sets TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workout_preset_exercise_sets TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workout_preset_exercise_sets TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workout_preset_exercise_sets TO sparky_app;
 
 
 --
 -- Name: SEQUENCE workout_preset_exercise_sets_id_seq; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,USAGE ON SEQUENCE public.workout_preset_exercise_sets_id_seq TO sparky_uat;
-GRANT SELECT,USAGE ON SEQUENCE public.workout_preset_exercise_sets_id_seq TO "sparky-uat";
-GRANT SELECT,USAGE ON SEQUENCE public.workout_preset_exercise_sets_id_seq TO "sparky uat";
+GRANT SELECT,USAGE ON SEQUENCE public.workout_preset_exercise_sets_id_seq TO sparky_app;
 
 
 --
 -- Name: TABLE workout_preset_exercises; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workout_preset_exercises TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workout_preset_exercises TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workout_preset_exercises TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workout_preset_exercises TO sparky_app;
 
 
 --
 -- Name: SEQUENCE workout_preset_exercises_id_seq; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,USAGE ON SEQUENCE public.workout_preset_exercises_id_seq TO sparky_uat;
-GRANT SELECT,USAGE ON SEQUENCE public.workout_preset_exercises_id_seq TO "sparky-uat";
-GRANT SELECT,USAGE ON SEQUENCE public.workout_preset_exercises_id_seq TO "sparky uat";
+GRANT SELECT,USAGE ON SEQUENCE public.workout_preset_exercises_id_seq TO sparky_app;
 
 
 --
 -- Name: TABLE workout_presets; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workout_presets TO sparky_uat;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workout_presets TO "sparky-uat";
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workout_presets TO "sparky uat";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workout_presets TO sparky_app;
 
 
 --
 -- Name: SEQUENCE workout_presets_id_seq; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT SELECT,USAGE ON SEQUENCE public.workout_presets_id_seq TO sparky_uat;
-GRANT SELECT,USAGE ON SEQUENCE public.workout_presets_id_seq TO "sparky-uat";
-GRANT SELECT,USAGE ON SEQUENCE public.workout_presets_id_seq TO "sparky uat";
+GRANT SELECT,USAGE ON SEQUENCE public.workout_presets_id_seq TO sparky_app;
 
 
 --
 -- Name: TABLE schema_migrations; Type: ACL; Schema: system; Owner: -
 --
 
-GRANT SELECT ON TABLE system.schema_migrations TO sparky_uat;
-GRANT SELECT ON TABLE system.schema_migrations TO "sparky-uat";
-GRANT SELECT ON TABLE system.schema_migrations TO "sparky uat";
+GRANT SELECT ON TABLE system.schema_migrations TO sparky_app;
 
 
 --
 -- Name: DEFAULT PRIVILEGES FOR FUNCTIONS; Type: DEFAULT ACL; Schema: auth; Owner: -
 --
 
-ALTER DEFAULT PRIVILEGES FOR ROLE sparky IN SCHEMA auth GRANT ALL ON FUNCTIONS TO "sparky uat";
-ALTER DEFAULT PRIVILEGES FOR ROLE sparky IN SCHEMA auth GRANT ALL ON FUNCTIONS TO "sparky-uat";
-ALTER DEFAULT PRIVILEGES FOR ROLE sparky IN SCHEMA auth GRANT ALL ON FUNCTIONS TO sparky_uat;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA auth GRANT ALL ON FUNCTIONS TO sparky_app;
 
 
 --
 -- Name: DEFAULT PRIVILEGES FOR TABLES; Type: DEFAULT ACL; Schema: auth; Owner: -
 --
 
-ALTER DEFAULT PRIVILEGES FOR ROLE sparky IN SCHEMA auth GRANT SELECT,INSERT,DELETE,UPDATE ON TABLES TO "sparky uat";
-ALTER DEFAULT PRIVILEGES FOR ROLE sparky IN SCHEMA auth GRANT SELECT,INSERT,DELETE,UPDATE ON TABLES TO "sparky-uat";
-ALTER DEFAULT PRIVILEGES FOR ROLE sparky IN SCHEMA auth GRANT SELECT,INSERT,DELETE,UPDATE ON TABLES TO sparky_uat;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA auth GRANT SELECT,INSERT,DELETE,UPDATE ON TABLES TO sparky_app;
 
 
 --
 -- Name: DEFAULT PRIVILEGES FOR SEQUENCES; Type: DEFAULT ACL; Schema: public; Owner: -
 --
 
-ALTER DEFAULT PRIVILEGES FOR ROLE sparky IN SCHEMA public GRANT SELECT,USAGE ON SEQUENCES TO "sparky uat";
-ALTER DEFAULT PRIVILEGES FOR ROLE sparky IN SCHEMA public GRANT SELECT,USAGE ON SEQUENCES TO "sparky-uat";
-ALTER DEFAULT PRIVILEGES FOR ROLE sparky IN SCHEMA public GRANT SELECT,USAGE ON SEQUENCES TO sparky_uat;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT,USAGE ON SEQUENCES TO sparky_app;
 
 
 --
 -- Name: DEFAULT PRIVILEGES FOR FUNCTIONS; Type: DEFAULT ACL; Schema: public; Owner: -
 --
 
-ALTER DEFAULT PRIVILEGES FOR ROLE sparky IN SCHEMA public GRANT ALL ON FUNCTIONS TO "sparky uat";
-ALTER DEFAULT PRIVILEGES FOR ROLE sparky IN SCHEMA public GRANT ALL ON FUNCTIONS TO "sparky-uat";
-ALTER DEFAULT PRIVILEGES FOR ROLE sparky IN SCHEMA public GRANT ALL ON FUNCTIONS TO sparky_uat;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON FUNCTIONS TO sparky_app;
 
 
 --
 -- Name: DEFAULT PRIVILEGES FOR TABLES; Type: DEFAULT ACL; Schema: public; Owner: -
 --
 
-ALTER DEFAULT PRIVILEGES FOR ROLE sparky IN SCHEMA public GRANT SELECT,INSERT,DELETE,UPDATE ON TABLES TO "sparky uat";
-ALTER DEFAULT PRIVILEGES FOR ROLE sparky IN SCHEMA public GRANT SELECT,INSERT,DELETE,UPDATE ON TABLES TO "sparky-uat";
-ALTER DEFAULT PRIVILEGES FOR ROLE sparky IN SCHEMA public GRANT SELECT,INSERT,DELETE,UPDATE ON TABLES TO sparky_uat;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT,INSERT,DELETE,UPDATE ON TABLES TO sparky_app;
 
 
 --
 -- PostgreSQL database dump complete
 --
 
-\unrestrict dhGmLySjFGTRowxkdoNsugMJvJLlJnLFKqaQcs0DG614jCZILkcwuzPSKJ6l1bT
+\unrestrict SparkyFitnessSchemaBackup
 

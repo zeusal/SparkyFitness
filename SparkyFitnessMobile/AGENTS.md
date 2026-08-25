@@ -1,8 +1,8 @@
 # AGENTS.md
 
-*Last updated: 2026-06-24*
+*Last updated: 2026-08-24*
 
-SparkyFitness Mobile is a React Native 0.83.6 + Expo SDK 55 app for syncing Apple Health / Health Connect data with the SparkyFitness backend, tracking nutrition, hydration, fasting, measurements, exercise, saved foods, meal templates, custom exercises, workout presets, iOS / Android widgets, and the active workout HUD.
+SparkyFitness Mobile is a React Native 0.85 + Expo SDK 56 app for syncing Apple Health / Health Connect data with the SparkyFitness backend, tracking nutrition, hydration, fasting, measurements, exercise, saved foods, meal templates, custom exercises, workout presets, iOS / Android widgets, the active workout HUD, and the Sparky AI chat.
 
 This is the package guide for `SparkyFitnessMobile/`. Work from this directory for mobile implementation and validation. If a task crosses into the backend, frontend, or `shared/`, read that package guide too before editing outside mobile.
 
@@ -12,15 +12,17 @@ This is the package guide for `SparkyFitnessMobile/`. Work from this directory f
 - Prefer small, direct changes that fit the existing screen, hook, and service boundaries.
 - For ambiguous bugs, prove which layer is failing before patching. One narrow diagnostic check beats speculative edits across multiple layers.
 - Do not replace a working implementation with a rewrite unless the requester explicitly approves that direction.
+- When asked to plan work, confirm scope with clarifying questions before exploring code or drafting the plan.
 - Run scripts from `SparkyFitnessMobile/`, except root package operations such as `pnpm install` for patched dependencies.
 - Treat `android/` and `ios/` as generated output when possible. Edit `app.config.ts`, `plugins/`, `targets/`, JS/TS sources, or patch files first, then regenerate with prebuild when needed.
 
 ## Stack And Imports
 
-- Primary stack: React 19.2, React Native 0.83.6, Expo SDK 55, React Navigation 7, TanStack Query 5, Uniwind / TailwindCSS v4, Reanimated 4, Skia, Victory Native, Expo Background Task / Task Manager / Notifications, Zustand.
+- Primary stack: React 19.2, React Native 0.85, Expo SDK 56, TypeScript 6, React Navigation 7, TanStack Query 5, Uniwind / TailwindCSS v4, Reanimated 4, Skia, Victory Native, Expo Background Task / Task Manager / Notifications, Zustand, assistant-ui + AI SDK (chat).
 - `@/*` maps to this package and `@workspace/shared` maps to `../shared/src/index.ts`.
 - Prefer `@workspace/shared` schemas, constants, date/timezone helpers, and types over local duplicates.
 - The app talks to the backend under `/api`; health uploads go to `POST /api/health-data`.
+- Global `fetch` is Expo's WinterCG `expo/fetch`, so React Native's `{uri, name, type}` FormData file parts throw "Unsupported FormDataPart implementation". Append an `expo-file-system` `File` (it implements Blob) for multipart uploads; see `pregnancyPhotosApi.ts`.
 - Server-stored distance/weight units are metric. UI conversion belongs in mobile helpers such as `unitConversions.ts`.
 
 ## Commands
@@ -32,29 +34,45 @@ pnpm run android
 pnpm run lint
 pnpm run typecheck
 pnpm run validate
-pnpm run test:run -- --watchman=false --runInBand
+pnpm exec jest --watchman=false --runInBand
 pnpm exec jest --watchman=false --runInBand <test-path>
 pnpm run test:coverage -- --watchman=false --runInBand
-npx expo prebuild -c
+npx expo prebuild --clean
 ```
 
 - `pnpm run validate` runs typecheck and Expo lint.
 - Use Watchman-disabled Jest commands in agent/sandbox runs; bare Jest often fails on macOS.
 - `collectCoverage` is enabled in Jest config, so expect coverage output from normal test runs.
-- Run `npx expo prebuild -c` after native dependency changes, permissions, app group or widget target changes, Expo plugin changes, native config edits, or patching native modules.
+- Run `npx expo prebuild --clean` after native dependency changes, permissions, app group or widget target changes, Expo plugin changes, native config edits, or patching native modules.
 - After editing the root `patches/react-native-health-connect@3.5.3.patch`, run `pnpm install` from the repo root, then prebuild from mobile.
 
 ## App Shell And Navigation
 
 - `App.tsx` is the root composition point. `App()` wraps `QueryClientProvider`, `KeyboardProvider`, `GestureHandlerRootView`, and `BottomSheetModalProvider`; `AppContent()` owns `NavigationContainer`, `SafeAreaProvider`, navigators, `AddSheet`, auth modals, the embedded/floating active-workout bars, the tab-bar `WhatsNewBanner`, and toasts.
+- App-shell logic lives in dedicated hooks that `AppContent` composes: `useAppBootstrap` (`src/hooks/useAppBootstrap.ts`) owns language initialization, initial-route selection, the initial linking-enabled state, and splash hiding; `useAppStartup` (`src/hooks/useAppStartup.ts`) owns the one-time startup services (theme, notifications, notification actions, background sync, HealthKit observers); `useAutoSyncOnOpen` (`src/hooks/useAutoSyncOnOpen.ts`) for cold-start/foreground-return sync and the observer-yield window; `useAddSheetActions` (`src/hooks/useAddSheetActions.ts`) for AddSheet handlers and last-active-tab tracking. Error-boundary-wrapped `Safe*` screen components live in `src/navigation/safeScreens.tsx`.
 - Startup initializes theme, haptics, sounds, notification prefs, logs, timezone bootstrap, background sync, pending cache refreshes, fasting/hydration card visibility, and platform health observers.
-- Initial route comes from `getActiveServerConfig()`: no active config lands on `Onboarding`; otherwise users enter `Tabs`.
+- Initial route comes from `getActiveServerConfig()` inside `useAppBootstrap`: no active config lands on `Onboarding`; otherwise users enter `Tabs`. A language-initialization failure is logged and never changes the route.
 - Deep links are enabled only after startup confirms `Tabs`, so widget links do not bypass first-run onboarding.
 - Navigation source of truth is `App.tsx` plus `src/types/navigation.ts`; update both and the linking config when routes change.
 - Root stack uses `@react-navigation/native-stack`. Tabs use `@react-navigation/bottom-tabs`.
 - Tabs are `Dashboard`, `Diary`, `Add`, `Library`, and `Settings`. `Add` is a center action in `CustomTabBar`, not a content screen.
+- Native iOS Liquid Glass tabs use `@bottom-tabs/react-navigation` in `src/components/TabsLayout.tsx`; each content tab is wrapped in its own `createNativeStackNavigator` so the tab path still gets native headers.
+- `TabsLayout` switches at runtime via `useNativeIOSTabsActive()` (`services/nativeTabBarPreference.ts`): native tabs require iOS 26+ Liquid Glass support AND the user's `liquidGlassTabBarEnabled` preference (opt-in). Everything else renders `CustomTabBar` (`TAB_BAR_HEIGHT = 56`); `ActiveWorkoutBar` reads the native tab-bar height instead when native tabs are active.
+- When adding a root-stack screen, add the route to `RootStackParamList` and register a matching `<Stack.Screen>` in `App.tsx` with `createStackScreenOptions(...)` or equivalent explicit iOS native-stack header options.
+- Native header option/button builders live in `utils/nativeHeaderItems.ts` (`createIOSNativeHeaderOptions`, `createIOSSmallNativeHeaderOptions`, text/icon button items); header action colors come from `useHeaderActionColors`, which is Liquid-Glass-aware on iOS.
+- Root-stack screens with a screen-owned React header are automatically checked by `__tests__/navigation/nativeHeaderContract.test.ts`; do not add screen-specific native-header allowlists.
+- Root-stack screens with a screen-owned React header and a real back button must set `headerBackTitle` or `headerBackButtonDisplayMode: 'minimal'` in `App.tsx` so iOS back labels stay explicit or intentionally hidden; close/cancel modal headers do not need either option.
+- Declare screen headers with `useScreenHeader(config)` (`src/hooks/useScreenHeader.tsx`), or the thin `<ScreenHeader …/>` wrapper when nothing interleaves with the bar. One declarative descriptor (`title`/`nativeTitle`, `left`/`right` items of kind `back`/`dismiss`/`text`/`icon`/`primary`/`menu`, `busy`/`disabled`, `animateKey` for view↔edit cross-fades) renders both paths: on the native path it mirrors items into `unstable_header{Left,Right}Items` via a layout effect and returns `null`; on the custom path it returns the bar element for the screen to render. A `menu` item is a declarative dropdown (plain actions and/or titled single-select sections, optional accent-dot `showsBadge`): the native path builds a system UIMenu header button, the custom path renders the trigger plus an `AnchoredMenu` under it — one item list drives both, as in `FoodsLibraryScreen`'s ownership filter. Hook screens must not keep hand-rolled header code (no `unstable_header*Items` blocks or custom bars alongside the hook) — the contract test enforces this.
+- Path selection is `useNativeIOSHeadersActive()` (`services/nativeTabBarPreference.ts`): always false on Android; on iOS it is true below iOS 26 (classic native headers) and follows the Liquid Glass toggle on iOS 26+, so turning the toggle off swaps in the same screen-owned fallback headers Android renders.
+- One-accent rule: exactly one primary header action per screen (`kind: 'primary'` or `role: 'primary'`), enforced with a `__DEV__` throw; primary header save buttons fall back to the localized `t('common.save')` / `t('common.saving')` labels when no `label`/`busyLabel` is supplied. Footer-save forms mark their header Save `placement: 'native-only'` so the custom bar does not duplicate the sticky-footer button. `onPress` handlers dispatch through the hook's internal ref map — do not add per-screen handler-ref effects for native header buttons.
+- A **right-slot** `kind: 'primary'` press is wrapped in the shared synchronous duplicate-press guard (`utils/duplicatePress.ts`, same one `FooterSaveBar` uses): presses inside `DUPLICATE_PRESS_WINDOW_MS` collapse to one. `disabled`/`busy` are React state and have not committed when taps queued behind a blocked JS thread replay, so every queued press otherwise ran the handler again (#2191). The guard is deliberately time-based, not a latch on `busy`, because handlers that never report a pending state would leave the button dead. **Left-slot** primaries are exempt — that slot is navigation, and `CycleOnboardingScreen` uses the sugar for a wizard Back where repeated presses are intended. A screen that needs a rapidly repeatable right-slot action must not use `kind: 'primary'`.
+- If a root-stack screen is intentionally presented above `Tabs` instead of inside native-tabs mode, document it in `NATIVE_TABS_ROUTE_EXCLUSIONS` in `__tests__/navigation/nativeHeaderContract.test.ts` with a short reason.
+- Screens intentionally off the hook (e.g. `FoodSearchScreen`'s bespoke anchored-menu bar) must mirror custom actions with `unstable_header{Left,Right}Items` themselves, hide the screen-owned React header behind `useNativeIOSHeadersActive()` with a guard such as `{!usesNativeHeader && <Header />}`, and gate the `useLayoutEffect` that sets native header items on the same flag; otherwise iOS renders both headers.
+- When adding a tab, update `TabParamList`, `NativeTab.Screen`, and `FallbackTab.Screen`; for content tabs also add a tab-local native stack screen using `createIOSNativeHeaderOptions(...)`.
+- `__tests__/navigation/nativeHeaderContract.test.ts` enforces this native-header wiring. If it fails, fix the route/type/navigator alignment instead of weakening the test.
 - Current stack screens include onboarding/tabs, library/detail/form flows for foods/meals/exercises/presets, food entry view/edit, meal type detail and copy, `EditBarcode`, food search/entry/scan/photo flow, workout/activity add/detail, exercise/preset search, settings subscreens, logs, sync, measurements, fasting, and `WhatsNew`.
-- `AddSheet` offers Food, Workout, Activity, Preset, Measurements, Scan Food, and Sync Health Data. Keep its present/dismiss refs intact to avoid Android re-present loops.
+- `AddSheet` offers Food, Workout, Activity, Preset, Measurements, Scan Food, Ask Sparky, and Sync Health Data. Keep its present/dismiss refs intact to avoid Android re-present loops.
+- `useNavigationActionGuard` locks navigation-triggering actions while a native-stack transition is running (idle-callback unlock on re-focus, 5s safety release) so double-taps cannot queue duplicate screens; Library create actions use it.
 - `ActiveWorkoutBar` is mounted outside normal screen trees, uses the root navigation ref, and hides itself on modal/editor routes such as food search/forms/scan/photo, exercise search, workout/activity add, measurements, and barcode edit.
 - Most screens are wrapped with `withErrorBoundary(...)`; `SettingsScreen` also uses section-level recovery so settings remain reachable.
 
@@ -63,18 +81,18 @@ npx expo prebuild -c
 - `src/components/` - reusable UI, charts, settings rows, custom tab bar, add sheet, workout HUD, form chrome, library rows, diary rows, serving sheets, food/workout editors, fasting UI, writeback UI, and `ui/` primitives.
 - `src/components/auth/` - MFA UI shared by onboarding, setup, and reauth.
 - `src/screens/` - top-level route destinations: dashboard, diary, settings, sync, logs, Whats New, fasting, food search/scan/photo, library CRUD flows, workout/activity flows, and measurement entry.
-- `src/navigation/` - nested navigation such as `FoodPhotoFlow`.
+- `src/navigation/` - navigation-level modules such as `safeScreens.tsx`, the error-boundary-wrapped screen components registered in `App.tsx`. (`FoodPhotoFlow` lives in `src/components/`.)
 - `src/hooks/` - TanStack Query hooks, auth/connection hooks, library/search/mutation hooks, measurement/water/check-in hooks, fasting hooks, workout form hooks, widget sync, query client, query keys, and cache helpers.
 - `src/services/api/` - backend clients. `apiClient.ts` handles normal API auth/proxy headers; `healthDataApi.ts`, `aiSettingsApi.ts`, food-photo estimate, and other raw fetch paths must keep auth, proxy, timeout, and session-expiry behavior aligned.
 - `src/services/healthconnect/` - Android Health Connect reads, native aggregation, transformation, enrichment, preferences, and writeback.
 - `src/services/healthkit/` - iOS HealthKit reads, statistics aggregation, transformation, background delivery, preferences, and writeback.
-- `src/services/shared/` - shared health helpers such as preference factories and permission migration.
+- `src/services/shared/` - platform-agnostic health helpers: the `collectHealthData` / `runForegroundSync` engine both orchestrators share, the per-run workout-telemetry budget and its reuse cache, Health Connect error classification, sample downsampling, day aggregation/transformation, preference factories, and permission migration/sets.
 - `src/services/` - platform health orchestration, writeback re-exports, background sync, auto-sync coordination, diagnostics, calculations, logging, storage, theme, haptics, sounds, notifications, food photo intro, meal selection, boolean preferences, card visibility, and workout drafts.
 - `src/stores/` - Zustand stores, including the persisted active workout/rest timer store.
-- `src/utils/` - date helpers, unit conversion, food details, meal nutrition, nutrient display, workout/session helpers, fasting formatting, numeric input, concurrency, sync utilities, photo estimate error mapping, and rate limiting.
+- `src/utils/` - date helpers, unit conversion, food details, meal nutrition, nutrient display, workout/session helpers, fasting formatting, numeric input, concurrency, sync utilities, duplicate-press guarding, photo estimate error mapping, and rate limiting.
 - `src/constants/` - meal, exercise, fasting, and nutrient metadata.
-- `src/native/` - JS bridges to native modules, including Android widget reloads.
-- `plugins/`, `targets/widget/`, `targets/android-widget/` - Expo plugins and widget/native extension sources.
+- JS bridges to native modules live in `src/services/` (`CalorieWidgetBridge.ts`, `ExactAlarmBridge.ts`); there is no `src/native/` directory.
+- `plugins/`, `targets/widget/`, `targets/android-widget/`, `targets/android-exact-alarm/` - Expo plugins and widget/native extension sources.
 
 ## React Query And Local State
 
@@ -88,7 +106,7 @@ npx expo prebuild -c
 - `useWaterIntakeMutation` fetches `waterContainersQueryKey`, persists the selected container, and optimistically updates `dailySummaryQueryKey(date)`.
 - Active-server switches clear React Query state before refetching connection state.
 - Error-boundary retry flows call `queryClient.resetQueries()`.
-- Local app-only booleans use `services/booleanPreference.ts` with `useSyncExternalStore`. Current users include haptics, sounds, notifications, hydration card visibility, and fasting card visibility.
+- App-local toggles live in `stores/appPreferencesStore.ts` (Zustand `persist`, single AsyncStorage key `@SparkyFitness/app-preferences`): haptics, sounds, notifications, hydration/fasting card visibility, Ask Sparky card visibility, the Liquid Glass tab bar opt-in, the active-workout metric column, and the default rest period (`defaultRestSec`, edited in `WorkoutSettingsScreen`). Consume via selectors (`useAppPreferencesStore((s) => s.hapticsEnabled)`) plus generated setters; non-React code reads current values through helpers like `getDefaultRestSec()`. A legacy-aware storage adapter migrates the old per-key `@HealthConnect:*` values once. These preferences never sync to the server.
 
 ## Health Sync
 
@@ -108,6 +126,8 @@ npx expo prebuild -c
 - `app.config.ts` grants `android.permission.health.READ_HEALTH_DATA_HISTORY` so Android can read data older than 30 days.
 - Health Connect permission migrations belong in `services/shared/healthPermissionMigration.ts`, not UI-only state.
 - Core check-in measurements use `measurementsApi.ts` and `MeasurementsAddScreen`; preserve `upsertCheckIn` omitted-vs-null semantics.
+- "Import Full History" (`ImportHistoryScreen`, reached from `SyncScreen`) is a one-time resumable backfill: `backfillService.ts` walks 30-day day-aligned windows newest-first from start-of-today down to a probe-derived floor (`readEarliestRecord` on both providers), one upload per window, with a per-server checkpoint in `backfillCheckpoint.ts`. It never advances `lastSyncedTime` and never runs writeback; while it runs, `isBackfillRunning()` (autoSyncCoordinator) makes background sync skip.
+- The backfill's metric set is FROZEN in its checkpoint at first run; resume uses the frozen set verbatim and toggle changes require Start Over. Quota exhaustion, locked device, and app-inactive are expected mid-run stops — the checkpoint keeps them resumable.
 
 ## Health Writeback
 
@@ -120,12 +140,13 @@ npx expo prebuild -c
 - `HealthDataWriteback` on `SyncScreen` owns the remove flow. `BottomSheetPicker` offers all-time purge or date range through `DateRangeSheet`; both call `removeWrittenData(range)` and clear tracking.
 - Inbound iOS nutrition sync reads food correlations with a rolling nutrition lookback and upserts by `(source, source_id)` server-side.
 
-## Native Patch
+## Native Patches
 
 - `react-native-health-connect` is declared as `^3.5.3`; the installed 3.5.3 build is patched from the repo root via `pnpm.patchedDependencies`.
 - Patch file: `../patches/react-native-health-connect@3.5.3.patch`.
 - The patch changes Android `getAggregateGroupByPeriodRequest` implementations from instant-based `getTimeRangeFilter` to local-date-time `getTimeRangeFilterLocal` for non-Steps record types. This protects per-day grouping around DST and local-day boundaries.
-- After changing the patch or upgrading `react-native-health-connect`, run `pnpm install` from the repo root and then `npx expo prebuild -c` from mobile before Android validation.
+- `@bacons/apple-targets@4.0.6` is patched via `../patches/@bacons__apple-targets@4.0.6.patch`, fixing two upstream bugs. First, its xcode pass matched "its" extension target by type with a fall-back to any same-type target, which adopted and corrupted the expo-widgets `ExpoWidgetsTarget` on a clean prebuild; the patch scopes the match to an exact product-name hit. Second, the existing-target update path crashed every non-clean prebuild (EvanBacon/expo-apple-targets#201): removing the old build configuration list's referrers cleared `target.props.buildConfigurationList`, which the next line then dereferenced; the patch holds the list in a local and iterates a copy of its configurations so none are skipped mid-removal.
+- After changing a patch or upgrading a patched package, run `pnpm install` from the repo root and then `npx expo prebuild --clean` from mobile before native validation.
 
 ## Food, Meals, Units, And Photo Estimates
 
@@ -138,6 +159,7 @@ npx expo prebuild -c
 - Logged-meal grouped diary entries use `foodEntryMealsApi`, `FoodEntryViewScreen`, and `EditLoggedMealScreen`. Preserve stored component nutrition snapshots when editing.
 - `MealTypeDetailScreen` owns single-meal-type day views and copy-to-another-day via `useCopyFoodEntries`; be careful with custom meal types and synthetic buckets.
 - External food providers use provider-agnostic v2 endpoints where possible. Provider categories and barcode support come from server config; do not hardcode provider type allowlists unless preserving an explicit fallback.
+- "All Providers" aggregated search (`useAllProvidersSearch`) fans one debounced term out across every active provider in parallel — one `useQueries` entry per provider, results projected in the `combine` callback for structural sharing. Providers stream in independently; a slow or failing provider must not block the others. Open Food Facts calls go through the shared rate limiter.
 - Photo mode is hidden in meal-builder mode because photo estimates log to the diary.
 - `FoodPhotoFlow` is a modal native stack and wraps itself in a local `KeyboardProvider`.
 - Photo availability fetches `GET /api/chat/ai-service-settings/active` through `aiSettingsApi.ts`; food photo is attempt-all, so `isFoodPhotoAvailable` gates only on a configured provider, not a specific provider type.
@@ -151,9 +173,9 @@ npx expo prebuild -c
 - Session responses are discriminated unions from `@workspace/shared`: preset workouts and individual activity sessions have different shapes. Keep detail/edit screens type-safe.
 - Workout/activity drafts are persisted by `workoutDraftService`; `useWorkoutForm`, `useActivityForm`, and `useDraftPersistence` own form state.
 - Exercise selection returns via `CommonActions.setParams` and a nonce pattern through `useSelectedExercise`.
-- Rest timer state lives in `stores/activeWorkoutStore.ts`; notifications are scheduled through `services/notifications.ts`.
+- Rest timer state lives in `stores/activeWorkoutStore.ts`; notifications are scheduled through `services/notifications.ts`. The rest-complete ping carries a background "Complete Set" action (`rest-complete` category): responses are routed to `completeActiveSetIfReady` by `initWorkoutNotificationActions` (exported from the store, wired in App startup — the response listener cannot live in `notifications.ts` without a store↔service import cycle), and stale delivered pings are swept when the next rest is scheduled.
 - Set IDs are preserved server-side across workout edits so the active workout cursor stays attached to the right row.
-- Rest duration is configurable per exercise via `RestPeriodChip` / `RestPeriodSheet` and is forwarded through `buildExercisesPayload`.
+- Rest duration is configurable per exercise via `RestPeriodChip` / `RestPeriodSheet` and is forwarded through `buildExercisesPayload`. New exercises/sets and null `rest_time` fallbacks seed from the `defaultRestSec` app preference via `getDefaultRestSec()` (Settings → Workout Settings), not a hardcoded constant.
 - Fasting uses `FastingDetailScreen`, `FastingCard`, `FastingProtocolSheet`, `useFasting`, `useFastingTimer`, `utils/fasting.ts`, and `services/api/fastingApi.ts`.
 - `FastingGoalReconciler` is mounted headlessly on `DashboardScreen`; it owns goal-notification reconciliation and app-resume refetch even when the visible fasting card is hidden.
 - Fasting goal notifications are gated by the app notifications toggle; ending/canceling a fast clears scheduled notifications.
@@ -167,6 +189,16 @@ npx expo prebuild -c
 - Custom nutrients are fetched via `useCustomNutrients` from `GET /api/custom-nutrients`; nutrient display preferences use full-array replace through `preferencesApi.ts`.
 - Nutrient metadata and defaults live in `constants/nutrients.ts`; aggregation and visibility toggling live in `utils/nutrientUtils.ts`.
 - Measurements and water routes are in `measurementsApi.ts`; date-sensitive flows should preserve calendar-day strings and shared timezone helpers.
+
+## Chat (Ask Sparky)
+
+- `Chat` is a root-stack route (`src/screens/ChatScreen.tsx`), reached from `AddSheet`'s "Ask Sparky" row and an optional dashboard card gated by the `askSparkyVisible` preference.
+- The thread is an assistant-ui runtime: `@assistant-ui/react-native` primitives plus `useChatRuntime` / `AssistantChatTransport` from `@assistant-ui/react-ai-sdk`, streaming from `POST /api/chat/stream` (AI SDK UI message stream protocol).
+- The transport must use `expo/fetch` — it exposes a real `ReadableStream` body. RN's global fetch buffers responses and silently breaks incremental streaming.
+- Auth and proxy headers are resolved per request through an async `headers` callback; `service_config_id` (the user's active AI provider) is merged into the request body and required by the server.
+- `chatApi.ts` is history persistence only: `GET /api/chat/sparky-chat-history` and `POST /api/chat/clear-all-history`. `useChatHistory` seeds the runtime with prior messages and uses `staleTime`/`gcTime` of 0 because the runtime ignores `messages` changes after mount — every chat open must re-seed cold.
+- Chat UI lives in `components/chat/`: `MarkdownMessage` (`react-native-enriched-markdown` + `remend` to repair unclosed streamed markdown), `ToolCallCard` (derives running/complete/error from `result`/`isError`), `TypingIndicator`. Tool-name display mapping lives in `constants/chat.ts`.
+- There is no chat Zustand store; thread state lives in the assistant-ui runtime and history seeding in React Query.
 
 ## Auth, Networking, And Settings
 
@@ -192,8 +224,9 @@ npx expo prebuild -c
 - Styling uses Uniwind with TailwindCSS v4 tokens in `global.css`.
 - Themes are Light, Dark, AMOLED, and System. `themeService.ts` owns persistence; `App.tsx` syncs Android navigation bar style.
 - Many visual components read CSS variables with `useCSSVariable`, especially Skia charts and themed controls.
+- Animate Skia paths from Reanimated `useSharedValue` / `useDerivedValue`, not Skia's deprecated animation API.
 - `Icon.tsx` maps semantic names to SF Symbols on iOS and Ionicons on Android; verify identifiers before adding icons.
-- Use shared primitives where they fit: `FormInput`, `Button`, `SettingsRow`, `SettingsRowGroup`, `SegmentedControl`, `StepperInput`, `BottomSheetPicker`, `CalendarSheet`, `DateRangeSheet`, and `FormScreenChrome`.
+- Use shared primitives where they fit: `FormInput`, `Button`, `SettingsRow`, `SettingsRowGroup`, `SegmentedControl`, `StepperInput`, `BottomSheetPicker`, `CalendarSheet`, `DateRangeSheet`, `AnchoredMenu`, and `FormScreenChrome`.
 - `BottomSheetPicker`, `CalendarSheet`, and sheets shown over native modals use `FullWindowOverlay` on iOS to avoid nested-provider inset bugs.
 - Keep button text and compact cards within their stable dimensions across mobile sizes. Avoid layout shifts from dynamic labels, loading states, or icon swaps.
 
@@ -202,11 +235,13 @@ npx expo prebuild -c
 - iOS widgets live under `targets/widget/`, share data through the app group from `app.identifiers.js`, and reload through `ExtensionStorage` in `useWidgetSync`.
 - Current iOS widgets are calorie and macro widgets. When changing display, update Swift views, shared helpers, TS snapshot shape, and reload kind handling together.
 - Android widgets live under `targets/android-widget/`. `plugins/withCalorieWidget.ts` copies Kotlin/templates/resources, registers receivers, wires the native module package, and documents the pattern for adding another widget.
-- `src/native/CalorieWidgetBridge.ts` is the JS bridge for Android widget snapshot writes and Glance reloads.
+- `src/services/CalorieWidgetBridge.ts` is the JS bridge for Android widget snapshot writes and Glance reloads.
+- The scheduled "Rest complete" alert fires exactly only with the `SCHEDULE_EXACT_ALARM` special access ("Alarms & reminders", user-granted, denied by default on Android 13+) — without it expo-notifications falls back to inexact alarms the OS batches ~15s late. The `targets/android-exact-alarm/` Kotlin module (registered by `plugins/withExactAlarmModule.ts`) exposes `canScheduleExactAlarms`/`openExactAlarmSettings` through `src/services/ExactAlarmBridge.ts`; `maybePromptForExactAlarmPermission` in `notifications.ts` owns the one-time grant prompt at workout start.
 - Widget snapshot shape is owned by `useWidgetSync.ts`; keep it aligned with Swift views and Kotlin composables.
+- The workout Live Activity (Lock Screen + Dynamic Island elapsed/rest timers) uses `expo-widgets`, whose generated `ExpoWidgetsTarget` extension coexists with the `@bacons/apple-targets` `targets/widget/` target. `src/services/WorkoutLiveActivityLayout.tsx` is the `'widget'`-directive layout (self-contained; only `@expo/ui/swift-ui` imports; epoch-ms props, never `Date`s) and must only be imported from `src/services/workoutLiveActivity.ios.ts` — `createLiveActivity` runs at module scope and would drag iOS native modules into the Android bundle. The `.ios.ts` service subscribes to `activeWorkoutStore` (ops held until persist hydration + instance reconcile) and serializes all start/update/end calls; the OS ticks the timers from absolute timestamps, no polling — the app pushes an update only on a real state change. The rest "+15s"/"Skip" and active-phase "Complete" buttons (iOS 17+; inert below 17) fire a `LiveActivityIntent` that runs in the app process and lands in the service via `addUserInteractionListener`, which dispatches to store actions; the button `target` strings are duplicated by hand between layout and service because the `'widget'` body cannot import them. A press after a force-quit is lost (the event fires before JS boots). The rest progress bar is an OS-ticked `ProgressView timerInterval`; the `bannerSmall` slot targets the watchOS Smart Stack/CarPlay and stays button-free. Live Activities get NO `widgets[]` entry in `app.config.ts` (that array is only for home/Lock Screen widgets).
 - `app.config.ts` controls bundle identifiers, Apple team IDs, iOS app group, Android permissions, navigation bar contrast, widget plugins, and production-only network security config.
 - `APP_VARIANT` selects dev vs production behavior; dev builds request extra Android Health Connect write permissions for local testing/seeding.
-- After editing `targets/`, native config plugins, app groups, permissions, or native bridge shape, run `npx expo prebuild -c`.
+- After editing `targets/`, native config plugins, app groups, permissions, or native bridge shape, run `npx expo prebuild --clean`.
 
 ## Shared Workspace Contracts
 
@@ -227,8 +262,18 @@ All endpoints require auth headers, and proxy headers are injected before auth h
 - `exerciseApi.ts`, `externalExerciseSearchApi.ts`, `workoutPresetsApi.ts` - exercise history, suggested/search/import flows, preset/individual exercise sessions, workout presets.
 - `fastingApi.ts` - `POST /api/fasting/start`, `POST /api/fasting/end`, and current/stats/history reads.
 - `authService.ts`, `profileApi.ts`, `externalProvidersApi.ts`, `customNutrientsApi.ts` - auth/session/MFA, profile, configured providers, custom nutrient definitions.
+- `ChatScreen.tsx` (transport) + `chatApi.ts` - streaming chat via `POST /api/chat/stream`, history load/clear.
 
-When reviewing an API issue, trace screen/hook -> API client -> server route -> service/repository -> shared schema before judging the fix.
+When reviewing an API issue, trace screen/hook -> API client -> server route -> service/repository -> shared schema before judging the fix. Deeper endpoint docs live in mobile `docs/` (`food_api.md`, `sync_api.md`, `measurements_api.md`, `external_providers.md`, `healthkit.md`, `bg_sync.md`).
+
+## Localization And Reactive Helpers
+
+- React UI gets `t` from `useTranslation()`; user-facing utility helpers accept an injected `TFunction` and never hide singleton `i18n.t()` fallbacks.
+- Pass `t` through every presentation helper and include it in `useMemo` / `useCallback` dependencies when the derived result contains localized text; this keeps mounted UI correct after a runtime language switch.
+- Translation keys are semantic and statically analyzable. Every static `defaultValue` is the English source fallback and must exactly match the EN catalog entry.
+- A key used with `count` is a plural family: EN requires `_one` and `_other`; PL requires `_one`, `_few`, `_many`, and `_other`. Use grammatically correct forms rather than duplicating suffixes blindly.
+- Run `pnpm run i18n:audit` after localization work. `pnpm run validate` includes typecheck, lint with zero warnings, and this audit.
+- Keep canonical storage/API values and user-generated content literal; localize only application-owned presentation labels.
 
 ## Testing Guidance
 

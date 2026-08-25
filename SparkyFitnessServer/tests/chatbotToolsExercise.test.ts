@@ -6,6 +6,7 @@ import workoutPresetService from '../services/workoutPresetService.js';
 import exerciseDb from '../models/exercise.js';
 import exerciseEntryDb from '../models/exerciseEntry.js';
 import workoutPresetRepository from '../models/workoutPresetRepository.js';
+import { getResolvedExerciseCaloriesRange } from '../services/exerciseCalorieRangeService.js';
 
 vi.mock('../services/exerciseService', () => ({
   default: {
@@ -46,13 +47,17 @@ vi.mock('../models/workoutPresetRepository', () => ({
     getWorkoutPresetByName: vi.fn(),
   },
 }));
+vi.mock('../services/exerciseCalorieRangeService', () => ({
+  getResolvedExerciseCaloriesRange: vi.fn(),
+  getResolvedExerciseCaloriesTotal: vi.fn(),
+}));
 vi.mock('../config/logging', () => ({
   log: vi.fn(),
 }));
 
 const opts = { toolCallId: 'tc-1', messages: [] };
 const DB_ERROR_TEXT =
-  'Error [DB_ERROR]: A database error occurred. Please try again.\n\nSuggestion: If the issue persists, contact support.';
+  'Error [DB_ERROR]: A database error occurred.\n\nSuggestion: Do NOT retry the same call — it will fail the same way. Tell the user what failed and stop.';
 const NOT_FOUND_RESOURCE_TEXT =
   "Error [NOT_FOUND]: Resource with ID 'unknown' not found.\n\nSuggestion: Check the ID and try again.";
 
@@ -64,6 +69,9 @@ const PRESET_ID = '44444444-4444-4444-8444-444444444444';
 let tools: ReturnType<typeof buildExerciseTools>;
 
 beforeEach(() => {
+  // Default: no resolved rows, so the tool falls back to the raw per-day totals and the
+  // projection goldens below stay meaningful. Resolution itself is covered separately.
+  vi.mocked(getResolvedExerciseCaloriesRange).mockResolvedValue(new Map());
   vi.clearAllMocks();
   tools = buildExerciseTools('user-1', 'UTC');
 });
@@ -76,6 +84,21 @@ describe('sparky_manage_exercise validation', () => {
     );
     expect(result).toBe(
       'Error [VALIDATION]: searchTerm: Invalid input: expected string, received undefined'
+    );
+  });
+
+  it('infers action when missing from input parameters', async () => {
+    vi.mocked(exerciseService.searchExercisesPaginated).mockResolvedValue({
+      exercises: [],
+      totalCount: 0,
+    });
+    // Omit the 'action' field, but supply 'searchTerm' to imply search_exercises
+    const result = await tools.sparky_manage_exercise.execute!(
+      { searchTerm: 'pushups' },
+      opts
+    );
+    expect(result).toBe(
+      '# Exercise Search: "pushups"\n\nNo results found.\n\n---\nShowing 0 of 0 results.'
     );
   });
 });
@@ -184,6 +207,30 @@ describe('search_exercises', () => {
     );
     expect(result).toBe(DB_ERROR_TEXT);
   });
+
+  // A deterministic constraint violation used to reach the chat as a bare
+  // "a database error occurred", so the only way to see what broke was to grep
+  // the server log. Surface the constraint name (schema metadata, not row data).
+  it('names the violated constraint instead of a bare DB error', async () => {
+    const pgError = Object.assign(new Error('insert failed'), {
+      code: '23514',
+      constraint: 'food_variants_source_check',
+    });
+    vi.mocked(exerciseService.searchExercisesPaginated).mockRejectedValue(
+      pgError
+    );
+
+    const result = await tools.sparky_manage_exercise.execute!(
+      { action: 'search_exercises', searchTerm: 'bench' },
+      opts
+    );
+
+    expect(result).toContain('check constraint food_variants_source_check');
+    // And it must never invite the blind identical retry that a deterministic
+    // failure guarantees will fail again.
+    expect(result).not.toContain('try again');
+    expect(result).toContain('Do NOT retry');
+  });
 });
 
 describe('create_exercise', () => {
@@ -248,21 +295,99 @@ describe('create_exercise', () => {
       category: 'Cardio',
       calories_per_hour: 550,
       description: 'Indoor rower',
+      modality: undefined,
       is_custom: true,
       shared_with_public: false,
       source: 'manual',
     });
   });
+
+  it('passes an explicit modality through to the service', async () => {
+    vi.mocked(exerciseService.searchExercises).mockResolvedValue([]);
+    vi.mocked(exerciseService.createExercise).mockResolvedValue({
+      id: EXERCISE_ID,
+      name: 'Plank',
+    });
+
+    const result = await tools.sparky_manage_exercise.execute!(
+      {
+        action: 'create_exercise',
+        name: 'Plank',
+        category: 'Isometric',
+        modality: 'duration',
+      },
+      opts
+    );
+
+    expect(result).toBe('✅ Exercise "Plank" created.');
+    expect(exerciseService.createExercise).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({ name: 'Plank', modality: 'duration' })
+    );
+  });
+
+  it('rejects a modality outside the enum', async () => {
+    vi.mocked(exerciseService.searchExercises).mockResolvedValue([]);
+
+    const result = await tools.sparky_manage_exercise.execute!(
+      {
+        action: 'create_exercise',
+        name: 'Plank',
+        modality: 'time_only',
+      } as never,
+      opts
+    );
+
+    expect(result).toContain('modality');
+    expect(exerciseService.createExercise).not.toHaveBeenCalled();
+  });
 });
 
 describe('log_exercise', () => {
-  it('requires exercise_id or exercise_name', async () => {
+  it('defaults to General Exercise when exercise_id and exercise_name are missing', async () => {
+    vi.mocked(exerciseService.searchExercises).mockResolvedValue([]);
+    vi.mocked(exerciseService.createExercise).mockResolvedValue({
+      id: EXERCISE_ID,
+      name: 'General Exercise',
+    } as any);
+    vi.mocked(exerciseService.createExerciseEntry).mockResolvedValue({
+      id: ENTRY_ID,
+    });
+
     const result = await tools.sparky_manage_exercise.execute!(
       { action: 'log_exercise', entry_date: '2026-06-10' },
       opts
     );
-    expect(result).toBe(
-      'Error [VALIDATION]: Either exercise_id or exercise_name must be provided'
+    expect(result).toBe('✅ Exercise logged for 2026-06-10.');
+    expect(exerciseService.createExercise).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({ name: 'General Exercise' })
+    );
+  });
+
+  // Matches the web's entry_time contract; without it a chatbot-logged workout
+  // had a NULL time and sorted differently in the diary than a web-logged one.
+  it('persists entry_time when the user states a time', async () => {
+    vi.mocked(exerciseService.createExerciseEntry).mockResolvedValue({
+      id: ENTRY_ID,
+    });
+
+    await tools.sparky_manage_exercise.execute!(
+      {
+        action: 'log_exercise',
+        exercise_id: EXERCISE_ID,
+        entry_date: '2026-06-10',
+        entry_time: '19:45',
+        duration_minutes: 30,
+      },
+      opts
+    );
+
+    expect(exerciseService.createExerciseEntry).toHaveBeenCalledWith(
+      'user-1',
+      'user-1',
+      expect.objectContaining({ entry_time: '19:45' }),
+      expect.anything()
     );
   });
 
@@ -301,6 +426,7 @@ describe('log_exercise', () => {
             reps: 10,
             weight: 60,
             duration: null,
+            distance: null,
             rest_time: null,
             rpe: null,
             notes: null,
@@ -311,6 +437,7 @@ describe('log_exercise', () => {
             reps: 8,
             weight: 65,
             duration: null,
+            distance: null,
             rest_time: null,
             rpe: null,
             notes: null,
@@ -434,11 +561,79 @@ describe('log_exercise', () => {
             reps: 5,
             weight: 100,
             duration: null,
+            distance: null,
             rest_time: null,
             rpe: null,
             notes: null,
           },
         ],
+      }),
+      { skipDuplicateCheck: true }
+    );
+  });
+
+  it('persists per-set distance for cardio sets', async () => {
+    vi.mocked(exerciseService.createExerciseEntry).mockResolvedValue({
+      id: ENTRY_ID,
+    });
+
+    await tools.sparky_manage_exercise.execute!(
+      {
+        action: 'log_exercise',
+        exercise_id: EXERCISE_ID,
+        entry_date: '2026-06-10',
+        duration_minutes: 30,
+        sets: [{ duration: 1800, distance: 5.2 }],
+      },
+      opts
+    );
+
+    expect(exerciseService.createExerciseEntry).toHaveBeenCalledWith(
+      'user-1',
+      'user-1',
+      expect.objectContaining({
+        sets: [expect.objectContaining({ duration: 1800, distance: 5.2 })],
+      }),
+      { skipDuplicateCheck: true }
+    );
+  });
+
+  it('rejects a fractional set duration (per-set duration is integer seconds)', async () => {
+    const result = await tools.sparky_manage_exercise.execute!(
+      {
+        action: 'log_exercise',
+        exercise_id: EXERCISE_ID,
+        entry_date: '2026-06-10',
+        sets: [{ reps: 5, duration: 90.5 }],
+      },
+      opts
+    );
+
+    // The sets union collapses inner paths, so the issue is reported on 'sets'.
+    expect(result).toBe('Error [VALIDATION]: sets: Invalid input');
+    expect(exerciseService.createExerciseEntry).not.toHaveBeenCalled();
+  });
+
+  it('rounds fractional durations arriving through the JSON-string sets branch', async () => {
+    vi.mocked(exerciseService.createExerciseEntry).mockResolvedValue({
+      id: ENTRY_ID,
+    });
+
+    await tools.sparky_manage_exercise.execute!(
+      {
+        action: 'log_exercise',
+        exercise_id: EXERCISE_ID,
+        entry_date: '2026-06-10',
+        sets: '[{"reps":5,"duration":90.6}]',
+      },
+      opts
+    );
+
+    expect(exerciseService.createExerciseEntry).toHaveBeenCalledWith(
+      'user-1',
+      'user-1',
+      expect.objectContaining({
+        sets: [expect.objectContaining({ duration: 91 })],
       }),
       { skipDuplicateCheck: true }
     );
@@ -723,6 +918,7 @@ describe('update_exercise_entry / delete_exercise_entry', () => {
             reps: 12,
             weight: null,
             duration: null,
+            distance: null,
             rest_time: null,
             rpe: null,
             notes: null,

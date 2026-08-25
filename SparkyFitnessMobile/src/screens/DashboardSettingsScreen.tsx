@@ -1,14 +1,14 @@
 import React, { useCallback } from 'react';
-import { Platform, View, Text, Switch, ScrollView, ActivityIndicator } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import { View, Text, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useCSSVariable } from 'uniwind';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import Toast from 'react-native-toast-message';
 
-import Button from '../components/ui/Button';
-import Icon from '../components/Icon';
 import SettingsRow, { SettingsRowGroup } from '../components/SettingsRow';
+import StatusView from '../components/StatusView';
 import { useActiveWorkoutBarPadding } from '../components/ActiveWorkoutBar';
+import Switch from '../components/ui/Switch';
 import { useServerConnection, useCustomNutrients, useNutrientDisplayPreferences } from '../hooks';
 import {
   updateNutrientDisplayPreference,
@@ -16,19 +16,9 @@ import {
 } from '../services/api/preferencesApi';
 import { nutrientDisplayPreferencesQueryKey } from '../hooks/queryKeys';
 import { toggleNutrientVisibility } from '../utils/nutrientUtils';
-import {
-  useFastingCardVisible,
-  setFastingCardVisible,
-} from '../services/fastingCardVisibility';
-import {
-  useHydrationCardVisible,
-  setHydrationCardVisible,
-} from '../services/hydrationCardVisibility';
-import {
-  useAskSparkyVisible,
-  setAskSparkyVisible,
-} from '../services/askSparkyVisibility';
-import { useHeaderActionColors } from '../hooks/useHeaderActionColors';
+import { useAppPreferencesStore } from '../stores/appPreferencesStore';
+import { useNativeIOSHeadersActive } from '../services/nativeTabBarPreference';
+import { useScreenHeader } from '../hooks/useScreenHeader';
 import type { RootStackScreenProps } from '../types/navigation';
 
 type DashboardSettingsScreenProps = RootStackScreenProps<'DashboardSettings'>;
@@ -47,19 +37,22 @@ const SERVER_DEFAULT_SUMMARY_NUTRIENTS = [
   'dietary_fiber',
 ];
 
-const DashboardSettingsScreen: React.FC<DashboardSettingsScreenProps> = ({ navigation }) => {
+const DashboardSettingsScreen: React.FC<DashboardSettingsScreenProps> = () => {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const activeWorkoutBarPadding = useActiveWorkoutBarPadding('stack');
-  const [accentPrimary, formEnabled, formDisabled] = useCSSVariable([
-    '--color-accent-primary',
-    '--color-form-enabled',
-    '--color-form-disabled',
-  ]) as [string, string, string];
-  const { backColor } = useHeaderActionColors();
+  const usesNativeHeader = useNativeIOSHeadersActive();
 
-  const fastingCardVisible = useFastingCardVisible();
-  const hydrationCardVisible = useHydrationCardVisible();
-  const askSparkyVisible = useAskSparkyVisible();
+  const fastingCardVisible = useAppPreferencesStore((s) => s.fastingCardVisible);
+  const setFastingCardVisible = useAppPreferencesStore((s) => s.setFastingCardVisible);
+  const cycleCardVisible = useAppPreferencesStore((s) => s.cycleCardVisible);
+  const setCycleCardVisible = useAppPreferencesStore((s) => s.setCycleCardVisible);
+  const hydrationCardVisible = useAppPreferencesStore((s) => s.hydrationCardVisible);
+  const setHydrationCardVisible = useAppPreferencesStore((s) => s.setHydrationCardVisible);
+  const askSparkyVisible = useAppPreferencesStore((s) => s.askSparkyVisible);
+  const setAskSparkyVisible = useAppPreferencesStore((s) => s.setAskSparkyVisible);
+  const medicationsCardVisible = useAppPreferencesStore((s) => s.medicationsCardVisible);
+  const setMedicationsCardVisible = useAppPreferencesStore((s) => s.setMedicationsCardVisible);
 
   const queryClient = useQueryClient();
   const { isConnected } = useServerConnection();
@@ -112,7 +105,7 @@ const DashboardSettingsScreen: React.FC<DashboardSettingsScreenProps> = ({ navig
       if (context?.previous) {
         queryClient.setQueryData(nutrientDisplayPreferencesQueryKey, context.previous);
       }
-      Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to update setting.' });
+      Toast.show({ type: 'error', text1: t('common.error', { defaultValue: 'Error' }), text2: t('dashboardSettings.updateFailed', { defaultValue: 'Failed to update setting.' }) });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: nutrientDisplayPreferencesQueryKey });
@@ -128,22 +121,17 @@ const DashboardSettingsScreen: React.FC<DashboardSettingsScreenProps> = ({ navig
 
   const renderContent = () => {
     if (isLoading) {
-      return (
-        <View className="items-center justify-center py-12">
-          <ActivityIndicator size="large" color={accentPrimary} />
-        </View>
-      );
+      return <StatusView inline loading />;
     }
 
     if (customNutrients.length === 0) {
       return (
         <View className="bg-surface rounded-xl p-4 mb-4 shadow-sm">
           <Text className="text-base font-semibold text-text-primary mb-2">
-            No custom nutrients
+            {t('dashboardSettings.noCustomNutrients', { defaultValue: 'No custom nutrients' })}
           </Text>
           <Text className="text-text-secondary text-sm">
-            Custom nutrients are created in the SparkyFitness web app. Once you add
-            some, they will appear here so you can choose which show on your Dashboard.
+            {t('dashboardSettings.customNutrientsDescription', { defaultValue: 'Custom nutrients are created in the SparkyFitness web app. Once you add some, they will appear here so you can choose which show on your Dashboard.' })}
           </Text>
         </View>
       );
@@ -158,10 +146,9 @@ const DashboardSettingsScreen: React.FC<DashboardSettingsScreenProps> = ({ navig
             subtitle={cn.unit}
             rightAccessory={
               <Switch
+                accessibilityLabel={cn.name}
                 value={base.includes(cn.name)}
                 onValueChange={(value) => handleToggle(cn.name, value)}
-                trackColor={{ false: formDisabled, true: formEnabled }}
-                thumbColor="#FFFFFF"
               />
             }
           />
@@ -170,67 +157,75 @@ const DashboardSettingsScreen: React.FC<DashboardSettingsScreenProps> = ({ navig
     );
   };
 
+  const header = useScreenHeader({ title: t('dashboardSettings.title', { defaultValue: 'Dashboard Settings' }), left: { kind: 'back' } });
+
   return (
     <View
       className="flex-1 bg-background"
-      style={Platform.OS === 'ios' ? undefined : { paddingTop: insets.top }}
+      style={usesNativeHeader ? undefined : { paddingTop: insets.top }}
     >
+      {header}
       <ScrollView
         contentContainerStyle={{
           padding: 16,
           paddingTop: 16,
           paddingBottom: insets.bottom + 80 + activeWorkoutBarPadding,
         }}
-        contentInsetAdjustmentBehavior={Platform.OS === 'ios' ? 'automatic' : 'never'}
+        contentInsetAdjustmentBehavior={usesNativeHeader ? 'automatic' : 'never'}
       >
-        {Platform.OS !== 'ios' && (
-          <View className="flex-row items-center mb-4">
-            <Button
-              variant="ghost"
-              onPress={() => navigation.goBack()}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              className="py-0 px-0 mr-2"
-            >
-              <Icon name="chevron-back" size={22} color={backColor} />
-            </Button>
-            <Text className="text-2xl font-bold text-text-primary">Dashboard Settings</Text>
-          </View>
-        )}
-
         <SettingsRowGroup>
           <SettingsRow
-            title="Ask Sparky"
-            subtitle="Show the Ask Sparky chat launcher on the Dashboard"
+            title={t('dashboardSettings.askSparky', { defaultValue: 'Ask Sparky' })}
+            subtitle={t('dashboardSettings.askSparkySubtitle', { defaultValue: 'Show the Ask Sparky chat launcher on the Dashboard' })}
             rightAccessory={
               <Switch
+                accessibilityLabel={t('dashboardSettings.askSparky', { defaultValue: 'Ask Sparky' })}
                 value={askSparkyVisible}
                 onValueChange={setAskSparkyVisible}
-                trackColor={{ false: formDisabled, true: formEnabled }}
-                thumbColor="#FFFFFF"
               />
             }
           />          
           <SettingsRow
-            title="Hydration"
-            subtitle="Show the hydration card on the Dashboard"
+            title={t('dashboardSettings.hydration', { defaultValue: 'Hydration' })}
+            subtitle={t('dashboardSettings.hydrationSubtitle', { defaultValue: 'Show the hydration card on the Dashboard' })}
             rightAccessory={
               <Switch
+                accessibilityLabel={t('dashboardSettings.hydration', { defaultValue: 'Hydration' })}
                 value={hydrationCardVisible}
                 onValueChange={setHydrationCardVisible}
-                trackColor={{ false: formDisabled, true: formEnabled }}
-                thumbColor="#FFFFFF"
               />
             }
           />
           <SettingsRow
-            title="Fasting"
-            subtitle="Show the fasting card on the Dashboard"
+            title={t('dashboardSettings.fasting', { defaultValue: 'Fasting' })}
+            subtitle={t('dashboardSettings.fastingSubtitle', { defaultValue: 'Show the fasting card on the Dashboard' })}
             rightAccessory={
               <Switch
+                accessibilityLabel={t('dashboardSettings.fasting', { defaultValue: 'Fasting' })}
                 value={fastingCardVisible}
                 onValueChange={setFastingCardVisible}
-                trackColor={{ false: formDisabled, true: formEnabled }}
-                thumbColor="#FFFFFF"
+              />
+            }
+          />
+          <SettingsRow
+            title={t('dashboardSettings.cyclePregnancy', { defaultValue: 'Cycle & Pregnancy' })}
+            subtitle={t('dashboardSettings.cyclePregnancySubtitle', { defaultValue: 'Show the wellness card on the Dashboard' })}
+            rightAccessory={
+              <Switch
+                accessibilityLabel={t('dashboardSettings.cyclePregnancy', { defaultValue: 'Cycle & Pregnancy' })}
+                value={cycleCardVisible}
+                onValueChange={setCycleCardVisible}
+              />
+            }
+          />
+          <SettingsRow
+            title={t('dashboardSettings.medications', { defaultValue: 'Medications' })}
+            subtitle={t('dashboardSettings.medicationsSubtitle', { defaultValue: 'Show the medications card on the Dashboard' })}
+            rightAccessory={
+              <Switch
+                accessibilityLabel={t('dashboardSettings.medications', { defaultValue: 'Medications' })}
+                value={medicationsCardVisible}
+                onValueChange={setMedicationsCardVisible}
               />
             }
           />
@@ -238,7 +233,7 @@ const DashboardSettingsScreen: React.FC<DashboardSettingsScreenProps> = ({ navig
         </SettingsRowGroup>
 
         <Text className="text-base font-semibold text-text-primary mb-4">
-          Custom Nutrient Display
+          {t('dashboardSettings.customNutrientDisplay', { defaultValue: 'Custom Nutrient Display' })}
         </Text>
 
         {renderContent()}

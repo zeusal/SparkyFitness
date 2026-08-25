@@ -1,25 +1,71 @@
 import {
   requestAuthorization,
   queryQuantitySamples,
-  queryStatisticsForQuantity,
+  queryStatisticsCollectionForQuantity,
   isHealthDataAvailable,
   queryCategorySamples,
   queryWorkoutSamples,
   queryCorrelationSamples,
+  type QueryStatisticsResponse,
+  type StatisticsOptions,
 } from '@kingstinct/react-native-healthkit';
 import { Platform, Alert } from 'react-native';
 import { addLog } from '../LogService';
+import i18n from '../../localization/i18n';
 import {
   AggregatedHealthRecord,
+  MetricConfig,
   PermissionRequest,
+  TransformedRecord,
+  HEALTHKIT_SOURCE,
+  type ReadResult,
 } from '../../types/healthRecords';
 import { getSyncStartDate } from '../../utils/syncUtils';
 import { getDeviceTimezone } from '../../utils/dateUtils';
-import { toLocalDateString } from './dataAggregation';
+import { toLocalDateString, mapDayStatisticsToMinMaxAvg } from './dataAggregation';
+import { BLOOD_GLUCOSE_MG_DL_PER_MMOL_L } from '../shared/dataTransformation';
 import { DIETARY_WRITE_IDENTIFIERS } from './writebackMappers';
+import {
+  collectWorkoutTelemetry,
+  type WorkoutProxyLike,
+} from './workoutTelemetry';
+import {
+  createTelemetryRunContext,
+  type TelemetryRunContext,
+} from '../shared/telemetryBudget';
+import {
+  hasEnrichedSession,
+  sessionTelemetryKey,
+} from '../shared/enrichedSessionCache';
+import { createConcurrencyLimiter, runTasksInBatches } from '../../utils/concurrency';
+import { getErrorMessage } from '../../utils/errors';
 
 // Re-export for backward compatibility with callers importing from this module
 export { getSyncStartDate };
+
+/**
+ * Two limits, because enrichment runs two very different costs per workout.
+ * The statistics queries return a scalar each and run at the wider limit;
+ * telemetry (route plus per-workout sample series) returns large arrays that
+ * are parsed on the JS thread and stays tightly capped. See the matching
+ * comment in healthconnect/index.ts.
+ */
+const AGGREGATE_CONCURRENCY = 6;
+const TELEMETRY_CONCURRENCY = 2;
+
+/** Shared across overlapping runs, so the cap is a real ceiling. */
+const limitTelemetry = createConcurrencyLimiter(TELEMETRY_CONCURRENCY);
+
+/**
+ * Telemetry-collection cache key for a HealthKit workout. endDate moves if the
+ * workout is still being written, so a session in flight is re-collected
+ * rather than frozen at its first reading.
+ */
+const workoutCacheKey = (workout: unknown): string | null => {
+  const w = workout as { uuid?: string; endDate?: string | Date };
+  const end = w.endDate instanceof Date ? w.endDate.toISOString() : w.endDate;
+  return sessionTelemetryKey(w.uuid, end);
+};
 
 // Track if HealthKit is available on this device
 let isHealthKitAvailable = false;
@@ -48,6 +94,25 @@ export function isDatabaseInaccessibleError(error: unknown): boolean {
   return msg.includes('protected health data') || msg.includes('errordatabaseinaccessible');
 }
 
+// Classify and log a failed HealthKit read, bumping the locked-device counter when the
+// database was inaccessible. Returns the message for the caller's { records, error }
+// envelope so a failed read is distinguishable from a successful empty one.
+const recordReadError = (error: unknown, label: string): string => {
+  const message = error instanceof Error ? error.message : String(error);
+  if (isDatabaseInaccessibleError(error)) {
+    databaseInaccessibleCount++;
+    addLog(`[HealthKitService] ${label} failed: database inaccessible (device likely locked)`, 'WARNING');
+  } else {
+    addLog(`[HealthKitService] ${label} failed: ${message}`, 'ERROR');
+  }
+  return message;
+};
+
+// Read-result envelope: callers surface `error` in sync results and hold the sync
+// cursor instead of treating a failed read as "synced, 0 records". Alias of the
+// platform-neutral ReadResult shared with Android.
+export type HealthKitReadResult<T = unknown> = ReadResult<T>;
+
 // Define all supported HealthKit type identifiers for this app
 const SUPPORTED_HK_TYPES = new Set<string>([
   'HKQuantityTypeIdentifierStepCount',
@@ -64,6 +129,7 @@ const SUPPORTED_HK_TYPES = new Set<string>([
   'HKQuantityTypeIdentifierOxygenSaturation',
   'HKQuantityTypeIdentifierVO2Max',
   'HKQuantityTypeIdentifierRestingHeartRate',
+  'HKQuantityTypeIdentifierHeartRateVariabilitySDNN',
   'HKQuantityTypeIdentifierRespiratoryRate',
   'HKQuantityTypeIdentifierDistanceWalkingRunning',
   'HKQuantityTypeIdentifierFlightsClimbed',
@@ -100,7 +166,29 @@ const SUPPORTED_HK_TYPES = new Set<string>([
   'HKQuantityTypeIdentifierAppleMoveTime',
   'HKQuantityTypeIdentifierAppleExerciseTime',
   'HKQuantityTypeIdentifierAppleStandTime',
+  'HKWorkoutRouteTypeIdentifier', // GPS route attached to a workout
 ]);
+
+/**
+ * Types authorized alongside a workout read so its telemetry is readable.
+ *
+ * HealthKit authorizes each underlying type separately — workout access alone
+ * grants neither the route nor the samples recorded during it. Every entry here
+ * is only ever queried scoped to a workout, so they are requested with the
+ * workout rather than surfaced as their own toggleable metrics.
+ */
+const WORKOUT_TELEMETRY_READ_IDENTIFIERS: readonly string[] = [
+  'HKWorkoutRouteTypeIdentifier',
+  'HKQuantityTypeIdentifierHeartRate',
+  'HKQuantityTypeIdentifierRunningSpeed',
+  'HKQuantityTypeIdentifierCyclingSpeed',
+  'HKQuantityTypeIdentifierRunningPower',
+  'HKQuantityTypeIdentifierCyclingPower',
+  'HKQuantityTypeIdentifierCyclingCadence',
+  'HKQuantityTypeIdentifierRunningGroundContactTime',
+  'HKQuantityTypeIdentifierRunningVerticalOscillation',
+  'HKQuantityTypeIdentifierRunningStrideLength',
+];
 
 // Map record types to the unit we want HealthKit to return values in.
 // Without specifying a unit, HealthKit returns values in the user's preferred/locale unit,
@@ -114,6 +202,7 @@ const HEALTHKIT_UNIT_MAP: Record<string, string> = {
   'BodyTemperature': 'degC',
   'BasalBodyTemperature': 'degC',
   'BloodGlucose': 'mg/dL',
+  'HeartRateVariabilitySDNN': 'ms',
   // Add other metrics that need explicit units as needed
 };
 
@@ -135,6 +224,7 @@ export const HEALTHKIT_TYPE_MAP: Record<string, string> = {
   'OxygenSaturation': 'HKQuantityTypeIdentifierOxygenSaturation',
   'Vo2Max': 'HKQuantityTypeIdentifierVO2Max',
   'RestingHeartRate': 'HKQuantityTypeIdentifierRestingHeartRate',
+  'HeartRateVariabilitySDNN': 'HKQuantityTypeIdentifierHeartRateVariabilitySDNN',
   'RespiratoryRate': 'HKQuantityTypeIdentifierRespiratoryRate',
   'Distance': 'HKQuantityTypeIdentifierDistanceWalkingRunning',
   'FloorsClimbed': 'HKQuantityTypeIdentifierFlightsClimbed',
@@ -144,7 +234,13 @@ export const HEALTHKIT_TYPE_MAP: Record<string, string> = {
   'Stress': 'HKCategoryTypeIdentifierMindfulSession', // Map Stress to MindfulSession for HealthKit
   'Workout': 'HKWorkoutTypeIdentifier', // Map Workout to HKWorkoutTypeIdentifier for HealthKit
   'CervicalMucus': 'HKCategoryTypeIdentifierCervicalMucusQuality',
-  'ExerciseRoute': 'HKWorkoutTypeIdentifier',
+  // The route is its own HealthKit type; mapping it to the workout type would
+  // authorize the workout again and leave the route unreadable. Note this
+  // recordType must not be added to a metric's `permissions`: Health Connect
+  // throws InvalidRecordType for a *read* ExerciseRoute permission, which would
+  // fail the whole Android request. iOS gets it via
+  // WORKOUT_TELEMETRY_READ_IDENTIFIERS instead.
+  'ExerciseRoute': 'HKWorkoutRouteTypeIdentifier',
   'IntermenstrualBleeding': 'HKCategoryTypeIdentifierIntermenstrualBleeding',
   'MenstruationFlow': 'HKCategoryTypeIdentifierMenstrualFlow',
   'OvulationTest': 'HKCategoryTypeIdentifierOvulationTestResult',
@@ -195,14 +291,21 @@ export const requestHealthPermissions = async (
 ): Promise<boolean> => {
   if (!isHealthKitAvailable) {
     Alert.alert(
-      'Health App Not Available',
-      'Please install the Apple Health app to sync your health data.'
+      i18n.t('healthSync.alerts.healthAppUnavailableTitle', { defaultValue: 'Health App Not Available' }),
+      i18n.t('healthSync.alerts.healthAppUnavailableMessage', { defaultValue: 'Please install the Apple Health app to sync your health data.' })
     );
     return false;
   }
 
   const isSimulator = Platform.OS === 'ios' && (Platform.constants as { simulator?: boolean })?.simulator === true;
   if (isSimulator && !(globalThis as Record<string, unknown>).FORCE_HEALTHKIT_ON_SIM) {
+    // Returning true here is a convenience for simulator runs, but callers log it as
+    // "permission granted" — say plainly that nothing was requested so the log is not
+    // read as evidence that HealthKit was asked.
+    addLog(
+      '[HealthKitService] Simulator: skipped the authorization request entirely (no sheet, no grant). Set FORCE_HEALTHKIT_ON_SIM to exercise the real path.',
+      'WARNING',
+    );
     return true;
   }
 
@@ -225,11 +328,32 @@ export const requestHealthPermissions = async (
           writePermissionsSet.add('HKQuantityTypeIdentifierBloodPressureSystolic');
           writePermissionsSet.add('HKQuantityTypeIdentifierBloodPressureDiastolic');
         }
-      } else if (p.recordType === 'Workout') {
+      } else if (p.recordType === 'Workout' || p.recordType === 'ExerciseSession') {
         if (p.accessType === 'read') {
           readPermissionsSet.add('HKWorkoutTypeIdentifier');
+          // Workout telemetry is authorized per underlying type, not by the
+          // workout: without these the route comes back empty and the
+          // per-workout sample queries throw, so a synced walk would have no
+          // map and no heart-rate chart. Requested alongside the workout itself
+          // rather than as separate metrics because they are only ever read
+          // scoped to a workout (see healthkit/workoutTelemetry.ts).
+          WORKOUT_TELEMETRY_READ_IDENTIFIERS.forEach((identifier) =>
+            readPermissionsSet.add(identifier)
+          );
         } else if (p.accessType === 'write') {
           writePermissionsSet.add('HKWorkoutTypeIdentifier');
+        }
+      } else if (p.recordType === 'TotalCaloriesBurned') {
+        // Total calories is derived from basal + active energy: the day-statistics
+        // reader and the earliest-sample probe query both underlying types, so
+        // authorization must cover both even when Active Calories is not itself an
+        // enabled metric.
+        if (p.accessType === 'read') {
+          readPermissionsSet.add('HKQuantityTypeIdentifierBasalEnergyBurned');
+          readPermissionsSet.add('HKQuantityTypeIdentifierActiveEnergyBurned');
+        } else if (p.accessType === 'write') {
+          writePermissionsSet.add('HKQuantityTypeIdentifierBasalEnergyBurned');
+          writePermissionsSet.add('HKQuantityTypeIdentifierActiveEnergyBurned');
         }
       } else if (p.recordType === 'Nutrition') {
         // HealthKit authorizes the *contents* of a Food correlation, not the correlation
@@ -260,8 +384,23 @@ export const requestHealthPermissions = async (
   const toShare = Array.from(writePermissionsSet);
 
   if (toRead.length === 0 && toShare.length === 0) {
+    // Every requested record type expanded to nothing — an unmapped record type, or one
+    // missing from SUPPORTED_HK_TYPES. Nothing reaches HealthKit, so no sheet appears and
+    // the type never shows up in the Health app, yet callers see success. Say so loudly.
+    addLog(
+      '[HealthKitService] Authorization request expanded to zero HealthKit types — nothing was requested.',
+      'WARNING',
+      permissionsToRequest.map(p => `unmapped: ${p.accessType} ${p.recordType}`),
+    );
     return true;
   }
+
+  // Exactly what we hand HealthKit, per direction. This is the record that separates
+  // "the request never reached HealthKit" from "it did and the grant did not stick".
+  addLog('[HealthKitService] Requesting HealthKit authorization', 'INFO', [
+    `toRead (${toRead.length}): ${toRead.join(', ') || '(none)'}`,
+    `toShare (${toShare.length}): ${toShare.join(', ') || '(none)'}`,
+  ]);
 
   try {
     // HealthKit library expects 'toRead' and 'toShare' arrays
@@ -276,98 +415,20 @@ export const requestHealthPermissions = async (
     const message = error instanceof Error ? error.message : String(error);
     addLog(`[HealthKitService] Failed to request permissions: ${message}`, 'ERROR');
     Alert.alert(
-      'Permission Error',
-      `An unexpected error occurred while trying to request Health permissions: ${message}`
+      i18n.t('healthSync.alerts.permissionErrorTitle', { defaultValue: 'Permission Error' }),
+      i18n.t('healthSync.alerts.permissionErrorMessage', { defaultValue: 'An unexpected error occurred while trying to request Health permissions: {{error}}', error: message })
     );
     return false;
   }
 };
 
-// Result from a custom query function for aggregation
-interface AggregationQueryResult {
-  value: number;
-  hasData: boolean;
-}
-
-// Configuration for aggregated health metrics
+// Configuration for aggregated cumulative health metrics
 interface AggregationConfig {
   identifier: string;
   unit: string;
   type: string;
   logLabel: string;
-  // Optional custom query function for metrics that need special handling (e.g., multi-query metrics)
-  // If provided, this is used instead of the default single-query approach
-  queryFn?: (dayStart: Date, dayEnd: Date) => Promise<AggregationQueryResult | null>;
 }
-
-// Query function for total calories (basal + active)
-const queryTotalCalories = async (
-  dayStart: Date,
-  dayEnd: Date
-): Promise<AggregationQueryResult | null> => {
-  try {
-    const [basalStats, activeStats] = await Promise.all([
-      queryStatisticsForQuantity(
-        'HKQuantityTypeIdentifierBasalEnergyBurned',
-        ['cumulativeSum'],
-        { filter: { date: { startDate: dayStart, endDate: dayEnd } }, unit: 'kcal' }
-      ),
-      queryStatisticsForQuantity(
-        'HKQuantityTypeIdentifierActiveEnergyBurned',
-        ['cumulativeSum'],
-        { filter: { date: { startDate: dayStart, endDate: dayEnd } }, unit: 'kcal' }
-      ),
-    ]);
-
-    const basal = basalStats?.sumQuantity?.quantity || 0;
-    const active = activeStats?.sumQuantity?.quantity || 0;
-
-    if (basal > 0 || active > 0) {
-      return { value: Math.round(basal + active), hasData: true };
-    }
-    return { value: 0, hasData: false };
-  } catch (error) {
-    if (isDatabaseInaccessibleError(error)) {
-      databaseInaccessibleCount++;
-      addLog('[HealthKitService] Total calories query failed: database inaccessible (device likely locked)', 'WARNING');
-    } else {
-      const message = error instanceof Error ? error.message : String(error);
-      addLog(`[HealthKitService] Failed to query total calories: ${message}`, 'ERROR');
-    }
-    return null;
-  }
-};
-
-// Query function for basal (resting) energy only — the iOS analogue of a BMR rate.
-// Apple's Basal/Resting Energy is a cumulative, wear-dependent daily total, so callers
-// must only sum COMPLETE days (see getAggregatedBasalEnergyByDate) to avoid partial-day
-// under-reporting.
-const queryBasalEnergy = async (
-  dayStart: Date,
-  dayEnd: Date
-): Promise<AggregationQueryResult | null> => {
-  try {
-    const basalStats = await queryStatisticsForQuantity(
-      'HKQuantityTypeIdentifierBasalEnergyBurned',
-      ['cumulativeSum'],
-      { filter: { date: { startDate: dayStart, endDate: dayEnd } }, unit: 'kcal' }
-    );
-    const basal = basalStats?.sumQuantity?.quantity || 0;
-    if (basal > 0) {
-      return { value: Math.round(basal), hasData: true };
-    }
-    return { value: 0, hasData: false };
-  } catch (error) {
-    if (isDatabaseInaccessibleError(error)) {
-      databaseInaccessibleCount++;
-      addLog('[HealthKitService] Basal energy query failed: database inaccessible (device likely locked)', 'WARNING');
-    } else {
-      const message = error instanceof Error ? error.message : String(error);
-      addLog(`[HealthKitService] Failed to query basal energy: ${message}`, 'ERROR');
-    }
-    return null;
-  }
-};
 
 const AGGREGATION_CONFIGS: Record<string, AggregationConfig> = {
   steps: {
@@ -394,150 +455,172 @@ const AGGREGATION_CONFIGS: Record<string, AggregationConfig> = {
     type: 'floors_climbed',
     logLabel: 'floors',
   },
-  totalCalories: {
-    identifier: '', // Not used - custom queryFn handles both metrics
-    unit: 'kcal',
-    type: 'total_calories',
-    logLabel: 'total calories',
-    queryFn: queryTotalCalories,
-  },
 };
 
-// Default query function for single-metric aggregation using HealthKit statistics
-const defaultAggregationQuery = async (
-  dayStart: Date,
-  dayEnd: Date,
+const startOfLocalDay = (date: Date): Date => {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  return start;
+};
+
+/**
+ * One statistics-collection query for the whole [filterStart, endDate] range, bucketed
+ * into local calendar days (NSCalendar day intervals, so DST transitions stay correct).
+ * Replaces the per-day queryStatisticsForQuantity loop — a 365d backfill was ~365
+ * sequential native queries per metric against a 60s timeout; now it is one.
+ *
+ * Throws on native errors — callers classify via recordReadError and return an error
+ * envelope instead of treating the failure as an empty read.
+ */
+const queryDayStatistics = async (
   identifier: string,
-  unit: string
-): Promise<AggregationQueryResult | null> => {
-  const stats = await queryStatisticsForQuantity(
-    identifier as Parameters<typeof queryStatisticsForQuantity>[0],
-    ['cumulativeSum'],
-    {
-      filter: {
-        date: {
-          startDate: dayStart,
-          endDate: dayEnd,
-        },
-      },
-      unit,
-    }
+  statistics: readonly StatisticsOptions[],
+  filterStart: Date,
+  endDate: Date,
+  unit?: string,
+): Promise<QueryStatisticsResponse[]> => {
+  const now = new Date();
+  const filterEnd = endDate.getTime() < now.getTime() ? endDate : now; // never query future dates
+  const options: { filter: { date: { startDate: Date; endDate: Date } }; unit?: string } = {
+    filter: { date: { startDate: filterStart, endDate: filterEnd } },
+  };
+  if (unit) {
+    options.unit = unit;
+  }
+
+  const buckets = await queryStatisticsCollectionForQuantity(
+    identifier as Parameters<typeof queryStatisticsCollectionForQuantity>[0],
+    statistics,
+    startOfLocalDay(filterStart), // anchor buckets to local midnight
+    { day: 1 },
+    options,
   );
 
-  if (stats && stats.sumQuantity && stats.sumQuantity.quantity > 0) {
-    return { value: Math.round(stats.sumQuantity.quantity), hasData: true };
-  }
-  return { value: 0, hasData: false };
+  // Keep buckets that overlap [filterStart, filterEnd]:
+  //  - the first bucket STARTS at the midnight before filterStart (partial first day — keep),
+  //  - today's bucket ENDS at tomorrow's midnight (in-progress today — keep; a
+  //    `bucket.endDate <= filterEnd` guard here would drop today's data on every sync).
+  return buckets
+    .filter(bucket => bucket.startDate != null && bucket.endDate != null
+      && new Date(bucket.endDate).getTime() > filterStart.getTime()
+      && new Date(bucket.startDate).getTime() <= filterEnd.getTime())
+    .sort((a, b) => new Date(a.startDate as Date).getTime() - new Date(b.startDate as Date).getTime());
 };
 
-// Generic aggregation function for cumulative HealthKit metrics
-// Uses HealthKit's statistics query which handles deduplication automatically
-// Supports custom query functions for metrics that need special handling (e.g., total calories)
-const getAggregatedDataByDate = async (
+// Generic aggregation for cumulative HealthKit metrics. One statistics-collection query
+// per metric; HealthKit handles cross-source deduplication.
+const getAggregatedDataByDateDetailed = async (
   startDate: Date,
   endDate: Date,
   config: AggregationConfig
-): Promise<AggregatedHealthRecord[]> => {
+): Promise<HealthKitReadResult<AggregatedHealthRecord>> => {
   if (!isHealthKitAvailable) {
     addLog(`[HealthKitService] HealthKit not available for ${config.logLabel} aggregation`, 'DEBUG');
-    return [];
+    return { records: [] };
   }
 
-  const results: AggregatedHealthRecord[] = [];
-  const deviceTz = getDeviceTimezone();
-  const currentDate = new Date(startDate);
-  // let daysQueried = 0;
-  // let daysWithData = 0;
-  // let errorCount = 0;
-  let isFirstDay = true;
-
-  while (currentDate <= endDate) {
-    // On the first day, use the actual startDate time to respect rolling windows (e.g., 24h)
-    // On subsequent days, use midnight as the start
-    const dayStart = new Date(currentDate);
-    if (isFirstDay) {
-      // Keep the original time from startDate
-      dayStart.setTime(startDate.getTime());
-    } else {
-      dayStart.setHours(0, 0, 0, 0);
-    }
-
-    const dayEnd = new Date(currentDate);
-    dayEnd.setHours(23, 59, 59, 999);
-
-    // Don't query future dates
-    const now = new Date();
-    if (dayEnd > now) {
-      dayEnd.setTime(now.getTime());
-    }
-
-    // daysQueried++;
-    try {
-      // Use custom query function if provided, otherwise use default single-metric query
-      const queryResult = config.queryFn
-        ? await config.queryFn(dayStart, dayEnd)
-        : await defaultAggregationQuery(dayStart, dayEnd, config.identifier, config.unit);
-
-      if (queryResult === null) {
-        // null indicates an error occurred in the custom query
-        // errorCount++; // commented out to fix unused variable warning
-      } else if (queryResult.hasData) {
-        // daysWithData++; // commented out to fix unused variable warning
-        // Use dayStart's date for the date string (normalized to midnight for consistent keys)
-        const dateForKey = new Date(dayStart);
-        dateForKey.setHours(0, 0, 0, 0);
-        const dateStr = toLocalDateString(dateForKey);
-        results.push({
-          date: dateStr,
-          value: queryResult.value,
+  try {
+    const buckets = await queryDayStatistics(config.identifier, ['cumulativeSum'], startDate, endDate, config.unit);
+    const deviceTz = getDeviceTimezone();
+    const records: AggregatedHealthRecord[] = [];
+    for (const bucket of buckets) {
+      const sum = bucket.sumQuantity?.quantity ?? 0;
+      // Compare before rounding so a 0 < sum < 0.5 day still emits (as 0), matching the
+      // per-day loop this replaced.
+      if (sum > 0) {
+        records.push({
+          date: toLocalDateString(new Date(bucket.startDate as Date)),
+          value: Math.round(sum),
           type: config.type,
           record_timezone: deviceTz,
         });
       }
-    } catch (error) {
-      if (isDatabaseInaccessibleError(error)) {
-        databaseInaccessibleCount++;
-        addLog(`[HealthKitService] Aggregated ${config.logLabel} query failed: database inaccessible (device likely locked)`, 'WARNING');
-      } else {
-        const message = error instanceof Error ? error.message : String(error);
-        addLog(`[HealthKitService] Failed to get aggregated ${config.logLabel}: ${message}`, 'ERROR');
+    }
+    return { records };
+  } catch (error) {
+    return { records: [], error: recordReadError(error, `Aggregated ${config.logLabel} query`) };
+  }
+};
+
+export const getAggregatedStepsByDateDetailed = (startDate: Date, endDate: Date) =>
+  getAggregatedDataByDateDetailed(startDate, endDate, AGGREGATION_CONFIGS.steps);
+
+export const getAggregatedStepsByDate = (startDate: Date, endDate: Date) =>
+  getAggregatedStepsByDateDetailed(startDate, endDate).then(result => result.records);
+
+export const getAggregatedActiveCaloriesByDateDetailed = (startDate: Date, endDate: Date) =>
+  getAggregatedDataByDateDetailed(startDate, endDate, AGGREGATION_CONFIGS.activeCalories);
+
+export const getAggregatedActiveCaloriesByDate = (startDate: Date, endDate: Date) =>
+  getAggregatedActiveCaloriesByDateDetailed(startDate, endDate).then(result => result.records);
+
+export const getAggregatedDistanceByDateDetailed = (startDate: Date, endDate: Date) =>
+  getAggregatedDataByDateDetailed(startDate, endDate, AGGREGATION_CONFIGS.distance);
+
+export const getAggregatedDistanceByDate = (startDate: Date, endDate: Date) =>
+  getAggregatedDistanceByDateDetailed(startDate, endDate).then(result => result.records);
+
+export const getAggregatedFloorsClimbedByDateDetailed = (startDate: Date, endDate: Date) =>
+  getAggregatedDataByDateDetailed(startDate, endDate, AGGREGATION_CONFIGS.floorsClimbed);
+
+export const getAggregatedFloorsClimbedByDate = (startDate: Date, endDate: Date) =>
+  getAggregatedFloorsClimbedByDateDetailed(startDate, endDate).then(result => result.records);
+
+// Total calories = Basal + Active energy summed per local day, via two collection
+// queries merged by day string. All-or-nothing: either query failing errors the whole
+// metric (so the sync cursor holds) rather than silently under-reporting days.
+export const getAggregatedTotalCaloriesByDateDetailed = async (
+  startDate: Date,
+  endDate: Date,
+): Promise<HealthKitReadResult<AggregatedHealthRecord>> => {
+  if (!isHealthKitAvailable) {
+    addLog('[HealthKitService] HealthKit not available for total calories aggregation', 'DEBUG');
+    return { records: [] };
+  }
+
+  try {
+    const [basalBuckets, activeBuckets] = await Promise.all([
+      queryDayStatistics('HKQuantityTypeIdentifierBasalEnergyBurned', ['cumulativeSum'], startDate, endDate, 'kcal'),
+      queryDayStatistics('HKQuantityTypeIdentifierActiveEnergyBurned', ['cumulativeSum'], startDate, endDate, 'kcal'),
+    ]);
+
+    const totalsByDay = new Map<string, number>();
+    for (const buckets of [basalBuckets, activeBuckets]) {
+      for (const bucket of buckets) {
+        const sum = bucket.sumQuantity?.quantity ?? 0;
+        if (sum > 0) {
+          const day = toLocalDateString(new Date(bucket.startDate as Date));
+          totalsByDay.set(day, (totalsByDay.get(day) ?? 0) + sum);
+        }
       }
     }
 
-    currentDate.setDate(currentDate.getDate() + 1);
-    isFirstDay = false;
+    const deviceTz = getDeviceTimezone();
+    // YYYY-MM-DD keys sort lexicographically = chronologically.
+    const records = Array.from(totalsByDay.entries())
+      .sort(([dayA], [dayB]) => dayA.localeCompare(dayB))
+      .map(([date, total]) => ({
+        date,
+        value: Math.round(total),
+        type: 'total_calories',
+        record_timezone: deviceTz,
+      }));
+    return { records };
+  } catch (error) {
+    return { records: [], error: recordReadError(error, 'Total calories query') };
   }
-
-  // const errorSuffix = errorCount > 0 ? `, ${errorCount} errors` : '';
-  // if (daysWithData === 0) {
-  //   addLog(`[HealthKitService] No ${config.logLabel} data found for ${daysQueried} days queried${errorSuffix}`, 'DEBUG');
-  // } else {
-  //   addLog(`[HealthKitService] ${config.logLabel} aggregation: ${daysWithData}/${daysQueried} days with data${errorSuffix}`, 'DEBUG');
-  // }
-
-  return results;
 };
 
-export const getAggregatedStepsByDate = (startDate: Date, endDate: Date) =>
-  getAggregatedDataByDate(startDate, endDate, AGGREGATION_CONFIGS.steps);
-
-export const getAggregatedActiveCaloriesByDate = (startDate: Date, endDate: Date) =>
-  getAggregatedDataByDate(startDate, endDate, AGGREGATION_CONFIGS.activeCalories);
-
 export const getAggregatedTotalCaloriesByDate = (startDate: Date, endDate: Date) =>
-  getAggregatedDataByDate(startDate, endDate, AGGREGATION_CONFIGS.totalCalories);
-
-export const getAggregatedDistanceByDate = (startDate: Date, endDate: Date) =>
-  getAggregatedDataByDate(startDate, endDate, AGGREGATION_CONFIGS.distance);
-
-export const getAggregatedFloorsClimbedByDate = (startDate: Date, endDate: Date) =>
-  getAggregatedDataByDate(startDate, endDate, AGGREGATION_CONFIGS.floorsClimbed);
+  getAggregatedTotalCaloriesByDateDetailed(startDate, endDate).then(result => result.records);
 
 /**
  * Aggregates Apple Health Resting/Basal Energy for the BMR override.
  *
- * Unlike the other aggregators, this:
- *  - sums ONLY fully-elapsed days (excludes today's partial, wear-dependent total), and
+ * Unlike getAggregatedDataByDateDetailed, this:
+ *  - queries whole days only (the filter starts at local midnight of startDate, matching
+ *    the per-day loop this replaced, which never used startDate's mid-day time),
+ *  - keeps ONLY fully-elapsed days (excludes today's partial, wear-dependent total), and
  *  - stamps each complete day D's value with D+1 as its `date` (the day it should apply
  *    to). This lets the server do an exact-date lookup: today's summary picks up
  *    yesterday's complete resting energy, mirroring Cronometer's prior-complete-day import.
@@ -545,73 +628,160 @@ export const getAggregatedFloorsClimbedByDate = (startDate: Date, endDate: Date)
  * Emits records of type `basal_metabolic_rate` so the server stores/reads them the same
  * way as Android's Health Connect BasalMetabolicRate.
  */
-export const getAggregatedBasalEnergyByDate = async (
+export const getAggregatedBasalEnergyByDateDetailed = async (
   startDate: Date,
   endDate: Date
-): Promise<AggregatedHealthRecord[]> => {
+): Promise<HealthKitReadResult<AggregatedHealthRecord>> => {
   if (!isHealthKitAvailable) {
     addLog('[HealthKitService] HealthKit not available for basal energy aggregation', 'DEBUG');
-    return [];
+    return { records: [] };
   }
 
-  const results: AggregatedHealthRecord[] = [];
-  const deviceTz = getDeviceTimezone();
+  try {
+    const buckets = await queryDayStatistics(
+      'HKQuantityTypeIdentifierBasalEnergyBurned',
+      ['cumulativeSum'],
+      startOfLocalDay(startDate),
+      endDate,
+      'kcal',
+    );
 
-  // Start of the current local day — any day whose end reaches into today is "incomplete".
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
-
-  const currentDate = new Date(startDate);
-  currentDate.setHours(0, 0, 0, 0);
-
-  while (currentDate < startOfToday) {
-    const dayStart = new Date(currentDate);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(currentDate);
-    dayEnd.setHours(23, 59, 59, 999);
-
-    // Only consider days that are fully within [startDate, endDate] and fully elapsed.
-    if (dayEnd >= startDate && dayEnd <= endDate && dayEnd < startOfToday) {
-      try {
-        const queryResult = await queryBasalEnergy(dayStart, dayEnd);
-        if (queryResult && queryResult.hasData) {
-          // Stamp with the FOLLOWING day (D+1) — the day this resting energy applies to.
-          const effectiveDate = new Date(dayStart);
-          effectiveDate.setDate(effectiveDate.getDate() + 1);
-          effectiveDate.setHours(0, 0, 0, 0);
-          results.push({
-            date: toLocalDateString(effectiveDate),
-            value: queryResult.value,
-            type: 'basal_metabolic_rate',
-            record_timezone: deviceTz,
-          });
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        addLog(`[HealthKitService] Failed to get aggregated basal energy: ${message}`, 'ERROR');
+    const startOfToday = startOfLocalDay(new Date());
+    const deviceTz = getDeviceTimezone();
+    const records: AggregatedHealthRecord[] = [];
+    for (const bucket of buckets) {
+      const bucketEnd = new Date(bucket.endDate as Date);
+      // Complete days only: a bucket ends at local midnight of D+1, so any bucket ending
+      // after start-of-today (or past the requested window) is a partial day — skip it.
+      if (bucketEnd.getTime() > startOfToday.getTime() || bucketEnd.getTime() > endDate.getTime()) {
+        continue;
+      }
+      const basal = bucket.sumQuantity?.quantity ?? 0;
+      if (basal > 0) {
+        // Stamp with the FOLLOWING day — bucket.endDate IS local midnight of D+1
+        // (DST-correct, unlike setDate(+1) arithmetic on a pinned clock time).
+        records.push({
+          date: toLocalDateString(bucketEnd),
+          value: Math.round(basal),
+          type: 'basal_metabolic_rate',
+          record_timezone: deviceTz,
+        });
       }
     }
+    return { records };
+  } catch (error) {
+    return { records: [], error: recordReadError(error, 'Basal energy query') };
+  }
+};
 
-    currentDate.setDate(currentDate.getDate() + 1);
+export const getAggregatedBasalEnergyByDate = (startDate: Date, endDate: Date) =>
+  getAggregatedBasalEnergyByDateDetailed(startDate, endDate).then(result => result.records);
+
+// ============================================================================
+// min-max-avg day statistics (native HKStatisticsCollection reads)
+// ============================================================================
+
+interface MinMaxAvgDayStatsSpec {
+  identifier: string;
+  /** HealthKit QUERY unit only. The emitted record unit is always metric.unit —
+   *  e.g. HeartRate queries 'count/min' but emits 'bpm'. */
+  statsUnit: string;
+  /** Converts a queried value into metric.unit (e.g. mg/dL → mmol/L). */
+  toValue?: (value: number) => number;
+}
+
+// min-max-avg metrics with a VERIFIED native day-statistics read, keyed by recordType
+// (iOS SpO2 is 'BloodOxygenSaturation'; 'OxygenSaturation' is the Android recordType).
+// Each statsUnit pins the query so values match the sample path it replaces:
+//  - BloodGlucose: the sample path read mg/dL and divided in dataTransformation.ts;
+//  - BloodOxygenSaturation: HealthKit '%' is a 0–1 fraction; the sample path ×100.
+// Gait/running/cycling min-max-avg metrics deliberately STAY on the sample path: their
+// sample reads never pinned a unit (no HEALTHKIT_UNIT_MAP entry), so they historically
+// synced in the user's HealthKit-preferred unit and pinning a stats unit here could
+// shift scales vs already-synced server data (converting them is a Phase 3 candidate).
+// Hydration ('sum') stays on samples for its per-sample sourceBundleId writeback echo
+// guard; CyclingFunctionalThresholdPower ('last') and the Apple move/exercise/stand
+// times ('sum') stay as well.
+const MIN_MAX_AVG_DAY_STATS: Record<string, MinMaxAvgDayStatsSpec> = {
+  HeartRate: { identifier: 'HKQuantityTypeIdentifierHeartRate', statsUnit: 'count/min' },
+  HeartRateVariabilitySDNN: { identifier: 'HKQuantityTypeIdentifierHeartRateVariabilitySDNN', statsUnit: 'ms' },
+  RespiratoryRate: { identifier: 'HKQuantityTypeIdentifierRespiratoryRate', statsUnit: 'count/min' },
+  BloodGlucose: {
+    identifier: 'HKQuantityTypeIdentifierBloodGlucose',
+    statsUnit: 'mg/dL',
+    toValue: (value) => value / BLOOD_GLUCOSE_MG_DL_PER_MMOL_L,
+  },
+  BloodOxygenSaturation: {
+    identifier: 'HKQuantityTypeIdentifierOxygenSaturation',
+    statsUnit: '%',
+    toValue: (value) => value * 100,
+  },
+};
+
+/**
+ * Day-bucketed min/max/avg for a metric via one native statistics-collection query,
+ * emitting records in aggregateByDay's exact output shape. The result is already
+ * day-aggregated — callers must NOT run it through aggregateByDay again.
+ *
+ * Returns null when the metric has no verified spec — the caller falls back to the raw
+ * sample path with its ORIGINAL window. Known deltas vs the sample path: discreteAverage
+ * is time-weighted (matches the Health app; the old path was an arithmetic mean of
+ * samples pre-rounded to 2dp), and record_timezone is always the device timezone (the
+ * old path used a sample's HKTimeZone metadata when present).
+ */
+export const readMinMaxAvgByDayDetailed = async (
+  metric: MetricConfig,
+  startDate: Date,
+  endDate: Date,
+): Promise<HealthKitReadResult<TransformedRecord> | null> => {
+  const spec = MIN_MAX_AVG_DAY_STATS[metric.recordType];
+  if (!spec) return null;
+
+  if (!isHealthKitAvailable) {
+    addLog(`[HealthKitService] HealthKit not available for ${metric.recordType} day statistics`, 'DEBUG');
+    return { records: [] };
   }
 
-  return results;
+  try {
+    const buckets = await queryDayStatistics(
+      spec.identifier,
+      ['discreteMin', 'discreteMax', 'discreteAverage'],
+      startDate,
+      endDate,
+      spec.statsUnit,
+    );
+    const records = mapDayStatisticsToMinMaxAvg(
+      buckets,
+      metric.type,
+      metric.unit,
+      HEALTHKIT_SOURCE,
+      getDeviceTimezone(),
+      spec.toValue,
+    );
+    return { records };
+  } catch (error) {
+    return { records: [], error: recordReadError(error, `${metric.recordType} day statistics query`) };
+  }
 };
 
 // ============================================================================
 // Record Handlers - modular handlers for different HealthKit record types
 // ============================================================================
 
-const QUERY_LIMIT = 20000;
-
 // Handler function signature for reading health records
 type RecordHandler = (
   identifier: string,
   startDate: Date,
-  endDate: Date
+  endDate: Date,
+  telemetry: TelemetryRunContext
 ) => Promise<unknown[]>;
 
-// Filter helpers for date range checking
+// Filter helpers for date range checking. Every handler pushes the window into the
+// native query (filter + limit: 0 = all in-window samples) instead of taking the most
+// recent N samples across ALL history and post-filtering — a dense or old history would
+// otherwise silently drop valid in-window records. The JS guards below are kept
+// belt-and-suspenders: the native predicate matches on sample-interval overlap (right
+// for sleep/workouts), while isInDateRange keeps point-sample semantics exact.
 const isInDateRange = (recordDate: Date, startDate: Date, endDate: Date): boolean =>
   recordDate >= startDate && recordDate <= endDate;
 
@@ -622,7 +792,8 @@ const overlapsDateRange = (recordStart: Date, recordEnd: Date, rangeStart: Date,
 const handleSleepSession: RecordHandler = async (identifier, startDate, endDate) => {
   const samples = await queryCategorySamples(identifier as Parameters<typeof queryCategorySamples>[0], {
     ascending: false,
-    limit: QUERY_LIMIT,
+    limit: 0,
+    filter: { date: { startDate, endDate } },
   });
 
   // Use overlap check to include sessions that span range boundaries
@@ -658,7 +829,8 @@ const handleSleepSession: RecordHandler = async (identifier, startDate, endDate)
 const handleStress: RecordHandler = async (identifier, startDate, endDate) => {
   const samples = await queryCategorySamples(identifier as Parameters<typeof queryCategorySamples>[0], {
     ascending: false,
-    limit: QUERY_LIMIT,
+    limit: 0,
+    filter: { date: { startDate, endDate } },
   });
 
   const filteredSamples = samples.filter(s => {
@@ -677,7 +849,8 @@ const handleStress: RecordHandler = async (identifier, startDate, endDate) => {
 const handleReproductiveHealth: RecordHandler = async (identifier, startDate, endDate) => {
   const samples = await queryCategorySamples(identifier as Parameters<typeof queryCategorySamples>[0], {
     ascending: false,
-    limit: QUERY_LIMIT,
+    limit: 0,
+    filter: { date: { startDate, endDate } },
   });
 
   const filteredSamples = samples.filter(s => {
@@ -693,10 +866,11 @@ const handleReproductiveHealth: RecordHandler = async (identifier, startDate, en
 };
 
 // Handler for Workout/ExerciseSession records
-const handleWorkout: RecordHandler = async (_identifier, startDate, endDate) => {
+const handleWorkout: RecordHandler = async (_identifier, startDate, endDate, telemetry) => {
   const workouts = await queryWorkoutSamples({
     ascending: false,
-    limit: QUERY_LIMIT,
+    limit: 0,
+    filter: { date: { startDate, endDate } },
   });
 
   // Use overlap check to include workouts that span range boundaries
@@ -706,8 +880,33 @@ const handleWorkout: RecordHandler = async (_identifier, startDate, endDate) => 
     return overlapsDateRange(workoutStart, workoutEnd, startDate, endDate);
   });
 
-  // Fetch statistics (calories, distance) for each workout
-  const workoutsWithStats = await Promise.all(filteredWorkouts.map(async (w) => {
+  // Budget slots are assigned in list order (the query is newest-first) before
+  // the concurrent stats fetches start. Claiming inside the map would award
+  // slots in Promise completion order — whichever workout's reads resolve
+  // first — so a capped background run could spend its budget on old workouts
+  // while the newest go unenriched.
+  const ctx = telemetry;
+  const telemetryAllowed = new Set<unknown>();
+  const startedAtMs = Date.now();
+  let skippedAlreadyCollected = 0;
+  for (const w of filteredWorkouts) {
+    // Already-collected workouts neither consume a slot nor get re-read, so a
+    // bounded budget works through the backlog across syncs instead of
+    // re-picking the same newest few every run (#2191).
+    if (await hasEnrichedSession(workoutCacheKey(w))) {
+      skippedAlreadyCollected++;
+      continue;
+    }
+    if (!ctx.claim()) break;
+    telemetryAllowed.add(w);
+  }
+
+  // Fetch statistics (calories, distance) for each workout. Bounded fan-out:
+  // each workout issues several statistics queries plus, when telemetry is
+  // allowed, a route read and per-workout sample queries, and every result is
+  // deserialized on the JS thread — an unbounded Promise.all over a wide
+  // window converts that into one UI-starving burst (#2191).
+  const settled = await runTasksInBatches(filteredWorkouts, AGGREGATE_CONCURRENCY, async (w) => {
     const workoutAny = w as unknown as {
       totalEnergyBurned?: number | { quantity?: number };
       totalDistance?: number | { quantity?: number };
@@ -767,8 +966,92 @@ const handleWorkout: RecordHandler = async (_identifier, startDate, endDate) => 
     if (tz) {
       record.metadata = { HKTimeZone: tz };
     }
+
+    // Elevation is not a totals field on the workout; it arrives as metadata.
+    const elevation = w as unknown as {
+      metadataElevationAscended?: { quantity?: number };
+      metadataElevationDescended?: { quantity?: number };
+      totalFlightsClimbed?: { quantity?: number } | number;
+      totalSwimmingStrokeCount?: { quantity?: number } | number;
+    };
+    const quantityOf = (v: { quantity?: number } | number | undefined) =>
+      typeof v === 'object' ? v?.quantity : v;
+
+    // These all come from the workout sample already loaded above — no route
+    // read, no per-workout sample query — so they must not be gated behind the
+    // telemetry budget below. Gating them too would mean every workout past the
+    // budget on a backfill silently loses elevation/floors/strokes/elapsed time
+    // as well, even though the budget exists only to cap the expensive reads.
+    const telemetry: Record<string, number | null | undefined> = {};
+    const gain = elevation.metadataElevationAscended?.quantity;
+    const loss = elevation.metadataElevationDescended?.quantity;
+    const floors = quantityOf(elevation.totalFlightsClimbed);
+    const strokes = quantityOf(elevation.totalSwimmingStrokeCount);
+    if (typeof gain === 'number') telemetry.elevation_gain_meters = gain;
+    if (typeof loss === 'number') telemetry.elevation_loss_meters = loss;
+    if (typeof floors === 'number') telemetry.floors_climbed = floors;
+    if (typeof strokes === 'number') telemetry.stroke_count = strokes;
+    // w.duration is a Quantity ({ unit, quantity }), not a raw number — the
+    // same shape totalEnergyBurned/totalDistance arrive in above.
+    const durationSeconds = quantityOf(
+      w.duration as { quantity?: number } | number | undefined
+    );
+    if (typeof durationSeconds === 'number') {
+      telemetry.elapsed_time_seconds = Math.round(durationSeconds);
+    }
+    if (totalEnergyBurned) telemetry.active_calories = totalEnergyBurned;
+
+    // Telemetry must be collected here, inside the closure that owns the live
+    // proxy: the per-workout sample predicate takes the proxy object itself,
+    // and the proxy cannot be carried out on the returned record.
+    if (telemetryAllowed.has(w)) {
+      const bundle = await limitTelemetry(() => collectWorkoutTelemetry(
+        w as unknown as WorkoutProxyLike,
+        (w as unknown as { events?: readonly { type: number; startDate: Date; endDate: Date }[] }).events,
+      ));
+      if (bundle.gps_points) record.gps_points = bundle.gps_points;
+      if (bundle.hr_samples) record.hr_samples = bundle.hr_samples;
+      if (bundle.laps) record.laps = bundle.laps;
+      Object.assign(telemetry, bundle.telemetry);
+      // Recorded even when the workout had nothing beyond its summary: the
+      // reads that established that are exactly what must not repeat. A bundle
+      // that came back `incomplete` is a failed read, not an empty one, and is
+      // left uncached so the next sync retries it.
+      if (!bundle.incomplete) ctx.stageCollected(workoutCacheKey(w));
+    }
+
+    if (Object.keys(telemetry).length > 0) record.telemetry = telemetry;
+
     return record;
-  }));
+  });
+
+  // Batching must not change failure semantics: Promise.all rejected the whole
+  // read before, which surfaced as a metric error and held the sync cursor so
+  // the window is retried. Dropping the failed workout instead would advance
+  // the cursor past one we never actually read.
+  const failure = settled.find(result => result.status === 'rejected');
+  if (failure && failure.status === 'rejected') {
+    addLog(
+      `[HealthKitService] Workout enrichment failed: ${getErrorMessage(failure.reason)}`,
+      'ERROR',
+    );
+    throw failure.reason;
+  }
+
+  const workoutsWithStats = settled.flatMap(result =>
+    result.status === 'fulfilled' ? [result.value] : [],
+  );
+
+  // One summary line per run — the field-verifiable signal for #2191. See the
+  // matching log in healthconnect/index.ts.
+  const overBudget =
+    filteredWorkouts.length - skippedAlreadyCollected - telemetryAllowed.size;
+  addLog(
+    `[HealthKitService] Enriched ${filteredWorkouts.length} workout(s) in ${Date.now() - startedAtMs}ms ` +
+      `(telemetry: ${telemetryAllowed.size}, already collected: ${skippedAlreadyCollected}, ` +
+      `over budget: ${Math.max(overBudget, 0)})`,
+    'INFO',
+  );
 
   return workoutsWithStats;
 };
@@ -778,11 +1061,13 @@ const handleBloodPressure: RecordHandler = async (_identifier, startDate, endDat
   const [systolicSamples, diastolicSamples] = await Promise.all([
     queryQuantitySamples('HKQuantityTypeIdentifierBloodPressureSystolic', {
       ascending: false,
-      limit: QUERY_LIMIT,
+      limit: 0,
+      filter: { date: { startDate, endDate } },
     }),
     queryQuantitySamples('HKQuantityTypeIdentifierBloodPressureDiastolic', {
       ascending: false,
-      limit: QUERY_LIMIT,
+      limit: 0,
+      filter: { date: { startDate, endDate } },
     }),
   ]);
 
@@ -846,9 +1131,15 @@ const createQuantityHandler = (recordType: string): RecordHandler => {
     }
 
     const unit = HEALTHKIT_UNIT_MAP[recordType];
-    const queryOptions: { ascending: boolean; limit: number; unit?: string } = {
+    const queryOptions: {
+      ascending: boolean;
+      limit: number;
+      filter: { date: { startDate: Date; endDate: Date } };
+      unit?: string;
+    } = {
       ascending: false,
-      limit: QUERY_LIMIT,
+      limit: 0,
+      filter: { date: { startDate, endDate } },
     };
     if (unit) {
       queryOptions.unit = unit;
@@ -878,6 +1169,9 @@ const createQuantityHandler = (recordType: string): RecordHandler => {
         // — there is no pre-flattened source field, so this path is read directly.
         sourceBundleId: (s as unknown as { sourceRevision?: { source?: { bundleIdentifier?: string } } })
           .sourceRevision?.source?.bundleIdentifier,
+        // Stable per-sample id, used by e.g. the Hydration transformer as
+        // source_id for idempotent server-side upsert-by-record sync.
+        uuid: (s as unknown as { uuid?: string }).uuid,
       };
       // Forward timezone metadata so the transform layer can attach it to output records
       const tz = (s as unknown as { metadataTimeZone?: string }).metadataTimeZone;
@@ -942,8 +1236,8 @@ const readLooseNutrition = async (
   correlationUuids: Set<string>,
 ): Promise<Record<string, unknown>[]> => {
   const groups = new Map<string, LooseGroup>();
-  // Filter to the window natively (limit: 0 = all in-window samples) instead of taking the
-  // most recent QUERY_LIMIT samples across all history and discarding out-of-window ones —
+  // Filter to the window natively (limit: 0 = all in-window samples) instead of taking a
+  // capped number of newest samples across all history and discarding out-of-window ones —
   // a large or old dietary history would otherwise silently drop valid in-window samples.
   const dateFilter = { date: { startDate, endDate } };
 
@@ -1002,7 +1296,7 @@ const readLooseNutrition = async (
 
 const handleNutrition: RecordHandler = async (_identifier, startDate, endDate) => {
   // Filter to the window natively (limit: 0 = all in-window correlations) instead of taking
-  // the most recent QUERY_LIMIT across all history and discarding out-of-window ones — a
+  // a capped number of newest ones across all history and discarding out-of-window ones — a
   // large or old food history would otherwise silently drop valid in-window correlations.
   const dateFilter = { date: { startDate, endDate } };
 
@@ -1061,33 +1355,161 @@ const RECORD_HANDLERS: Record<string, RecordHandler> = {
   'Nutrition': handleNutrition,
 };
 
-// Read health records from HealthKit
-export const readHealthRecords = async (
+// Read health records from HealthKit. A failed read returns an error envelope so
+// callers can surface it (and hold the sync cursor) instead of seeing an empty read.
+export const readHealthRecordsDetailed = async (
   recordType: string,
   startDate: Date,
-  endDate: Date
-): Promise<unknown[]> => {
+  endDate: Date,
+  telemetry: TelemetryRunContext
+): Promise<HealthKitReadResult> => {
   if (!isHealthKitAvailable) {
-    return [];
+    return { records: [] };
   }
 
   try {
     const identifier = HEALTHKIT_TYPE_MAP[recordType];
     if (!identifier) {
-      return [];
+      return { records: [] };
     }
 
     // Use registered handler if available, otherwise create a quantity handler
     const handler = RECORD_HANDLERS[recordType] || createQuantityHandler(recordType);
-    return await handler(identifier, startDate, endDate);
+    return { records: await handler(identifier, startDate, endDate, telemetry) };
   } catch (error) {
-    if (isDatabaseInaccessibleError(error)) {
-      databaseInaccessibleCount++;
-      addLog(`[HealthKitService] ${recordType} read failed: database inaccessible (device likely locked)`, 'WARNING');
-    } else {
-      const message = error instanceof Error ? error.message : String(error);
-      addLog(`[HealthKitService] Error reading ${recordType}: ${message}`, 'ERROR');
+    return { records: [], error: recordReadError(error, `${recordType} read`) };
+  }
+};
+
+/**
+ * Read-only convenience wrapper for display and diagnostics paths.
+ *
+ * Pinned to a zero budget and non-interactive: these callers only render values,
+ * so they must never spend per-workout telemetry reads or raise a route-consent
+ * dialog. The sync engine uses readHealthRecordsDetailed directly and supplies
+ * its own run context.
+ */
+export const readHealthRecords = (
+  recordType: string,
+  startDate: Date,
+  endDate: Date
+): Promise<unknown[]> =>
+  readHealthRecordsDetailed(
+    recordType,
+    startDate,
+    endDate,
+    createTelemetryRunContext({ budget: 0, interactive: false }),
+  ).then(result => result.records);
+
+// ============================================================================
+// Earliest-sample probes (history-import floor detection)
+// ============================================================================
+
+// Probes read from the 1970 epoch: backdated manual entries and third-party
+// imports can predate any "reasonable" floor, and the wider window costs nothing.
+const PROBE_EPOCH = new Date(0);
+
+const probeQuantityEarliest = async (identifier: string, now: Date): Promise<Date | null> => {
+  const samples = await queryQuantitySamples(identifier as Parameters<typeof queryQuantitySamples>[0], {
+    ascending: true,
+    limit: 1,
+    filter: { date: { startDate: PROBE_EPOCH, endDate: now } },
+  });
+  const sample = Array.isArray(samples) ? samples[0] : undefined;
+  return sample ? new Date(sample.startDate) : null;
+};
+
+const probeCategoryEarliest = async (identifier: string, now: Date): Promise<Date | null> => {
+  const samples = await queryCategorySamples(identifier as Parameters<typeof queryCategorySamples>[0], {
+    ascending: true,
+    limit: 1,
+    filter: { date: { startDate: PROBE_EPOCH, endDate: now } },
+  });
+  const sample = Array.isArray(samples) ? samples[0] : undefined;
+  return sample ? new Date(sample.startDate) : null;
+};
+
+const probeWorkoutEarliest = async (now: Date): Promise<Date | null> => {
+  const workouts = await queryWorkoutSamples({
+    ascending: true,
+    limit: 1,
+    filter: { date: { startDate: PROBE_EPOCH, endDate: now } },
+  });
+  const workout = Array.isArray(workouts) ? workouts[0] : undefined;
+  return workout ? new Date(workout.startDate) : null;
+};
+
+const CATEGORY_PROBE_TYPES = new Set([
+  'SleepSession',
+  'Stress',
+  'IntermenstrualBleeding',
+  'MenstruationFlow',
+  'OvulationTest',
+  'CervicalMucus',
+]);
+
+const WORKOUT_PROBE_TYPES = new Set(['Workout', 'ExerciseSession']);
+
+const minDate = (dates: (Date | null)[]): Date | null =>
+  dates.reduce<Date | null>(
+    (earliest, date) => (date && (!earliest || date < earliest) ? date : earliest),
+    null,
+  );
+
+// Routed by record kind, mirroring RECORD_HANDLERS. Multi-identifier metrics take
+// the min over the SAME identifiers their reader reads, so the probe can never
+// claim less history than the reader would find.
+const probeEarliestSample = async (recordType: string, now: Date): Promise<Date | null> => {
+  if (WORKOUT_PROBE_TYPES.has(recordType)) {
+    return probeWorkoutEarliest(now);
+  }
+  if (CATEGORY_PROBE_TYPES.has(recordType)) {
+    const identifier = HEALTHKIT_TYPE_MAP[recordType];
+    return identifier ? probeCategoryEarliest(identifier, now) : null;
+  }
+  if (recordType === 'BloodPressure') {
+    return probeQuantityEarliest('HKQuantityTypeIdentifierBloodPressureSystolic', now);
+  }
+  if (recordType === 'TotalCaloriesBurned') {
+    const [basal, active] = await Promise.all([
+      probeQuantityEarliest('HKQuantityTypeIdentifierBasalEnergyBurned', now),
+      probeQuantityEarliest('HKQuantityTypeIdentifierActiveEnergyBurned', now),
+    ]);
+    return minDate([basal, active]);
+  }
+  if (recordType === 'Nutrition') {
+    // Nutrient-only entries with no energy value must still move the floor, so
+    // every dietary identifier the nutrition reader covers is probed (iOS has no
+    // read quota; a dozen limit-1 probes are free).
+    const dates: (Date | null)[] = [];
+    for (const identifier of DIETARY_WRITE_IDENTIFIERS) {
+      dates.push(await probeQuantityEarliest(identifier, now));
     }
-    return [];
+    return minDate(dates);
+  }
+  const identifier = HEALTHKIT_TYPE_MAP[recordType];
+  if (!identifier || !SUPPORTED_HK_TYPES.has(identifier)) {
+    return null;
+  }
+  return probeQuantityEarliest(identifier, now);
+};
+
+/**
+ * Earliest stored sample for a record type across all history. No data =
+ * { records: [] }; failures go through recordReadError so locked-device probes
+ * bump the database-inaccessible counter.
+ */
+export const readEarliestSampleDetailed = async (
+  recordType: string,
+): Promise<HealthKitReadResult<{ startTime: string }>> => {
+  if (!isHealthKitAvailable) {
+    return { records: [] };
+  }
+
+  try {
+    const earliest = await probeEarliestSample(recordType, new Date());
+    return earliest ? { records: [{ startTime: earliest.toISOString() }] } : { records: [] };
+  } catch (error) {
+    return { records: [], error: recordReadError(error, `${recordType} earliest-sample probe`) };
   }
 };

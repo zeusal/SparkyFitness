@@ -32,7 +32,16 @@ export interface FoodItem {
   is_custom: boolean;
   user_id?: string;
   shared_with_public?: boolean;
+  provider_type?: string | null;
+  provider_external_id?: string | null;
+  provider_verified?: boolean;
   is_quick_food?: boolean;
+  // Present only on items returned by the favorites endpoint.
+  favorited_at?: string;
+  // Ordered image paths; index 0 is the thumbnail. Locally uploaded images are
+  // server-relative (`/uploads/foods/<id>/...`); provider images that could not
+  // be downloaded stay absolute and are hotlinked.
+  images?: string[] | null;
   default_variant: FoodDefaultVariant;
 }
 
@@ -43,6 +52,19 @@ export interface TopFoodItem extends FoodItem {
 export interface FoodsResponse {
   recentFoods: FoodItem[];
   topFoods: TopFoodItem[];
+}
+
+export type FavoriteType = 'food' | 'meal';
+
+export interface FavoritesResponse {
+  favoriteFoods: FoodItem[];
+  favoriteMeals: import('./meals').Meal[];
+}
+
+export interface ToggleFavoriteResponse {
+  type: FavoriteType;
+  id: string;
+  is_favorite: boolean;
 }
 
 export interface FoodSearchResponse {

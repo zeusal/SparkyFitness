@@ -73,6 +73,7 @@ describe('published (flat) chatbot tool schemas', () => {
         'food_name',
         'food_id',
         'variant_id',
+        'external_id',
         'update_existing_entries',
         'serving_size',
         'serving_unit',
@@ -80,7 +81,9 @@ describe('published (flat) chatbot tool schemas', () => {
         'quantity',
         'unit',
         'meal_type',
+        'meal_type_id',
         'entry_date',
+        'entry_time',
         'meal_id',
         'meal_name',
         'search_type',
@@ -117,7 +120,9 @@ describe('published (flat) chatbot tool schemas', () => {
       actions: [
         'search_food',
         'lookup_food_nutrition',
+        'list_meal_types',
         'log_food',
+        'log_external_food',
         'create_food',
         'search_meal',
         'log_meal',
@@ -150,7 +155,9 @@ describe('published (flat) chatbot tool schemas', () => {
         'category',
         'calories_per_hour',
         'description',
+        'modality',
         'entry_date',
+        'entry_time',
         'duration_minutes',
         'calories_burned',
         'notes',
@@ -194,12 +201,16 @@ describe('published (flat) chatbot tool schemas', () => {
         'hips',
         'measurements_unit',
         'body_fat',
+        'muscle_mass',
+        'bone_mass',
+        'body_water',
         'category_name',
         'value',
         'unit',
         'notes',
         'data_type',
         'mood_value',
+        'mood_tags',
         'start_time',
         'end_time',
         'fasting_status',
@@ -238,6 +249,20 @@ describe('published (flat) chatbot tool schemas', () => {
         'fat',
         'water_goal_ml',
         'weight',
+        'saturated_fat',
+        'polyunsaturated_fat',
+        'monounsaturated_fat',
+        'trans_fat',
+        'cholesterol',
+        'sodium',
+        'potassium',
+        'dietary_fiber',
+        'sugars',
+        'vitamin_a',
+        'vitamin_c',
+        'calcium',
+        'iron',
+        'custom_nutrients',
       ],
       actions: ['get_goals', 'set_goals', 'list_goal_timeline'],
     },
@@ -247,7 +272,6 @@ describe('published (flat) chatbot tool schemas', () => {
       properties: [
         'action',
         'display_name',
-        'email',
         'image',
         'timezone',
         'energy_unit',
@@ -399,6 +423,104 @@ describe('strict discriminated-union validation schemas', () => {
     expect(result.success).toBe(true);
   });
 
+  it('manageFoodSchema accepts custom meal type IDs for logging and moving entries', () => {
+    const customMealTypeId = '66666666-6666-4666-8666-666666666666';
+    expect(
+      manageFoodSchema.safeParse({
+        action: 'log_food',
+        food_name: 'Eggs',
+        meal_type_id: customMealTypeId,
+      }).success
+    ).toBe(true);
+    expect(
+      manageFoodSchema.safeParse({
+        action: 'update_entry',
+        entry_id: '33333333-3333-4333-8333-333333333333',
+        entry_type: 'food_entry',
+        meal_type_id: customMealTypeId,
+      }).success
+    ).toBe(true);
+  });
+
+  it('manageFoodSchema accepts food_name in place of entry_id for delete_entry and update_entry', () => {
+    expect(
+      manageFoodSchema.safeParse({
+        action: 'delete_entry',
+        food_name: 'Oatmeal',
+        entry_date: '2026-06-10',
+      }).success
+    ).toBe(true);
+    expect(
+      manageFoodSchema.safeParse({
+        action: 'update_entry',
+        food_name: 'Oatmeal',
+        meal_type: 'dinner',
+      }).success
+    ).toBe(true);
+  });
+
+  it('manageFoodSchema rejects food_name resolution for meal entries (food entries only)', () => {
+    expect(
+      manageFoodSchema.safeParse({
+        action: 'delete_entry',
+        food_name: 'Oatmeal',
+        entry_type: 'food_entry_meal',
+      }).success
+    ).toBe(false);
+    expect(
+      manageFoodSchema.safeParse({
+        action: 'update_entry',
+        food_name: 'Oatmeal',
+        entry_type: 'food_entry_meal',
+        quantity: 2,
+      }).success
+    ).toBe(false);
+    expect(
+      manageFoodSchema.safeParse({
+        action: 'delete_entry',
+        entry_id: '33333333-3333-4333-8333-333333333333',
+        entry_type: 'food_entry_meal',
+      }).success
+    ).toBe(true);
+  });
+
+  it('manageFoodSchema still requires some entry identifier for delete_entry and update_entry', () => {
+    expect(manageFoodSchema.safeParse({ action: 'delete_entry' }).success).toBe(
+      false
+    );
+    expect(
+      manageFoodSchema.safeParse({ action: 'update_entry', quantity: 2 })
+        .success
+    ).toBe(false);
+  });
+
+  it('manageFoodSchema keeps meal_type as a built-in enum fallback (custom types go through meal_type_id)', () => {
+    // The legacy fallback accepts only the built-in slots...
+    expect(
+      manageFoodSchema.safeParse({
+        action: 'log_food',
+        food_name: 'Eggs',
+        meal_type: 'breakfast',
+      }).success
+    ).toBe(true);
+    // ...and rejects anything else: custom meal types must NOT be passed by name.
+    expect(
+      manageFoodSchema.safeParse({
+        action: 'log_food',
+        food_name: 'Eggs',
+        meal_type: 'invalid-slot',
+      }).success
+    ).toBe(false);
+    // Custom meal types are selected by ID, not by name.
+    expect(
+      manageFoodSchema.safeParse({
+        action: 'log_food',
+        food_name: 'Eggs',
+        meal_type_id: '66666666-6666-4666-8666-666666666666',
+      }).success
+    ).toBe(true);
+  });
+
   it('manageFoodSchema rejects fields that do not belong to the action', () => {
     const result = manageFoodSchema.safeParse({
       action: 'list_diary',
@@ -446,11 +568,11 @@ describe('strict discriminated-union validation schemas', () => {
     }
   });
 
-  it('manageGoalsSchema requires start_date for set_goals', () => {
+  it('manageGoalsSchema accepts set_goals without start_date (defaults to today)', () => {
     expect(
       manageGoalsSchema.safeParse({ action: 'set_goals', calories: 2200 })
         .success
-    ).toBe(false);
+    ).toBe(true);
     expect(
       manageGoalsSchema.safeParse({
         action: 'set_goals',

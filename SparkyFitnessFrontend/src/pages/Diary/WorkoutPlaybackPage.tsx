@@ -28,6 +28,7 @@ import {
   updateWorkoutSetAtPointer,
 } from '@/utils/workoutPlayback';
 import { formatSecondsClock } from '@/utils/timeFormatters';
+import { localDateTimeToUtc } from '@workspace/shared';
 import WorkoutPlaybackDialogs from './WorkoutPlaybackDialogs';
 import WorkoutPlaybackExercisesList from './WorkoutPlaybackExercisesList';
 import WorkoutPlaybackSummary from './WorkoutPlaybackSummary';
@@ -111,7 +112,7 @@ function startRestTimer(
 
 const WorkoutPlaybackPage = () => {
   const { t } = useTranslation();
-  const { weightUnit } = usePreferences();
+  const { weightUnit, timezone } = usePreferences();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -320,7 +321,13 @@ const WorkoutPlaybackPage = () => {
   const handleSetFieldChange = useCallback(
     (
       pointer: WorkoutSetPointer,
-      field: 'reps' | 'weight' | 'rest_time' | 'set_type' | 'notes',
+      field:
+        | 'reps'
+        | 'weight'
+        | 'duration'
+        | 'rest_time'
+        | 'set_type'
+        | 'notes',
       value: number | string | null
     ) => {
       updateDraft((currentDraft) =>
@@ -335,6 +342,34 @@ const WorkoutPlaybackPage = () => {
       updateDraft((currentDraft) => ({ ...currentDraft, notes: value }));
     },
     [updateDraft]
+  );
+
+  const handleStartTimeChange = useCallback(
+    (timeStr: string) => {
+      setDraft((currentDraft) => {
+        if (!currentDraft) return null;
+        if (!timeStr) {
+          return {
+            ...currentDraft,
+            started_at: '',
+          };
+        }
+        try {
+          const utcDate = localDateTimeToUtc(
+            `${currentDraft.entry_date}T${timeStr}`,
+            timezone
+          );
+          return {
+            ...currentDraft,
+            started_at: utcDate.toISOString(),
+          };
+        } catch (e) {
+          console.error('Error changing start time:', e);
+          return currentDraft;
+        }
+      });
+    },
+    [timezone]
   );
 
   const toggleSetNotesVisibility = useCallback((setKey: string) => {
@@ -470,7 +505,7 @@ const WorkoutPlaybackPage = () => {
   const handleFinishWorkout = useCallback(async () => {
     if (!draft) return;
 
-    const payload = buildPresetSessionCreateRequestFromDraft(draft);
+    const payload = buildPresetSessionCreateRequestFromDraft(draft, timezone);
     if (!payload.exercises || payload.exercises.length === 0) {
       setSaveError(
         t(
@@ -495,7 +530,7 @@ const WorkoutPlaybackPage = () => {
         )
       );
     }
-  }, [createPresetSession, draft, navigate, returnPath, t]);
+  }, [createPresetSession, draft, navigate, returnPath, t, timezone]);
 
   if (!draft) {
     return (
@@ -542,12 +577,14 @@ const WorkoutPlaybackPage = () => {
         isRestActive={!!isRestActive}
         saveError={saveError}
         isSaving={isSaving}
+        timezone={timezone}
         onCloseKeepDraft={handleCloseKeepDraft}
         onDiscard={handleDiscard}
         onFinishWorkout={handleFinishWorkout}
         onPauseResumeRest={handlePauseResumeRest}
         onSkipRest={handleSkipRest}
         onSessionNotesChange={handleSessionNotesChange}
+        onStartTimeChange={handleStartTimeChange}
       />
 
       <WorkoutPlaybackExercisesList

@@ -41,6 +41,16 @@ describe('transformHealthRecords', () => {
       expect(result[0]).toMatchObject({ date: '2024-01-15', value: 72, type: 'heart_rate' });
     });
 
+    test('transforms raw HeartRateVariabilityRmssd records via value transformer', () => {
+      const records = [
+        { time: '2024-01-15T08:00:00Z', heartRateVariabilityMillis: 48 },
+      ];
+      const result = transformHealthRecords(records, { recordType: 'HeartRateVariabilityRmssd', unit: 'ms', type: 'HRV' });
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({ date: '2024-01-15', value: 48, type: 'HRV' });
+    });
+
     test('passes through ActiveCaloriesBurned aggregated records', () => {
       const records = [
         { date: '2024-01-15', value: 500, type: 'Active Calories' },
@@ -744,7 +754,7 @@ describe('transformHealthRecords', () => {
       expect(result[0].distance).toBe(-0.1);
     });
 
-    test('includes sets array with duration in minutes', () => {
+    test('includes sets array with duration in seconds', () => {
       const records = [
         {
           startTime: '2024-01-15T08:00:00Z',
@@ -754,20 +764,20 @@ describe('transformHealthRecords', () => {
       ];
       const result = transformHealthRecords(records, { recordType: 'ExerciseSession', unit: '', type: 'exercise' }) as TransformedExerciseSession[];
 
-      expect(result[0].sets).toEqual([{ set_number: 1, set_type: 'Working Set', duration: 60 }]);
+      expect(result[0].sets).toEqual([{ set_number: 1, set_type: 'Working Set', duration_seconds: 3600 }]);
     });
 
-    test('rounds non-even duration to nearest minute in sets', () => {
+    test('rounds fractional duration to whole seconds in sets', () => {
       const records = [
         {
           startTime: '2024-01-15T08:00:00Z',
-          endTime: '2024-01-15T08:01:30Z',
+          endTime: '2024-01-15T08:01:30.500Z',
           exerciseType: 8,
         },
       ];
       const result = transformHealthRecords(records, { recordType: 'ExerciseSession', unit: '', type: 'exercise' }) as TransformedExerciseSession[];
 
-      expect(result[0].sets).toEqual([{ set_number: 1, set_type: 'Working Set', duration: 2 }]);
+      expect(result[0].sets).toEqual([{ set_number: 1, set_type: 'Working Set', duration_seconds: 91 }]);
     });
   });
 
@@ -1362,14 +1372,15 @@ describe('transformHealthRecords', () => {
       expect(result[0].value).toBe(16);
     });
 
-    test('Hydration extracts volume.inLiters', () => {
+    test('Hydration converts volume.inLiters to integer ml and maps to water intake', () => {
       const records = [
         { startTime: '2024-01-15T08:00:00Z', volume: { inLiters: 0.5 } },
       ];
-      const result = transformHealthRecords(records, { recordType: 'Hydration', unit: 'L', type: 'hydration' }) as TransformedRecord[];
+      const result = transformHealthRecords(records, { recordType: 'Hydration', unit: 'ml', type: 'water' }) as TransformedRecord[];
 
       expect(result).toHaveLength(1);
-      expect(result[0].value).toBe(0.5);
+      expect(result[0].value).toBe(500);
+      expect(result[0].type).toBe('water');
     });
 
     test('IntermenstrualBleeding returns value 1', () => {
@@ -1670,9 +1681,9 @@ describe('own-app exclusion (writeback feedback-loop guard)', () => {
       { startTime: '2024-01-15T08:00:00Z', volume: { inLiters: 0.5 }, metadata: { dataOrigin: OWN } },
       { startTime: '2024-01-15T09:00:00Z', volume: { inLiters: 0.3 }, metadata: { dataOrigin: 'com.other.app' } },
     ];
-    const result = transformHealthRecords(records, { recordType: 'Hydration', unit: 'L', type: 'hydration' }) as TransformedRecord[];
+    const result = transformHealthRecords(records, { recordType: 'Hydration', unit: 'ml', type: 'water' }) as TransformedRecord[];
     expect(result).toHaveLength(1);
-    expect(result[0].value).toBe(0.3);
+    expect(result[0].value).toBe(300);
   });
 
   test('with no own package set, nothing is excluded', () => {

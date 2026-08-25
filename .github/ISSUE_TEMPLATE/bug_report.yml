@@ -8,6 +8,16 @@ body:
       value: |
         Thanks for taking the time to report a bug! Please fill out as much as you can so we can reproduce and fix it faster.
 
+  - type: dropdown
+    id: pr_willingness
+    attributes:
+      label: Are you willing to submit a PR?
+      description: Would you like to submit a Pull Request to fix this issue yourself?
+      options:
+        - Yes, I'd like to submit a PR!
+        - No, but I can help test
+        - No
+
   - type: textarea
     id: description
     attributes:
@@ -67,11 +77,13 @@ body:
         - Mobile app (iOS)
         - Mobile app (Android)
         - Server / API
-        - AI / SparkyAI
-        - Integrations (Garmin, Fitbit, etc.)
         - Database / migrations
+        - AI / SparkyAI
+        - Integrations (Garmin, Google Health, Polar, Oura, etc.)
         - Docker / deployment
         - Other
+    validations:
+      required: true
 
   - type: textarea
     id: docker_setup

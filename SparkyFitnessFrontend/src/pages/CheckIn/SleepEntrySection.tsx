@@ -10,7 +10,11 @@ import { usePreferences } from '@/contexts/PreferencesContext';
 import { debug, info, warn, error } from '@/utils/logging';
 import { Trash2, Edit, Save, X } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { formatSecondsToHHMM } from '@/utils/timeFormatters';
+import {
+  formatSecondsToHHMM,
+  formatTimeInZone,
+  sleepEntryZone,
+} from '@/utils/timeFormatters';
 import {
   Tooltip,
   TooltipContent,
@@ -36,7 +40,8 @@ const SleepEntrySection: React.FC<SleepEntrySectionProps> = ({
 }) => {
   const { t } = useTranslation();
   const { activeUserId } = useActiveUser();
-  const { formatDateInUserTimezone, loggingLevel } = usePreferences();
+  const { formatDateInUserTimezone, timeFormat, timezone, loggingLevel } =
+    usePreferences();
 
   const [sleepSessions, setSleepSessions] = useState<
     Array<{ bedtime: string; wakeTime: string; stageEvents: SleepStageEvent[] }>
@@ -114,6 +119,10 @@ const SleepEntrySection: React.FC<SleepEntrySectionProps> = ({
           wake_time: parsedWakeTime.toISOString(),
           duration_in_seconds: Number(durationInSeconds) || 0,
           source: 'manual',
+          // Typed wall-clock times are interpreted by the browser clock, so
+          // the browser zone is the recording zone; stamping it makes
+          // read-back exact regardless of the profile timezone.
+          record_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           stage_events: session.stageEvents
             .filter((event) => event)
             .map((event) => ({
@@ -196,6 +205,17 @@ const SleepEntrySection: React.FC<SleepEntrySectionProps> = ({
     const durationInSeconds =
       differenceInMinutes(parseISO(newWakeTime), parseISO(newBedtime)) * 60;
 
+    // A bed/wake edit is typed against the browser clock, so it relabels the
+    // recording zone; a stage-only or no-op save must not — omitting the key
+    // leaves an imported entry's zone metadata untouched server-side.
+    const originalEntry = sleepEntries.find((e) => e.id === entryId);
+    const timesChanged =
+      originalEntry != null &&
+      (new Date(newBedtime).getTime() !==
+        new Date(originalEntry.bedtime).getTime() ||
+        new Date(newWakeTime).getTime() !==
+          new Date(originalEntry.wake_time).getTime());
+
     await updateSleepEntry({
       id: entryId,
       data: {
@@ -203,6 +223,14 @@ const SleepEntrySection: React.FC<SleepEntrySectionProps> = ({
         bedtime: newBedtime,
         wake_time: newWakeTime,
         duration_in_seconds: durationInSeconds,
+        ...(timesChanged
+          ? {
+              record_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+              // Clear any stale offset so the relabel doesn't leave
+              // contradictory zone metadata from the original import.
+              record_utc_offset_minutes: null,
+            }
+          : {}),
       },
     });
 
@@ -489,10 +517,15 @@ const SleepEntrySection: React.FC<SleepEntrySectionProps> = ({
                         }}
                         // Pass basic sleep entry details to SleepTimelineEditor for display
                         entryDetails={{
-                          bedtime: formatDateInUserTimezone(entry.bedtime, 'p'),
-                          wakeTime: formatDateInUserTimezone(
+                          bedtime: formatTimeInZone(
+                            entry.bedtime,
+                            sleepEntryZone(entry, timezone),
+                            timeFormat
+                          ),
+                          wakeTime: formatTimeInZone(
                             entry.wake_time,
-                            'p'
+                            sleepEntryZone(entry, timezone),
+                            timeFormat
                           ),
                           duration: formatSecondsToHHMM(
                             entry.duration_in_seconds

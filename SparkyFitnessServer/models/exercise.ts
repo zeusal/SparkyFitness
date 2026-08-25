@@ -1,5 +1,19 @@
+import {
+  deriveExerciseModality,
+  isExerciseModality,
+  resolveExerciseModality,
+} from '@workspace/shared';
+
 import { getClient, getSystemClient } from '../db/poolManager.js';
 import { log } from '../config/logging.js';
+import {
+  buildSqlSearch,
+  buildSqlExactMatchOrder,
+} from '../utils/dbSearchHelper.js';
+import {
+  parseJsonArrayField,
+  normalizeToStringArray,
+} from '../utils/exerciseJsonFields.js';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getExerciseById(id: any, userId: any) {
   const client = await getClient(userId);
@@ -8,7 +22,7 @@ async function getExerciseById(id: any, userId: any) {
       `SELECT id, source, source_id, name, force, level, mechanic, equipment,
               primary_muscles, secondary_muscles, instructions, category, images,
               calories_per_hour, description, user_id, is_custom, shared_with_public,
-              created_at, updated_at
+              modality, created_at, updated_at
        FROM exercises WHERE id = $1`,
       [id]
     );
@@ -72,8 +86,8 @@ async function getOrCreateActiveCaloriesExercise(
     let newExercise;
     try {
       const result = await insertClient.query(
-        `INSERT INTO exercises (user_id, name, category, calories_per_hour, description, is_custom, shared_with_public, source)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+        `INSERT INTO exercises (user_id, name, category, calories_per_hour, description, is_custom, shared_with_public, source, modality)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
         [
           userId,
           exerciseName,
@@ -83,6 +97,7 @@ async function getOrCreateActiveCaloriesExercise(
           true,
           false,
           source,
+          deriveExerciseModality('Cardio'),
         ]
       );
       newExercise = result.rows[0];
@@ -101,39 +116,48 @@ async function getOrCreateActiveCaloriesExercise(
   return exercise.id;
 }
 async function getExercisesWithPagination(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  targetUserId: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  searchTerm: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  categoryFilter: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ownershipFilter: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  equipmentFilter: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  muscleGroupFilter: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  limit: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  offset: any
+  targetUserId: string | null | undefined,
+  searchTerm: string | null | undefined,
+  categoryFilter: string | null | undefined,
+  ownershipFilter: string | null | undefined,
+  equipmentFilter: string[] | null | undefined,
+  muscleGroupFilter: string[] | null | undefined,
+  limit: number,
+  offset: number
 ) {
   const client = await getClient(targetUserId);
   try {
     const whereClauses = ['is_quick_exercise = FALSE'];
-    const queryParams = [];
-    let paramIndex = 1;
-    if (searchTerm) {
-      whereClauses.push(`name ILIKE $${paramIndex}`);
-      queryParams.push(`%${searchTerm}%`);
-      paramIndex++;
-    }
+    const {
+      whereClauses: searchClauses,
+      queryParams: searchParams,
+      nextParamIndex,
+    } = buildSqlSearch('name', searchTerm, 1);
+    whereClauses.push(...searchClauses);
+    const queryParams: any[] = [...searchParams];
+    let paramIndex = nextParamIndex;
+
     if (categoryFilter && categoryFilter !== 'all') {
       whereClauses.push(`category = $${paramIndex}`);
       queryParams.push(categoryFilter);
       paramIndex++;
     }
-    // RLS will handle ownership filtering
+    // Handle ownership/source filtering
+    if (ownershipFilter === 'mine') {
+      whereClauses.push(`user_id = $${paramIndex}`);
+      queryParams.push(targetUserId);
+      paramIndex++;
+    } else if (ownershipFilter === 'family') {
+      whereClauses.push(
+        `user_id IS NOT NULL AND user_id != $${paramIndex} AND shared_with_public = FALSE`
+      );
+      queryParams.push(targetUserId);
+      paramIndex++;
+    } else if (ownershipFilter === 'public') {
+      whereClauses.push('shared_with_public = TRUE');
+    } else if (ownershipFilter === 'system') {
+      whereClauses.push('user_id IS NULL');
+    }
     if (equipmentFilter && equipmentFilter.length > 0) {
       whereClauses.push(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -151,18 +175,27 @@ async function getExercisesWithPagination(
       queryParams.push(...muscleGroupFilter); // Push twice for primary and secondary muscles
       paramIndex += muscleGroupFilter.length * 2;
     }
+    let orderClause = 'name ASC';
+    const selectQueryParams = [...queryParams];
+    let selectParamIndex = paramIndex;
+    if (searchTerm) {
+      const exactMatchParamIndex = selectParamIndex;
+      selectQueryParams.push(`%${searchTerm}%`);
+      selectParamIndex++;
+      orderClause = `${buildSqlExactMatchOrder('name', exactMatchParamIndex)}, name ASC`;
+    }
     const query = `
       SELECT id, source, source_id, name, force, level, mechanic, equipment,
              primary_muscles, secondary_muscles, instructions, category, images,
              calories_per_hour, description, user_id, is_custom, shared_with_public,
-             created_at, updated_at
+             modality, created_at, updated_at
       FROM exercises
       WHERE ${whereClauses.join(' AND ')}
-      ORDER BY name ASC
-      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+      ORDER BY ${orderClause}
+      LIMIT $${selectParamIndex} OFFSET $${selectParamIndex + 1}
     `;
-    queryParams.push(limit, offset);
-    const result = await client.query(query, queryParams);
+    selectQueryParams.push(limit, offset);
+    const result = await client.query(query, selectQueryParams);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return result.rows.map((row: any) => {
       if (row.images) {
@@ -180,35 +213,45 @@ async function getExercisesWithPagination(
   }
 }
 async function countExercises(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  targetUserId: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  searchTerm: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  categoryFilter: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ownershipFilter: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  equipmentFilter: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  muscleGroupFilter: any
+  targetUserId: string | null | undefined,
+  searchTerm: string | null | undefined,
+  categoryFilter: string | null | undefined,
+  ownershipFilter: string | null | undefined,
+  equipmentFilter: string[] | null | undefined,
+  muscleGroupFilter: string[] | null | undefined
 ) {
   const client = await getClient(targetUserId);
   try {
     const whereClauses = ['is_quick_exercise = FALSE'];
-    const queryParams = [];
-    let paramIndex = 1;
-    if (searchTerm) {
-      whereClauses.push(`name ILIKE $${paramIndex}`);
-      queryParams.push(`%${searchTerm}%`);
-      paramIndex++;
-    }
+    const {
+      whereClauses: searchClauses,
+      queryParams: searchParams,
+      nextParamIndex,
+    } = buildSqlSearch('name', searchTerm, 1);
+    whereClauses.push(...searchClauses);
+    const queryParams: any[] = [...searchParams];
+    let paramIndex = nextParamIndex;
     if (categoryFilter && categoryFilter !== 'all') {
       whereClauses.push(`category = $${paramIndex}`);
       queryParams.push(categoryFilter);
       paramIndex++;
     }
-    // RLS will handle ownership filtering
+    // Handle ownership/source filtering
+    if (ownershipFilter === 'mine') {
+      whereClauses.push(`user_id = $${paramIndex}`);
+      queryParams.push(targetUserId);
+      paramIndex++;
+    } else if (ownershipFilter === 'family') {
+      whereClauses.push(
+        `user_id IS NOT NULL AND user_id != $${paramIndex} AND shared_with_public = FALSE`
+      );
+      queryParams.push(targetUserId);
+      paramIndex++;
+    } else if (ownershipFilter === 'public') {
+      whereClauses.push('shared_with_public = TRUE');
+    } else if (ownershipFilter === 'system') {
+      whereClauses.push('user_id IS NULL');
+    }
     if (equipmentFilter && equipmentFilter.length > 0) {
       whereClauses.push(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -310,25 +353,22 @@ async function getDistinctMuscleGroups() {
   }
 }
 async function searchExercises(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  name: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  userId: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  equipmentFilter: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  muscleGroupFilter: any
+  name: string | null | undefined,
+  userId: string | null | undefined,
+  equipmentFilter: string[] | null | undefined,
+  muscleGroupFilter: string[] | null | undefined
 ) {
   const client = await getClient(userId);
   try {
     const whereClauses = ['is_quick_exercise = FALSE'];
-    const queryParams = [];
-    let paramIndex = 1;
-    if (name) {
-      whereClauses.push(`name ILIKE $${paramIndex}`);
-      queryParams.push(`%${name}%`);
-      paramIndex++;
-    }
+    const {
+      whereClauses: searchClauses,
+      queryParams: searchParams,
+      nextParamIndex,
+    } = buildSqlSearch('name', name, 1);
+    whereClauses.push(...searchClauses);
+    const queryParams: any[] = [...searchParams];
+    let paramIndex = nextParamIndex;
     if (equipmentFilter && equipmentFilter.length > 0) {
       whereClauses.push(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -356,34 +396,47 @@ async function searchExercises(
       queryParams.push(...muscleGroupFilter); // Push twice for primary and secondary muscles
       paramIndex += muscleGroupFilter.length * 2;
     }
+    let orderClause = 'name ASC';
+    const selectQueryParams = [...queryParams];
+    let selectParamIndex = paramIndex;
+    if (name) {
+      const exactMatchParamIndex = selectParamIndex;
+      selectQueryParams.push(`%${name}%`);
+      selectParamIndex++;
+      orderClause = `${buildSqlExactMatchOrder('name', exactMatchParamIndex)}, name ASC`;
+    }
     const finalQuery = `
       SELECT id, source, source_id, name, force, level, mechanic, equipment,
               primary_muscles, secondary_muscles, instructions, category, images,
-              calories_per_hour, description, user_id, is_custom, shared_with_public
+              calories_per_hour, description, user_id, is_custom, shared_with_public,
+              modality
        FROM exercises
-  WHERE ${whereClauses.join(' AND ')} LIMIT 50`; // Added a limit to prevent too many results
-    const result = await client.query(finalQuery, queryParams);
+       WHERE ${whereClauses.join(' AND ')}
+       ORDER BY ${orderClause}
+       LIMIT 50`;
+    const result = await client.query(finalQuery, selectQueryParams);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return result.rows.map((row: any) => {
-      // Helper function to safely parse JSONB fields into arrays
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const parseJsonbField = (field: any) => {
-        if (row[field]) {
-          try {
-            const parsed = JSON.parse(row[field]);
-            return Array.isArray(parsed) ? parsed : [parsed]; // Ensure it's an array
-          } catch (e) {
-            log('error', `Error parsing ${field} for exercise ${row.id}:`, e);
-            return [];
-          }
-        }
-        return [];
-      };
-      row.equipment = parseJsonbField('equipment');
-      row.primary_muscles = parseJsonbField('primary_muscles');
-      row.secondary_muscles = parseJsonbField('secondary_muscles');
-      row.instructions = parseJsonbField('instructions');
-      row.images = parseJsonbField('images');
+      row.equipment = parseJsonArrayField(
+        row.equipment,
+        `equipment for exercise ${row.id}`
+      );
+      row.primary_muscles = parseJsonArrayField(
+        row.primary_muscles,
+        `primary_muscles for exercise ${row.id}`
+      );
+      row.secondary_muscles = parseJsonArrayField(
+        row.secondary_muscles,
+        `secondary_muscles for exercise ${row.id}`
+      );
+      row.instructions = parseJsonArrayField(
+        row.instructions,
+        `instructions for exercise ${row.id}`
+      );
+      row.images = parseJsonArrayField(
+        row.images,
+        `images for exercise ${row.id}`
+      );
       return row;
     });
   } finally {
@@ -391,29 +444,24 @@ async function searchExercises(
   }
 }
 async function searchExercisesPaginated(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  name: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  userId: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  equipmentFilter: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  muscleGroupFilter: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  limit: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  offset: any
+  name: string | null | undefined,
+  userId: string | null | undefined,
+  equipmentFilter: string[] | null | undefined,
+  muscleGroupFilter: string[] | null | undefined,
+  limit: number,
+  offset: number
 ) {
   const client = await getClient(userId);
   try {
     const whereClauses = ['is_quick_exercise = FALSE'];
-    const queryParams = [];
-    let paramIndex = 1;
-    if (name) {
-      whereClauses.push(`name ILIKE $${paramIndex}`);
-      queryParams.push(`%${name}%`);
-      paramIndex++;
-    }
+    const {
+      whereClauses: searchClauses,
+      queryParams: searchParams,
+      nextParamIndex,
+    } = buildSqlSearch('name', name, 1);
+    whereClauses.push(...searchClauses);
+    const queryParams: any[] = [...searchParams];
+    let paramIndex = nextParamIndex;
     if (equipmentFilter && equipmentFilter.length > 0) {
       whereClauses.push(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -446,41 +494,53 @@ async function searchExercisesPaginated(
       queryParams
     );
     const totalCount = countResult.rows[0]?.count ?? 0;
-    const limitParamIndex = paramIndex;
-    const offsetParamIndex = paramIndex + 1;
+    let orderClause = 'name ASC';
+    const selectQueryParams = [...queryParams];
+    let selectParamIndex = paramIndex;
+    if (name) {
+      const exactMatchParamIndex = selectParamIndex;
+      selectQueryParams.push(`%${name}%`);
+      selectParamIndex++;
+      orderClause = `${buildSqlExactMatchOrder('name', exactMatchParamIndex)}, name ASC`;
+    }
+    const limitParamIndex = selectParamIndex;
+    const offsetParamIndex = selectParamIndex + 1;
     const finalQuery = `
       SELECT id, source, source_id, name, force, level, mechanic, equipment,
               primary_muscles, secondary_muscles, instructions, category, images,
-              calories_per_hour, description, user_id, is_custom, shared_with_public
+              calories_per_hour, description, user_id, is_custom, shared_with_public,
+              modality
        FROM exercises
        WHERE ${whereSql}
-       ORDER BY name ASC
+       ORDER BY ${orderClause}
        LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}`;
     const result = await client.query(finalQuery, [
-      ...queryParams,
+      ...selectQueryParams,
       limit,
       offset,
     ]);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const exercises = result.rows.map((row: any) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const parseJsonbField = (field: any) => {
-        if (row[field]) {
-          try {
-            const parsed = JSON.parse(row[field]);
-            return Array.isArray(parsed) ? parsed : [parsed];
-          } catch (e) {
-            log('error', `Error parsing ${field} for exercise ${row.id}:`, e);
-            return [];
-          }
-        }
-        return [];
-      };
-      row.equipment = parseJsonbField('equipment');
-      row.primary_muscles = parseJsonbField('primary_muscles');
-      row.secondary_muscles = parseJsonbField('secondary_muscles');
-      row.instructions = parseJsonbField('instructions');
-      row.images = parseJsonbField('images');
+      row.equipment = parseJsonArrayField(
+        row.equipment,
+        `equipment for exercise ${row.id}`
+      );
+      row.primary_muscles = parseJsonArrayField(
+        row.primary_muscles,
+        `primary_muscles for exercise ${row.id}`
+      );
+      row.secondary_muscles = parseJsonArrayField(
+        row.secondary_muscles,
+        `secondary_muscles for exercise ${row.id}`
+      );
+      row.instructions = parseJsonArrayField(
+        row.instructions,
+        `instructions for exercise ${row.id}`
+      );
+      row.images = parseJsonArrayField(
+        row.images,
+        `images for exercise ${row.id}`
+      );
       return row;
     });
     return { exercises, totalCount };
@@ -501,9 +561,9 @@ async function createExercise(exerciseData: any) {
         source, source_id, name, force, level, mechanic, equipment,
         primary_muscles, secondary_muscles, instructions, category, images,
         calories_per_hour, description, is_custom, user_id, shared_with_public,
-        created_at, updated_at
+        modality, created_at, updated_at
       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, now(), now())
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, now(), now())
        RETURNING *`,
       [
         exerciseData.source,
@@ -512,23 +572,36 @@ async function createExercise(exerciseData: any) {
         exerciseData.force,
         exerciseData.level,
         exerciseData.mechanic,
-        exerciseData.equipment ? JSON.stringify(exerciseData.equipment) : null,
+        // normalizeToStringArray is applied here, right before encoding,
+        // so every write path (route JSON body, CSV import, external
+        // provider import) lands on the same JSON-array-of-strings shape
+        // regardless of whether the caller already normalized it.
+        exerciseData.equipment
+          ? JSON.stringify(normalizeToStringArray(exerciseData.equipment))
+          : null,
         exerciseData.primary_muscles
-          ? JSON.stringify(exerciseData.primary_muscles)
+          ? JSON.stringify(normalizeToStringArray(exerciseData.primary_muscles))
           : null,
         exerciseData.secondary_muscles
-          ? JSON.stringify(exerciseData.secondary_muscles)
+          ? JSON.stringify(
+              normalizeToStringArray(exerciseData.secondary_muscles)
+            )
           : null,
         exerciseData.instructions
-          ? JSON.stringify(exerciseData.instructions)
+          ? JSON.stringify(normalizeToStringArray(exerciseData.instructions))
           : null,
         exerciseData.category,
-        exerciseData.images ? JSON.stringify(exerciseData.images) : null,
+        exerciseData.images
+          ? JSON.stringify(normalizeToStringArray(exerciseData.images))
+          : null,
         exerciseData.calories_per_hour || 0, // Ensure calories_per_hour is a number, default to 0
         exerciseData.description,
         exerciseData.is_custom,
         exerciseData.user_id,
         exerciseData.shared_with_public,
+        // Sanitized here rather than at the route so an arbitrary client string
+        // cannot reach the CHECK constraint as a 500.
+        resolveExerciseModality(exerciseData.modality, exerciseData.category),
       ]
     );
     return result.rows[0];
@@ -557,8 +630,9 @@ async function updateExercise(id: any, userId: any, updateData: any) {
         instructions = COALESCE($13, instructions),
         images = COALESCE($14, images),
         is_quick_exercise = COALESCE($15, is_quick_exercise),
+        modality = COALESCE($16, modality),
         updated_at = now()
-      WHERE id = $16
+      WHERE id = $17
       RETURNING *`,
       [
         updateData.name,
@@ -570,20 +644,29 @@ async function updateExercise(id: any, userId: any, updateData: any) {
         updateData.force,
         updateData.level,
         updateData.mechanic,
-        updateData.equipment ? JSON.stringify(updateData.equipment) : null,
+        // See createExercise: normalize right before encoding so this
+        // chokepoint holds the invariant regardless of caller.
+        updateData.equipment
+          ? JSON.stringify(normalizeToStringArray(updateData.equipment))
+          : null,
         updateData.primary_muscles
-          ? JSON.stringify(updateData.primary_muscles)
+          ? JSON.stringify(normalizeToStringArray(updateData.primary_muscles))
           : null,
         updateData.secondary_muscles
-          ? JSON.stringify(updateData.secondary_muscles)
+          ? JSON.stringify(normalizeToStringArray(updateData.secondary_muscles))
           : null,
         updateData.instructions
-          ? JSON.stringify(updateData.instructions)
+          ? JSON.stringify(normalizeToStringArray(updateData.instructions))
           : null,
-        updateData.images ? JSON.stringify(updateData.images) : null,
+        updateData.images
+          ? JSON.stringify(normalizeToStringArray(updateData.images))
+          : null,
         typeof updateData.is_quick_exercise === 'boolean'
           ? updateData.is_quick_exercise
           : null,
+        // Modality is authoritative once set: an omitted or unrecognized value
+        // preserves it, and editing `category` alone never re-derives it.
+        isExerciseModality(updateData.modality) ? updateData.modality : null,
         id,
       ]
     );
@@ -614,7 +697,7 @@ async function getRecentExercises(userId: any, limit: any) {
         e.id, e.source, e.source_id, e.name, e.force, e.level, e.mechanic, e.equipment,
         e.primary_muscles, e.secondary_muscles, e.instructions, e.category, e.images,
         e.calories_per_hour, e.description, e.user_id, e.is_custom, e.shared_with_public,
-        e.created_at, e.updated_at
+        e.modality, e.created_at, e.updated_at
       FROM exercise_entries ee
       JOIN exercises e ON ee.exercise_id = e.id
       WHERE ee.user_id = $1
@@ -622,32 +705,33 @@ async function getRecentExercises(userId: any, limit: any) {
       GROUP BY e.id, e.source, e.source_id, e.name, e.force, e.level, e.mechanic, e.equipment,
                e.primary_muscles, e.secondary_muscles, e.instructions, e.category, e.images,
                e.calories_per_hour, e.description, e.user_id, e.is_custom, e.shared_with_public,
-               e.created_at, e.updated_at
+               e.modality, e.created_at, e.updated_at
       ORDER BY MAX(ee.entry_date) DESC, MAX(ee.created_at) DESC
       LIMIT $2`,
       [userId, limit]
     );
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return result.rows.map((row: any) => {
-      // Helper function to safely parse JSONB fields into arrays
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const parseJsonbField = (field: any) => {
-        if (row[field]) {
-          try {
-            const parsed = JSON.parse(row[field]);
-            return Array.isArray(parsed) ? parsed : [parsed]; // Ensure it's an array
-          } catch (e) {
-            log('error', `Error parsing ${field} for exercise ${row.id}:`, e);
-            return [];
-          }
-        }
-        return [];
-      };
-      row.equipment = parseJsonbField('equipment');
-      row.primary_muscles = parseJsonbField('primary_muscles');
-      row.secondary_muscles = parseJsonbField('secondary_muscles');
-      row.instructions = parseJsonbField('instructions');
-      row.images = parseJsonbField('images');
+      row.equipment = parseJsonArrayField(
+        row.equipment,
+        `equipment for exercise ${row.id}`
+      );
+      row.primary_muscles = parseJsonArrayField(
+        row.primary_muscles,
+        `primary_muscles for exercise ${row.id}`
+      );
+      row.secondary_muscles = parseJsonArrayField(
+        row.secondary_muscles,
+        `secondary_muscles for exercise ${row.id}`
+      );
+      row.instructions = parseJsonArrayField(
+        row.instructions,
+        `instructions for exercise ${row.id}`
+      );
+      row.images = parseJsonArrayField(
+        row.images,
+        `images for exercise ${row.id}`
+      );
       return row;
     });
   } finally {
@@ -663,7 +747,7 @@ async function getTopExercises(userId: any, limit: any) {
         e.id, e.source, e.source_id, e.name, e.force, e.level, e.mechanic, e.equipment,
         e.primary_muscles, e.secondary_muscles, e.instructions, e.category, e.images,
         e.calories_per_hour, e.description, e.user_id, e.is_custom, e.shared_with_public,
-        e.created_at, e.updated_at,
+        e.modality, e.created_at, e.updated_at,
         COUNT(ee.exercise_id) AS usage_count
       FROM exercise_entries ee
       JOIN exercises e ON ee.exercise_id = e.id
@@ -672,32 +756,33 @@ async function getTopExercises(userId: any, limit: any) {
       GROUP BY e.id, e.source, e.source_id, e.name, e.force, e.level, e.mechanic, e.equipment,
                e.primary_muscles, e.secondary_muscles, e.instructions, e.category, e.images,
                e.calories_per_hour, e.description, e.user_id, e.is_custom, e.shared_with_public,
-               e.created_at, e.updated_at
+               e.modality, e.created_at, e.updated_at
       ORDER BY usage_count DESC
       LIMIT $2`,
       [userId, limit]
     );
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return result.rows.map((row: any) => {
-      // Helper function to safely parse JSONB fields into arrays
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const parseJsonbField = (field: any) => {
-        if (row[field]) {
-          try {
-            const parsed = JSON.parse(row[field]);
-            return Array.isArray(parsed) ? parsed : [parsed]; // Ensure it's an array
-          } catch (e) {
-            log('error', `Error parsing ${field} for exercise ${row.id}:`, e);
-            return [];
-          }
-        }
-        return [];
-      };
-      row.equipment = parseJsonbField('equipment');
-      row.primary_muscles = parseJsonbField('primary_muscles');
-      row.secondary_muscles = parseJsonbField('secondary_muscles');
-      row.instructions = parseJsonbField('instructions');
-      row.images = parseJsonbField('images');
+      row.equipment = parseJsonArrayField(
+        row.equipment,
+        `equipment for exercise ${row.id}`
+      );
+      row.primary_muscles = parseJsonArrayField(
+        row.primary_muscles,
+        `primary_muscles for exercise ${row.id}`
+      );
+      row.secondary_muscles = parseJsonArrayField(
+        row.secondary_muscles,
+        `secondary_muscles for exercise ${row.id}`
+      );
+      row.instructions = parseJsonArrayField(
+        row.instructions,
+        `instructions for exercise ${row.id}`
+      );
+      row.images = parseJsonArrayField(
+        row.images,
+        `images for exercise ${row.id}`
+      );
       return row;
     });
   } finally {
@@ -718,7 +803,7 @@ async function getExerciseBySourceAndSourceId(
       `SELECT id, source, source_id, name, force, level, mechanic, equipment,
               primary_muscles, secondary_muscles, instructions, category, images,
               calories_per_hour, description, user_id, is_custom, shared_with_public,
-              created_at, updated_at
+              modality, created_at, updated_at
        FROM exercises WHERE source = $1 AND source_id = $2 AND user_id = $3`,
       [source, sourceId, userId]
     );
@@ -925,7 +1010,7 @@ async function findExerciseByNameAndUserId(name: any, userId: any) {
       `SELECT id, source, source_id, name, force, level, mechanic, equipment,
               primary_muscles, secondary_muscles, instructions, category, images,
               calories_per_hour, description, user_id, is_custom, shared_with_public,
-              created_at, updated_at
+              modality, created_at, updated_at
        FROM exercises WHERE name = $1 AND (user_id = $2 OR shared_with_public = TRUE)`,
       [name, userId]
     );

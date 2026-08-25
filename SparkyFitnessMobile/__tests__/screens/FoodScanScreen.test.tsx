@@ -5,6 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import FoodScanScreen from '../../src/screens/FoodScanScreen';
 import { lookupBarcodeV2, scanNutritionLabel } from '../../src/services/api/externalFoodSearchApi';
 import { ApiError } from '../../src/services/api/errors';
+import { TimeoutError } from '../../src/utils/concurrency';
 import { fireSuccessHaptic } from '../../src/services/haptics';
 import { useActiveAiServiceSetting } from '../../src/hooks/useActiveAiServiceSetting';
 import { hasSeenFoodPhotoIntro, markFoodPhotoIntroSeen } from '../../src/services/foodPhotoIntro';
@@ -129,7 +130,10 @@ describe('FoodScanScreen', () => {
     expect(mockNavigation.replace).toHaveBeenCalledWith(
       'FoodEntryAdd',
       expect.objectContaining({
-        item: expect.objectContaining({ id: 'food-1' }),
+        item: expect.objectContaining({
+          id: 'food-1',
+          barcode: '012345678905',
+        }),
       }),
     );
   });
@@ -147,6 +151,101 @@ describe('FoodScanScreen', () => {
     });
     expect(mockFireSuccessHaptic).not.toHaveBeenCalled();
     expect(mockNavigation.replace).not.toHaveBeenCalled();
+  });
+
+  it('passes all verified Yazio barcode portions with gram descriptions to FoodEntryAdd', async () => {
+    mockLookupBarcodeV2.mockResolvedValue({
+      source: 'yazio',
+      food: {
+        id: 'remote-food-1',
+        name: 'Apple',
+        brand: 'Yazio',
+        barcode: '1234567890123',
+        provider_type: 'yazio',
+        provider_external_id: 'yazio-apple-1',
+        provider_verified: true,
+        default_variant: {
+          id: 'remote-variant-1',
+          serving_size: 1,
+          serving_unit: 'piece',
+          serving_description: '1 piece (200 g)',
+          calories: 50,
+          protein: 1,
+          carbs: 10,
+          fat: 1,
+        },
+        variants: [
+          {
+            id: 'remote-variant-1',
+            serving_size: 1,
+            serving_unit: 'piece',
+            serving_description: '1 piece (200 g)',
+            calories: 50,
+            protein: 1,
+            carbs: 10,
+            fat: 1,
+          },
+          {
+            id: 'remote-variant-2',
+            serving_size: 200,
+            serving_unit: 'g',
+            serving_description: '200 g',
+            calories: 50,
+            protein: 1,
+            carbs: 10,
+            fat: 1,
+          },
+          {
+            id: 'remote-variant-3',
+            serving_size: 1,
+            serving_unit: 'package',
+            serving_description: '1 package (400 g)',
+            calories: 100,
+            protein: 2,
+            carbs: 20,
+            fat: 2,
+          },
+        ],
+      },
+    } as any);
+    const screen = renderScreen();
+
+    fireEvent(screen.getByTestId('camera-view'), 'onBarcodeScanned', {
+      data: '1234567890123',
+    });
+
+    await waitFor(() => {
+      expect(mockNavigation.replace).toHaveBeenCalledWith(
+        'FoodEntryAdd',
+        expect.objectContaining({
+          item: expect.objectContaining({
+            source: 'external',
+            barcode: '1234567890123',
+            provider_type: 'yazio',
+            provider_external_id: 'yazio-apple-1',
+            provider_verified: true,
+            servingDescription: '1 piece (200 g)',
+            externalVariants: expect.arrayContaining([
+              expect.objectContaining({
+                serving_size: 1,
+                serving_unit: 'piece',
+                serving_description: '1 piece (200 g)',
+              }),
+              expect.objectContaining({
+                serving_size: 200,
+                serving_unit: 'g',
+                serving_description: '200 g',
+              }),
+              expect.objectContaining({
+                serving_size: 1,
+                serving_unit: 'package',
+                serving_description: '1 package (400 g)',
+              }),
+            ]),
+          }),
+        }),
+      );
+    });
   });
 
   it('shows the lookup-failed recovery card with the server message when lookup throws', async () => {
@@ -542,4 +641,25 @@ describe('FoodScanScreen', () => {
       });
     });
   });
+  it('localizes timeout lookup failures and keeps recovery actions visible', async () => {
+    mockLookupBarcodeV2.mockRejectedValue(new TimeoutError('Request', 30000));
+    const screen = renderScreen();
+    fireEvent(screen.getByTestId('camera-view'), 'onBarcodeScanned', { data: '012345678905' });
+    await waitFor(() => expect(screen.getByText('Lookup failed')).toBeTruthy());
+    expect(screen.getByText('Request timed out. Check your server connection.')).toBeTruthy();
+    expect(screen.queryByText('No match for barcode')).toBeNull();
+    expect(screen.getByText('Scan Nutrition Label')).toBeTruthy();
+  });
+
+  it('exposes selected state for scan mode tabs', () => {
+    const screen = renderScreen();
+    const barcodeTab = screen.getByText('Barcode').parent?.parent;
+    const labelTab = screen.getByText('Label').parent?.parent;
+    expect(barcodeTab?.props.accessibilityState?.selected).toBe(true);
+    expect(labelTab?.props.accessibilityState?.selected).toBe(false);
+    fireEvent.press(screen.getByText('Label'));
+    expect(screen.getByText('Barcode').parent?.parent?.props.accessibilityState?.selected).toBe(false);
+    expect(screen.getByText('Label').parent?.parent?.props.accessibilityState?.selected).toBe(true);
+  });
+
 });

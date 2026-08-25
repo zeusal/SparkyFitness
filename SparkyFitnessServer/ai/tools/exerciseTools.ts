@@ -12,8 +12,10 @@ import {
   compactRecord,
   dayString,
   formatConfirmation,
+  formatJsonResult,
   formatList,
 } from './formatting.js';
+import { getResolvedExerciseCaloriesRange } from '../../services/exerciseCalorieRangeService.js';
 import {
   normalizePagination,
   buildPaginatedResult,
@@ -24,6 +26,8 @@ import {
   manageExerciseInput,
   type ManageExerciseInput,
 } from './schemas/exercise.js';
+import { optionalDateSchema } from './schemas/common.js';
+import { normalizeActionArgs, normalizeDayKeywords } from './dates.js';
 
 const VALID_ACTIONS = [
   'search_exercises',
@@ -69,6 +73,7 @@ interface ExerciseSetInput {
   reps?: number;
   weight?: number;
   duration?: number;
+  distance?: number;
   rest_time?: number;
   set_type?: string;
   rpe?: number;
@@ -83,7 +88,10 @@ function toRepoSets(sets: ExerciseSetInput[]) {
     set_type: s.set_type || 'Working Set',
     reps: s.reps ?? null,
     weight: s.weight ?? null,
-    duration: s.duration ?? null,
+    // Sets may arrive as a JSON string that bypasses schema validation, so
+    // round here to keep the integer-seconds duration column safe.
+    duration: typeof s.duration === 'number' ? Math.round(s.duration) : null,
+    distance: s.distance ?? null,
     rest_time: s.rest_time ?? null,
     rpe: s.rpe ?? null,
     notes: s.notes ?? null,
@@ -128,9 +136,14 @@ const EXERCISE_ENTRY_DROP: readonly string[] = [
   'exercise_preset_entry_id',
   'sort_order',
 ];
-// exercise_entry_sets dumps (`SELECT *`): only audit timestamps are noise.
+// exercise_entry_sets dumps (`SELECT *`): audit timestamps and per-set
+// completion timestamps are token noise for the chatbot.
 // `exercise_entry_id` is kept so the model can map sets back to their entry.
-const EXERCISE_SET_DROP: readonly string[] = ['created_at', 'updated_at'];
+const EXERCISE_SET_DROP: readonly string[] = [
+  'created_at',
+  'updated_at',
+  'completed_at',
+];
 // exercises catalog rows (sparky_list_exercises) — drop the redundant caller id
 // and audit columns; keep descriptive catalog fields.
 const EXERCISE_CATALOG_DROP: readonly string[] = [
@@ -293,18 +306,9 @@ async function getExerciseProgress(
 
 // Standalone domain tools.
 const exerciseDateRangeSchema = z.object({
-  date: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(),
-  start_date: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(),
-  end_date: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(),
+  date: optionalDateSchema,
+  start_date: optionalDateSchema,
+  end_date: optionalDateSchema,
 });
 
 const exercisePaginationSchema = z.object({
@@ -351,8 +355,8 @@ export function buildExerciseTools(userId: string, tz: string) {
 
 Actions:
 - search_exercises(searchTerm, muscleGroup?, equipment?, limit?, offset?)
-- create_exercise(name, category?, calories_per_hour?, description?)
-- log_exercise(entry_date, exercise_id?|exercise_name?, duration_minutes?, calories_burned?, notes?, distance?, avg_heart_rate?, steps?, sets?:JSON string or array of [{reps,weight,duration,rest_time,set_type,rpe,notes}]) — distance/avg_heart_rate/steps are for cardio
+- create_exercise(name, category?, calories_per_hour?, description?, modality?:weight_reps|reps_only|duration|duration_distance)
+- log_exercise(entry_date, exercise_id?|exercise_name?, duration_minutes?, calories_burned?, notes?, distance?, avg_heart_rate?, steps?, sets?:JSON string or array of [{reps,weight,duration,distance,rest_time,set_type,rpe,notes}]) — distance/avg_heart_rate/steps are for cardio
 - list_exercise_diary(entry_date)
 - get_workout_presets()
 - log_workout_preset(entry_date, preset_id?|preset_name?)
@@ -363,7 +367,43 @@ Actions:
 - get_exercise_progress(exercise_id?|exercise_name?, start_date?, end_date?, limit?, offset?) — returns paginated performance history`,
       inputSchema: manageExerciseInput,
       execute: async (rawArgs) => {
-        const parsed = manageExerciseSchema.safeParse(rawArgs);
+        const normalized = normalizeActionArgs(
+          rawArgs,
+          tz,
+          VALID_ACTIONS,
+          (args) => {
+            if (args.searchTerm) {
+              return 'search_exercises';
+            }
+            if (args.sets || args.duration_minutes || args.calories_burned) {
+              return 'log_exercise';
+            }
+            if (args.preset_id || args.preset_name) {
+              return 'log_workout_preset';
+            }
+            if (args.entry_id) {
+              return 'update_exercise_entry';
+            }
+            if (args.start_date || args.end_date) {
+              return 'get_exercise_progress';
+            }
+            if (args.entry_date) {
+              return 'list_exercise_diary';
+            }
+            return 'list_exercise_diary'; // fallback
+          }
+        ) as any;
+
+        // Default missing entry_date to today's date string for logging actions
+        const loggingActions = ['log_exercise', 'log_workout_preset'];
+        if (
+          normalized.entry_date === undefined &&
+          loggingActions.includes(normalized.action)
+        ) {
+          normalized.entry_date = todayInZone(tz);
+        }
+
+        const parsed = manageExerciseSchema.safeParse(normalized);
         if (!parsed.success) {
           return formatZodError(parsed.error);
         }
@@ -414,6 +454,7 @@ Actions:
                   category: args.category || 'custom',
                   calories_per_hour: args.calories_per_hour || 300,
                   description: args.description || null,
+                  modality: args.modality,
                   is_custom: true,
                   shared_with_public: false,
                   source: 'manual',
@@ -423,9 +464,7 @@ Actions:
 
             case 'log_exercise': {
               if (!args.exercise_id && !args.exercise_name) {
-                return ERRORS.VALIDATION(
-                  'Either exercise_id or exercise_name must be provided'
-                );
+                args.exercise_name = 'General Exercise';
               }
               // Parse sets if it arrives as a JSON string (LLM serialisation quirk)
               let parsedSets: ExerciseSetInput[] | undefined;
@@ -477,6 +516,7 @@ Actions:
                 {
                   exercise_id: exerciseId,
                   entry_date: args.entry_date,
+                  entry_time: args.entry_time,
                   duration_minutes: args.duration_minutes,
                   calories_burned: args.calories_burned,
                   notes: args.notes,
@@ -530,6 +570,7 @@ Actions:
                         if (isSet(s.reps)) parts.push(`${s.reps}r`);
                         if (isSet(s.weight)) parts.push(`${s.weight}kg`);
                         if (isSet(s.duration)) parts.push(`${s.duration}s`);
+                        if (isSet(s.distance)) parts.push(`${s.distance}km`);
                         if (isSet(s.rpe)) parts.push(`RPE ${s.rpe}`);
                         let str = parts.join('×');
                         if (isSet(s.rest_time))
@@ -610,6 +651,7 @@ Actions:
                   args.entry_id,
                   {
                     entry_date: args.entry_date,
+                    entry_time: args.entry_time,
                     duration_minutes: args.duration_minutes,
                     calories_burned: args.calories_burned,
                     notes: args.notes,
@@ -722,7 +764,7 @@ Actions:
           if (error instanceof Error && error.message.includes('not found')) {
             return ERRORS.NOT_FOUND('Resource', 'unknown');
           }
-          return ERRORS.DB_ERROR();
+          return ERRORS.DB_ERROR(error);
         }
       },
     }),
@@ -732,7 +774,9 @@ Actions:
         'Returns a paginated exercise catalog for the authenticated user.',
       inputSchema: listExercisesSchema,
       execute: async (rawArgs) => {
-        const parsed = listExercisesSchema.safeParse(rawArgs);
+        const parsed = listExercisesSchema.safeParse(
+          normalizeDayKeywords(rawArgs, tz)
+        );
         if (!parsed.success) {
           return formatZodError(parsed.error);
         }
@@ -762,13 +806,13 @@ Actions:
             totalCount,
             offset
           );
-          return JSON.stringify(data);
+          return formatJsonResult(data);
         } catch (error) {
           log('error', '[Exercise Tool] sparky_list_exercises error:', error);
           if (error instanceof Error && error.message.includes('not found')) {
             return ERRORS.NOT_FOUND('Exercise', 'unknown');
           }
-          return ERRORS.DB_ERROR();
+          return ERRORS.DB_ERROR(error);
         }
       },
     }),
@@ -778,13 +822,15 @@ Actions:
         'Returns full details for one exercise by exercise_id or exercise_name.',
       inputSchema: getExerciseDetailsSchema,
       execute: async (rawArgs) => {
-        const parsed = getExerciseDetailsSchema.safeParse(rawArgs);
+        const parsed = getExerciseDetailsSchema.safeParse(
+          normalizeDayKeywords(rawArgs, tz)
+        );
         if (!parsed.success) {
           return formatZodError(parsed.error);
         }
         try {
           const data = await getExerciseDetails(userId, parsed.data);
-          return JSON.stringify(data);
+          return formatJsonResult(data);
         } catch (error) {
           log(
             'error',
@@ -797,7 +843,7 @@ Actions:
               parsed.data.exercise_id || parsed.data.exercise_name || 'unknown'
             );
           }
-          return ERRORS.DB_ERROR();
+          return ERRORS.DB_ERROR(error);
         }
       },
     }),
@@ -806,7 +852,9 @@ Actions:
       description: 'Searches exercises by name and optional filters.',
       inputSchema: searchExercisesSchema,
       execute: async (rawArgs) => {
-        const parsed = searchExercisesSchema.safeParse(rawArgs);
+        const parsed = searchExercisesSchema.safeParse(
+          normalizeDayKeywords(rawArgs, tz)
+        );
         if (!parsed.success) {
           return formatZodError(parsed.error);
         }
@@ -831,13 +879,13 @@ Actions:
             totalCount,
             offset
           );
-          return JSON.stringify(data);
+          return formatJsonResult(data);
         } catch (error) {
           log('error', '[Exercise Tool] sparky_search_exercises error:', error);
           if (error instanceof Error && error.message.includes('not found')) {
             return ERRORS.NOT_FOUND('Exercise', parsed.data.query);
           }
-          return ERRORS.DB_ERROR();
+          return ERRORS.DB_ERROR(error);
         }
       },
     }),
@@ -847,7 +895,9 @@ Actions:
         'Returns entry-level exercise diary data for a specific date or date range.',
       inputSchema: exerciseDateRangeSchema,
       execute: async (rawArgs) => {
-        const parsed = exerciseDateRangeSchema.safeParse(rawArgs);
+        const parsed = exerciseDateRangeSchema.safeParse(
+          normalizeDayKeywords(rawArgs, tz)
+        );
         if (!parsed.success) {
           return formatZodError(parsed.error);
         }
@@ -866,7 +916,7 @@ Actions:
               compactRecord(s, EXERCISE_SET_DROP)
             ),
           };
-          return JSON.stringify(data);
+          return formatJsonResult(data);
         } catch (error) {
           log(
             'error',
@@ -879,7 +929,7 @@ Actions:
               parsed.data.date || parsed.data.start_date || 'unknown'
             );
           }
-          return ERRORS.DB_ERROR();
+          return ERRORS.DB_ERROR(error);
         }
       },
     }),
@@ -888,7 +938,9 @@ Actions:
       description: 'Returns daily exercise totals for a date or range.',
       inputSchema: exerciseDateRangeSchema,
       execute: async (rawArgs) => {
-        const parsed = exerciseDateRangeSchema.safeParse(rawArgs);
+        const parsed = exerciseDateRangeSchema.safeParse(
+          normalizeDayKeywords(rawArgs, tz)
+        );
         if (!parsed.success) {
           return formatZodError(parsed.error);
         }
@@ -899,12 +951,29 @@ Actions:
             startDate,
             endDate
           );
+          // `calories_burned` reports the resolved figure — max(device summary,
+          // logged + background steps) — so it matches the Diary. The raw row sum
+          // double-counts a device summary against the workouts it already includes.
+          const resolvedByDate = await getResolvedExerciseCaloriesRange(
+            userId,
+            startDate,
+            endDate
+          );
           const data = {
             start_date: startDate,
             end_date: endDate,
-            rows: rows.map(projectEntryDate),
+            rows: rows.map((row: { entry_date?: unknown }) => {
+              const projected = projectEntryDate(row) as Record<
+                string,
+                unknown
+              >;
+              const resolved = resolvedByDate.get(String(projected.entry_date));
+              return resolved
+                ? { ...projected, calories_burned: resolved.calories }
+                : projected;
+            }),
           };
-          return JSON.stringify(data);
+          return formatJsonResult(data);
         } catch (error) {
           log(
             'error',
@@ -917,7 +986,7 @@ Actions:
               parsed.data.date || parsed.data.start_date || 'unknown'
             );
           }
-          return ERRORS.DB_ERROR();
+          return ERRORS.DB_ERROR(error);
         }
       },
     }),
@@ -927,7 +996,9 @@ Actions:
         'Returns recent entry-level exercise diary rows for the authenticated user.',
       inputSchema: recentExerciseEntriesSchema,
       execute: async (rawArgs) => {
-        const parsed = recentExerciseEntriesSchema.safeParse(rawArgs);
+        const parsed = recentExerciseEntriesSchema.safeParse(
+          normalizeDayKeywords(rawArgs, tz)
+        );
         if (!parsed.success) {
           return formatZodError(parsed.error);
         }
@@ -937,7 +1008,7 @@ Actions:
             userId,
             limit
           );
-          return JSON.stringify(rows.map(projectExerciseEntry));
+          return formatJsonResult(rows.map(projectExerciseEntry));
         } catch (error) {
           log(
             'error',
@@ -947,7 +1018,7 @@ Actions:
           if (error instanceof Error && error.message.includes('not found')) {
             return ERRORS.NOT_FOUND('Exercise entries', 'recent');
           }
-          return ERRORS.DB_ERROR();
+          return ERRORS.DB_ERROR(error);
         }
       },
     }),
@@ -957,7 +1028,9 @@ Actions:
         'Shows where a specific exercise_id was used in the exercise diary.',
       inputSchema: exerciseUsageSchema,
       execute: async (rawArgs) => {
-        const parsed = exerciseUsageSchema.safeParse(rawArgs);
+        const parsed = exerciseUsageSchema.safeParse(
+          normalizeDayKeywords(rawArgs, tz)
+        );
         if (!parsed.success) {
           return formatZodError(parsed.error);
         }
@@ -981,7 +1054,7 @@ Actions:
             totalCount,
             offset
           );
-          return JSON.stringify(data);
+          return formatJsonResult(data);
         } catch (error) {
           log(
             'error',
@@ -991,7 +1064,7 @@ Actions:
           if (error instanceof Error && error.message.includes('not found')) {
             return ERRORS.NOT_FOUND('Exercise', parsed.data.exercise_id);
           }
-          return ERRORS.DB_ERROR();
+          return ERRORS.DB_ERROR(error);
         }
       },
     }),
@@ -1000,13 +1073,15 @@ Actions:
       description: 'Returns paginated performance history for an exercise.',
       inputSchema: exerciseProgressSchema,
       execute: async (rawArgs) => {
-        const parsed = exerciseProgressSchema.safeParse(rawArgs);
+        const parsed = exerciseProgressSchema.safeParse(
+          normalizeDayKeywords(rawArgs, tz)
+        );
         if (!parsed.success) {
           return formatZodError(parsed.error);
         }
         try {
           const data = await getExerciseProgress(userId, parsed.data);
-          return JSON.stringify(data);
+          return formatJsonResult(data);
         } catch (error) {
           log(
             'error',
@@ -1019,7 +1094,7 @@ Actions:
               parsed.data.exercise_id || parsed.data.exercise_name || 'unknown'
             );
           }
-          return ERRORS.DB_ERROR();
+          return ERRORS.DB_ERROR(error);
         }
       },
     }),

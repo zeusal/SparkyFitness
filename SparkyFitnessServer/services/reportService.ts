@@ -12,9 +12,15 @@ import symptomRepository from '../models/symptomRepository.js';
 import injectionRepository from '../models/injectionRepository.js';
 import titrationRepository from '../models/titrationRepository.js';
 import { log } from '../config/logging.js';
-import { addDays, compareDays, todayInZone } from '@workspace/shared';
+import {
+  addDays,
+  compareDays,
+  FOOD_VARIANT_NUTRIENT_FIELDS,
+  todayInZone,
+} from '@workspace/shared';
 import { userAge } from '../utils/dateHelpers.js';
 import { loadUserTimezone } from '../utils/timezoneLoader.js';
+import { parseJsonArrayField } from '../utils/exerciseJsonFields.js';
 
 interface CustomNutrientDefinition {
   id: string;
@@ -132,6 +138,7 @@ async function getReportsData(
       medicationEntries,
       symptomEntries,
       injections,
+      waterTotals,
     ] = await Promise.all([
       reportRepository.getNutritionData(
         targetUserId,
@@ -165,7 +172,19 @@ async function getReportsData(
         fromDate: startDate,
         toDate: endDate,
       }),
+      measurementRepository.getWaterTotalsByDateRange(
+        targetUserId,
+        startDate,
+        endDate
+      ),
     ]);
+    const waterByDate = new Map<string, number>();
+    for (const row of waterTotals as Array<{
+      entry_date: string;
+      total_ml: string | number;
+    }>) {
+      waterByDate.set(row.entry_date, Number(row.total_ml) || 0);
+    }
     const customMeasurementsData = [];
     for (const category of customCategoriesResult) {
       const customMeasurementResult =
@@ -175,7 +194,9 @@ async function getReportsData(
           startDate,
           endDate
         );
-      customMeasurementsData.push(...customMeasurementResult);
+      for (let i = 0; i < customMeasurementResult.length; i++) {
+        customMeasurementsData.push(customMeasurementResult[i]);
+      }
     }
     const tabularData = tabularDataRaw.map((row: TabularFoodRow) => {
       // Custom nutrients are now already in the row, scaled and summed by the repository
@@ -208,7 +229,7 @@ async function getReportsData(
     });
     const nutritionData = fetchedNutritionData.map(
       (item: Record<string, string | number>) => {
-        const mappedItem = {
+        const mappedItem: Record<string, string | number> = {
           date: item.date,
           calories: parseFloat(String(item.calories)) || 0,
           protein: parseFloat(String(item.protein)) || 0,
@@ -229,12 +250,22 @@ async function getReportsData(
           vitamin_c: parseFloat(String(item.vitamin_c)) || 0,
           calcium: parseFloat(String(item.calcium)) || 0,
           iron: parseFloat(String(item.iron)) || 0,
+          water: waterByDate.get(String(item.date)) || 0,
         };
+        FOOD_VARIANT_NUTRIENT_FIELDS.forEach((nutrient) => {
+          mappedItem[`food_${nutrient}`] =
+            parseFloat(String(item[`food_${nutrient}`])) || 0;
+          mappedItem[`supplement_${nutrient}`] =
+            parseFloat(String(item[`supplement_${nutrient}`])) || 0;
+        });
         // Map custom nutrients dynamically
         customNutrients.forEach((cn: CustomNutrientDefinition) => {
           const key = cn.name; // Use exact name as key, matching frontend expectation
-          // @ts-expect-error TS(7053): Element implicitly has an 'any' type because expre... Remove this comment to see the full error message
-          mappedItem[key] = parseFloat(item[key]) || 0;
+          mappedItem[key] = parseFloat(String(item[key])) || 0;
+          mappedItem[`food_${key}`] =
+            parseFloat(String(item[`food_${key}`])) || 0;
+          mappedItem[`supplement_${key}`] =
+            parseFloat(String(item[`supplement_${key}`])) || 0;
         });
         return mappedItem;
       }
@@ -307,11 +338,13 @@ async function getReportsData(
         name: entry.exercise_name,
         category: entry.exercise_category,
         calories_per_hour: entry.exercise_calories_per_hour,
-        equipment: JSON.parse(entry.exercise_equipment || '[]'),
-        primary_muscles: JSON.parse(entry.exercise_primary_muscles || '[]'),
-        secondary_muscles: JSON.parse(entry.exercise_secondary_muscles || '[]'),
-        instructions: JSON.parse(entry.exercise_instructions || '[]'),
-        images: JSON.parse(entry.exercise_images || '[]'),
+        equipment: parseJsonArrayField(entry.exercise_equipment),
+        primary_muscles: parseJsonArrayField(entry.exercise_primary_muscles),
+        secondary_muscles: parseJsonArrayField(
+          entry.exercise_secondary_muscles
+        ),
+        instructions: parseJsonArrayField(entry.exercise_instructions),
+        images: parseJsonArrayField(entry.exercise_images),
         source: entry.exercise_source,
         source_id: entry.exercise_source_id,
         user_id: entry.exercise_user_id,

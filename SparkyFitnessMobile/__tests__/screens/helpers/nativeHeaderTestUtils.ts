@@ -1,4 +1,13 @@
 import { act, fireEvent } from '@testing-library/react-native';
+import { DUPLICATE_PRESS_WINDOW_MS } from '../../../src/utils/duplicatePress';
+
+type HeaderMenuItem = {
+  type?: string;
+  label?: string;
+  state?: 'on' | 'off' | 'mixed';
+  onPress?: () => void;
+  items?: HeaderMenuItem[];
+};
 
 type HeaderItem = {
   label?: string;
@@ -6,6 +15,8 @@ type HeaderItem = {
   disabled?: boolean;
   accessibilityLabel?: string;
   onPress?: () => void;
+  badge?: { value?: number | string };
+  menu?: { items: HeaderMenuItem[] };
 };
 
 /**
@@ -15,6 +26,40 @@ type HeaderItem = {
  * and interact with the action regardless of which platform Jest is currently
  * emulating (jest-expo runs both the ios and android projects).
  */
+
+/**
+ * Header `kind: 'primary'` (Save) actions carry a synchronous duplicate-press
+ * guard: two presses inside DUPLICATE_PRESS_WINDOW_MS count as one, which is
+ * what stops a burst of taps replayed off a blocked JS thread from writing the
+ * same entry several times (#2191).
+ *
+ * Tests press in immediate succession, compressing to zero what is always
+ * seconds of real user time — reading an error toast, fixing a field, then
+ * pressing Save again. Call this between two scripted presses of the same
+ * action so the guard sees them as the separate deliberate presses they stand
+ * for. The guard's own behaviour is covered directly in
+ * `__tests__/hooks/useScreenHeaderDuplicatePress.test.tsx`; do not use this to
+ * paper over a real double-fire.
+ */
+let pressClockOffsetMs = 0;
+
+export function skipDuplicatePressWindow(): void {
+  pressClockOffsetMs += DUPLICATE_PRESS_WINDOW_MS + 1;
+  if (!jest.isMockFunction(Date.now)) {
+    const realNow = Date.now.bind(Date);
+    jest.spyOn(Date, 'now').mockImplementation(() => realNow() + pressClockOffsetMs);
+  }
+}
+
+// Restored per test so a shifted clock never leaks into a sibling test that
+// asserts on dates. Registered here rather than in each importing file so the
+// helper cannot be used without its cleanup.
+afterEach(() => {
+  if (jest.isMockFunction(Date.now)) {
+    (Date.now as unknown as jest.SpyInstance).mockRestore();
+  }
+  pressClockOffsetMs = 0;
+});
 
 function collectHeaderItems(navigation: { setOptions?: unknown }): HeaderItem[] {
   const setOptions = navigation?.setOptions as
@@ -56,7 +101,48 @@ export function findHeaderItem(
   return [...items].reverse().find((item) => item?.label === label);
 }
 
-function findHeaderItemByAccessibilityLabel(
+function flattenMenuItems(items: HeaderMenuItem[]): HeaderMenuItem[] {
+  return items.flatMap((item) =>
+    item.items ? [item, ...flattenMenuItems(item.items)] : [item],
+  );
+}
+
+/**
+ * Find an action inside a native header menu item (type: 'menu'), searching
+ * submenus recursively. Returns the most recently configured match.
+ */
+export function findHeaderMenuAction(
+  navigation: { setOptions?: unknown },
+  label: string,
+): HeaderMenuItem | undefined {
+  const items = collectHeaderItems(navigation);
+  for (const item of [...items].reverse()) {
+    if (!item.menu) continue;
+    const match = flattenMenuItems(item.menu.items).find(
+      (action) => action.label === label && typeof action.onPress === 'function',
+    );
+    if (match) return match;
+  }
+  return undefined;
+}
+
+/** Press an action inside a native header menu item, wrapped in act(). */
+export function pressHeaderMenuAction(
+  navigation: { setOptions?: unknown },
+  label: string,
+): void {
+  const action = findHeaderMenuAction(navigation, label);
+  if (!action?.onPress) {
+    throw new Error(
+      `pressHeaderMenuAction: no native header menu action labelled "${label}" was found`,
+    );
+  }
+  act(() => {
+    action.onPress?.();
+  });
+}
+
+export function findHeaderItemByAccessibilityLabel(
   navigation: { setOptions?: unknown },
   accessibilityLabel: string,
 ): HeaderItem | undefined {

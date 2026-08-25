@@ -18,8 +18,13 @@ import {
   Layers,
 } from 'lucide-react';
 import ExerciseEntryDisplay from './ExerciseEntryDisplay';
-import { formatMinutesToHHMM } from '@/utils/timeFormatters';
+import { usePreferences } from '@/contexts/PreferencesContext';
+import {
+  formatMinutesToHHMM,
+  formatTimeOfDayString,
+} from '@/utils/timeFormatters';
 import { Exercise, ExerciseEntry, PresetSessionEntry } from '@/types/exercises';
+import { earliestEntryTime, setsDurationMinutes } from '@workspace/shared';
 
 interface ExercisePresetEntryDisplayProps {
   presetEntry: PresetSessionEntry;
@@ -53,6 +58,7 @@ const ExercisePresetEntryDisplay: React.FC<ExercisePresetEntryDisplayProps> = ({
   getEnergyUnitString,
 }) => {
   const { t } = useTranslation();
+  const { timeFormat } = usePreferences();
   const [isExpanded, setIsExpanded] = useState(false);
 
   const toggleExpansion = useCallback(() => {
@@ -66,17 +72,12 @@ const ExercisePresetEntryDisplay: React.FC<ExercisePresetEntryDisplayProps> = ({
     ) ?? 0;
 
   const totalMinutes =
-    presetEntry.exercises?.reduce(
-      (sum, ex) =>
-        sum +
-        (ex.sets && ex.sets.length > 0
-          ? ex.sets.reduce(
-              (s, set) => s + (set.duration || 0) + (set.rest_time || 0) / 60,
-              0
-            )
-          : ex.duration_minutes || 0),
-      0
-    ) ?? 0;
+    presetEntry.exercises?.reduce((sum, ex) => {
+      const setsDuration = setsDurationMinutes(ex.sets);
+      // Fall back to the entry-level duration when the sets carry no per-set
+      // timers (e.g. rep-based sets synced from Hevy).
+      return sum + (setsDuration > 0 ? setsDuration : ex.duration_minutes || 0);
+    }, 0) ?? 0;
 
   const avgHR = (() => {
     const withHR =
@@ -88,6 +89,8 @@ const ExercisePresetEntryDisplay: React.FC<ExercisePresetEntryDisplayProps> = ({
         )
       : 0;
   })();
+
+  const earliestTime = earliestEntryTime(presetEntry.exercises ?? []);
 
   const totalCalories = Math.round(
     convertEnergy(
@@ -139,6 +142,11 @@ const ExercisePresetEntryDisplay: React.FC<ExercisePresetEntryDisplayProps> = ({
                     {presetEntry.name ||
                       t('exerciseCard.workoutPreset', 'Workout Preset')}
                   </span>
+                  {earliestTime && (
+                    <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full dark:bg-blue-900/30 dark:text-blue-300 font-medium">
+                      {formatTimeOfDayString(earliestTime, timeFormat)}
+                    </span>
+                  )}
                   {exerciseCount > 0 && (
                     <span className="flex-shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300">
                       {exerciseCount}{' '}

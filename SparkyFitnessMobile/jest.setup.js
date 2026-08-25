@@ -4,6 +4,20 @@ const { TextEncoder, TextDecoder } = require('util');
 if (typeof globalThis.TextEncoder === 'undefined') globalThis.TextEncoder = TextEncoder;
 if (typeof globalThis.TextDecoder === 'undefined') globalThis.TextDecoder = TextDecoder;
 
+// Deterministic expo-localization: tests read the device language through
+// getLocales(). The localization suite overrides the return value per test;
+// the default here keeps every other test environment-agnostic (en-US).
+jest.mock('expo-localization', () => ({
+  getLocales: jest.fn(() => [
+    {
+      languageCode: 'en',
+      languageTag: 'en-US',
+      regionCode: 'US',
+      textDirection: 'ltr',
+    },
+  ]),
+}));
+
 // Mock radon-ide (ESM module that Jest can't transform)
 jest.mock('radon-ide', () => ({
   preview: jest.fn(),
@@ -47,6 +61,7 @@ jest.mock('@kingstinct/react-native-healthkit', () => ({
   queryQuantitySamples: jest.fn(),
   queryCategorySamples: jest.fn(),
   queryStatisticsForQuantity: jest.fn(),
+  queryStatisticsCollectionForQuantity: jest.fn().mockResolvedValue([]),
   queryWorkoutSamples: jest.fn(),
   queryCorrelationSamples: jest.fn(),
   // Writeback saves return the persisted sample (orchestrator reads .uuid off it);
@@ -86,8 +101,11 @@ jest.mock('@kingstinct/react-native-healthkit', () => ({
 jest.mock('react-native-health-connect', () => ({
   initialize: jest.fn().mockResolvedValue(true),
   requestPermission: jest.fn().mockResolvedValue([]),
+  getGrantedPermissions: jest.fn().mockResolvedValue([]),
   readRecords: jest.fn().mockResolvedValue({ records: [] }),
+  requestExerciseRoute: jest.fn().mockResolvedValue([]),
   aggregateRecord: jest.fn().mockResolvedValue({}),
+  aggregateGroupByDuration: jest.fn().mockResolvedValue([]),
   aggregateGroupByPeriod: jest.fn().mockResolvedValue([]),
   getSdkStatus: jest.fn().mockResolvedValue(3),
   SdkAvailabilityStatus: {
@@ -124,6 +142,11 @@ jest.mock('expo-notifications', () => {
     scheduleNotificationAsync: jest.fn(async () => `mock-notif-${nextId++}`),
     cancelScheduledNotificationAsync: jest.fn().mockResolvedValue(undefined),
     cancelAllScheduledNotificationsAsync: jest.fn().mockResolvedValue(undefined),
+    getAllScheduledNotificationsAsync: jest.fn().mockResolvedValue([]),
+    setNotificationCategoryAsync: jest.fn().mockResolvedValue(undefined),
+    getPresentedNotificationsAsync: jest.fn().mockResolvedValue([]),
+    dismissNotificationAsync: jest.fn().mockResolvedValue(undefined),
+    addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
     AndroidImportance: { HIGH: 4, DEFAULT: 3, LOW: 2, MIN: 1, NONE: 0 },
     SchedulableTriggerInputTypes: {
       CALENDAR: 'calendar',
@@ -144,6 +167,17 @@ jest.mock('expo-haptics', () => ({
   selectionAsync: jest.fn().mockResolvedValue(undefined),
   impactAsync: jest.fn().mockResolvedValue(undefined),
   ImpactFeedbackStyle: { Light: 'light', Medium: 'medium', Heavy: 'heavy', Soft: 'soft', Rigid: 'rigid' },
+}));
+
+// Mock expo-audio
+jest.mock('expo-audio', () => ({
+  createAudioPlayer: jest.fn(() => ({
+    play: jest.fn(),
+    pause: jest.fn(),
+    seekTo: jest.fn().mockResolvedValue(undefined),
+    remove: jest.fn(),
+  })),
+  setAudioModeAsync: jest.fn().mockResolvedValue(undefined),
 }));
 
 // Mock expo-camera
@@ -188,8 +222,28 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 // Mock react-native-gesture-handler
 jest.mock('react-native-gesture-handler', () => {
   const View = require('react-native').View;
+  // A chainable gesture builder: every method returns the same object so
+  // `.activateAfterLongPress(150).onStart(fn).onEnd(fn)` chains resolve to a
+  // gesture stub (the drag itself is device-verified, not unit-tested).
+  const makeChainableGesture = () => {
+    const gesture = new Proxy({}, { get: () => () => gesture });
+    return gesture;
+  };
   return {
     GestureHandlerRootView: View,
+    GestureDetector: ({ children }) => children,
+    Gesture: {
+      Pan: makeChainableGesture,
+      Tap: makeChainableGesture,
+      LongPress: makeChainableGesture,
+      Fling: makeChainableGesture,
+      Pinch: makeChainableGesture,
+      Rotation: makeChainableGesture,
+      Race: makeChainableGesture,
+      Simultaneous: makeChainableGesture,
+      Exclusive: makeChainableGesture,
+      Native: makeChainableGesture,
+    },
     Swipeable: View,
     TouchableOpacity: View,
     DrawerLayout: View,
@@ -242,18 +296,55 @@ jest.mock('react-native-gesture-handler/ReanimatedSwipeable', () => {
 // Mock react-native-reanimated
 jest.mock('react-native-reanimated', () => {
   const React = require('react');
-  const { View } = require('react-native');
-  const createAnimationMock = () => ({ duration: () => createAnimationMock() });
+  const { View, ScrollView } = require('react-native');
+  const createAnimationMock = () => {
+    const chain = {};
+    for (const method of [
+      'duration',
+      'delay',
+      'springify',
+      'easing',
+      'withInitialValues',
+      'withCallback',
+    ]) {
+      chain[method] = () => chain;
+    }
+    return chain;
+  };
   return {
     __esModule: true,
-    default: { View },
+    default: { View, ScrollView, createAnimatedComponent: (Component) => Component },
     useSharedValue: (init) => React.useRef({ value: init }).current,
     useAnimatedStyle: (fn) => fn(),
     useDerivedValue: (fn) => ({ value: fn() }),
+    // Linear map between the first and last stops, clamped — enough for the
+    // synchronous worklet the useAnimatedStyle mock runs.
+    interpolate: (value, input, output) => {
+      const inMin = input[0];
+      const inMax = input[input.length - 1];
+      const outMin = output[0];
+      const outMax = output[output.length - 1];
+      if (inMax === inMin) return outMin;
+      const t = Math.max(0, Math.min(1, (value - inMin) / (inMax - inMin)));
+      return outMin + t * (outMax - outMin);
+    },
+    Extrapolation: { CLAMP: 'clamp', EXTEND: 'extend', IDENTITY: 'identity' },
     withTiming: (toValue) => toValue,
     withSpring: (toValue) => toValue,
     withSequence: (...args) => args[args.length - 1],
+    withRepeat: (animation) => animation,
+    withDelay: (_delayMs, animation) => animation,
+    cancelAnimation: jest.fn(),
+    useReducedMotion: () => false,
     useAnimatedReaction: jest.fn(),
+    // Drag-reorder worklet plumbing — runOnJS returns the fn so callers can
+    // invoke it synchronously; the scroll/frame helpers are inert stubs.
+    runOnJS: (fn) => fn,
+    useAnimatedRef: () => React.useRef(null),
+    useAnimatedScrollHandler: (handler) => handler,
+    useFrameCallback: () => ({ setActive: jest.fn() }),
+    scrollTo: jest.fn(),
+    measure: jest.fn(() => null),
     Easing: {
       linear: jest.fn(),
       ease: jest.fn(),
@@ -267,7 +358,10 @@ jest.mock('react-native-reanimated', () => {
       exp: jest.fn(),
     },
     FadeIn: createAnimationMock(),
+    FadeInDown: createAnimationMock(),
     FadeOut: createAnimationMock(),
+    FadeOutUp: createAnimationMock(),
+    ZoomIn: createAnimationMock(),
     LinearTransition: createAnimationMock(),
   };
 });
@@ -288,6 +382,38 @@ jest.mock('react-native-keyboard-controller', () => {
     KeyboardStickyView: React.forwardRef(({ children, offset: _offset, enabled: _enabled, ...props }, ref) =>
       React.createElement(View, { ...props, ref }, children),
     ),
+    // Keyboard-closed shared values; tests render with the rail expanded.
+    useReanimatedKeyboardAnimation: () => ({ height: { value: 0 }, progress: { value: 0 } }),
+    // isVisible defaults to true so the Android IME-retry path in
+    // focusSetCellInput stays quiet unless a test opts in.
+    KeyboardController: {
+      setDefaultMode: jest.fn(),
+      setInputMode: jest.fn(),
+      preload: jest.fn(),
+      dismiss: jest.fn(),
+      setFocusTo: jest.fn(),
+      isVisible: jest.fn(() => true),
+      state: jest.fn(() => ({})),
+    },
+    // Subscriptions are inert; tests drive a listener by pulling the callback
+    // out of addListener.mock.calls.
+    KeyboardEvents: {
+      addListener: jest.fn(() => ({ remove: jest.fn() })),
+    },
+  };
+});
+
+// Mock expo-glass-effect. Availability is false so iOS tests exercise the
+// classic native-header path (useNativeIOSHeadersActive() → true) instead of
+// the Liquid Glass fallback; tests that need glass-on mock
+// src/utils/liquidGlass locally.
+jest.mock('expo-glass-effect', () => {
+  const { View } = require('react-native');
+  return {
+    GlassView: View,
+    GlassContainer: View,
+    isLiquidGlassAvailable: () => false,
+    isGlassEffectAPIAvailable: () => false,
   };
 });
 
@@ -362,6 +488,15 @@ jest.mock('@shopify/react-native-skia', () => {
           close: jest.fn().mockReturnThis(),
         }),
       },
+      PathBuilder: {
+        Make: () => ({
+          addArc: jest.fn().mockReturnThis(),
+          moveTo: jest.fn().mockReturnThis(),
+          lineTo: jest.fn().mockReturnThis(),
+          close: jest.fn().mockReturnThis(),
+          build: jest.fn().mockReturnValue(null),
+        }),
+      },
     },
     rect: jest.fn((x, y, width, height) => ({ x, y, width, height })),
     rrect: jest.fn((r, rx, ry) => ({ rect: r, rx, ry })),
@@ -416,8 +551,12 @@ jest.mock('uniwind', () => ({
 jest.mock('react-native-enriched-markdown', () => {
   const React = require('react');
   const { Text } = require('react-native');
-  const Markdown = ({ markdown, onLinkPress }) =>
-    React.createElement(Text, { testID: 'enriched-markdown', onLinkPress }, markdown);
+  const Markdown = ({ markdown, onLinkPress, selectable, streamingAnimation }) =>
+    React.createElement(
+      Text,
+      { testID: 'enriched-markdown', onLinkPress, selectable, streamingAnimation },
+      markdown,
+    );
   return { __esModule: true, EnrichedMarkdownText: Markdown, default: Markdown };
 });
 
@@ -462,3 +601,19 @@ jest.mock('@gorhom/bottom-sheet', () => {
     BottomSheetBackdrop: () => null,
   };
 });
+
+// Provide the production i18n instance to components rendered in isolation.
+// Screen/component suites may omit the app bootstrap, but localized UI should
+// still resolve its explicit English defaults instead of warning or returning
+// raw keys.
+const { initReactI18next } = require('react-i18next');
+const testI18n = require('./src/localization/i18n').default;
+if (!testI18n.isInitialized) {
+  testI18n.use(initReactI18next).init({
+    resources: { en: { translation: {} }, pl: { translation: {} } },
+    lng: 'en',
+    fallbackLng: 'en',
+    initImmediate: false,
+    interpolation: { escapeValue: false },
+  });
+}

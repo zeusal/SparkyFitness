@@ -5,7 +5,7 @@ packages:
   - "SparkyFitnessMobile"
   - "SparkyFitnessServer"
   - "docs"
-  - "SparkyFitnessMCP"
+
 
 packageExtensions:
   "@kingstinct/react-native-healthkit@13":
@@ -40,16 +40,4 @@ overrides:
 
 patchedDependencies:
   "react-native-health-connect@3.5.3": "patches/react-native-health-connect@3.5.3.patch"
-
-supportedArchitectures:
-  os:
-    - current
-    - linux
-  cpu:
-    - current
-    - x64
-    - arm64
-
-minimumReleaseAge: 4320
-
-minimumReleaseAgeExclude: []
+  "@bacons/apple-targets@4.0.6": "patches/@bacons__apple-targets@4.0.6.patch"

@@ -10,6 +10,11 @@ import {
 } from '../schemas/externalProviderSchemas.js';
 import { log } from '../config/logging.js';
 import { logAdminAction } from '../services/authService.js';
+import { requiresApiKey } from '../ai/providerDispatch.js';
+import {
+  assertOutboundUrlShapeAndLiteralAllowed,
+  requiresUserSuppliedAiUrl,
+} from '../utils/outboundUrlPolicy.js';
 import { auth } from '../auth.js';
 const router = express.Router();
 // Middleware to ensure only admins can access these routes
@@ -597,10 +602,30 @@ router.post('/ai-service-settings/global', async (req, res, next) => {
         .status(400)
         .json({ error: 'service_name and service_type are required.' });
     }
-    if (service_type !== 'ollama' && !api_key) {
+    if (requiresApiKey(service_type) && !api_key) {
       return res
         .status(400)
-        .json({ error: 'api_key is required for non-Ollama services.' });
+        .json({ error: 'api_key is required for this service type.' });
+    }
+    if (requiresUserSuppliedAiUrl(service_type) && !custom_url) {
+      return res
+        .status(400)
+        .json({ error: 'custom_url is required for this service type.' });
+    }
+    if (custom_url) {
+      try {
+        assertOutboundUrlShapeAndLiteralAllowed(custom_url, {
+          allowPrivateNetwork: true,
+          reason: 'admin',
+        });
+      } catch (error) {
+        return res.status(400).json({
+          error:
+            error instanceof Error
+              ? error.message
+              : 'custom_url is invalid for this service type.',
+        });
+      }
     }
     const settingData = {
       service_name,
@@ -700,6 +725,26 @@ router.put('/ai-service-settings/global/:id', async (req, res, next) => {
       return res
         .status(400)
         .json({ error: 'service_name and service_type are required.' });
+    }
+    if (requiresUserSuppliedAiUrl(service_type) && !custom_url) {
+      return res
+        .status(400)
+        .json({ error: 'custom_url is required for this service type.' });
+    }
+    if (custom_url) {
+      try {
+        assertOutboundUrlShapeAndLiteralAllowed(custom_url, {
+          allowPrivateNetwork: true,
+          reason: 'admin',
+        });
+      } catch (error) {
+        return res.status(400).json({
+          error:
+            error instanceof Error
+              ? error.message
+              : 'custom_url is invalid for this service type.',
+        });
+      }
     }
     const settingData = {
       id,

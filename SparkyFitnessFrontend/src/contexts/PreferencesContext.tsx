@@ -10,11 +10,13 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { debug, info, error } from '@/utils/logging';
 import { format, parseISO, startOfDay } from 'date-fns';
+import { normalizeTimeFormat } from '@/utils/timeFormatters';
 import {
   FatBreakdownAlgorithm,
   MineralCalculationAlgorithm,
   VitaminCalculationAlgorithm,
   SugarCalculationAlgorithm,
+  AddedSugarAlgorithm,
 } from '@/types/nutrientAlgorithms';
 import { BmrAlgorithm } from '@/services/bmrService';
 import { BodyFatAlgorithm } from '@/services/bodyCompositionService';
@@ -28,8 +30,14 @@ import {
   useSetPrimaryWaterContainerMutation,
 } from '@/hooks/Settings/useWaterContainers';
 import { getErrorMessage } from '@/utils/api';
-import { CalorieGoalAdjustmentMode } from '@/utils/calorieCalculations';
-import { GoalMode, GoalModeCalculationMethod } from '@workspace/shared';
+import {
+  CalorieGoalAdjustmentMode,
+  GoalMode,
+  GoalModeCalculationMethod,
+  CalorieSafetyFloorMode,
+  DEFAULT_CUSTOM_CALORIE_SAFETY_FLOOR,
+  type UserPreferences as SharedUserPreferences,
+} from '@workspace/shared';
 
 import {
   kgToLbs,
@@ -57,12 +65,14 @@ export type WeightUnit = 'kg' | 'lbs' | 'st_lbs';
 export type MeasurementUnit = 'cm' | 'inches' | 'ft_in';
 export type DistanceUnit = 'km' | 'miles';
 export type LoggingLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' | 'SILENT';
-export type calorieGoalAdjustmentMode =
-  | 'dynamic'
-  | 'fixed'
-  | 'percentage'
-  | 'tdee'
-  | 'adaptive';
+/**
+ * @deprecated Import `CalorieGoalAdjustmentMode` from `@workspace/shared` instead.
+ *
+ * Kept as an alias for the existing import sites. It used to be a hand-maintained union
+ * that omitted `'smart'` even though the server has always supported it -- which is part
+ * of why an incomplete mode switch could compile without TypeScript objecting.
+ */
+export type calorieGoalAdjustmentMode = CalorieGoalAdjustmentMode;
 export type WaterDisplayUnit = 'ml' | 'oz' | 'liter';
 
 // Conversion constant
@@ -78,6 +88,7 @@ interface PreferencesContextType {
   measurementUnit: MeasurementUnit;
   distanceUnit: DistanceUnit;
   dateFormat: string;
+  timeFormat: string;
   autoClearHistory: string;
   loggingLevel: LoggingLevel;
   defaultFoodDataProviderId: string | null;
@@ -103,6 +114,7 @@ interface PreferencesContextType {
   mineralCalculationAlgorithm: MineralCalculationAlgorithm;
   vitaminCalculationAlgorithm: VitaminCalculationAlgorithm;
   sugarCalculationAlgorithm: SugarCalculationAlgorithm;
+  addedSugarAlgorithm: AddedSugarAlgorithm;
   exerciseCaloriePercentage: number;
   activityLevel: ActivityLevel;
   tdeeAllowNegativeAdjustment: boolean;
@@ -112,6 +124,8 @@ interface PreferencesContextType {
   goalMode: GoalMode;
   goalModeCalculationMethod: GoalModeCalculationMethod;
   goalModeCustomPercentage: number;
+  calorieSafetyFloorMode: CalorieSafetyFloorMode;
+  calorieSafetyFloorValue: number;
   setMeasurementDecimalPlaces: (places: number) => void;
   setGoalMode: (mode: GoalMode) => void;
   setGoalModeCalculationMethod: (method: GoalModeCalculationMethod) => void;
@@ -120,6 +134,7 @@ interface PreferencesContextType {
   setMeasurementUnit: (unit: MeasurementUnit) => void;
   setDistanceUnit: (unit: DistanceUnit) => void;
   setDateFormat: (format: string) => void;
+  setTimeFormat: (format: string) => void;
   setAutoClearHistory: (value: string) => void;
   setLoggingLevel: (level: LoggingLevel) => void;
   setDefaultFoodDataProviderId: (id: string | null) => void;
@@ -151,6 +166,7 @@ interface PreferencesContextType {
     algorithm: VitaminCalculationAlgorithm
   ) => void;
   setSugarCalculationAlgorithm: (algorithm: SugarCalculationAlgorithm) => void;
+  setAddedSugarAlgorithm: (algorithm: AddedSugarAlgorithm) => void;
   setSelectedDiet: (diet: string) => void;
   setFirstDayOfWeek: (day: DayOfWeek) => void;
   convertWeight: (value: number, from: WeightUnit, to: WeightUnit) => number;
@@ -172,6 +188,7 @@ interface PreferencesContextType {
   getEnergyUnitString: (unit: EnergyUnit) => string;
   formatDate: (date: string | Date) => string;
   formatDateInUserTimezone: (date: string | Date, formatStr?: string) => string;
+  formatTime: (date: string | Date) => string;
   getDateRelationToToday: (date: string | Date) => string;
   parseDateInUserTimezone: (dateString: string) => Date;
   loadPreferences: () => Promise<void>;
@@ -183,10 +200,10 @@ interface PreferencesContextType {
 export interface DefaultPreferences {
   user_id: string;
   date_format: string;
+  time_format: string;
   default_weight_unit: WeightUnit;
   default_measurement_unit: MeasurementUnit;
   default_distance_unit: DistanceUnit;
-  system_prompt: string;
   auto_clear_history: string;
   logging_level: LoggingLevel;
   timezone: string;
@@ -216,11 +233,14 @@ export interface DefaultPreferences {
   mineral_calculation_algorithm: MineralCalculationAlgorithm;
   vitamin_calculation_algorithm: VitaminCalculationAlgorithm;
   sugar_calculation_algorithm: SugarCalculationAlgorithm;
+  added_sugar_algorithm: AddedSugarAlgorithm;
   first_day_of_week: number;
   measurement_decimal_places: number;
   goal_mode: GoalMode;
   goal_mode_calculation_method: GoalModeCalculationMethod;
   goal_mode_custom_percentage: number;
+  calorie_safety_floor_mode: SharedUserPreferences['calorie_safety_floor_mode'];
+  calorie_safety_floor_value: SharedUserPreferences['calorie_safety_floor_value'];
 }
 
 const PreferencesContext = createContext<PreferencesContextType | undefined>(
@@ -251,6 +271,7 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({
     useState<MeasurementUnit>('cm');
   const [distanceUnit, setDistanceUnitState] = useState<'km' | 'miles'>('km');
   const [dateFormat, setDateFormatState] = useState<string>('MM/dd/yyyy');
+  const [timeFormat, setTimeFormatState] = useState<string>('h:mm A');
   const [autoClearHistory, setAutoClearHistoryState] =
     useState<string>('never');
   const [loggingLevel, setLoggingLevelState] = useState<
@@ -269,9 +290,7 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({
   const [itemDisplayLimit, setItemDisplayLimitState] = useState<number>(10);
   const [foodDisplayLimit, setFoodDisplayLimitState] = useState<number>(10);
   const [calorieGoalAdjustmentMode, setCalorieGoalAdjustmentModeState] =
-    useState<'dynamic' | 'fixed' | 'percentage' | 'tdee' | 'adaptive'>(
-      'dynamic'
-    );
+    useState<CalorieGoalAdjustmentMode>('dynamic');
   const [exerciseCaloriePercentage, setExerciseCaloriePercentageState] =
     useState<number>(100);
   const [activityLevel, setActivityLevelState] =
@@ -318,6 +337,8 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({
     useState<SugarCalculationAlgorithm>(
       SugarCalculationAlgorithm.WHO_GUIDELINES
     );
+  const [addedSugarAlgorithm, setAddedSugarAlgorithmState] =
+    useState<AddedSugarAlgorithm>(AddedSugarAlgorithm.WHO_IDEAL);
   const [selectedDiet, setSelectedDietState] = useState<string>('balanced');
   const [firstDayOfWeek, setFirstDayOfWeekState] = useState<DayOfWeek>(0);
   const [measurementDecimalPlaces, setMeasurementDecimalPlacesState] =
@@ -327,6 +348,10 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({
     useState<GoalModeCalculationMethod>('manual');
   const [goalModeCustomPercentage, setGoalModeCustomPercentageState] =
     useState<number>(0);
+  const [calorieSafetyFloorMode, setCalorieSafetyFloorModeState] =
+    useState<CalorieSafetyFloorMode>('standard');
+  const [calorieSafetyFloorValue, setCalorieSafetyFloorValueState] =
+    useState<number>(DEFAULT_CUSTOM_CALORIE_SAFETY_FLOOR);
 
   const fetchUserPreferences = useCallback(async () => {
     try {
@@ -522,6 +547,13 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({
     [formatDateInUserTimezone, dateFormat]
   );
 
+  const formatTime = useCallback(
+    (date: string | Date) => {
+      return formatDateInUserTimezone(date, normalizeTimeFormat(timeFormat));
+    },
+    [formatDateInUserTimezone, timeFormat]
+  );
+
   /**
    * Returns whether the given date is in the past, today, or in the future.
    *
@@ -570,11 +602,10 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({
       const defaultPrefs: Partial<DefaultPreferences> = {
         user_id: user.id,
         date_format: 'MM/dd/yyyy',
+        time_format: 'h:mm A',
         default_weight_unit: 'kg',
         default_measurement_unit: 'cm',
         default_distance_unit: 'km',
-        system_prompt:
-          'You are Sparky, a helpful AI assistant for health and fitness tracking.',
         auto_clear_history: 'never',
         logging_level: 'ERROR' as const,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -590,6 +621,8 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({
         first_day_of_week: 0,
         show_net_carbs: false,
         ai_assisted_conversions: true,
+        calorie_safety_floor_mode: 'standard',
+        calorie_safety_floor_value: DEFAULT_CUSTOM_CALORIE_SAFETY_FLOOR,
       };
       await upsertUserPreferences(defaultPrefs);
     } catch (err) {
@@ -635,6 +668,7 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({
         setDateFormatState(
           data.date_format.replace(/DD/g, 'dd').replace(/YYYY/g, 'yyyy')
         );
+        setTimeFormatState(data.time_format || 'h:mm A');
         setAutoClearHistoryState(data.auto_clear_history || 'never');
         setLoggingLevelState(data.logging_level || 'INFO');
         setDefaultFoodDataProviderIdState(
@@ -699,6 +733,9 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({
           data.sugar_calculation_algorithm ||
             SugarCalculationAlgorithm.WHO_GUIDELINES
         );
+        setAddedSugarAlgorithmState(
+          data.added_sugar_algorithm || AddedSugarAlgorithm.WHO_IDEAL
+        );
         setSelectedDietState(data.selected_diet || 'balanced');
         setFirstDayOfWeekState(data.first_day_of_week ?? 0);
         setMeasurementDecimalPlacesState(data.measurement_decimal_places ?? 0);
@@ -707,6 +744,12 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({
           data.goal_mode_calculation_method || 'manual'
         );
         setGoalModeCustomPercentageState(data.goal_mode_custom_percentage ?? 0);
+        setCalorieSafetyFloorModeState(
+          data.calorie_safety_floor_mode ?? 'standard'
+        );
+        setCalorieSafetyFloorValueState(
+          data.calorie_safety_floor_value ?? DEFAULT_CUSTOM_CALORIE_SAFETY_FLOOR
+        );
       } else {
         await createDefaultPreferences();
         await createDefaultWaterContainer();
@@ -757,6 +800,8 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({
           localStorage.setItem('distanceUnit', updates.default_distance_unit);
         if (updates.date_format)
           localStorage.setItem('dateFormat', updates.date_format);
+        if (updates.time_format)
+          localStorage.setItem('timeFormat', updates.time_format);
         if (updates.language)
           localStorage.setItem('language', updates.language);
         if (updates.calorie_goal_adjustment_mode)
@@ -816,12 +861,17 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({
         default_measurement_unit: newPrefs?.measurementUnit ?? measurementUnit,
         default_distance_unit: newPrefs?.distanceUnit ?? distanceUnit,
         date_format: newPrefs?.dateFormat ?? dateFormat,
+        time_format: newPrefs?.timeFormat ?? timeFormat,
         auto_clear_history: newPrefs?.autoClearHistory ?? autoClearHistory,
         logging_level: newPrefs?.loggingLevel ?? loggingLevel,
         default_food_data_provider_id:
-          newPrefs?.defaultFoodDataProviderId ?? defaultFoodDataProviderId,
+          newPrefs?.defaultFoodDataProviderId !== undefined
+            ? newPrefs.defaultFoodDataProviderId
+            : defaultFoodDataProviderId,
         default_barcode_provider_id:
-          newPrefs?.defaultBarcodeProviderId ?? defaultBarcodeProviderId,
+          newPrefs?.defaultBarcodeProviderId !== undefined
+            ? newPrefs.defaultBarcodeProviderId
+            : defaultBarcodeProviderId,
         barcode_fallback_open_food_facts:
           newPrefs?.barcodeFallbackOpenFoodFacts ??
           barcodeFallbackOpenFoodFacts,
@@ -860,6 +910,8 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({
           newPrefs?.vitaminCalculationAlgorithm ?? vitaminCalculationAlgorithm,
         sugar_calculation_algorithm:
           newPrefs?.sugarCalculationAlgorithm ?? sugarCalculationAlgorithm,
+        added_sugar_algorithm:
+          newPrefs?.addedSugarAlgorithm ?? addedSugarAlgorithm,
         selected_diet: newPrefs?.selectedDiet ?? selectedDiet,
         first_day_of_week: newPrefs?.firstDayOfWeek ?? firstDayOfWeek,
         measurement_decimal_places:
@@ -869,6 +921,10 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({
           newPrefs?.goalModeCalculationMethod ?? goalModeCalculationMethod,
         goal_mode_custom_percentage:
           newPrefs?.goalModeCustomPercentage ?? goalModeCustomPercentage,
+        calorie_safety_floor_mode:
+          newPrefs?.calorieSafetyFloorMode ?? calorieSafetyFloorMode,
+        calorie_safety_floor_value:
+          newPrefs?.calorieSafetyFloorValue ?? calorieSafetyFloorValue,
       };
 
       try {
@@ -893,6 +949,7 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({
       measurementUnit,
       distanceUnit,
       dateFormat,
+      timeFormat,
       autoClearHistory,
       defaultFoodDataProviderId,
       defaultBarcodeProviderId,
@@ -919,12 +976,15 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({
       mineralCalculationAlgorithm,
       vitaminCalculationAlgorithm,
       sugarCalculationAlgorithm,
+      addedSugarAlgorithm,
       selectedDiet,
       firstDayOfWeek,
       measurementDecimalPlaces,
       goalMode,
       goalModeCalculationMethod,
       goalModeCustomPercentage,
+      calorieSafetyFloorMode,
+      calorieSafetyFloorValue,
       updatePreferences,
       loadPreferences,
     ]
@@ -948,6 +1008,10 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({
     setDateFormatState(formatStr.replace(/DD/g, 'dd').replace(/YYYY/g, 'yyyy'));
   }, []);
 
+  const setTimeFormat = useCallback((formatStr: string) => {
+    setTimeFormatState(formatStr);
+  }, []);
+
   const setAutoClearHistory = useCallback((value: string) => {
     setAutoClearHistoryState(value);
   }, []);
@@ -960,7 +1024,7 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 
   const setCalorieGoalAdjustmentMode = useCallback(
-    (mode: 'dynamic' | 'fixed' | 'percentage' | 'tdee' | 'adaptive') => {
+    (mode: CalorieGoalAdjustmentMode) => {
       setCalorieGoalAdjustmentModeState(mode);
       saveAllPreferences({ calorieGoalAdjustmentMode: mode });
     },
@@ -1084,10 +1148,14 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({
           | 'km'
           | 'miles';
         const savedDateFormat = localStorage.getItem('dateFormat');
+        const savedTimeFormat = localStorage.getItem('timeFormat');
         const savedLanguage = localStorage.getItem('language');
+        // The shared union, not another hand-maintained copy: the inline one here also
+        // omitted `'smart'`, so a stored `smart` was typed as impossible while flowing
+        // through at runtime — the same gap that hid the Diary's TDEE panel.
         const savedCalorieGoalAdjustmentMode = localStorage.getItem(
           'calorieGoalAdjustmentMode'
-        ) as 'dynamic' | 'fixed' | 'percentage' | 'tdee' | 'adaptive';
+        ) as CalorieGoalAdjustmentMode;
         const savedEnergyUnit = localStorage.getItem(
           'energyUnit'
         ) as EnergyUnit;
@@ -1098,6 +1166,7 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({
         if (savedWeightUnit) setWeightUnitState(savedWeightUnit);
         if (savedMeasurementUnit) setMeasurementUnitState(savedMeasurementUnit);
         if (savedDateFormat) setDateFormatState(savedDateFormat);
+        if (savedTimeFormat) setTimeFormatState(savedTimeFormat);
         if (savedDistanceUnit) setDistanceUnitState(savedDistanceUnit);
         if (savedLanguage) setLanguageState(savedLanguage);
         if (savedCalorieGoalAdjustmentMode)
@@ -1126,6 +1195,7 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({
       measurementUnit,
       distanceUnit,
       dateFormat,
+      timeFormat,
       autoClearHistory,
       loggingLevel,
       defaultFoodDataProviderId,
@@ -1154,12 +1224,15 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({
       mineralCalculationAlgorithm,
       vitaminCalculationAlgorithm,
       sugarCalculationAlgorithm,
+      addedSugarAlgorithm,
       selectedDiet,
       firstDayOfWeek,
       measurementDecimalPlaces,
       goalMode,
       goalModeCalculationMethod,
       goalModeCustomPercentage,
+      calorieSafetyFloorMode,
+      calorieSafetyFloorValue,
       setMeasurementDecimalPlaces: setMeasurementDecimalPlacesState,
       setGoalMode,
       setGoalModeCalculationMethod,
@@ -1168,6 +1241,7 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({
       setMeasurementUnit,
       setDistanceUnit,
       setDateFormat,
+      setTimeFormat,
       setAutoClearHistory,
       setLoggingLevel,
       setDefaultFoodDataProviderId,
@@ -1195,6 +1269,7 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({
       setMineralCalculationAlgorithm: setMineralCalculationAlgorithmState,
       setVitaminCalculationAlgorithm: setVitaminCalculationAlgorithmState,
       setSugarCalculationAlgorithm: setSugarCalculationAlgorithmState,
+      setAddedSugarAlgorithm: setAddedSugarAlgorithmState,
       setSelectedDiet: setSelectedDietState,
       setFirstDayOfWeek: setFirstDayOfWeekState,
       convertWeight,
@@ -1203,6 +1278,7 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({
       convertEnergy,
       getEnergyUnitString,
       formatDate,
+      formatTime,
       formatDateInUserTimezone,
       getDateRelationToToday,
       parseDateInUserTimezone,
@@ -1214,6 +1290,7 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({
       measurementUnit,
       distanceUnit,
       dateFormat,
+      timeFormat,
       autoClearHistory,
       loggingLevel,
       defaultFoodDataProviderId,
@@ -1242,12 +1319,15 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({
       mineralCalculationAlgorithm,
       vitaminCalculationAlgorithm,
       sugarCalculationAlgorithm,
+      addedSugarAlgorithm,
       selectedDiet,
       firstDayOfWeek,
       measurementDecimalPlaces,
       goalMode,
       goalModeCalculationMethod,
       goalModeCustomPercentage,
+      calorieSafetyFloorMode,
+      calorieSafetyFloorValue,
       setGoalMode,
       setGoalModeCalculationMethod,
       setGoalModeCustomPercentage,
@@ -1255,6 +1335,7 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({
       setMeasurementUnit,
       setDistanceUnit,
       setDateFormat,
+      setTimeFormat,
       setAutoClearHistory,
       setLoggingLevel,
       setDefaultFoodDataProviderId,
@@ -1276,6 +1357,7 @@ export const PreferencesProvider: React.FC<{ children: React.ReactNode }> = ({
       convertEnergy,
       getEnergyUnitString,
       formatDate,
+      formatTime,
       formatDateInUserTimezone,
       getDateRelationToToday,
       parseDateInUserTimezone,

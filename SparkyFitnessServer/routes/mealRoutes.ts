@@ -2,7 +2,23 @@ import express from 'express';
 import { authenticate } from '../middleware/authMiddleware.js';
 import mealService from '../services/mealService.js';
 import { log } from '../config/logging.js';
+import {
+  uploadImages,
+  applyImageOrder,
+  finalizeUploadedImages,
+  cleanupStagedImages,
+  stagedFilesFrom,
+  parseMultipartBody,
+  removeOrphanedImages,
+} from '../middleware/imageUpload.js';
 const router = express.Router();
+
+/** Reads a meal payload from either a JSON body or a multipart form. */
+function parseMealBody(req: unknown) {
+  return parseMultipartBody(req, ['images', 'foods'], 'mealData') as ReturnType<
+    typeof parseMultipartBody
+  > & { name: string; images?: string[] };
+}
 router.use(express.json());
 
 function parseRecentMealsLimit(value: unknown) {
@@ -271,18 +287,35 @@ router.delete('/plan/:id', authenticate, async (req, res, next) => {
  *                 description: How many servings the recipe yields. Full recipe quantity = serving_size × total_servings.
  *               foods:
  *                 type: array
+ *                 description: >
+ *                   The meal's flat ingredient list. Each item is either a food
+ *                   (item_type "food", default) or a reusable sub-meal
+ *                   (item_type "meal"). A linked meal's quantity/unit scale its
+ *                   full recipe (serving_size × total_servings) the same way a
+ *                   food's quantity scales its serving_size. Linking a meal that
+ *                   would create a cycle, exceed the max nesting depth, or that
+ *                   the caller cannot access is rejected with a 400.
  *                 items:
  *                   type: object
  *                   properties:
+ *                     item_type:
+ *                       type: string
+ *                       enum: [food, meal]
+ *                       default: food
+ *                       description: Discriminates a food ingredient from a linked sub-meal.
  *                     food_id:
  *                       type: string
  *                       format: uuid
+ *                       description: Required when item_type is "food".
+ *                     child_meal_id:
+ *                       type: string
+ *                       format: uuid
+ *                       description: Required when item_type is "meal"; the linked sub-meal's id.
  *                     quantity:
  *                       type: number
  *                     unit:
  *                       type: string
  *                   required:
- *                     - food_id
  *                     - quantity
  *                     - unit
  *             required:
@@ -292,17 +325,40 @@ router.delete('/plan/:id', authenticate, async (req, res, next) => {
  *       201:
  *         description: The meal was created successfully.
  *       400:
- *         description: Validation error (e.g. serving_size or total_servings not positive).
+ *         description: Validation error (e.g. serving_size/total_servings not positive, ambiguous or inaccessible ingredient, cycle, or nesting depth exceeded).
  *       403:
  *         description: User does not have permission to create a meal.
  */
-router.post('/', authenticate, async (req, res, next) => {
+router.post('/', authenticate, uploadImages, async (req, res, next) => {
   try {
-    const newMeal = await mealService.createMeal(req.userId, req.body);
+    const newMeal = await mealService.createMeal(
+      req.userId,
+      parseMealBody(req)
+    );
+
+    // Files were staged before the meal had an id; move them in now and
+    // persist the resulting web paths alongside any images already set.
+    const uploadedPaths = await finalizeUploadedImages(
+      stagedFilesFrom(req),
+      'meals',
+      newMeal.id
+    );
+    if (uploadedPaths.length > 0) {
+      // The client's `images` array carries __new__<n> placeholders marking
+      // where each upload belongs, so a reordered list keeps its order.
+      const merged = applyImageOrder(newMeal.images, uploadedPaths);
+      const updated = await mealService.updateMeal(req.userId, newMeal.id, {
+        images: merged,
+      });
+      newMeal.images = updated?.images ?? merged;
+    }
+
     res.status(201).json(newMeal);
   } catch (error) {
     log('error', 'Error creating meal:', error);
     next(error);
+  } finally {
+    await cleanupStagedImages(req);
   }
 });
 /**
@@ -374,6 +430,38 @@ router.get('/recent', authenticate, async (req, res, next) => {
 });
 /**
  * @swagger
+ * /meals/top:
+ *   get:
+ *     summary: Get most frequently logged meal templates
+ *     tags: [Nutrition & Meals]
+ *     description: Retrieves the meal templates the authenticated user logs most often, ranked by usage count.
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 3
+ *           minimum: 1
+ *           maximum: 20
+ *         description: The maximum number of top meals to return.
+ *     responses:
+ *       200:
+ *         description: A list of the most frequently logged meal templates.
+ *       403:
+ *         description: User does not have permission to access this resource.
+ */
+router.get('/top', authenticate, async (req, res, next) => {
+  try {
+    const limit = parseRecentMealsLimit(req.query.limit);
+    const meals = await mealService.getTopMeals(req.userId, limit);
+    res.status(200).json(meals);
+  } catch (error) {
+    log('error', 'Error getting top meals:', error);
+    next(error);
+  }
+});
+/**
+ * @swagger
  * /meals/search:
  *   get:
  *     summary: Search for meal templates
@@ -423,7 +511,17 @@ router.get('/search', authenticate, async (req, res, next) => {
  *         description: The ID of the meal template to retrieve.
  *     responses:
  *       200:
- *         description: The requested meal template.
+ *         description: >
+ *           The requested meal template. Each entry in `foods` carries
+ *           `item_type` ("food" or "meal"). Food rows have `food_id`,
+ *           `food_name`, `variant_id`, and a nutrition snapshot. Linked-meal
+ *           rows have `child_meal_id`, `child_meal_name`,
+ *           `child_meal_serving_unit`, `child_meal_total_servings`, and the
+ *           same nutrition fields populated with the sub-meal's *resolved*
+ *           full-recipe totals (recursively aggregated through any further
+ *           nested sub-meals) so external tools can compute a scaled
+ *           contribution the same way as for a food row: value × quantity /
+ *           serving_size.
  *       403:
  *         description: User does not have permission to access this resource.
  *       404:
@@ -490,18 +588,33 @@ router.get('/:id', authenticate, async (req, res, next) => {
  *                 description: How many servings the recipe yields. Full recipe quantity = serving_size × total_servings.
  *               foods:
  *                 type: array
+ *                 description: >
+ *                   The meal's flat ingredient list. Each item is either a food
+ *                   (item_type "food", default) or a reusable sub-meal
+ *                   (item_type "meal"). Linking a meal that would create a
+ *                   cycle, exceed the max nesting depth, or that the caller
+ *                   cannot access is rejected with a 400.
  *                 items:
  *                   type: object
  *                   properties:
+ *                     item_type:
+ *                       type: string
+ *                       enum: [food, meal]
+ *                       default: food
+ *                       description: Discriminates a food ingredient from a linked sub-meal.
  *                     food_id:
  *                       type: string
  *                       format: uuid
+ *                       description: Required when item_type is "food".
+ *                     child_meal_id:
+ *                       type: string
+ *                       format: uuid
+ *                       description: Required when item_type is "meal"; the linked sub-meal's id.
  *                     quantity:
  *                       type: number
  *                     unit:
  *                       type: string
  *                   required:
- *                     - food_id
  *                     - quantity
  *                     - unit
  *             required:
@@ -511,16 +624,46 @@ router.get('/:id', authenticate, async (req, res, next) => {
  *       200:
  *         description: The meal template was updated successfully.
  *       400:
- *         description: Validation error (e.g. serving_size or total_servings not positive).
+ *         description: Validation error (e.g. serving_size/total_servings not positive, ambiguous or inaccessible ingredient, cycle, or nesting depth exceeded).
  *       403:
  *         description: User does not have permission to update this meal.
  *       404:
  *         description: Meal not found.
  */
-router.put('/:id', authenticate, async (req, res, next) => {
+router.put('/:id', authenticate, uploadImages, async (req, res, next) => {
   try {
+    const mealData = parseMealBody(req);
+
+    // `images` is the client's desired order, with __new__<n> placeholders
+    // marking where each uploaded file belongs. A client that sends `images`
+    // without any files is performing a removal and/or a reorder.
+    const uploadedPaths = await finalizeUploadedImages(
+      stagedFilesFrom(req),
+      'meals',
+      req.params.id
+    );
+    if (mealData.images !== undefined || uploadedPaths.length > 0) {
+      mealData.images = applyImageOrder(mealData.images, uploadedPaths);
+    }
+
+    const previousImages =
+      mealData.images === undefined
+        ? null
+        : ((await mealService.getMealById(req.userId, req.params.id))?.images ??
+          []);
+
     const { confirmationMessage, ...updatedMeal } =
-      await mealService.updateMeal(req.userId, req.params.id, req.body);
+      await mealService.updateMeal(req.userId, req.params.id, mealData);
+
+    // Drop upload files the user removed. Best-effort: the database already
+    // reflects the new list, so a failed unlink must not fail the update.
+    if (previousImages) {
+      await removeOrphanedImages(previousImages, updatedMeal.images).catch(
+        (unlinkError) =>
+          log('warn', 'Error removing orphaned meal images:', unlinkError)
+      );
+    }
+
     res.status(200).json({ ...updatedMeal, confirmationMessage });
   } catch (error) {
     log('error', `Error updating meal ${req.params.id}:`, error);
@@ -535,6 +678,8 @@ router.put('/:id', authenticate, async (req, res, next) => {
       return res.status(403).json({ error: error.message });
     }
     next(error);
+  } finally {
+    await cleanupStagedImages(req);
   }
 });
 /**

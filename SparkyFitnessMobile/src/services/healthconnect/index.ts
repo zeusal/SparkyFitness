@@ -1,8 +1,10 @@
 import {
   initialize,
   requestPermission,
+  getGrantedPermissions,
   readRecords,
   aggregateRecord,
+  aggregateGroupByDuration,
   aggregateGroupByPeriod,
 } from 'react-native-health-connect';
 import { addLog } from '../LogService';
@@ -11,11 +13,49 @@ import {
   PermissionRequest,
   GrantedPermission,
   type HCZoneOffset,
+  type ReadResult,
 } from '../../types/healthRecords';
-import { getSyncStartDate } from '../../utils/syncUtils';
+import { ceilToLocalDayStart, getSyncStartDate } from '../../utils/syncUtils';
+import { isClientUnavailableError, isQuotaExceededError } from '../shared/quotaError';
+import { type TelemetryRunContext } from '../shared/telemetryBudget';
+import {
+  hasEnrichedSession,
+} from '../shared/enrichedSessionCache';
+import { createConcurrencyLimiter, runTasksInBatches } from '../../utils/concurrency';
+import { getErrorMessage } from '../../utils/errors';
+import { collectSessionTelemetry, sessionCacheKey } from './workoutTelemetry';
+import { deriveActiveCalories } from '@workspace/shared';
 
 // Re-export for backward compatibility with callers importing from this module
 export { getSyncStartDate };
+export { isQuotaExceededError };
+export { sessionCacheKey };
+
+/**
+ * Enrichment runs two very different costs per session, so they get two limits.
+ *
+ * The three calories/distance aggregates return a single scalar each — cheap to
+ * carry over the bridge. Throttling those as hard as telemetry is what would
+ * push a large workout library toward the 60s per-metric timeout, so they run
+ * at the wider limit.
+ *
+ * Telemetry (route plus up to five sample series) returns large arrays that are
+ * deserialized, flat-mapped and sorted on the JS thread — that is the burst
+ * that froze the UI in #2191, and it stays tightly capped no matter how wide
+ * the outer batch runs.
+ *
+ * Both are far below the unbounded fan-out that caused the bug, and well inside
+ * the Health Connect API call quota (see shared/quotaError.ts).
+ */
+const AGGREGATE_CONCURRENCY = 6;
+const TELEMETRY_CONCURRENCY = 2;
+
+/**
+ * Shared across concurrent enrichment runs (a foreground sync overlapping a
+ * background one), so the cap is a real ceiling on native telemetry reads
+ * rather than a per-run one.
+ */
+const limitTelemetry = createConcurrencyLimiter(TELEMETRY_CONCURRENCY);
 
 export const initHealthConnect = async (): Promise<boolean> => {
   try {
@@ -52,10 +92,13 @@ export const requestHealthPermissions = async (
     );
 
     if (allGranted) {
-      console.log('[HealthConnectService] All requested permissions granted.');
+      addLog('[HealthConnectService] All requested permissions granted.', 'INFO');
       return true;
     } else {
-      console.log('[HealthConnectService] Not all requested permissions granted.', { requested: permissionsToRequest, granted: grantedPermissions });
+      addLog('[HealthConnectService] Not all requested permissions granted.', 'WARNING', [
+        `requested: ${JSON.stringify(permissionsToRequest)}`,
+        `granted: ${JSON.stringify(grantedPermissions)}`,
+      ]);
       return false;
     }
   } catch (error) {
@@ -65,21 +108,39 @@ export const requestHealthPermissions = async (
   }
 };
 
+// Health Connect's history read permission ("Allow access to all past data"). The
+// runtime grant is required to read records older than 30 days; without it reads
+// silently cap at the 30-day window, which the history-import probes then reflect.
+const HISTORY_READ_PERMISSION = { accessType: 'read', recordType: 'ReadHealthDataHistory' } as const;
+
+const isHistoryReadGrant = (permission: { accessType: string; recordType: string }): boolean =>
+  permission.accessType === 'read' && permission.recordType === 'ReadHealthDataHistory';
+
+/**
+ * Ensures the history read permission is granted, requesting it if not. Returns
+ * whether it is granted; callers treat a decline as informational (probes then
+ * naturally cap the reachable floor at ~30 days), never as a hard failure.
+ */
+export const ensureHistoryReadPermission = async (): Promise<boolean> => {
+  try {
+    const granted = await getGrantedPermissions();
+    if (granted.some(isHistoryReadGrant)) {
+      return true;
+    }
+    const result = await requestPermission([HISTORY_READ_PERMISSION]);
+    return result.some(isHistoryReadGrant);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    addLog(`[HealthConnectService] History read permission check failed: ${message}`, 'WARNING');
+    return false;
+  }
+};
+
 const PAGE_SIZE = 5000;
 const MAX_PAGES = 100;
-const FALLBACK_DAY_WINDOW_MS = 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const FALLBACK_DAY_WINDOW_MS = DAY_MS;
 const FALLBACK_HOUR_WINDOW_MS = 60 * 60 * 1000;
-
-// Health Connect enforces a foreground API call quota; once exceeded, every
-// subsequent call fails with "API call quota exceeded". Splitting the failed
-// range into more sub-windows (the normal fallback path) just multiplies the
-// call rate and prolongs the outage, so we short-circuit on quota errors.
-const QUOTA_ERROR_PATTERNS = [/quota exceeded/i, /api call quota/i];
-
-export const isQuotaExceededError = (error: unknown): boolean => {
-  const message = error instanceof Error ? error.message : String(error ?? '');
-  return QUOTA_ERROR_PATTERNS.some((pattern) => pattern.test(message));
-};
 
 interface ReadRecordsOptions {
   timeRangeFilter: {
@@ -89,17 +150,13 @@ interface ReadRecordsOptions {
   };
   pageSize: number;
   pageToken?: string;
+  ascendingOrder?: boolean;
 }
 
-export interface HealthConnectReadResult {
-  records: unknown[];
-  error?: string;
-}
+// Aliases of the platform-neutral ReadResult shared with iOS.
+export type HealthConnectReadResult = ReadResult;
 
-export interface HealthConnectAggregateResult {
-  records: AggregatedHealthRecord[];
-  error?: string;
-}
+export type HealthConnectAggregateResult = ReadResult<AggregatedHealthRecord>;
 
 const formatDateForLog = (date: Date): string => {
   const time = date.getTime();
@@ -149,7 +206,13 @@ const readHealthRecordsOnce = async (
   recordType: string,
   startDate: Date,
   endDate: Date
-): Promise<HealthConnectReadResult & { failedOnFirstPage: boolean; quotaExceeded?: boolean }> => {
+): Promise<
+  HealthConnectReadResult & {
+    failedOnFirstPage: boolean;
+    quotaExceeded?: boolean;
+    clientUnavailable?: boolean;
+  }
+> => {
   const allRecords: unknown[] = [];
   let pageToken: string | undefined;
   let page = 0;
@@ -197,6 +260,7 @@ const readHealthRecordsOnce = async (
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const quotaExceeded = isQuotaExceededError(error);
+    const clientUnavailable = isClientUnavailableError(error);
     addLog(
       `[HealthConnectService] Failed reading ${recordType} on page ${page}: ${message}. Returning ${allRecords.length} records collected so far.`,
       'ERROR'
@@ -206,6 +270,7 @@ const readHealthRecordsOnce = async (
       error: message,
       failedOnFirstPage: page <= 1 && allRecords.length === 0,
       quotaExceeded,
+      clientUnavailable,
     };
   }
 };
@@ -262,12 +327,66 @@ const readHealthRecordsFallback = async (
   return { records, error };
 };
 
+/**
+ * Client-unavailable bookkeeping for one sync run.
+ *
+ * The Health Connect client is created once at startup and never rebuilt, so
+ * when it goes away (the app was backgrounded, the provider updated) every
+ * remaining read in the run fails the same way. Reconnecting is nearly always
+ * enough — but it must be attempted once per run, not once per metric, or 33
+ * enabled metrics mean 33 reconnects. Mirrors the iOS locked-device counters
+ * (`databaseInaccessibleCount` in healthkit/index.ts).
+ */
+let clientUnavailableCount = 0;
+let reconnectAttemptedThisRun = false;
+
+export function resetClientUnavailableState(): void {
+  clientUnavailableCount = 0;
+  reconnectAttemptedThisRun = false;
+}
+
+export function getClientUnavailableCount(): number {
+  return clientUnavailableCount;
+}
+
+/**
+ * Reconnects once per run and reports whether a retry is worth attempting.
+ * A second caller in the same run gets false — the first attempt already
+ * settled it, and the client does not become available by asking twice.
+ */
+const tryReconnectOnce = async (): Promise<boolean> => {
+  if (reconnectAttemptedThisRun) return false;
+  reconnectAttemptedThisRun = true;
+
+  addLog(
+    '[HealthConnectService] Health Connect client is unavailable — reconnecting once before giving up.',
+    'WARNING',
+  );
+  return initHealthConnect();
+};
+
 export const readHealthRecordsDetailed = async (
   recordType: string,
   startDate: Date,
   endDate: Date
 ): Promise<HealthConnectReadResult> => {
-  const result = await readHealthRecordsOnce(recordType, startDate, endDate);
+  let result = await readHealthRecordsOnce(recordType, startDate, endDate);
+
+  // A dead client is recoverable far more often than not, and the previous
+  // behaviour (splitting the window and failing once per day) recovered
+  // nothing. Reconnect and read again before treating it as fatal (#2191).
+  if (result.clientUnavailable) {
+    clientUnavailableCount++;
+    if (await tryReconnectOnce()) {
+      result = await readHealthRecordsOnce(recordType, startDate, endDate);
+      if (!result.clientUnavailable) {
+        addLog(
+          `[HealthConnectService] Reconnected to Health Connect; ${recordType} read resumed.`,
+          'INFO',
+        );
+      }
+    }
+  }
 
   if (!result.error || !result.failedOnFirstPage) {
     return { records: result.records, error: result.error };
@@ -278,6 +397,19 @@ export const readHealthRecordsDetailed = async (
   if (result.quotaExceeded) {
     addLog(
       `[HealthConnectService] Skipping fallback split for ${recordType}: Health Connect quota exceeded.`,
+      'WARNING',
+    );
+    return { records: result.records, error: result.error };
+  }
+
+  // Still dead after the reconnect above. Splitting would turn one error into
+  // one per window per metric — hundreds of identical log lines and the
+  // AsyncStorage churn that comes with them, for no recovered records (#2191).
+  // The error reaches syncErrors, which holds the cursor so the window is
+  // retried next cycle.
+  if (result.clientUnavailable) {
+    addLog(
+      `[HealthConnectService] Skipping fallback split for ${recordType}: Health Connect client is unavailable.`,
       'WARNING',
     );
     return { records: result.records, error: result.error };
@@ -300,25 +432,74 @@ export const readHealthRecords = async (
   return result.records;
 };
 
+// Probes read from the 1970 epoch: backdated manual entries and third-party
+// imports can predate any "reasonable" floor, and the wider window costs nothing.
+const PROBE_EPOCH_ISO = '1970-01-01T00:00:00.000Z';
+
 /**
- * Aggregates a cumulative metric by local day for [startDate, endDate] using
- * Health Connect's native aggregateGroupByPeriod (one call per range, not
- * per day). HC's native aggregation handles cross-origin dedup using the
- * user's source priority list — matching what HC's own UI displays — so
- * callers do not need to deduplicate records themselves (issue #1279).
+ * Earliest stored record of a type across all history, via a single ascending
+ * pageSize-1 read. Interval records carry startTime, instantaneous ones (Weight,
+ * Height, ...) carry time. No data = { records: [] }; failures = { records: [],
+ * error } (quota errors stay string-detectable via isQuotaExceededError).
+ */
+export const readEarliestRecordDetailed = async (
+  recordType: string,
+): Promise<ReadResult<{ startTime: string }>> => {
+  try {
+    const result = await readRecords(
+      recordType as Parameters<typeof readRecords>[0],
+      {
+        timeRangeFilter: {
+          operator: 'between',
+          startTime: PROBE_EPOCH_ISO,
+          endTime: new Date().toISOString(),
+        },
+        pageSize: 1,
+        ascendingOrder: true,
+      } as unknown as Parameters<typeof readRecords>[1],
+    );
+    const record = (result.records as { startTime?: string; time?: string }[])[0];
+    const startTime = record?.startTime ?? record?.time;
+    return startTime ? { records: [{ startTime }] } : { records: [] };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    addLog(`[HealthConnectService] Earliest-record probe for ${recordType} failed: ${message}`, 'ERROR');
+    return { records: [], error: message };
+  }
+};
+
+/**
+ * Aggregates a cumulative metric by local day for [startDate, endDate].
+ * HC's native aggregation handles cross-origin dedup using the user's source
+ * priority list — matching what HC's own UI displays — so callers do not
+ * need to deduplicate records themselves (issue #1279). Native call counts
+ * stay bounded regardless of window length (per-day native calls previously
+ * blew HC's API quota).
  *
- * Captures one UTC offset for the whole range via a single pageSize:1 read
- * and attaches it to every day's record. The server treats `date`-only
- * payloads as authoritative for day attribution (see
- * resolveHealthEntryDate's basisIsDayOnly short-circuit in
- * measurementService.ts), so per-day offset precision is not load-bearing —
- * the field exists for observability of timezone-metadata coverage.
+ * Day attribution follows the zone offsets stored on the records, matching
+ * how HC's own UI assigns records to days (issue #1712):
+ *
+ * - When the records' offsets match the device zone (the stationary case,
+ *   including across DST — device zone rules cover it), a single
+ *   aggregateGroupByPeriod call buckets by device-local days.
+ * - When they diverge (the user changed timezone), day windows are rebuilt
+ *   as fixed 24h instant ranges anchored at the *records'* midnights and
+ *   aggregated with aggregateGroupByDuration — one call per offset segment,
+ *   at most two segments. Without this, HC re-bins up to a week of pre-move
+ *   records across the new zone's midnights and day totals drift by
+ *   whatever crossed midnight.
+ *
+ * The server treats `date`-only payloads as authoritative for day
+ * attribution (see resolveHealthEntryDate's basisIsDayOnly short-circuit in
+ * measurementService.ts); `record_utc_offset_minutes` carries the offset
+ * used for each day's attribution.
  */
 export type CumulativeMetricRecordType =
   | 'Steps'
   | 'Distance'
   | 'ActiveCaloriesBurned'
   | 'TotalCaloriesBurned'
+  | 'BasalMetabolicRate'
   | 'FloorsClimbed';
 
 export interface CumulativeMetricSpec {
@@ -338,30 +519,31 @@ const formatLocalDay = (date: Date): string => {
   return `${y}-${m}-${d}`;
 };
 
-/**
- * Returns a copy of `date` rounded down to local midnight. Sync paths must
- * align cumulative-metric query starts to a local-day boundary because HC's
- * aggregateGroupByPeriod anchors DAYS buckets at the supplied start.
- */
-export const alignToLocalDayStart = (date: Date): Date => {
-  const aligned = new Date(date);
-  aligned.setHours(0, 0, 0, 0);
-  return aligned;
-};
+// Canonical implementation lives with the other sync window helpers; re-exported
+// here because HC's aggregateGroupByPeriod anchors DAYS buckets at the supplied
+// start, so callers of this module align cumulative query starts with it.
+export { alignToLocalDayStart } from '../../utils/syncUtils';
+
+type EdgeProbeResult =
+  | { outcome: 'record'; instantMs: number; offsetMinutes?: number }
+  | { outcome: 'empty' }
+  | { outcome: 'error' };
 
 /**
- * Reads a single record in the range for the sole purpose of capturing one
- * UTC offset to attach to every aggregated day. Returns undefined if no
- * record / no offset / on any error (offset is observability-only metadata).
+ * Reads the first (ascending) or last (descending) record in the range and
+ * returns its start instant plus the zone offset stored on it, pairing the
+ * offset with the matching timestamp (start with start, end with end) so a
+ * record spanning a DST shift can't mix an end offset with a start instant.
  */
-const readZoneOffsetForRange = async (
+const readEdgeRecord = async (
   recordType: CumulativeMetricRecordType,
   startDate: Date,
   endDate: Date,
-): Promise<number | undefined> => {
+  ascending: boolean,
+): Promise<EdgeProbeResult> => {
   try {
-    if (getWindowError(`offset read for ${recordType}`, startDate, endDate)) {
-      return undefined;
+    if (getWindowError(`offset probe for ${recordType}`, startDate, endDate)) {
+      return { outcome: 'error' };
     }
     const result = await readRecords(
       recordType as Parameters<typeof readRecords>[0],
@@ -372,18 +554,376 @@ const readZoneOffsetForRange = async (
           endTime: endDate.toISOString(),
         },
         pageSize: 1,
+        ascendingOrder: ascending,
       } as unknown as Parameters<typeof readRecords>[1],
     );
-    type OffsetRecord = { startZoneOffset?: HCZoneOffset; endZoneOffset?: HCZoneOffset };
-    const record = (result.records as OffsetRecord[])[0];
-    const offset = record?.endZoneOffset ?? record?.startZoneOffset;
-    if (offset?.totalSeconds != null) {
-      return Math.round(offset.totalSeconds / 60);
+    type EdgeRecord = {
+      startTime?: string;
+      endTime?: string;
+      startZoneOffset?: HCZoneOffset;
+      endZoneOffset?: HCZoneOffset;
+    };
+    const record = (result.records as EdgeRecord[])[0];
+    if (!record) {
+      return { outcome: 'empty' };
     }
-    return undefined;
+    const startMs = record.startTime ? new Date(record.startTime).getTime() : NaN;
+    const endMs = record.endTime ? new Date(record.endTime).getTime() : NaN;
+    if (record.startZoneOffset?.totalSeconds != null && Number.isFinite(startMs)) {
+      return {
+        outcome: 'record',
+        instantMs: startMs,
+        offsetMinutes: Math.round(record.startZoneOffset.totalSeconds / 60),
+      };
+    }
+    if (record.endZoneOffset?.totalSeconds != null && Number.isFinite(endMs)) {
+      return {
+        outcome: 'record',
+        instantMs: endMs,
+        offsetMinutes: Math.round(record.endZoneOffset.totalSeconds / 60),
+      };
+    }
+    const instantMs = Number.isFinite(startMs) ? startMs : endMs;
+    if (!Number.isFinite(instantMs)) {
+      return { outcome: 'error' };
+    }
+    return { outcome: 'record', instantMs };
   } catch {
+    return { outcome: 'error' };
+  }
+};
+
+/** UTC offset minutes the device zone applies at the given instant. */
+const deviceOffsetMinutesAt = (instantMs: number): number =>
+  -new Date(instantMs).getTimezoneOffset();
+
+/** Device-local wall-clock fields, used for fixed-offset instant arithmetic. */
+interface WallClockParts {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+  ms: number;
+}
+
+const wallClockParts = (date: Date): WallClockParts => ({
+  year: date.getFullYear(),
+  month: date.getMonth(),
+  day: date.getDate(),
+  hour: date.getHours(),
+  minute: date.getMinutes(),
+  second: date.getSeconds(),
+  ms: date.getMilliseconds(),
+});
+
+/**
+ * Epoch ms of the wall clock shifted by dayShift days and interpreted at a
+ * fixed UTC offset — "midnight of day k in the records' zone" when the parts
+ * are a midnight.
+ */
+const instantAtOffset = (
+  parts: WallClockParts,
+  dayShift: number,
+  offsetMinutes: number,
+): number =>
+  Date.UTC(
+    parts.year,
+    parts.month,
+    parts.day + dayShift,
+    parts.hour,
+    parts.minute,
+    parts.second,
+    parts.ms,
+  ) -
+  offsetMinutes * 60_000;
+
+/** YYYY-MM-DD label of the wall clock shifted by dayShift days. */
+const dayLabelAt = (parts: WallClockParts, dayShift: number): string => {
+  const shifted = new Date(Date.UTC(parts.year, parts.month, parts.day + dayShift));
+  const y = shifted.getUTCFullYear();
+  const m = String(shifted.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(shifted.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+/** Index of the last included calendar day relative to the parts' day (day 0). */
+const dayIndexSpan = (parts: WallClockParts, endDate: Date): number => {
+  // Health Connect time ranges are end-exclusive. Looking one millisecond back
+  // keeps an end already at midnight from opening a bucket for the next day.
+  const end = wallClockParts(new Date(endDate.getTime() - 1));
+  return Math.round(
+    (Date.UTC(end.year, end.month, end.day) - Date.UTC(parts.year, parts.month, parts.day)) /
+      DAY_MS,
+  );
+};
+
+/**
+ * One fixed-offset stretch of the window. Buckets are fixed 24h instant
+ * ranges from startMs; a bucket landing past lastDayIndex is either folded
+ * into it (the extended evening of the day before a westward switch) or
+ * dropped (records the source stamped into a local day beyond the window —
+ * the next sync's window covers that day).
+ */
+interface AggregationSegment {
+  startMs: number;
+  endMs: number;
+  firstDayIndex: number;
+  lastDayIndex: number;
+  offsetMinutes: number;
+  overflow: 'fold' | 'drop';
+}
+
+/**
+ * Binary-searches the first day index (1..lastDayIndex + 1) whose midnight
+ * boundary belongs to the post-transition offset. Assumes offsets form a
+ * single step from off0 to off1 over the window; returns undefined as soon
+ * as a probe contradicts that (third offset, probe failure) so the caller
+ * can fall back to device-zone bucketing instead of guessing.
+ */
+const findSwitchDayIndex = async (
+  recordType: CumulativeMetricRecordType,
+  parts: WallClockParts,
+  lastDayIndex: number,
+  off0: number,
+  off1: number,
+  endDate: Date,
+): Promise<number | undefined> => {
+  let lo = 1;
+  let hi = lastDayIndex + 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    const probeStart = Math.min(
+      instantAtOffset(parts, mid, off0),
+      instantAtOffset(parts, mid, off1),
+    );
+    const probe = await readEdgeRecord(recordType, new Date(probeStart), endDate, true);
+    if (probe.outcome === 'empty') {
+      // No records at or after this midnight; its boundary offset is moot.
+      hi = mid;
+      continue;
+    }
+    if (probe.outcome === 'error' || probe.offsetMinutes == null) {
+      return undefined;
+    }
+    if (probe.offsetMinutes === off0) {
+      lo = mid + 1;
+    } else if (probe.offsetMinutes === off1) {
+      hi = mid;
+    } else {
+      return undefined;
+    }
+  }
+  return lo;
+};
+
+/**
+ * Plans the offset-anchored segments for a window whose records were stamped
+ * in a zone other than the device's. Returns undefined whenever the data
+ * doesn't look like a clean timezone change — callers then keep device-zone
+ * bucketing, which is the pre-#1712 behavior.
+ */
+const buildOffsetSegments = async (
+  recordType: CumulativeMetricRecordType,
+  startDate: Date,
+  endDate: Date,
+  firstOffsetMinutes: number,
+): Promise<AggregationSegment[] | undefined> => {
+  const lastProbe = await readEdgeRecord(recordType, startDate, endDate, false);
+  if (lastProbe.outcome !== 'record' || lastProbe.offsetMinutes == null) {
     return undefined;
   }
+  const off0 = firstOffsetMinutes;
+  const off1 = lastProbe.offsetMinutes;
+  const parts = wallClockParts(startDate);
+  const lastDayIndex = dayIndexSpan(parts, endDate);
+  const endMs = endDate.getTime();
+  const anchor = instantAtOffset(parts, 0, off0);
+  const wholeWindow: AggregationSegment = {
+    startMs: anchor,
+    endMs,
+    firstDayIndex: 0,
+    lastDayIndex,
+    offsetMinutes: off0,
+    overflow: 'drop',
+  };
+
+  if (off0 === off1) {
+    return [wholeWindow];
+  }
+  // A mid-window offset change is only trustworthy as travel when the window
+  // ends in the device's current zone; otherwise it's likely one source
+  // stamping bogus offsets (e.g. a UTC-stamping exporter) and re-bucketing
+  // would scramble a stationary user's days.
+  if (off1 !== deviceOffsetMinutesAt(lastProbe.instantMs)) {
+    return undefined;
+  }
+  // An offset jump of a day or more (dateline hop) degenerates the day-window
+  // math in both directions — eastward the segments invert, westward whole
+  // misattributed buckets would fold into the pre-switch day.
+  if (Math.abs(off1 - off0) * 60_000 >= DAY_MS) {
+    return undefined;
+  }
+  const switchDay = await findSwitchDayIndex(
+    recordType,
+    parts,
+    lastDayIndex,
+    off0,
+    off1,
+    endDate,
+  );
+  if (switchDay == null) {
+    return undefined;
+  }
+  const boundary = instantAtOffset(parts, switchDay, off1);
+  if (boundary >= endMs) {
+    // Transition after the window's last midnight: every boundary is still
+    // the old zone's.
+    return [wholeWindow];
+  }
+  return [
+    {
+      startMs: anchor,
+      endMs: boundary,
+      firstDayIndex: 0,
+      lastDayIndex: switchDay - 1,
+      offsetMinutes: off0,
+      overflow: 'fold',
+    },
+    {
+      startMs: boundary,
+      endMs,
+      firstDayIndex: switchDay,
+      lastDayIndex,
+      offsetMinutes: off1,
+      overflow: 'drop',
+    },
+  ];
+};
+
+/**
+ * Today's stationary path: one aggregateGroupByPeriod call bucketing by
+ * device-local calendar days.
+ */
+const aggregateByDeviceZone = async (
+  spec: CumulativeMetricSpec,
+  startDate: Date,
+  endDate: Date,
+  rangeOffsetMinutes: number | undefined,
+): Promise<HealthConnectAggregateResult> => {
+  type PeriodBucket = { result: unknown; startTime: string; endTime: string };
+  let buckets: PeriodBucket[];
+  try {
+    buckets = (await aggregateGroupByPeriod({
+      recordType: spec.recordType as Parameters<typeof aggregateGroupByPeriod>[0]['recordType'],
+      timeRangeFilter: {
+        operator: 'between',
+        startTime: startDate.toISOString(),
+        endTime: endDate.toISOString(),
+      },
+      timeRangeSlicer: { period: 'DAYS', length: 1 },
+    })) as unknown as PeriodBucket[];
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    addLog(
+      `[HealthConnectService] aggregateGroupByPeriod(${spec.recordType}) failed: ${message}`,
+      'ERROR',
+    );
+    return { records: [], error: message };
+  }
+
+  const results: AggregatedHealthRecord[] = [];
+  for (const bucket of buckets) {
+    const value = spec.extractValue(bucket.result);
+    if (!Number.isFinite(value) || value <= 0) continue;
+
+    const rec: AggregatedHealthRecord = {
+      date: formatLocalDay(new Date(bucket.startTime)),
+      value: spec.round ? Math.round(value) : value,
+      type: spec.outputType,
+    };
+    if (rangeOffsetMinutes != null) {
+      rec.record_utc_offset_minutes = rangeOffsetMinutes;
+    }
+    results.push(rec);
+  }
+
+  addLog(`[HealthConnectService] ${spec.recordType} aggregation: ${results.length} days`, 'DEBUG');
+  return { records: results };
+};
+
+/**
+ * Offset-anchored path: fixed 24h buckets per segment via
+ * aggregateGroupByDuration, so day boundaries sit at the records' own
+ * midnights instead of the device zone's. Native dedup applies within each
+ * call exactly as in the device-zone path.
+ */
+const aggregateByRecordOffsets = async (
+  spec: CumulativeMetricSpec,
+  startDate: Date,
+  segments: AggregationSegment[],
+): Promise<HealthConnectAggregateResult> => {
+  const parts = wallClockParts(startDate);
+  const days = new Map<number, { value: number; offsetMinutes: number }>();
+
+  for (const segment of segments) {
+    type DurationBucket = { result: unknown; startTime: string; endTime: string };
+    let buckets: DurationBucket[];
+    try {
+      buckets = (await aggregateGroupByDuration({
+        recordType: spec.recordType as Parameters<
+          typeof aggregateGroupByDuration
+        >[0]['recordType'],
+        timeRangeFilter: {
+          operator: 'between',
+          startTime: new Date(segment.startMs).toISOString(),
+          endTime: new Date(segment.endMs).toISOString(),
+        },
+        timeRangeSlicer: { duration: 'DAYS', length: 1 },
+      })) as unknown as DurationBucket[];
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      addLog(
+        `[HealthConnectService] aggregateGroupByDuration(${spec.recordType}) failed: ${message}`,
+        'ERROR',
+      );
+      return { records: [], error: message };
+    }
+
+    for (const bucket of buckets) {
+      const value = spec.extractValue(bucket.result);
+      if (!Number.isFinite(value) || value <= 0) continue;
+
+      const bucketIndex = Math.round(
+        (new Date(bucket.startTime).getTime() - segment.startMs) / DAY_MS,
+      );
+      const dayIndex = segment.firstDayIndex + bucketIndex;
+      if (dayIndex > segment.lastDayIndex && segment.overflow === 'drop') continue;
+
+      const boundedIndex = Math.min(dayIndex, segment.lastDayIndex);
+      const existing = days.get(boundedIndex);
+      days.set(boundedIndex, {
+        value: (existing?.value ?? 0) + value,
+        offsetMinutes: existing?.offsetMinutes ?? segment.offsetMinutes,
+      });
+    }
+  }
+
+  const results: AggregatedHealthRecord[] = [...days.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([dayIndex, day]) => ({
+      date: dayLabelAt(parts, dayIndex),
+      value: spec.round ? Math.round(day.value) : day.value,
+      type: spec.outputType,
+      record_utc_offset_minutes: day.offsetMinutes,
+    }));
+
+  addLog(
+    `[HealthConnectService] ${spec.recordType} aggregation: ${results.length} days across ${segments.length} offset segment(s)`,
+    'DEBUG',
+  );
+  return { records: results };
 };
 
 // HC anchors DAYS buckets at the supplied startTime, so callers emitting
@@ -400,48 +940,43 @@ export const aggregateCumulativeMetricByDayDetailed = async (
       return { records: [], error: rangeError };
     }
 
-    type PeriodBucket = { result: unknown; startTime: string; endTime: string };
-    let buckets: PeriodBucket[];
-    try {
-      buckets = (await aggregateGroupByPeriod({
-        recordType: spec.recordType as Parameters<typeof aggregateGroupByPeriod>[0]['recordType'],
-        timeRangeFilter: {
-          operator: 'between',
-          startTime: startDate.toISOString(),
-          endTime: endDate.toISOString(),
-        },
-        timeRangeSlicer: { period: 'DAYS', length: 1 },
-      })) as unknown as PeriodBucket[];
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+    // HC prorates interval records to the requested overlap. Some providers expose
+    // a daily total as a midnight-to-midnight record, so querying only through
+    // "now" returns a partial value. An existing midnight remains unchanged.
+    const queryEndDate = ceilToLocalDayStart(endDate);
+
+    const firstProbe = await readEdgeRecord(spec.recordType, startDate, queryEndDate, true);
+    if (firstProbe.outcome === 'empty') {
       addLog(
-        `[HealthConnectService] aggregateGroupByPeriod(${spec.recordType}) failed: ${message}`,
-        'ERROR',
+        `[HealthConnectService] ${spec.recordType} aggregation: no records in range`,
+        'DEBUG',
       );
-      return { records: [], error: message };
+      return { records: [] };
     }
 
-    const rangeOffset = await readZoneOffsetForRange(spec.recordType, startDate, endDate);
-    const results: AggregatedHealthRecord[] = [];
-
-    for (const bucket of buckets) {
-      const value = spec.extractValue(bucket.result);
-      if (!Number.isFinite(value) || value <= 0) continue;
-
-      const dayString = formatLocalDay(new Date(bucket.startTime));
-      const rec: AggregatedHealthRecord = {
-        date: dayString,
-        value: spec.round ? Math.round(value) : value,
-        type: spec.outputType,
-      };
-      if (rangeOffset != null) {
-        rec.record_utc_offset_minutes = rangeOffset;
+    if (
+      firstProbe.outcome === 'record' &&
+      firstProbe.offsetMinutes != null &&
+      firstProbe.offsetMinutes !== deviceOffsetMinutesAt(firstProbe.instantMs)
+    ) {
+      const segments = await buildOffsetSegments(
+        spec.recordType,
+        startDate,
+        queryEndDate,
+        firstProbe.offsetMinutes,
+      );
+      if (segments) {
+        return await aggregateByRecordOffsets(spec, startDate, segments);
       }
-      results.push(rec);
+      addLog(
+        `[HealthConnectService] ${spec.recordType}: record offsets diverge from the device zone but don't form a clean transition; using device-zone buckets`,
+        'WARNING',
+      );
     }
 
-    addLog(`[HealthConnectService] ${spec.recordType} aggregation: ${results.length} days`, 'DEBUG');
-    return { records: results };
+    const rangeOffsetMinutes =
+      firstProbe.outcome === 'record' ? firstProbe.offsetMinutes : undefined;
+    return await aggregateByDeviceZone(spec, startDate, queryEndDate, rangeOffsetMinutes);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     addLog(`[HealthConnectService] Error aggregating ${spec.recordType}: ${message}`, 'ERROR');
@@ -478,7 +1013,7 @@ export const getAggregatedStepsByDate = (
 ): Promise<AggregatedHealthRecord[]> =>
   getAggregatedStepsByDateDetailed(startDate, endDate).then(result => result.records);
 
-export const getAggregatedActiveCaloriesByDateDetailed = (
+const getNativeActiveCaloriesByDateDetailed = (
   startDate: Date,
   endDate: Date,
 ): Promise<HealthConnectAggregateResult> =>
@@ -493,11 +1028,123 @@ export const getAggregatedActiveCaloriesByDateDetailed = (
     endDate,
   );
 
+const getAggregatedBasalCaloriesByDateDetailed = (
+  startDate: Date,
+  endDate: Date,
+): Promise<HealthConnectAggregateResult> =>
+  aggregateCumulativeMetricByDayDetailed(
+    {
+      recordType: 'BasalMetabolicRate',
+      outputType: 'basal_calories',
+      extractValue: (r) => (r as { BASAL_CALORIES_TOTAL?: { inKilocalories?: number } }).BASAL_CALORIES_TOTAL?.inKilocalories ?? 0,
+      round: true,
+    },
+    startDate,
+    endDate,
+  );
+
+/** Prefer reported active energy; derive total minus basal only when absent. */
+export const getAggregatedActiveCaloriesByDateDetailed = async (
+  startDate: Date,
+  endDate: Date,
+): Promise<HealthConnectAggregateResult> => {
+  const activeResult = await getNativeActiveCaloriesByDateDetailed(startDate, endDate);
+  if (activeResult.records.length > 0) {
+    return activeResult;
+  }
+
+  const [totalResult, basalResult] = await Promise.all([
+    getAggregatedTotalCaloriesByDateDetailed(startDate, endDate),
+    getAggregatedBasalCaloriesByDateDetailed(startDate, endDate),
+  ]);
+
+  const basalByDate = new Map(basalResult.records.map(record => [record.date, record.value]));
+  const derivedRecords = totalResult.records.flatMap(totalRecord => {
+    const basal = basalByDate.get(totalRecord.date);
+    if (basal == null) return [];
+    const derived = deriveActiveCalories(totalRecord.value, basal);
+    if (derived == null) return [];
+    return [{
+      ...totalRecord,
+      value: Math.round(derived),
+      type: 'active_calories',
+    }];
+  });
+
+  if (derivedRecords.length > 0) {
+    addLog('[HealthConnectService] Active calorie aggregate missing; derived fallback from total minus basal calories', 'DEBUG');
+  }
+  const error = activeResult.error ?? totalResult.error ?? basalResult.error;
+  return { records: derivedRecords, ...(error ? { error } : {}) };
+};
+
 export const getAggregatedActiveCaloriesByDate = (
   startDate: Date,
   endDate: Date,
 ): Promise<AggregatedHealthRecord[]> =>
   getAggregatedActiveCaloriesByDateDetailed(startDate, endDate).then(result => result.records);
+
+export const getAggregatedTotalCaloriesByDateDetailed = (
+  startDate: Date,
+  endDate: Date,
+): Promise<HealthConnectAggregateResult> =>
+  aggregateCumulativeMetricByDayDetailed(
+    {
+      recordType: 'TotalCaloriesBurned',
+      outputType: 'total_calories',
+      extractValue: (r) => (r as { ENERGY_TOTAL?: { inKilocalories?: number } }).ENERGY_TOTAL?.inKilocalories ?? 0,
+      round: true,
+    },
+    startDate,
+    endDate,
+  );
+
+export const getAggregatedTotalCaloriesByDate = (
+  startDate: Date,
+  endDate: Date,
+): Promise<AggregatedHealthRecord[]> =>
+  getAggregatedTotalCaloriesByDateDetailed(startDate, endDate).then(result => result.records);
+
+export const getAggregatedDistanceByDateDetailed = (
+  startDate: Date,
+  endDate: Date,
+): Promise<HealthConnectAggregateResult> =>
+  aggregateCumulativeMetricByDayDetailed(
+    {
+      recordType: 'Distance',
+      outputType: 'distance',
+      extractValue: (r) => (r as { DISTANCE?: { inMeters?: number } }).DISTANCE?.inMeters ?? 0,
+      round: true,
+    },
+    startDate,
+    endDate,
+  );
+
+export const getAggregatedDistanceByDate = (
+  startDate: Date,
+  endDate: Date,
+): Promise<AggregatedHealthRecord[]> =>
+  getAggregatedDistanceByDateDetailed(startDate, endDate).then(result => result.records);
+
+export const getAggregatedFloorsClimbedByDateDetailed = (
+  startDate: Date,
+  endDate: Date,
+): Promise<HealthConnectAggregateResult> =>
+  aggregateCumulativeMetricByDayDetailed(
+    {
+      recordType: 'FloorsClimbed',
+      outputType: 'floors_climbed',
+      extractValue: (r) => (r as { FLOORS_CLIMBED_TOTAL?: number }).FLOORS_CLIMBED_TOTAL ?? 0,
+    },
+    startDate,
+    endDate,
+  );
+
+export const getAggregatedFloorsClimbedByDate = (
+  startDate: Date,
+  endDate: Date,
+): Promise<AggregatedHealthRecord[]> =>
+  getAggregatedFloorsClimbedByDateDetailed(startDate, endDate).then(result => result.records);
 
 // Distance plausibility floor: drop tiny distance aggregates on long sessions —
 // Health Sync writes a few dozen meters of passive step-distance over the
@@ -561,12 +1208,60 @@ export const isPlausibleSessionDistance = (meters: number, durationMs: number): 
  * ActiveCaloriesBurned, TotalCaloriesBurned, and Distance aggregated over
  * each session's time range and apply plausibility checks (see #593, #1296).
  */
-export const enrichExerciseSessions = async (records: unknown[]): Promise<unknown[]> => {
+export const enrichExerciseSessions = async (
+  records: unknown[],
+  telemetry: TelemetryRunContext,
+): Promise<unknown[]> => {
   if (records.length === 0) return records;
 
   addLog(`[HealthConnectService] Enriching ${records.length} exercise session(s) with calories/distance`, 'DEBUG');
 
-  const enriched = await Promise.all(records.map(async (record) => {
+  const ctx = telemetry;
+
+  // Budget slots are assigned newest-first before any read starts. Claiming
+  // inside the concurrent map below would award them in Promise completion
+  // order instead — whichever session's aggregate reads happen to resolve
+  // first — so a capped background run could spend its budget on old sessions
+  // while the newest go unenriched.
+  const telemetryAllowed = new Set<unknown>();
+  const byNewest = [...records].sort((a, b) => {
+    const aStart = (a as { startTime?: string }).startTime ?? '';
+    const bStart = (b as { startTime?: string }).startTime ?? '';
+    return bStart.localeCompare(aStart);
+  });
+  const startedAtMs = Date.now();
+  let skippedInvalid = 0;
+  let skippedAlreadyCollected = 0;
+  for (const record of byNewest) {
+    const rec = record as Record<string, unknown>;
+    if (typeof rec.startTime !== 'string' || typeof rec.endTime !== 'string') {
+      skippedInvalid++;
+      continue;
+    }
+    // Claimed slots are never refunded, so a record the enrichment loop below
+    // would reject for an invalid window must not consume one.
+    const startMs = Date.parse(rec.startTime);
+    const endMs = Date.parse(rec.endTime);
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
+      skippedInvalid++;
+      continue;
+    }
+    // Already-collected sessions neither consume a slot nor get re-read, so a
+    // bounded budget works through the backlog across syncs instead of
+    // re-picking the same newest few every run (#2191).
+    if (await hasEnrichedSession(sessionCacheKey(record))) {
+      skippedAlreadyCollected++;
+      continue;
+    }
+    if (!ctx.claim()) break;
+    telemetryAllowed.add(record);
+  }
+
+  // Bounded fan-out. An unbounded Promise.all over a busy window issued well
+  // over a hundred concurrent native calls, whose results are deserialized and
+  // sorted on the JS thread, which starves the UI until they drain (#2191).
+  // The expensive half is capped separately by limitTelemetry below.
+  const settled = await runTasksInBatches(records, AGGREGATE_CONCURRENCY, async (record) => {
     const rec = record as Record<string, unknown>;
     const startTime = rec.startTime as string | undefined;
     const endTime = rec.endTime as string | undefined;
@@ -629,10 +1324,76 @@ export const enrichExerciseSessions = async (records: unknown[]): Promise<unknow
       }
     }
 
+    // Route + series collection. Interactive only when a user is present:
+    // reading a route can prompt for per-session consent, which a headless
+    // background task cannot present. Sessions skipped here are re-sent with
+    // telemetry on a later interactive sync (while they remain inside the 6h
+    // overlap window) and upserted in place server-side.
+    if (telemetryAllowed.has(record)) {
+      const bundle = await limitTelemetry(() => collectSessionTelemetry(rec, {
+        interactive: ctx.interactive,
+      }));
+      if (bundle.gps_points) enrichedFields.gps_points = bundle.gps_points;
+      if (bundle.hr_samples) enrichedFields.hr_samples = bundle.hr_samples;
+      if (bundle.laps) enrichedFields.laps = bundle.laps;
+      if (bundle.telemetry) {
+        const telemetry: Record<string, unknown> = { ...bundle.telemetry };
+        if (kcal != null) telemetry.active_calories = kcal;
+        enrichedFields.telemetry = telemetry;
+      }
+      // Recorded even when the session turned out to have nothing beyond its
+      // summary: the reads that established that are exactly what we must not
+      // repeat every sync. A later edit to the record changes its cache key.
+      //
+      // Not recorded when the bundle came back `incomplete` — a failed read is
+      // not the same answer as an empty one, and this cache has no expiry, so
+      // caching a transient failure strands the session's telemetry for good.
+      //
+      // Interactive runs only. A headless run cannot present the per-session
+      // route-consent dialog, so collectSessionRoute returns no route for a
+      // session awaiting consent — caching that would make the next foreground
+      // sync skip it and the route would never be collected at all.
+      if (ctx.interactive && !bundle.incomplete) {
+        ctx.stageCollected(sessionCacheKey(record));
+      }
+    }
+
     return Object.keys(enrichedFields).length > 0
       ? { ...rec, ...enrichedFields }
       : record;
-  }));
+  });
+
+  // Index-aligned with `records`; a rejected task keeps the original record so
+  // a telemetry failure never drops a session from the sync.
+  const enriched = settled.map((result, index) =>
+    result.status === 'fulfilled' ? result.value : records[index],
+  );
+
+  // Batching must not change failure semantics: Promise.all rejected the whole
+  // read before, which surfaced as a metric error and held the sync cursor so
+  // the window is retried. Swallowing the rejection here would advance the
+  // cursor past a session we never actually read.
+  const failure = settled.find(result => result.status === 'rejected');
+  if (failure && failure.status === 'rejected') {
+    addLog(
+      `[HealthConnectService] Exercise session enrichment failed: ${getErrorMessage(failure.reason)}`,
+      'ERROR',
+    );
+    throw failure.reason;
+  }
+
+  // One summary line per run, so the budget and the reuse cache are visible in
+  // the in-app log and in the exported diagnostic. This is the field-verifiable
+  // signal for #2191: on a healthy run the telemetry count is bounded and the
+  // "already collected" count carries the rest.
+  const overBudget =
+    records.length - skippedInvalid - skippedAlreadyCollected - telemetryAllowed.size;
+  addLog(
+    `[HealthConnectService] Enriched ${records.length} session(s) in ${Date.now() - startedAtMs}ms ` +
+      `(telemetry: ${telemetryAllowed.size}, already collected: ${skippedAlreadyCollected}, ` +
+      `over budget: ${Math.max(overBudget, 0)}, invalid: ${skippedInvalid})`,
+    'INFO',
+  );
 
   return enriched;
 };

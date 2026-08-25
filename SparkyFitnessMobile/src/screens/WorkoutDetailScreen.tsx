@@ -1,6 +1,9 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, ActivityIndicator, TouchableOpacity, Pressable, Alert, Platform } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { View, Text, TouchableOpacity } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { useQueryClient } from '@tanstack/react-query';
+import Animated, { LinearTransition } from 'react-native-reanimated';
 import FadeView from '../components/FadeView';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,14 +11,31 @@ import { useCSSVariable } from 'uniwind';
 import Icon from '../components/Icon';
 import FormInput from '../components/FormInput';
 import Button from '../components/ui/Button';
-import SafeImage from '../components/SafeImage';
-import WorkoutEditableExerciseList from '../components/WorkoutEditableExerciseList';
-import RestPeriodChip from '../components/RestPeriodChip';
-import { getSourceLabel, getWorkoutSummary, CATEGORY_ICON_MAP } from '../utils/workoutSession';
+import WorkoutFormExerciseList, {
+  type WorkoutFormExerciseListHandle,
+} from '../components/WorkoutFormExerciseList';
+import { useSetEditAccessoryBar } from '../components/SetRowChrome';
+import ActiveWorkoutExerciseCard from '../components/ActiveWorkoutExerciseCard';
+import ActionSheet, {
+  type ActionSheetItem,
+  type ActionSheetRef,
+} from '../components/ActionSheet';
+import { MetricColumnMenu } from '../components/WorkoutMenus';
+import { type AnchorRect } from '../components/AnchoredMenu';
+import {
+  getSourceLabel,
+  getWorkoutSummary,
+  getExerciseVolumeKg,
+  formatVolume,
+  canReorderDraftExercises,
+  exerciseFromSnapshot,
+} from '../utils/workoutSession';
+import { formatLocalizedNumber } from '../localization';
 import {
   useDeleteWorkout,
   useUpdateWorkout,
 } from '../hooks/useExerciseMutations';
+import { promptForActiveWorkoutConflict } from '../hooks/useStartLiveWorkout';
 import { usePreferences } from '../hooks/usePreferences';
 import { useExerciseImageSource } from '../hooks/useExerciseImageSource';
 import { useSelectedExercise } from '../hooks/useSelectedExercise';
@@ -23,302 +43,92 @@ import { useWorkoutForm, getWorkoutDraftSubmission } from '../hooks/useWorkoutFo
 import { useExerciseSetEditing } from '../hooks/useExerciseSetEditing';
 import CalendarSheet, { type CalendarSheetRef } from '../components/CalendarSheet';
 import { normalizeDate, formatDate, formatDateLabel } from '../utils/dateUtils';
-import { weightFromKg } from '../utils/unitConversions';
 import { parseDecimalInput } from '../utils/numericInput';
 import Toast from 'react-native-toast-message';
 import { addLog } from '../services/LogService';
 import { extractActivitySummary } from '../utils/activityDetails';
-import { useActiveWorkoutStore } from '../stores/activeWorkoutStore';
-import { ensureNotificationPermission } from '../services/notifications';
+import {
+  seedCompletionFromSession,
+  useActiveWorkoutStore,
+} from '../stores/activeWorkoutStore';
+import { useAppPreferencesStore } from '../stores/appPreferencesStore';
+import {
+  ensureNotificationPermission,
+  maybePromptForExactAlarmPermission,
+} from '../services/notifications';
 import { useActiveWorkoutBarPadding } from '../components/ActiveWorkoutBar';
-import { createNativeHeaderTextButtonItem } from '../utils/nativeHeaderItems';
-import { useHeaderActionColors } from '../hooks/useHeaderActionColors';
+import { useNativeIOSHeadersActive } from '../services/nativeTabBarPreference';
+import { useScreenHeader, SAVE_LABEL, SAVING_LABEL, type HeaderItem } from '../hooks/useScreenHeader';
+import { useSupersetBorders } from '../components/ActiveWorkoutRail';
 import type { RootStackScreenProps } from '../types/navigation';
-import type {
-  ExerciseEntryResponse,
-  ExerciseEntrySetResponse,
-  UpdatePresetSessionRequest,
-} from '@workspace/shared';
+import type { UpdatePresetSessionRequest } from '@workspace/shared';
+import { canEditGroupedWorkout } from '@workspace/shared';
 
 type Props = RootStackScreenProps<'WorkoutDetail'>;
 
-function getExerciseVolume(exercise: ExerciseEntryResponse): number {
-  return exercise.sets.reduce((total, set) => {
-    return total + (set.weight ?? 0) * (set.reps ?? 0);
-  }, 0);
-}
-
-function getExerciseSetSummary(exercise: ExerciseEntryResponse, weightUnit: string): string {
-  if (exercise.sets.length === 0) return '';
-  const firstSet = exercise.sets[0];
-  const allSame = exercise.sets.every(
-    s => s.weight === firstSet.weight && s.reps === firstSet.reps
-  );
-  if (allSame && firstSet.weight != null && firstSet.reps != null) {
-    const displayWeight = parseFloat(weightFromKg(firstSet.weight, weightUnit as 'kg' | 'lbs').toFixed(1));
-    return `${exercise.sets.length} × ${firstSet.reps} @ ${displayWeight} ${weightUnit}`;
-  }
-  return `${exercise.sets.length} sets`;
-}
-
-function formatVolume(volumeKg: number, weightUnit: string): string {
-  const value = weightFromKg(volumeKg, weightUnit as 'kg' | 'lbs');
-  return `${Math.round(value).toLocaleString()} ${weightUnit}`;
-}
-
-interface ActiveWorkoutSetRowProps {
-  set: ExerciseEntrySetResponse;
-  isWorkoutActive: boolean;
-  onLongPress: (setId: string) => void;
-  onPress: (setId: string) => void;
-  accentPrimary: string;
-  weightUnit: string;
-}
-
-const ActiveWorkoutSetRow = React.memo(({
-  set,
-  isWorkoutActive,
-  onLongPress,
-  onPress,
-  accentPrimary,
-  weightUnit,
-}: ActiveWorkoutSetRowProps) => {
-  const setIdStr = String(set.id);
-  const isComplete = useActiveWorkoutStore((s) =>
-    Boolean(s.completedSetIds[setIdStr]),
-  );
-  const isActiveSet = useActiveWorkoutStore((s) => s.activeSetId === setIdStr);
-
-  const displayWeight = set.weight != null
-    ? `${parseFloat(weightFromKg(set.weight, weightUnit as 'kg' | 'lbs').toFixed(1))} ${weightUnit}`
-    : '\u2014';
-  const displayReps = set.reps != null ? String(set.reps) : '\u2014';
-
-  const indicator = (() => {
-    if (!isWorkoutActive) {
-      return <Text className="text-sm text-text-muted">{set.set_number}</Text>;
-    }
-    if (isComplete) {
-      return <Icon name="checkmark-circle" size={22} color={accentPrimary} />;
-    }
-    // Uncompleted during an active workout: highlight the active set with a
-    // filled radio, dim everything else.
-    return (
-      <Icon
-        name={isActiveSet ? 'radio-button-on' : 'radio-button-off'}
-        size={22}
-        color={isActiveSet ? accentPrimary : '#9CA3AF'}
-      />
-    );
-  })();
-
-  return (
-    <Pressable
-      onLongPress={() => onLongPress(setIdStr)}
-      onPress={() => {
-        if (isWorkoutActive) onPress(setIdStr);
-      }}
-      delayLongPress={400}
-      className="flex-row items-center py-1.5"
-    >
-      <View className="w-10 items-center justify-center">{indicator}</View>
-      <Text className="text-sm text-text-primary flex-1 text-center">{displayWeight}</Text>
-      <Text className="text-sm text-text-primary flex-1 text-center">{displayReps}</Text>
-    </Pressable>
-  );
-});
-
-ActiveWorkoutSetRow.displayName = 'ActiveWorkoutSetRow';
-
-interface ExerciseRowProps {
-  exercise: ExerciseEntryResponse;
-  isExpanded: boolean;
-  onToggle: (exerciseId: string) => void;
-  getImageSource: ReturnType<typeof useExerciseImageSource>['getImageSource'];
-  accentPrimary: string;
-  textMuted: string;
-  weightUnit: string;
-  isWorkoutActive: boolean;
-  showRestChip: boolean;
-  onLongPressSet: (setId: string) => void;
-  onPressSet: (setId: string) => void;
-}
-
-const ExerciseRow = React.memo(({
-  exercise,
-  isExpanded,
-  onToggle,
-  getImageSource,
-  accentPrimary,
-  textMuted,
-  weightUnit,
-  isWorkoutActive,
-  showRestChip,
-  onLongPressSet,
-  onPressSet,
-}: ExerciseRowProps) => {
-  const snapshot = exercise.exercise_snapshot;
-  const metadataItems = [snapshot?.category, snapshot?.level, snapshot?.force, snapshot?.mechanic].filter(Boolean);
-  const volume = getExerciseVolume(exercise);
-  const exerciseIcon = (snapshot?.category && CATEGORY_ICON_MAP[snapshot.category]) || 'exercise-weights';
-
-  const rotation = useSharedValue(isExpanded ? 0 : -90);
-
-  useEffect(() => {
-    rotation.value = withTiming(isExpanded ? 0 : -90, { duration: 200 });
-  }, [isExpanded, rotation]);
-
-  const chevronStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotation.value}deg` }],
-  }));
-
-  const renderSetTable = () => {
-    if (exercise.sets.length === 0) return null;
-    return (
-      <View className="mt-2">
-        <View className="flex-row py-1 mb-1">
-          <Text className="text-xs font-semibold text-text-muted w-10 text-center">Set</Text>
-          <Text className="text-xs font-semibold text-text-muted flex-1 text-center">Weight</Text>
-          <Text className="text-xs font-semibold text-text-muted flex-1 text-center">Reps</Text>
-        </View>
-        {exercise.sets.map(set => (
-          <ActiveWorkoutSetRow
-            key={set.id}
-            set={set}
-            isWorkoutActive={isWorkoutActive}
-            onLongPress={onLongPressSet}
-            onPress={onPressSet}
-            accentPrimary={accentPrimary}
-            weightUnit={weightUnit}
-          />
-        ))}
-      </View>
-    );
-  };
-
-  return (
-    <View>
-      <View className="border-t border-border-subtle" />
-      <TouchableOpacity
-        className="pt-4 pb-2"
-        onPress={() => onToggle(exercise.id)}
-        activeOpacity={0.7}
-      >
-        <View className="flex-row items-center">
-          <View className="mr-3 items-center justify-center" style={{ width: 64, height: 64, marginTop: 2 }}>
-            <SafeImage
-              source={snapshot?.images?.[0] ? getImageSource(snapshot.images[0]) : null}
-              style={{ width: 64, height: 64, borderRadius: 8, opacity: 0.8 }}
-              fallback={<Icon name={exerciseIcon} size={28} color={accentPrimary} />}
-            />
-          </View>
-          <View className="flex-1">
-            <View className="flex-row items-center justify-between">
-              <Text className="text-lg font-semibold text-text-primary flex-1 mr-2" numberOfLines={1}>
-                {snapshot?.name ?? 'Unknown exercise'}
-              </Text>
-              <Animated.View style={chevronStyle}>
-                <Icon name="chevron-down" size={18} color={textMuted} />
-              </Animated.View>
-            </View>
-
-            {isExpanded && metadataItems.length > 0 && (
-              <FadeView key="metadata">
-                <Text className="text-xs text-text-muted mt-1">
-                  {metadataItems.join(' \u2022 ')}
-                </Text>
-              </FadeView>
-            )}
-
-            {isExpanded && showRestChip && (
-              <FadeView key="rest-chip">
-                <View className="flex-row self-start mt-1.5">
-                  <RestPeriodChip readOnly value={exercise.sets[0]?.rest_time} />
-                </View>
-              </FadeView>
-            )}
-
-            {!isExpanded && exercise.sets.length > 0 && (
-              <FadeView key="collapsed">
-                <View className="mt-1">
-                  <Text className="text-sm text-text-secondary">
-                    {getExerciseSetSummary(exercise, weightUnit)}
-                  </Text>
-                  {volume > 0 && (
-                    <Text className="text-sm text-text-muted mt-0.5">
-                      Volume: {formatVolume(volume, weightUnit)}
-                    </Text>
-                  )}
-                </View>
-              </FadeView>
-            )}
-          </View>
-        </View>
-      </TouchableOpacity>
-
-      {isExpanded && exercise.sets.length > 0 && (
-        <FadeView key="expanded">
-          <View className="pb-2">
-            {renderSetTable()}
-          </View>
-        </FadeView>
-      )}
-    </View>
-  );
-});
-
-ExerciseRow.displayName = 'ExerciseRow';
-
 const WorkoutDetailScreen: React.FC<Props> = ({ navigation, route }) => {
+  const { t , i18n: translationI18n } = useTranslation();
+  const dateLocale = translationI18n.language.startsWith('pl') ? 'pl-PL' : 'en-US';
   const [session, setSession] = useState(route.params.session);
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const { preferences } = usePreferences();
   const weightUnit = preferences?.default_weight_unit ?? 'kg';
+  const distanceUnit = (preferences?.default_distance_unit as 'km' | 'miles') ?? 'km';
 
   const calendarSheetRef = useRef<CalendarSheetRef>(null);
+  const exerciseListRef = useRef<WorkoutFormExerciseListHandle>(null);
 
-  const [accentPrimary, textMuted, borderSubtle, textPrimary] = useCSSVariable([
+  const [accentPrimary, borderSubtle] = useCSSVariable([
     '--color-accent-primary',
-    '--color-text-muted',
     '--color-border-subtle',
-    '--color-text-primary',
-  ]) as [string, string, string, string];
-  const { defaultColor: headerActionColor, saveColor: headerSaveColor } = useHeaderActionColors();
+  ]) as [string, string];
+  const usesNativeHeader = useNativeIOSHeadersActive();
+
+  // Superset display (view mode only): grouped members get a flat left rail
+  // in a per-group palette color, matching the active-workout screen.
+  const { borders: supersetBorders } = useSupersetBorders(session.exercises);
 
   const { getImageSource } = useExerciseImageSource();
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
 
-  // Active workout state (narrow selectors — avoid re-rendering on unrelated changes)
+  // Last-saved server state: a live session's just-tapped checkmarks appear
+  // here only after the autosave lands (the focus refresh below swaps in the
+  // store's session snapshot).
+  const completedSetIds = useMemo(() => seedCompletionFromSession(session), [session]);
+
+  // Metric column is shared with the active-workout screen; changing it on
+  // either screen changes both (intended).
+  const metricColumn = useAppPreferencesStore((s) => s.activeWorkoutMetricColumn);
+  const [metricMenu, setMetricMenu] = useState<{
+    anchor: AnchorRect;
+    clampedToRpe: boolean;
+  } | null>(null);
+  const handlePressMetricHeader = useCallback(
+    (anchor: AnchorRect, clampedToRpe: boolean) => {
+      setMetricMenu({ anchor, clampedToRpe });
+    },
+    [],
+  );
+
+  // Active workout state (narrow selector to avoid re-rendering on unrelated
+  // changes). The Diary routes the live session to ActiveWorkout instead of
+  // here, but this gate still hides Start actions if the screen is reached
+  // for the live session some other way.
   const activeSessionId = useActiveWorkoutStore((s) => s.sessionId);
-  const activeSetId = useActiveWorkoutStore((s) => s.activeSetId);
   const activeWorkoutBarPadding = useActiveWorkoutBarPadding('stack');
   const isWorkoutActive = activeSessionId === session.id;
 
-  const toggleSection = (key: string) => {
+  const toggleSection = useCallback((key: string) => {
     setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
-  };
+  }, []);
 
-  // Auto-expand the exercise containing the active set while the workout is
-  // running for this session — so tapping the floating HUD lands on the
-  // detail page with the current exercise already open. Never auto-collapses;
-  // the user can still close it manually, and it re-expands only when the
-  // active set advances into a different exercise.
-  useEffect(() => {
-    if (!isWorkoutActive || activeSetId == null) return;
-    const activeExercise = session.exercises.find(ex =>
-      ex.sets.some(s => String(s.id) === activeSetId),
-    );
-    if (!activeExercise) return;
-    setExpandedSections(prev =>
-      prev[activeExercise.id] ? prev : { ...prev, [activeExercise.id]: true },
-    );
-  }, [isWorkoutActive, activeSetId, session]);
-
-  const { label: sourceLabel, isSparky } = getSourceLabel(session.source);
+  const sourceLabel = getSourceLabel(session.source);
+  const canEdit = canEditGroupedWorkout(session.source);
   const entryDate = session.entry_date ?? '';
   const normalizedDate = normalizeDate(entryDate);
 
-  const { name } = getWorkoutSummary(session);
+  const { name } = getWorkoutSummary(session, t);
 
   const deleteWorkout = useDeleteWorkout({
     sessionId: session.id,
@@ -345,18 +155,26 @@ const WorkoutDetailScreen: React.FC<Props> = ({ navigation, route }) => {
     state: formState,
     addExercise,
     removeExercise,
+    replaceExercise,
+    clearExerciseCompletions,
     addSet,
     removeSet,
     updateSetField,
+    updateSetMeta,
     setExerciseRest,
+    setExerciseCalories,
+    setExerciseNotes,
+    supersetWith,
+    ungroupExercise,
+    reorderExercises,
     setName: setFormName,
     setDate: setFormDate,
     populate,
     exercisesModifiedRef,
   } = useWorkoutForm({ isEditMode: true, skipDraftLoad: true });
   const submission = useMemo(
-    () => getWorkoutDraftSubmission(formState, weightUnit as 'kg' | 'lbs'),
-    [formState, weightUnit],
+    () => getWorkoutDraftSubmission(formState, weightUnit as 'kg' | 'lbs', distanceUnit),
+    [formState, weightUnit, distanceUnit],
   );
   const hasEditedExercisesWithSets = submission.canSave;
 
@@ -375,6 +193,21 @@ const WorkoutDetailScreen: React.FC<Props> = ({ navigation, route }) => {
     [addExercise],
   );
 
+  // A replaced exercise is effectively freshly added: mark it prefill-eligible
+  // so its empty set seeds from the new exercise's history.
+  const wrappedReplaceExercise = useCallback(
+    (clientId: string, exercise: Parameters<typeof replaceExercise>[1]) => {
+      const result = replaceExercise(clientId, exercise);
+      setEligibleIds(prev => {
+        const next = new Set(prev);
+        next.add(clientId);
+        return next;
+      });
+      return result;
+    },
+    [replaceExercise],
+  );
+
   const {
     activeSetKey,
     activeSetField,
@@ -383,7 +216,21 @@ const WorkoutDetailScreen: React.FC<Props> = ({ navigation, route }) => {
     handleAddSet,
     activateSet,
     deactivateSet,
-  } = useExerciseSetEditing({ addExercise: wrappedAddExercise, removeExercise, addSet });
+    setReplaceTarget,
+  } = useExerciseSetEditing({
+    addExercise: wrappedAddExercise,
+    removeExercise,
+    addSet,
+    replaceExercise: wrappedReplaceExercise,
+  });
+
+  // Sticky Done/Next bar for the focused set cell (edit mode), on both
+  // platforms.
+  const { onRegisterAccessoryHandle, accessoryBar } = useSetEditAccessoryBar({
+    activeSetKey,
+    activeSetField,
+    onDeactivateSet: deactivateSet,
+  });
 
   const isEligibleForPrefill = useCallback(
     (clientId: string) => eligibleIds.has(clientId),
@@ -391,11 +238,11 @@ const WorkoutDetailScreen: React.FC<Props> = ({ navigation, route }) => {
   );
 
   const startEditing = useCallback(() => {
-    populate(session, weightUnit as 'kg' | 'lbs');
+    populate(session, weightUnit as 'kg' | 'lbs', distanceUnit);
     setEditNotes(session.notes ?? '');
     setEligibleIds(new Set());
     setIsEditing(true);
-  }, [populate, session, weightUnit]);
+  }, [populate, session, weightUnit, distanceUnit]);
 
   const cancelEditing = useCallback(() => {
     setIsEditing(false);
@@ -413,96 +260,127 @@ const WorkoutDetailScreen: React.FC<Props> = ({ navigation, route }) => {
     }
   }, [session]);
 
-  const handleStartWorkout = () => {
-    if (useActiveWorkoutStore.getState().sessionId !== null) {
-      Alert.alert('Another workout is in progress', 'Finish or clear it first.');
-      return;
-    }
-    void ensureNotificationPermission();
-    useActiveWorkoutStore.getState().startWorkout(session);
-  };
-
-  const handleLongPressSet = (setId: string) => {
-    const buttons: {
-      text: string;
-      style?: 'cancel' | 'destructive';
-      onPress?: () => void;
-    }[] = [];
-
-    if (isSparky) {
-      buttons.push({ text: 'Edit', onPress: startEditing });
-    }
-
-    if (!isWorkoutActive) {
-      buttons.push({
-        text: 'Start workout here',
-        onPress: () => {
-          if (useActiveWorkoutStore.getState().sessionId !== null) {
-            Alert.alert('Another workout is in progress', 'Finish or clear it first.');
-            return;
-          }
-          void ensureNotificationPermission();
-          useActiveWorkoutStore.getState().startWorkoutAtSet(session, setId);
-        },
-      });
-    } else {
-      // Forward-only jump. Reject backward targets silently. When the workout
-      // is finished (`activeSetId == null`) the cursor is past the last set,
-      // so every target is behind it and no jump is possible.
-      const storeState = useActiveWorkoutStore.getState();
-      const activeIndex =
-        storeState.activeSetId == null
-          ? storeState.steps.length
-          : storeState.steps.findIndex((s) => s.setId === storeState.activeSetId);
-      const targetIndex = storeState.steps.findIndex((s) => s.setId === setId);
-      if (targetIndex >= 0 && targetIndex > activeIndex) {
-        buttons.push({
-          text: 'Jump to this set',
-          onPress: () => {
-            useActiveWorkoutStore.getState().jumpToSet(setId);
-          },
-        });
+  // Reverse direction: while this session is the live workout, the store's
+  // snapshot is the source of truth (the active-workout screen autosaves it,
+  // and a recreate save replaces every exercise/set id). Refresh the local
+  // copy on focus; otherwise edit-saves built from the stale
+  // route.params.session would send dead ids and 400.
+  useFocusEffect(
+    useCallback(() => {
+      const store = useActiveWorkoutStore.getState();
+      if (store.sessionId === session.id && store.session != null && store.session !== session) {
+        setSession(store.session);
       }
-    }
+    }, [session]),
+  );
 
-    if (buttons.length === 0) return;
+  // Seed the store from this saved session and enter the live screen. `atSetId`
+  // starts the cursor on a specific set (the "Start workout here" long-press).
+  const enterLiveWorkout = useCallback(
+    (atSetId?: string) => {
+      // Chained so the exact-alarm prompt never stacks on top of the OS
+      // notification-permission dialog.
+      void ensureNotificationPermission().then(() =>
+        maybePromptForExactAlarmPermission(),
+      );
+      const store = useActiveWorkoutStore.getState();
+      if (atSetId != null) store.startWorkoutAtSet(session, atSetId);
+      else store.startWorkout(session);
+      navigation.replace('ActiveWorkout');
+    },
+    [session, navigation],
+  );
 
-    buttons.push({ text: 'Cancel', style: 'cancel' });
-    Alert.alert(name, undefined, buttons);
-  };
+  // Start this workout, first resolving any other in-progress session through
+  // the shared conflict prompt (go to it, or clear it and start this one). The
+  // Start button and "Start workout here" long-press are both gated on
+  // !isWorkoutActive, so a non-null sessionId here means a *different* workout.
+  const beginWorkout = useCallback(
+    (atSetId?: string) => {
+      const prompted = promptForActiveWorkoutConflict(queryClient, {
+        onGoToWorkout: () => navigation.navigate('ActiveWorkout'),
+        onClearAndStart: () => enterLiveWorkout(atSetId),
+      }, t);
+      if (prompted) return;
+      enterLiveWorkout(atSetId);
+    },
+    [queryClient, navigation, enterLiveWorkout, t],
+  );
 
-  const handlePressSet = (setId: string) => {
-    if (!isWorkoutActive) return;
-    const storeState = useActiveWorkoutStore.getState();
-    // Tap on a completed set unchecks it (without moving the cursor).
-    if (storeState.completedSetIds[setId]) {
-      storeState.uncompleteSet(setId);
-      return;
+  const handleStartWorkout = () => beginWorkout();
+
+  // Long-pressing a set opens a menu-style bottom sheet (same ActionSheet the
+  // live/edit exercise ⋮ menus use). Gated on canEdit like the Start button:
+  // sessions that are not editable (external/unknown sources) can be neither
+  // edited nor run live — a live workout autosaves via the nested-exercise
+  // update, which the server rejects (409) for them.
+  const setMenuSheetRef = useRef<ActionSheetRef>(null);
+  const [setMenuTargetId, setSetMenuTargetId] = useState<string | null>(null);
+  const handleLongPressSet = useCallback(
+    (setId: string) => {
+      if (!canEdit) return;
+      setSetMenuTargetId(setId);
+      setMenuSheetRef.current?.present();
+    },
+    [canEdit],
+  );
+
+  const setMenuItems = useMemo<ActionSheetItem[]>(() => {
+    if (setMenuTargetId == null) return [];
+    const items: ActionSheetItem[] = [
+      { key: 'edit', label: t('common.edit', { defaultValue: 'Edit' }), onPress: startEditing },
+    ];
+    if (!isWorkoutActive) {
+      items.push({
+        key: 'start-here',
+        label: t('workoutDetail.actions.startHere', { defaultValue: 'Start workout here' }),
+        onPress: () => beginWorkout(setMenuTargetId),
+      });
     }
-    // Tap on the active set completes it and advances.
-    if (storeState.activeSetId === setId) {
-      storeState.completeActiveSet();
-      return;
-    }
-    // Tap on an uncompleted non-active set: allow re-check only if it's
-    // behind the cursor (something the user previously completed and then
-    // unchecked by accident). Taps on future sets stay a no-op — long-press
-    // is the explicit path for jumping forward. When the workout is finished
-    // (`activeSetId == null`) the cursor is past the end, so every set
-    // counts as behind and is re-checkable.
-    const setIndex = storeState.steps.findIndex((s) => s.setId === setId);
-    const activeIndex =
-      storeState.activeSetId == null
-        ? storeState.steps.length
-        : storeState.steps.findIndex((s) => s.setId === storeState.activeSetId);
-    if (setIndex >= 0 && setIndex < activeIndex) {
-      storeState.recompleteSet(setId);
-    }
-  };
+    return items;
+  }, [setMenuTargetId, isWorkoutActive, startEditing, beginWorkout, t]);
+
+  // "Save as preset": review-and-save through the preset create form,
+  // prefilled from this session. Not gated on canEdit — templating a synced
+  // workout (e.g. a Garmin strength import) only reads the session.
+  const handleSaveAsPreset = useCallback(() => {
+    navigation.navigate('WorkoutPresetForm', {
+      mode: 'create-preset',
+      sourceSession: session,
+    });
+  }, [navigation, session]);
 
   const openExerciseSearch = () => {
+    // Plain Add: drop any pending replace target so a cancelled replace can't
+    // misroute this add.
+    setReplaceTarget(null);
     navigation.navigate('ExerciseSearch', { returnKey: route.key });
   };
+
+  // ⋮ "Replace exercise": the next ExerciseSearch return swaps this entry in
+  // place instead of appending.
+  const handleReplaceExercise = useCallback(
+    (clientId: string) => {
+      setReplaceTarget(clientId);
+      navigation.navigate('ExerciseSearch', { returnKey: route.key });
+    },
+    [setReplaceTarget, navigation, route.key],
+  );
+
+  // Tap an exercise thumbnail → its library detail. Session entries carry a
+  // full snapshot, so the detail screen opens with muscles/equipment already
+  // populated (and still hydrates by id).
+  const handleViewExercise = useCallback(
+    (entryId: string) => {
+      const entry = session.exercises.find((e) => e.id === entryId);
+      if (!entry) return;
+      navigation.navigate('ExerciseDetail', {
+        item: exerciseFromSnapshot(entry.exercise_snapshot, entry.exercise_id, t),
+        hideWorkoutActions: true,
+      });
+    },
+    [session, navigation, t],
+  );
 
   // --- Save ---
 
@@ -514,8 +392,8 @@ const WorkoutDetailScreen: React.FC<Props> = ({ navigation, route }) => {
       if (exercisesModifiedRef.current && !submission.canSave) {
         Toast.show({
           type: 'error',
-          text1: 'Workout needs an exercise',
-          text2: 'Add at least one exercise with a set or delete the workout.',
+          text1: t('workoutDetail.errors.needsExercise', { defaultValue: 'Workout needs an exercise' }),
+          text2: t('workoutDetail.errors.addExerciseOrDelete', { defaultValue: 'Add at least one exercise with a set or delete the workout.' }),
         });
         return;
       }
@@ -536,30 +414,65 @@ const WorkoutDetailScreen: React.FC<Props> = ({ navigation, route }) => {
       deactivateSet();
     } catch (error) {
       addLog(`Failed to save workout: ${error}`, 'ERROR');
-      Toast.show({ type: 'error', text1: 'Failed to save workout', text2: 'Please try again.' });
+      Toast.show({ type: 'error', text1: t('workoutDetail.errors.saveFailed', { defaultValue: 'Failed to save workout' }), text2: t('common.tryAgain', { defaultValue: 'Please try again.' }) });
     }
-  }, [submission, normalizedDate, editNotes, updateSession, session, invalidateSessionCache, deactivateSet, exercisesModifiedRef]);
+  }, [submission, normalizedDate, editNotes, updateSession, session, invalidateSessionCache, deactivateSet, exercisesModifiedRef, t]);
 
   // --- Read-only render helpers ---
 
   const renderViewExercises = () => (
-    <View>
-      {session.exercises.map(exercise => (
-        <ExerciseRow
-          key={exercise.id}
-          exercise={exercise}
-          isExpanded={!!expandedSections[exercise.id]}
-          onToggle={toggleSection}
-          getImageSource={getImageSource}
-          accentPrimary={accentPrimary}
-          textMuted={textMuted}
-          weightUnit={weightUnit}
-          isWorkoutActive={isWorkoutActive}
-          showRestChip={isSparky}
-          onLongPressSet={handleLongPressSet}
-          onPressSet={handlePressSet}
-        />
-      ))}
+    <View className="mt-4">
+      {session.exercises.map(exercise => {
+        const isExpanded = !!expandedSections[exercise.id];
+        const supersetBorder = supersetBorders.get(exercise.id) ?? null;
+        const card = (
+          <ActiveWorkoutExerciseCard
+            exercise={exercise}
+            mode="view"
+            expanded={isExpanded}
+            completedSetIds={completedSetIds}
+            activeSetId={null}
+            metricColumn={metricColumn}
+            weightUnit={weightUnit as 'kg' | 'lbs'}
+            distanceUnit={distanceUnit}
+            getImageSource={getImageSource}
+            excludePresetEntryId={session.id}
+            showRestChip={canEdit}
+            onPressThumb={handleViewExercise}
+            onToggleExpanded={toggleSection}
+            onPressMetricHeader={handlePressMetricHeader}
+            onLongPressSet={handleLongPressSet}
+          />
+        );
+        return (
+          <Animated.View key={exercise.id} layout={LinearTransition.duration(300)}>
+            {supersetBorder ? (
+              // Grouped members carry a flat 3px left rail. Interior rails
+              // run the full wrapper height, meeting the next member's rail at
+              // the divider so consecutive members read as one continuous line;
+              // the run's last member stops ~8px short to end at the card
+              // content rather than the divider.
+              <View style={{ paddingLeft: 10 }}>
+                <View
+                  testID={`superset-rail-${exercise.id}`}
+                  pointerEvents="none"
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    top: 0,
+                    bottom: supersetBorder.isLast && isExpanded ? 8 : 0,
+                    width: 3,
+                    backgroundColor: supersetBorder.color,
+                  }}
+                />
+                {card}
+              </View>
+            ) : (
+              card
+            )}
+          </Animated.View>
+        );
+      })}
     </View>
   );
 
@@ -569,12 +482,12 @@ const WorkoutDetailScreen: React.FC<Props> = ({ navigation, route }) => {
     const details = session.activity_details;
     if (!details || details.length === 0) return null;
 
-    const items = extractActivitySummary(details);
+    const items = extractActivitySummary(details, t);
     if (items.length === 0) return null;
 
     return (
       <View className="bg-surface rounded-xl p-4 mt-4">
-        <Text className="text-base font-semibold text-text-primary mb-2">Details</Text>
+        <Text className="text-base font-semibold text-text-primary mb-2">{t('workoutDetail.labels.details', { defaultValue: 'Details' })}</Text>
         {items.map((item, i) => (
           <View
             key={`${item.label}-${i}`}
@@ -600,19 +513,38 @@ const WorkoutDetailScreen: React.FC<Props> = ({ navigation, route }) => {
           const r = parseInt(set.reps, 10);
           return s + (isNaN(w) || isNaN(r) ? 0 : w * r);
         }, sum), 0)
-      : session.exercises.reduce((sum, ex) => sum + getExerciseVolume(ex), 0);
+      : session.exercises.reduce((sum, ex) => sum + getExerciseVolumeKg(ex), 0);
+    const totalCalories = isEditing
+      ? formState.exercises.reduce((sum, ex) => {
+          const cal = parseDecimalInput(ex.calories ?? '');
+          return sum + (isNaN(cal) ? 0 : cal);
+        }, 0)
+      : session.exercises.reduce((sum, ex) => sum + (ex.calories_burned ?? 0), 0);
 
     const summaryItems: { value: string; label: string }[] = [];
     summaryItems.push({
       value: String(exerciseCount),
-      label: exerciseCount === 1 ? 'Exercise' : 'Exercises',
+      label: t('workoutDetail.summary.exercise', {
+        count: exerciseCount,
+        defaultValue: 'Exercises',
+        defaultValue_one: 'Exercise',
+        defaultValue_few: 'Exercises',
+        defaultValue_many: 'Exercises',
+        defaultValue_other: 'Exercises',
+      }),
     });
-    if (totalSets > 0) summaryItems.push({ value: String(totalSets), label: 'Sets' });
+    if (totalSets > 0) summaryItems.push({ value: String(totalSets), label: t('workoutDetail.summary.sets', { defaultValue: 'Sets' }) });
     if (totalVolume > 0) {
       const volumeLabel = isEditing
-        ? `${Math.round(totalVolume).toLocaleString()} ${weightUnit}`
+        ? `${formatLocalizedNumber(Math.round(totalVolume))} ${weightUnit}`
         : formatVolume(totalVolume, weightUnit);
-      summaryItems.push({ value: volumeLabel, label: 'Volume' });
+      summaryItems.push({ value: volumeLabel, label: t('workoutDetail.summary.volume', { defaultValue: 'Volume' }) });
+    }
+    if (totalCalories > 0) {
+      summaryItems.push({
+        value: formatLocalizedNumber(Math.round(totalCalories)),
+        label: t('workoutDetail.summary.calories', { defaultValue: 'Calories' }),
+      });
     }
     if (summaryItems.length === 0) return null;
 
@@ -635,163 +567,108 @@ const WorkoutDetailScreen: React.FC<Props> = ({ navigation, route }) => {
     );
   };
 
-  // iOS: drive the native glass header. We use a SMALL inline title (set in
-  // App.tsx), never a large one — re-applying a large title via setOptions (as
-  // this screen must, for edit mode) makes it "fly in" on every return. A small
-  // title updates in place. The glass material is the same either way.
-  // - View mode: small title = workout name + an Edit action (owner only). The
-  //   in-body name <Text> stays iOS-suppressed since the name lives in the bar.
-  // - Edit mode: title becomes "Edit Workout", the back button is hidden (+
-  //   swipe-back disabled) so Cancel owns the left slot, Save on the right; the
-  //   name is edited inline in the body.
-  useLayoutEffect(() => {
-    if (Platform.OS !== 'ios') return;
+  // Edit mode: Save is the one accent action; a secondary reorder icon joins it
+  // (left of Save) when the draft has 2+ draggable items.
+  const canReorderEdit = canReorderDraftExercises(formState.exercises);
+  const saveHeaderItem: HeaderItem = {
+    kind: 'primary',
+    label: SAVE_LABEL,
+    busyLabel: SAVING_LABEL,
+    busy: isSaving,
+    disabled: isSaving || !hasEditedExercisesWithSets,
+    onPress: handleSave,
+    accessibilityLabel: t('workoutDetail.accessibility.save', { defaultValue: 'Save' }),
+    identifier: 'workout-detail-save',
+  };
+  const reorderHeaderItem: HeaderItem = {
+    kind: 'icon',
+    sfSymbol: 'arrow.up.arrow.down',
+    ionicon: 'swap-vertical',
+    role: 'secondary',
+    onPress: () => exerciseListRef.current?.openReorder(),
+    accessibilityLabel: t('workoutDetail.accessibility.reorder', { defaultValue: 'Reorder exercises' }),
+    identifier: 'workout-detail-reorder',
+  };
+  const saveAsPresetHeaderItem: HeaderItem = {
+    kind: 'icon',
+    sfSymbol: 'bookmark',
+    ionicon: 'bookmark-outline',
+    role: 'secondary',
+    onPress: handleSaveAsPreset,
+    accessibilityLabel: t('workoutDetail.accessibility.saveAsPreset', { defaultValue: 'Save as preset' }),
+    identifier: 'workout-detail-save-as-preset',
+  };
 
-    if (isEditing) {
-      navigation.setOptions({
-        title: 'Edit Workout',
-        headerBackVisible: false,
-        gestureEnabled: false,
-        unstable_headerLeftItems: () => [
-          createNativeHeaderTextButtonItem({
-            label: 'Cancel',
-            identifier: 'workout-detail-cancel',
-            tintColor: headerActionColor,
-            accessibilityLabel: 'Cancel',
-            disabled: isSaving,
-            onPress: () => cancelEditing(),
-          }),
-        ],
-        unstable_headerRightItems: () => [
-          createNativeHeaderTextButtonItem({
-            label: 'Save',
-            identifier: 'workout-detail-save',
-            tintColor: headerSaveColor,
-            accessibilityLabel: 'Save',
-            fontWeight: '600',
-            disabled: isSaving || !hasEditedExercisesWithSets,
-            onPress: () => handleSave(),
-          }),
-        ],
-      });
-    } else {
-      navigation.setOptions({
-        title: name,
-        headerBackVisible: true,
-        gestureEnabled: true,
-        unstable_headerLeftItems: undefined,
-        unstable_headerRightItems: isSparky
-          ? () => [
-              createNativeHeaderTextButtonItem({
-                label: 'Edit',
-                identifier: 'workout-detail-edit',
-                tintColor: headerActionColor,
-                accessibilityLabel: 'Edit workout',
-                onPress: () => startEditing(),
-              }),
-            ]
-          : undefined,
-      });
-    }
-  }, [
-    navigation,
-    isEditing,
-    isSaving,
-    hasEditedExercisesWithSets,
-    name,
-    isSparky,
-    headerActionColor,
-    headerSaveColor,
-    startEditing,
-    cancelEditing,
-    handleSave,
-  ]);
+  // Small inline native title (set in App.tsx as a small title so re-applying it
+  // for the edit-mode swap updates in place rather than flying in a large one).
+  // View mode: name + owner-only Edit (the in-body name is suppressed since it
+  // lives in the bar). Edit mode: "Edit Workout" title, X-dismiss owning the
+  // left slot with swipe-back disabled, Save (+ reorder) on the right; name
+  // edited in-body.
+  const header = useScreenHeader({
+    nativeTitle: isEditing ? t('workoutDetail.title.edit', { defaultValue: 'Edit Workout' }) : name,
+    animateKey: isEditing ? 'edit' : 'view',
+    borderless: true,
+    nativeOptions: { gestureEnabled: !isEditing, headerBackVisible: !isEditing },
+    left: isEditing
+      ? {
+          kind: 'dismiss',
+          onPress: cancelEditing,
+          disabled: isSaving,
+          accessibilityLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+          identifier: 'workout-detail-cancel',
+        }
+      : { kind: 'back' },
+    right: isEditing
+      ? canReorderEdit
+        ? [reorderHeaderItem, saveHeaderItem]
+        : saveHeaderItem
+      : canEdit
+        ? [
+            saveAsPresetHeaderItem,
+            {
+              kind: 'text',
+              label: t('common.edit', { defaultValue: 'Edit' }),
+              role: 'secondary',
+              onPress: startEditing,
+              accessibilityLabel: t('workoutDetail.accessibility.editWorkout', { defaultValue: 'Edit workout' }),
+              identifier: 'workout-detail-edit',
+            },
+          ]
+        : saveAsPresetHeaderItem,
+  });
 
-  // iOS: native glass header (above) replaces the custom header, and the
-  // KeyboardAwareScrollView must be the screen root for the large title to
-  // attach. Android keeps the custom header + padded wrapper.
+  // Native-header mode: the glass header (above) replaces the custom header,
+  // and the KeyboardAwareScrollView must be the screen root for the large
+  // title to attach. Fallback mode keeps the custom header + padded wrapper.
   const content = (
     <>
-      {Platform.OS !== 'ios' && (
-      <View className="flex-row items-center px-4 py-3">
-        {isEditing ? (
-          <FadeView
-            key="header-edit"
-            style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}
-          >
-            <Button
-              variant="ghost"
-              onPress={cancelEditing}
-              disabled={isSaving}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              className="py-0 px-0"
-            >
-              <Text className="text-text-primary text-base font-medium">Cancel</Text>
-            </Button>
-            <View className="flex-1" />
-            <Button
-              variant="ghost"
-              onPress={handleSave}
-              disabled={isSaving || !hasEditedExercisesWithSets}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              className="py-0 px-0"
-            >
-              {isSaving ? (
-                <ActivityIndicator size="small" color={accentPrimary} />
-              ) : (
-                <Text className="text-accent-primary text-base font-semibold">Save</Text>
-              )}
-            </Button>
-          </FadeView>
-        ) : (
-          <FadeView
-            key="header-view"
-            style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}
-          >
-            <Button
-              variant="ghost"
-              onPress={() => navigation.goBack()}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              className="py-0 px-0"
-            >
-              <Icon name="chevron-back" size={22} color={textPrimary} />
-            </Button>
-            <View className="flex-1" />
-            {isSparky && (
-              <Button
-                variant="ghost"
-                onPress={startEditing}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                className="py-0 px-0"
-              >
-                <Text className="text-text-primary text-base font-medium">Edit</Text>
-              </Button>
-            )}
-          </FadeView>
-        )}
-      </View>
-      )}
+      {header}
 
       <KeyboardAwareScrollView
         contentContainerClassName="px-4 py-4"
         contentContainerStyle={{ paddingBottom: insets.bottom + 20 + activeWorkoutBarPadding }}
         bottomOffset={20}
         keyboardShouldPersistTaps="handled"
-        contentInsetAdjustmentBehavior={Platform.OS === 'ios' ? 'automatic' : undefined}
+        contentInsetAdjustmentBehavior={usesNativeHeader ? 'automatic' : undefined}
+        // Set-row taps remount the focused input; stop the keyboard-hide
+        // restore scroll so the refocus lands on the tapped cell (see
+        // ActiveWorkoutScreen's scroll view).
+        disableScrollOnKeyboardHide
       >
         {/* Title area */}
         <View className="mb-4">
           {isEditing ? (
             <FadeView key="edit-title">
+              <Text className="text-sm font-medium text-text-secondary mb-1">{t('workoutDetail.labels.name', { defaultValue: 'Name' })}</Text>
               <FormInput
                 value={formState.name}
                 onChangeText={setFormName}
-                placeholder="Workout Name"
-                className="text-xl font-bold text-text-primary mb-1"
-                style={{ borderWidth: 0, backgroundColor: 'transparent', paddingLeft: 0, paddingTop: 0, paddingBottom: 0, fontSize: 20 }}
+                placeholder={t('workoutDetail.placeholders.workoutName', { defaultValue: 'Workout Name' })}
+                className="mb-2"
               />
             </FadeView>
-          ) : Platform.OS !== 'ios' ? (
+          ) : !usesNativeHeader ? (
             <FadeView key="view-title">
               <Text className="text-xl font-bold text-text-primary mb-1">{name}</Text>
             </FadeView>
@@ -806,12 +683,12 @@ const WorkoutDetailScreen: React.FC<Props> = ({ navigation, route }) => {
                 activeOpacity={0.7}
               >
                 <Text className="text-sm" style={{ color: accentPrimary }}>
-                  {formatDateLabel(formState.entryDate)}
+                  {formatDateLabel(formState.entryDate, t, dateLocale)}
                 </Text>
                 <Icon name="chevron-forward" size={14} color={accentPrimary} style={{ marginLeft: 2 }} />
               </TouchableOpacity>
             ) : entryDate ? (
-              <Text className="text-sm text-text-muted">{formatDate(entryDate)}</Text>
+              <Text className="text-sm text-text-muted">{formatDate(entryDate, dateLocale)}</Text>
             ) : null}
           </View>
         </View>
@@ -820,42 +697,63 @@ const WorkoutDetailScreen: React.FC<Props> = ({ navigation, route }) => {
         {renderSummaryCard()}
 
         {/* Start Workout button */}
-        {!isEditing && isSparky && !isWorkoutActive && (
+        {!isEditing && canEdit && !isWorkoutActive && (
           <Button variant="primary" onPress={handleStartWorkout} className="mt-4">
-            Start Workout
+            {t('workout.startWorkout', { defaultValue: 'Start Workout' })}
           </Button>
         )}
 
-        {/* Exercises */}
-        {isEditing ? (
-          <WorkoutEditableExerciseList
-            exercises={formState.exercises}
-            getImageSource={getImageSource}
-            weightUnit={weightUnit as 'kg' | 'lbs'}
-            activeSetKey={activeSetKey}
-            activeSetField={activeSetField}
-            onActivateSet={activateSet}
-            onDeactivateSet={deactivateSet}
-            onUpdateSetField={updateSetField}
-            onRemoveSet={removeSet}
-            onAddSet={handleAddSet}
-            onRemoveExercise={handleRemoveExercise}
-            onAddExercisePress={openExerciseSearch}
-            onChangeRest={setExerciseRest}
-            isEligibleForPrefill={isEligibleForPrefill}
-            mode="detail"
-          />
-        ) : renderViewExercises()}
+        {/* Pull back part of the scroll container's px-4 so the cards sit at
+            the same 12px inset as the active workout screen (px-3). */}
+        <View className="-mx-1">
+          {isEditing ? (
+            <WorkoutFormExerciseList
+              ref={exerciseListRef}
+              exercises={formState.exercises}
+              weightUnit={weightUnit as 'kg' | 'lbs'}
+              distanceUnit={distanceUnit}
+              getImageSource={getImageSource}
+              excludePresetEntryId={session.id}
+              activeSetKey={activeSetKey}
+              activeSetField={activeSetField}
+              onActivateSet={activateSet}
+              onDeactivateSet={deactivateSet}
+              onRegisterAccessoryHandle={onRegisterAccessoryHandle}
+              updateSetField={updateSetField}
+              updateSetMeta={updateSetMeta}
+              removeSet={removeSet}
+              onAddSet={handleAddSet}
+              onRemoveExercise={handleRemoveExercise}
+              setExerciseRest={setExerciseRest}
+              setExerciseCalories={setExerciseCalories}
+              setExerciseNotes={setExerciseNotes}
+              onReplaceExercise={handleReplaceExercise}
+              clearExerciseCompletions={clearExerciseCompletions}
+              supersetWith={supersetWith}
+              ungroupExercise={ungroupExercise}
+              onReorderExercises={reorderExercises}
+              onAddExercisePress={openExerciseSearch}
+              onViewExercise={(exercise) =>
+                navigation.navigate('ExerciseDetail', { item: exercise, hideWorkoutActions: true })
+              }
+              isEligibleForPrefill={isEligibleForPrefill}
+              showCompletion
+              removeExerciseOnLastSetDelete
+            />
+          ) : (
+            renderViewExercises()
+          )}
+        </View>
 
         {/* Edit controls */}
         {isEditing && (
           <FadeView>
             <View className="mt-4">
-              <Text className="text-sm font-medium text-text-secondary mb-1">Notes</Text>
+              <Text className="text-sm font-medium text-text-secondary mb-1">{t('workoutDetail.labels.notes', { defaultValue: 'Notes' })}</Text>
               <FormInput
                 value={editNotes}
                 onChangeText={setEditNotes}
-                placeholder="Add notes..."
+                placeholder={t('workoutDetail.placeholders.notes', { defaultValue: 'Add notes...' })}
                 multiline
                 style={{ minHeight: 60 }}
               />
@@ -867,7 +765,7 @@ const WorkoutDetailScreen: React.FC<Props> = ({ navigation, route }) => {
         {!isEditing && session.notes && (
           <FadeView>
             <View className="mt-4 px-4">
-              <Text className="text-sm font-medium text-text-secondary mb-1">Notes</Text>
+              <Text className="text-sm font-medium text-text-secondary mb-1">{t('workoutDetail.labels.notes', { defaultValue: 'Notes' })}</Text>
               <Text className="text-sm text-text-primary">{session.notes}</Text>
             </View>
           </FadeView>
@@ -879,14 +777,12 @@ const WorkoutDetailScreen: React.FC<Props> = ({ navigation, route }) => {
         {isEditing && (
           <FadeView>
             <Button
-              variant="ghost"
+              variant="destructive"
               onPress={() => deleteWorkout.confirmAndDelete()}
               disabled={isDeleting}
               className="mt-6"
             >
-              <Text className="text-bg-danger text-base font-medium">
-                {isDeleting ? 'Deleting...' : 'Delete Workout'}
-              </Text>
+              {isDeleting ? t('common.deleting', { defaultValue: 'Deleting...' }) : t('workoutDetail.actions.deleteWorkout', { defaultValue: 'Delete Workout' })}
             </Button>
           </FadeView>
         )}
@@ -897,10 +793,25 @@ const WorkoutDetailScreen: React.FC<Props> = ({ navigation, route }) => {
         selectedDate={isEditing ? formState.entryDate : normalizedDate}
         onSelectDate={setFormDate}
       />
+
+      <MetricColumnMenu
+        anchor={metricMenu?.anchor ?? null}
+        onClose={() => setMetricMenu(null)}
+        includeWeightMetrics={!metricMenu?.clampedToRpe}
+      />
+
+      <ActionSheet
+        ref={setMenuSheetRef}
+        title={name}
+        items={setMenuItems}
+        onDismiss={() => setSetMenuTargetId(null)}
+      />
+
+      {accessoryBar}
     </>
   );
 
-  if (Platform.OS === 'ios') return content;
+  if (usesNativeHeader) return content;
 
   return (
     <View className="flex-1 bg-background" style={{ paddingTop: insets.top }}>

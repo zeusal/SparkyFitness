@@ -18,6 +18,7 @@ export const foodEntryMealsSchema = z.object({
   user_id: userIdSchema,
   meal_template_id: mealsIdSchema.nullable(),
   entry_date: z.date(),
+  entry_time: z.string().nullable(),
   name: z.string(),
   description: z.string().nullable(),
   created_at: z.date().nullable(),
@@ -28,6 +29,7 @@ export const foodEntryMealsSchema = z.object({
   unit: z.string().nullable(),
   meal_type_id: mealTypesIdSchema,
   legacy_serving_unit_math: z.boolean(),
+  images: z.array(z.string()),
 });
 
 export const foodEntryMealsInitializerSchema = z.object({
@@ -35,6 +37,7 @@ export const foodEntryMealsInitializerSchema = z.object({
   user_id: userIdSchema,
   meal_template_id: mealsIdSchema.optional().nullable(),
   entry_date: z.date(),
+  entry_time: z.string().optional().nullable(),
   name: z.string(),
   description: z.string().optional().nullable(),
   created_at: z.date().optional().nullable(),
@@ -45,6 +48,7 @@ export const foodEntryMealsInitializerSchema = z.object({
   unit: z.string().optional().nullable(),
   meal_type_id: mealTypesIdSchema,
   legacy_serving_unit_math: z.boolean().optional(),
+  images: z.array(z.string()).optional(),
 });
 
 export const foodEntryMealsMutatorSchema = z.object({
@@ -52,6 +56,7 @@ export const foodEntryMealsMutatorSchema = z.object({
   user_id: userIdSchema.optional(),
   meal_template_id: mealsIdSchema.optional().nullable(),
   entry_date: z.date().optional(),
+  entry_time: z.string().optional().nullable(),
   name: z.string().optional(),
   description: z.string().optional().nullable(),
   created_at: z.date().optional().nullable(),
@@ -62,6 +67,7 @@ export const foodEntryMealsMutatorSchema = z.object({
   unit: z.string().optional().nullable(),
   meal_type_id: mealTypesIdSchema.optional(),
   legacy_serving_unit_math: z.boolean().optional(),
+  images: z.array(z.string()).optional(),
 });
 
 export type FoodEntryMeals = z.infer<typeof foodEntryMealsSchema>;

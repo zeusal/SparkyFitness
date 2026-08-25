@@ -27,19 +27,28 @@ import {
   withNetCarbsSubstitution,
 } from '@/utils/nutrientUtils';
 import { NutritionData } from '@/types/reports';
-import { calculateAverage } from '@/utils/reportUtil';
+import { calculateAverage, effectiveCalorieGoal } from '@/utils/reportUtil';
 import { ExpandedGoals } from '@/types/goals';
+import type { DailyCalorieBalanceRow } from '@workspace/shared';
 
 interface NutritionChartsGridProps {
   nutritionData: NutritionData[];
   customNutrients: UserCustomNutrient[];
   goals?: Record<string, ExpandedGoals>;
+  /**
+   * Server-computed calorie balance per date. Only the calories chart uses it, and only
+   * to draw its goal line -- without it this grid would show the bare stored goal while
+   * the summary above it shows the exercise-adjusted one, i.e. two different
+   * "Calories Goal" values on the same screen.
+   */
+  calorieBalanceByDate?: Record<string, DailyCalorieBalanceRow>;
 }
 
 const NutritionChartsGrid = ({
   nutritionData,
   customNutrients,
   goals,
+  calorieBalanceByDate,
 }: NutritionChartsGridProps) => {
   const { t } = useTranslation();
   const {
@@ -73,12 +82,28 @@ const NutritionChartsGrid = ({
       ? excludeIncompleteDay(data, format(new Date(), 'yyyy-MM-dd'))
       : data;
 
-    // Merge goal value per date if goals is a map
-    if (goals && typeof goals === 'object' && !('calories' in goals)) {
+    // The calorie budget is derived from the balance, which does not depend on the
+    // stored goals map — so it must be resolved OUTSIDE the guard below. Keeping it
+    // inside meant that while `goalData` was still loading (its loading state is not
+    // part of the page's render gate) this grid drew no calorie goal line at all while
+    // NutritionPeriodSummary drew one, showing two different things on one screen.
+    const goalsIsMap =
+      goals && typeof goals === 'object' && !('calories' in goals);
+    const storedGoals = goalsIsMap
+      ? (goals as Record<string, ExpandedGoals>)
+      : undefined;
+
+    if (goalsIsMap || chartKey === 'calories') {
       result = result.map((point) => {
-        const goalValue = (goals as Record<string, ExpandedGoals>)[
-          point.date
-        ]?.[chartKey as keyof ExpandedGoals];
+        const goalValue =
+          chartKey === 'calories'
+            ? // Same identity, and the same unrounded `eaten`, as
+              // NutritionPeriodSummary — so both charts draw one goal line.
+              (effectiveCalorieGoal(
+                calorieBalanceByDate?.[point.date],
+                point.calories
+              ) ?? storedGoals?.[point.date]?.[chartKey as keyof ExpandedGoals])
+            : storedGoals?.[point.date]?.[chartKey as keyof ExpandedGoals];
         return goalValue !== undefined
           ? { ...point, [`${chartKey}_goal`]: goalValue }
           : point;
@@ -166,19 +191,27 @@ const NutritionChartsGrid = ({
         const chartData = prepareChartData(effectiveNutritionData, chart.key);
         const yAxisDomain = getYAxisDomain(effectiveNutritionData, chart.key);
         const average = calculateAverage(chartData, chart.key);
-
-        let formattedAverage = '';
-        if (chart.key === 'calories') {
-          formattedAverage = Math.round(
-            convertEnergy(average, 'kcal', energyUnit)
-          ).toString();
-        } else {
-          formattedAverage = formatNutrientValue(
-            chart.key,
-            average,
-            customNutrients
-          );
-        }
+        // The split is shown as a SHARE, not a second and third average. The question
+        // behind it is "how much of this comes from a pill", which is a proportion;
+        // and averaging the supplement arm understates it badly on intermittent
+        // dosing, where non-dosing days drag the mean toward zero. A share is also
+        // range-independent and needs no y-axis room, which is why the split is not
+        // drawn as extra series: the domain comes from the total, so lines sitting
+        // well below it never render inside the plot.
+        const supplementAverage = calculateAverage(
+          chartData,
+          `supplement_${chart.key}`
+        );
+        const supplementShare =
+          average > 0 ? Math.round((supplementAverage / average) * 100) : 0;
+        // Hidden entirely when nothing was supplemented, so users who track no
+        // supplements see their charts exactly as before.
+        const showSupplementShare = supplementAverage > 0;
+        const formatAverage = (value: number) =>
+          chart.key === 'calories'
+            ? Math.round(convertEnergy(value, 'kcal', energyUnit)).toString()
+            : formatNutrientValue(chart.key, value, customNutrients);
+        const formattedAverage = formatAverage(average);
 
         return (
           <ZoomableChart
@@ -192,10 +225,21 @@ const NutritionChartsGrid = ({
                     <CardTitle className="text-sm">
                       {chart.label} ({chart.unit})
                     </CardTitle>
-                    <span className="text-xs text-muted-foreground font-normal">
-                      {t('reports.average', 'Avg')}: {formattedAverage}{' '}
-                      {chart.unit}
-                    </span>
+                    <div className="text-right text-xs text-muted-foreground font-normal">
+                      <div>
+                        {t('reports.average', 'Avg')}: {formattedAverage}{' '}
+                        {chart.unit}
+                      </div>
+                      {showSupplementShare && (
+                        <div>
+                          {t(
+                            'reports.supplementShare',
+                            '{{percent}}% from supplements',
+                            { percent: supplementShare }
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent
@@ -250,21 +294,27 @@ const NutritionChartsGrid = ({
                               | string
                               | number
                               | ReadonlyArray<string | number>
-                              | undefined
+                              | undefined,
+                            name: string | number | undefined
                           ) => {
                             if (value === null || value === undefined) {
-                              return 'N/A';
+                              return ['N/A', name];
                             }
 
                             const numValue = Number(
                               Array.isArray(value) ? value[0] : value
                             );
-
-                            if (chart.key === 'calories') {
-                              return `${Math.round(convertEnergy(numValue, 'kcal', energyUnit))} ${chart.unit}`;
-                            }
-
-                            return `${formatNutrientValue(chart.key, numValue, customNutrients)} ${chart.unit}`;
+                            const formattedValue =
+                              chart.key === 'calories'
+                                ? Math.round(
+                                    convertEnergy(numValue, 'kcal', energyUnit)
+                                  )
+                                : formatNutrientValue(
+                                    chart.key,
+                                    numValue,
+                                    customNutrients
+                                  );
+                            return [`${formattedValue} ${chart.unit}`, name];
                           }}
                           contentStyle={{
                             backgroundColor: 'hsl(var(--background))',
@@ -277,6 +327,7 @@ const NutritionChartsGrid = ({
                           strokeWidth={2}
                           dot={false}
                           isAnimationActive={false}
+                          name={chart.label}
                         />
                         <Line
                           type="monotone"

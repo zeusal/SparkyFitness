@@ -24,6 +24,12 @@ import { error } from '@/utils/logging';
 import { usePreferences } from '@/contexts/PreferencesContext';
 import { useUpdateExerciseMutation } from '@/hooks/Exercises/useExercises';
 import { Exercise } from '@/types/exercises';
+import {
+  EXERCISE_CATEGORIES,
+  EXERCISE_MODALITY_OPTIONS,
+} from '@/constants/exercises';
+import { isExerciseModality, resolveExerciseModality } from '@workspace/shared';
+import { resolveExerciseImageSrc } from '@/utils/exercises';
 
 interface EditExerciseDatabaseDialogProps {
   open: boolean;
@@ -64,6 +70,7 @@ const EditExerciseDatabaseDialog: React.FC<EditExerciseDatabaseDialogProps> = ({
     setFormData({
       name: exerciseToEdit.name || '',
       category: exerciseToEdit.category || '',
+      modality: exerciseToEdit.modality,
       calories_per_hour: exerciseToEdit.calories_per_hour || 0,
       description: exerciseToEdit.description || '',
       level: exerciseToEdit.level?.toLowerCase() || '',
@@ -163,21 +170,42 @@ const EditExerciseDatabaseDialog: React.FC<EditExerciseDatabaseDialogProps> = ({
                 />
               </SelectTrigger>
               <SelectContent>
-                {[
-                  'general',
-                  'strength',
-                  'cardio',
-                  'yoga',
-                  'powerlifting',
-                  'strongman',
-                  'plyometrics',
-                  'stretching',
-                  'olympic weightlifting',
-                ].map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {cat.charAt(0).toUpperCase() + cat.slice(1)}
-                  </SelectItem>
-                ))}
+                {EXERCISE_CATEGORIES.map(
+                  ({ value, labelKey, defaultLabel }) => (
+                    <SelectItem key={value} value={value}>
+                      {t(labelKey, defaultLabel)}
+                    </SelectItem>
+                  )
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Tracking type */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label className="text-right">
+              {t('exercise.addExerciseDialog.modalityLabel', 'Tracking type')}
+            </Label>
+            <Select
+              value={resolveExerciseModality(
+                formData.modality,
+                formData.category
+              )}
+              onValueChange={(val) => {
+                if (isExerciseModality(val)) handleFieldChange('modality', val);
+              }}
+            >
+              <SelectTrigger className="col-span-3">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {EXERCISE_MODALITY_OPTIONS.map(
+                  ({ value, labelKey, defaultLabel }) => (
+                    <SelectItem key={value} value={value}>
+                      {t(labelKey, defaultLabel)}
+                    </SelectItem>
+                  )
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -371,11 +399,7 @@ const EditExerciseDatabaseDialog: React.FC<EditExerciseDatabaseDialogProps> = ({
                 {(formData.images || []).map((url, index) => (
                   <div key={`existing-${index}`} className="relative w-20 h-20">
                     <img
-                      src={
-                        url.startsWith('http')
-                          ? url
-                          : `/uploads/exercises/${url}`
-                      }
+                      src={resolveExerciseImageSrc(url)}
                       className="w-full h-full object-cover rounded"
                       alt=""
                     />

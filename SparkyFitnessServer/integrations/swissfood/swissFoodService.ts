@@ -1,4 +1,12 @@
 import { log } from '../../config/logging.js';
+import {
+  createGuardedFetch,
+  PUBLIC_ONLY_AI_NETWORK_POLICY,
+} from '../../utils/outboundUrlPolicy.js';
+
+// The base URL is configurable per provider; route outbound requests through
+// the shared public-host guard.
+const guardedFetch = createGuardedFetch(PUBLIC_ONLY_AI_NETWORK_POLICY);
 
 const DEFAULT_BASE_URL =
   'https://api.webapp.prod.blv.foodcase-services.com/BLV_WebApp_WS/webresources/BLV-api';
@@ -42,14 +50,25 @@ export function mapSwissFood(food: SwissFoodDetail) {
     throw new Error('Food detail is required for mapping');
   }
   const nutrients: Record<string, number> = {};
+  // All components keyed by SwissFood's exact component name (per 100 g), for
+  // alias discovery and custom-nutrient matching on import.
+  const providerNutrientsByLabel: Record<string, number> = {};
   for (const v of food.values || []) {
     const code = v.component?.code;
     if (code) {
       nutrients[code] = v.value ?? 0;
     }
+    const name = v.component?.name?.trim();
+    if (name) {
+      providerNutrientsByLabel[name] = v.value ?? 0;
+    }
   }
 
-  // Mappings per 100g edible portion
+  // Mappings per 100g edible portion. The Swiss Food Composition Database has
+  // no field indicating a liquid basis (its per-value `unit.code` is the
+  // *nutrient's* unit, e.g. mg, not the serving unit), so unlike OpenFoodFacts
+  // there is no signal to derive 'ml' from here; 'g' is correct-by-default,
+  // not a placeholder.
   const defaultVariant = {
     serving_size: 100,
     serving_unit: 'g',
@@ -70,6 +89,7 @@ export function mapSwissFood(food: SwissFoodDetail) {
     vitamin_a:
       Math.round((nutrients['VITARAE'] ?? nutrients['VITARE'] ?? 0) * 10) / 10,
     vitamin_c: Math.round((nutrients['VITC'] ?? 0) * 10) / 10,
+    provider_nutrients: providerNutrientsByLabel,
     is_default: true,
   };
 
@@ -110,7 +130,7 @@ export async function searchSwissFoods(
   const url = `${baseUrl}/foods?${params.toString()}`;
 
   try {
-    const response = await fetch(url, {
+    const response = await guardedFetch(url, {
       method: 'GET',
       headers: {
         Accept: 'application/json',
@@ -119,10 +139,8 @@ export async function searchSwissFoods(
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(
-        `Swiss Food API returned status ${response.status}: ${errorText}`
-      );
+      // Surface only the status, not the upstream response body.
+      throw new Error(`Swiss Food API returned status ${response.status}`);
     }
 
     const items = (await response.json()) as SwissFoodSearchItem[];
@@ -199,7 +217,7 @@ export async function getSwissFoodDetails(
   const url = `${baseUrl}/food/${encodeURIComponent(externalId)}?lang=${encodeURIComponent(queryLang)}`;
 
   try {
-    const response = await fetch(url, {
+    const response = await guardedFetch(url, {
       method: 'GET',
       headers: {
         Accept: 'application/json',
@@ -208,9 +226,8 @@ export async function getSwissFoodDetails(
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
       throw new Error(
-        `Swiss Food Details API returned status ${response.status}: ${errorText}`
+        `Swiss Food Details API returned status ${response.status}`
       );
     }
 

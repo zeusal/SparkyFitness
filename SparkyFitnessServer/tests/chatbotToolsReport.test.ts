@@ -6,6 +6,7 @@ import measurementService from '../services/measurementService.js';
 import exerciseEntryDb from '../models/exerciseEntry.js';
 import measurementRepository from '../models/measurementRepository.js';
 import reportRepository from '../models/reportRepository.js';
+import { getResolvedExerciseCaloriesRange } from '../services/exerciseCalorieRangeService.js';
 
 // Stubs for foodTools/checkinTools imports the report tools never call;
 // loading the real services trips on deep '@workspace/shared' subpath imports.
@@ -40,13 +41,17 @@ vi.mock('../models/reportRepository', () => ({
     getDailyNutritionTotalsRange: vi.fn(),
   },
 }));
+vi.mock('../services/exerciseCalorieRangeService', () => ({
+  getResolvedExerciseCaloriesRange: vi.fn(),
+  getResolvedExerciseCaloriesTotal: vi.fn(),
+}));
 vi.mock('../config/logging', () => ({
   log: vi.fn(),
 }));
 
 const opts = { toolCallId: 'tc-1', messages: [] };
 const DB_ERROR_TEXT =
-  'Error [DB_ERROR]: A database error occurred. Please try again.\n\nSuggestion: If the issue persists, contact support.';
+  'Error [DB_ERROR]: A database error occurred.\n\nSuggestion: Do NOT retry the same call — it will fail the same way. Tell the user what failed and stop.';
 
 const PREFS = {
   energy_unit: 'kcal',
@@ -58,6 +63,9 @@ const PREFS = {
 let tools: ReturnType<typeof buildReportTools>;
 
 beforeEach(() => {
+  // Default: no resolved rows, so the tool falls back to the raw per-day totals and the
+  // projection goldens below stay meaningful. Resolution itself is covered separately.
+  vi.mocked(getResolvedExerciseCaloriesRange).mockResolvedValue(new Map());
   vi.clearAllMocks();
   vi.mocked(preferenceService.getUserPreferences).mockResolvedValue(PREFS);
   tools = buildReportTools('user-1', 'UTC');
@@ -177,7 +185,7 @@ describe('sparky_get_report (get_weekly_report)', () => {
     );
 
     expect(result).toBe(
-      'Error [VALIDATION]: end_date: Date must be in YYYY-MM-DD format'
+      'Error [VALIDATION]: end_date: Date must be in YYYY-MM-DD format (or "today", "yesterday", "tomorrow")'
     );
   });
 

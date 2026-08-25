@@ -1,4 +1,4 @@
-import React, {
+import {
   forwardRef,
   useCallback,
   useImperativeHandle,
@@ -7,19 +7,20 @@ import React, {
   useState,
 } from 'react';
 import { Platform, Text, TouchableOpacity, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import {
-  BottomSheetBackdrop,
   BottomSheetModal,
   BottomSheetScrollView,
   BottomSheetTextInput,
-  type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
-import { FullWindowOverlay } from 'react-native-screens';
-import { useCSSVariable, useUniwind } from 'uniwind';
+import { useCSSVariable } from 'uniwind';
 import DateTimePicker, { type DateType } from 'react-native-ui-datepicker';
+import { dateTypeToDate } from './TimeSheet';
 import Toast from 'react-native-toast-message';
+import { useAppLocale } from '../localization';
 
 import Button from './ui/Button';
+import { sheetContainer, useSheetBackdrop } from './ui/sheetChrome';
 import Icon from './Icon';
 import StepperInput from './StepperInput';
 import { useStartFast } from '../hooks/useFasting';
@@ -35,31 +36,33 @@ const MIN_CUSTOM_HOURS = 1;
 const MAX_CUSTOM_HOURS = 72;
 const DEFAULT_CUSTOM_HOURS = 12;
 
-// Render the sheet inside an iOS UIWindow so it sits above any native modal
-// presentation. No-op on Android.
-const sheetContainer =
-  Platform.OS === 'ios'
-    ? ({ children }: React.PropsWithChildren) => <FullWindowOverlay>{children}</FullWindowOverlay>
-    : undefined;
-
 /** Normalizes the picker's 6-way `DateType` into a JS `Date`, preserving time. */
-function dateTypeToDate(date: DateType): Date | null {
-  if (!date) return null;
-  if (date instanceof Date) return date;
-  if (typeof date === 'object' && 'toDate' in date) return date.toDate();
-  if (typeof date === 'string') return new Date(date);
-  return new Date(date);
-}
-
 export interface FastingProtocolSheetRef {
   present: (initialPresetId?: string) => void;
   dismiss: () => void;
 }
 
+
+function getPresetCopy(t: (key: string, options?: Record<string, unknown>) => string, id: string, field: 'name' | 'description', fallback: string): string {
+  switch (`${id}.${field}`) {
+    case '16-8.name': return t('fastingProtocol.presets.leangains.name', { defaultValue: '16:8 Leangains' });
+    case '16-8.description': return t('fastingProtocol.presets.leangains.description', { defaultValue: 'Skip breakfast and eat during an 8-hour window.' });
+    case '18-6.name': return t('fastingProtocol.presets.warrior18.name', { defaultValue: '18:6 Warrior' });
+    case '18-6.description': return t('fastingProtocol.presets.warrior18.description', { defaultValue: 'More aggressive fast with a 6-hour eating window.' });
+    case '20-4.name': return t('fastingProtocol.presets.warrior20.name', { defaultValue: '20:4 Warrior' });
+    case '20-4.description': return t('fastingProtocol.presets.warrior20.description', { defaultValue: 'Eat one large meal or spread calories over 4 hours.' });
+    case 'circumadian.name': return t('fastingProtocol.presets.circadian.name', { defaultValue: 'Circadian Rhythm' });
+    case 'circumadian.description': return t('fastingProtocol.presets.circadian.description', { defaultValue: 'Fast from sunset to morning.' });
+    case 'custom.name': return t('fastingProtocol.presets.custom.name', { defaultValue: 'Custom Fast' });
+    case 'custom.description': return t('fastingProtocol.presets.custom.description', { defaultValue: 'Set your own fasting duration.' });
+    default: return fallback;
+  }
+}
+
 const FastingProtocolSheet = forwardRef<FastingProtocolSheetRef>((_props, ref) => {
+  const { t } = useTranslation();
+  const appLocale = useAppLocale();
   const bottomSheetRef = useRef<BottomSheetModal>(null);
-  const { theme } = useUniwind();
-  const isDarkMode = theme === 'dark' || theme === 'amoled';
 
   const [surfaceBg, textMuted, accentPrimary, textPrimary, textSecondary] = useCSSVariable([
     '--color-surface',
@@ -91,17 +94,7 @@ const FastingProtocolSheet = forwardRef<FastingProtocolSheetRef>((_props, ref) =
     dismiss: () => bottomSheetRef.current?.dismiss(),
   }));
 
-  const renderBackdrop = useCallback(
-    (props: BottomSheetBackdropProps) => (
-      <BottomSheetBackdrop
-        {...props}
-        opacity={isDarkMode ? 0.7 : 0.5}
-        disappearsOnIndex={-1}
-        appearsOnIndex={0}
-      />
-    ),
-    [isDarkMode],
-  );
+  const renderBackdrop = useSheetBackdrop();
 
   const handleStartChange = useCallback(({ date }: { date: DateType }) => {
     const js = dateTypeToDate(date);
@@ -132,12 +125,12 @@ const FastingProtocolSheet = forwardRef<FastingProtocolSheetRef>((_props, ref) =
 
   const startLabel = useMemo(
     () =>
-      startDate.toLocaleString([], {
+      startDate.toLocaleString(appLocale, {
         weekday: 'short',
         hour: 'numeric',
         minute: '2-digit',
       }),
-    [startDate],
+    [appLocale, startDate],
   );
 
   const handleStart = () => {
@@ -157,14 +150,14 @@ const FastingProtocolSheet = forwardRef<FastingProtocolSheetRef>((_props, ref) =
       {
         onSuccess: () => {
           bottomSheetRef.current?.dismiss();
-          Toast.show({ type: 'success', text1: 'Fast started' });
+          Toast.show({ type: 'success', text1: t('fastingProtocol.fastStarted', { defaultValue: 'Fast started' }) });
         },
         onError: (error) => {
           addLog(`Failed to start fast: ${error}`, 'ERROR');
           Toast.show({
             type: 'error',
-            text1: 'Failed to start fast',
-            text2: 'Please try again.',
+            text1: t('fastingProtocol.failedStart', { defaultValue: 'Failed to start fast' }),
+            text2: t('common.tryAgain', { defaultValue: 'Please try again.' }),
           });
         },
       },
@@ -178,14 +171,24 @@ const FastingProtocolSheet = forwardRef<FastingProtocolSheetRef>((_props, ref) =
       keyboardBehavior="interactive"
       keyboardBlurBehavior="restore"
       android_keyboardInputMode="adjustPan"
+      // On Android the sheet's content pan gesture steals vertical drags from
+      // the time picker's wheels (plain FlatLists), so content panning stays
+      // off there. Must be static: toggling this prop swaps the sheet's
+      // content wrapper component, remounting the content and dismissing the
+      // modal.
+      enableContentPanningGesture={Platform.OS !== 'android'}
       backdropComponent={renderBackdrop}
       containerComponent={sheetContainer}
       backgroundStyle={{ backgroundColor: surfaceBg }}
       handleIndicatorStyle={{ backgroundColor: textMuted }}
     >
-      <BottomSheetScrollView contentContainerClassName="px-5 pb-safe-or-8">
+      {/* bg-surface is a touch shield, not decoration: with content panning off
+          on Android, gesture-handler lets taps on background-less views fall
+          through to the backdrop's tap-to-close. A background makes this
+          container absorb them. */}
+      <BottomSheetScrollView contentContainerClassName="bg-surface px-5 pb-safe-or-8">
         <Text className="text-lg font-semibold text-text-primary text-center mb-4">
-          Start a fast
+          {t('fastingProtocol.startTitle', { defaultValue: 'Start a fast' })}
         </Text>
 
         {/* Protocol list */}
@@ -195,20 +198,23 @@ const FastingProtocolSheet = forwardRef<FastingProtocolSheetRef>((_props, ref) =
             <TouchableOpacity
               key={preset.id}
               onPress={() => setSelectedPresetId(preset.id)}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              accessibilityLabel={getPresetCopy(t, preset.id, 'name', preset.name)}
               activeOpacity={0.7}
               className={`rounded-xl p-3 mb-2 border ${
                 selected ? 'bg-accent-primary/10 border-accent-primary' : 'bg-raised border-border-subtle'
               }`}
             >
               <View className="flex-row items-center justify-between">
-                <Text className="text-base font-semibold text-text-primary">{preset.name}</Text>
+                <Text className="text-base font-semibold text-text-primary">{getPresetCopy(t, preset.id, 'name', preset.name)}</Text>
                 {preset.id !== CUSTOM_PRESET_ID && (
                   <Text className="text-sm font-medium" style={{ color: accentPrimary }}>
                     {preset.fastingHours}:{preset.eatingHours}
                   </Text>
                 )}
               </View>
-              <Text className="text-sm text-text-secondary mt-0.5">{preset.description}</Text>
+              <Text className="text-sm text-text-secondary mt-0.5">{getPresetCopy(t, preset.id, 'description', preset.description)}</Text>
 
               {/* Custom duration input */}
               {selected && preset.id === CUSTOM_PRESET_ID && (
@@ -220,8 +226,13 @@ const FastingProtocolSheet = forwardRef<FastingProtocolSheetRef>((_props, ref) =
                     onIncrement={() => adjustCustom(1)}
                     keyboardType="number-pad"
                     InputComponent={BottomSheetTextInput}
+                    accessibilityLabels={{
+                      decrement: t('fastingProtocol.accessibility.decreaseHours', { defaultValue: 'Decrease fasting duration' }),
+                      input: t('fastingProtocol.accessibility.durationHours', { defaultValue: 'Fasting duration in hours' }),
+                      increment: t('fastingProtocol.accessibility.increaseHours', { defaultValue: 'Increase fasting duration' }),
+                    }}
                   />
-                  <Text className="text-text-secondary text-base ml-3">hour fast</Text>
+                  <Text className="text-text-secondary text-base ml-3">{t('fastingProtocol.hourFast', { defaultValue: 'hour fast' })}</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -233,8 +244,10 @@ const FastingProtocolSheet = forwardRef<FastingProtocolSheetRef>((_props, ref) =
           onPress={() => setShowStartPicker((v) => !v)}
           activeOpacity={0.7}
           className="flex-row items-center justify-between py-3 mt-1"
+          accessibilityRole="button"
+          accessibilityLabel={t('fastingProtocol.accessibility.startTime', { defaultValue: 'Start time: {{time}}', time: startLabel })}
         >
-          <Text className="text-base text-text-primary">Start time</Text>
+          <Text className="text-base text-text-primary">{t('fastingProtocol.startTime', { defaultValue: 'Start time' })}</Text>
           <View className="flex-row items-center">
             <Text className="text-sm" style={{ color: accentPrimary }}>
               {startLabel}
@@ -266,6 +279,7 @@ const FastingProtocolSheet = forwardRef<FastingProtocolSheetRef>((_props, ref) =
               weekday_label: { color: textSecondary },
               month_selector_label: { color: textPrimary, fontWeight: '600' },
               year_selector_label: { color: textPrimary, fontWeight: '600' },
+              time_selector_label: { color: textPrimary, fontWeight: '600' },
               disabled_label: { color: textMuted },
               month_label: { color: textPrimary },
               year_label: { color: textPrimary },
@@ -284,7 +298,7 @@ const FastingProtocolSheet = forwardRef<FastingProtocolSheetRef>((_props, ref) =
           disabled={isPending || !customValid}
           className="mt-4"
         >
-          {isPending ? 'Starting...' : 'Start Fasting'}
+          {isPending ? t('fastingProtocol.starting', { defaultValue: 'Starting...' }) : t('fastingProtocol.startAction', { defaultValue: 'Start Fasting' })}
         </Button>
       </BottomSheetScrollView>
     </BottomSheetModal>

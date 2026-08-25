@@ -1,16 +1,15 @@
-import React, { useRef } from 'react';
-import { Alert, View, Text, Pressable, TouchableOpacity } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Alert, View, Text, Pressable } from 'react-native';
 import ReanimatedSwipeable, {
   type SwipeableMethods,
 } from 'react-native-gesture-handler/ReanimatedSwipeable';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  runOnJS,
-} from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
 import { useCSSVariable } from 'uniwind';
+import { DeleteRowAction } from './SwipeableDeleteRow';
+import { useRowCollapse } from '../hooks/useRowCollapse';
 import type { ExerciseSessionResponse } from '@workspace/shared';
+import { canEditGroupedWorkout } from '@workspace/shared';
 import Icon from './Icon';
 import SafeImage from './SafeImage';
 import {
@@ -32,9 +31,6 @@ interface SwipeableExerciseRowProps {
   distanceUnit?: 'km' | 'miles';
 }
 
-const ROW_COLLAPSE_DURATION = 300;
-const DELETE_ACTION_WIDTH = 80;
-
 const SwipeableExerciseRow: React.FC<SwipeableExerciseRowProps> = ({
   session,
   entryDate,
@@ -43,10 +39,12 @@ const SwipeableExerciseRow: React.FC<SwipeableExerciseRowProps> = ({
   weightUnit = 'kg',
   distanceUnit = 'km',
 }) => {
+  const { t } = useTranslation();
   const swipeableRef = useRef<SwipeableMethods | null>(null);
-  const rowHeight = useSharedValue<number | null>(null);
-  const isRemoving = useSharedValue(false);
   const invalidateCacheRef = useRef<() => void>(() => {});
+  const { collapse, handleLayout, animatedStyle } = useRowCollapse(() =>
+    invalidateCacheRef.current(),
+  );
 
   const [accentPrimary, textMuted, textSecondary] = useCSSVariable([
     '--color-accent-primary',
@@ -54,18 +52,9 @@ const SwipeableExerciseRow: React.FC<SwipeableExerciseRowProps> = ({
     '--color-text-secondary',
   ]) as [string, string, string];
 
-  const handleAnimationEnd = () => {
-    invalidateCacheRef.current();
-  };
-
   const onDeleteSuccess = () => {
     swipeableRef.current?.close();
-    isRemoving.value = true;
-    rowHeight.value = withTiming(0, { duration: ROW_COLLAPSE_DURATION }, (finished) => {
-      if (finished) {
-        runOnJS(handleAnimationEnd)();
-      }
-    });
+    collapse();
   };
 
   const workoutDelete = useDeleteWorkout({
@@ -82,48 +71,30 @@ const SwipeableExerciseRow: React.FC<SwipeableExerciseRowProps> = ({
   const { confirmAndDelete, deleteEntry, invalidateCache } =
     session.type === 'preset' ? workoutDelete : exerciseDelete;
 
-  invalidateCacheRef.current = invalidateCache;
-
-  const animatedStyle = useAnimatedStyle(() => {
-    if (!isRemoving.value || rowHeight.value === null) {
-      return {};
-    }
-    return {
-      height: rowHeight.value,
-      overflow: 'hidden' as const,
-    };
-  });
-
-  const handleLayout = (event: { nativeEvent: { layout: { height: number } } }) => {
-    if (rowHeight.value === null) {
-      rowHeight.value = event.nativeEvent.layout.height;
-    }
-  };
+  // Keep the latest invalidateCache in a ref so the post-collapse callback
+  // (run via runOnJS after the delete) always invokes the current one. Written
+  // in an effect rather than during render so the value stays mutable to
+  // React's compiler.
+  useEffect(() => {
+    invalidateCacheRef.current = invalidateCache;
+  }, [invalidateCache]);
 
   const renderRightActions = () => (
-    <TouchableOpacity
-      className="bg-bg-danger justify-center items-center"
-      style={{ width: DELETE_ACTION_WIDTH }}
-      onPress={confirmAndDelete}
-      activeOpacity={0.7}
-      accessibilityRole="button"
-      accessibilityLabel="Delete exercise"
-    >
-      <Text className="text-text-danger font-semibold text-sm">Delete</Text>
-    </TouchableOpacity>
+    <DeleteRowAction onPress={confirmAndDelete} accessibilityLabel={t('exerciseRow.deleteExercise', { defaultValue: 'Delete exercise' })} />
   );
 
-  const { name, duration, calories } = getWorkoutSummary(session);
-  const { label: sourceLabel, isSparky } = getSourceLabel(session.source);
+  const { name, duration, calories } = getWorkoutSummary(session, t);
+  const sourceLabel = getSourceLabel(session.source);
+  const canEdit = canEditGroupedWorkout(session.source);
   const iconName = getWorkoutIcon(session);
   const firstImage = getFirstImage(session);
   const imageSource = firstImage && getImageSource ? getImageSource(firstImage) : null;
-  const subtitle = buildSessionSubtitle(session, duration, calories, weightUnit, distanceUnit);
+  const subtitle = buildSessionSubtitle(session, duration, calories, t, weightUnit, distanceUnit);
 
   const handleLongPress = () => {
     Alert.alert(name, undefined, [
-      { text: 'Delete', style: 'destructive', onPress: deleteEntry },
-      { text: 'Cancel', style: 'cancel' },
+      { text: t('common.delete', { defaultValue: 'Delete' }), style: 'destructive', onPress: deleteEntry },
+      { text: t('common.cancel', { defaultValue: 'Cancel' }), style: 'cancel' },
     ]);
   };
 
@@ -137,11 +108,13 @@ const SwipeableExerciseRow: React.FC<SwipeableExerciseRowProps> = ({
       >
         <Pressable className="py-2.5 bg-surface" onPress={onPress} onLongPress={handleLongPress}>
           <View className="flex-row items-center">
-            <View className="mr-3 items-center justify-center" style={{ width: 36, height: 36 }}>
+            {/* Kept in step with the food row's thumbnail so the two diary
+                row types line up rather than differing by a few pixels. */}
+            <View className="mr-3 items-center justify-center" style={{ width: 56, height: 56 }}>
               <SafeImage
                 source={imageSource}
-                style={{ width: 36, height: 36, borderRadius: 8 }}
-                fallback={<Icon name={iconName} size={20} color={accentPrimary} />}
+                style={{ width: 56, height: 56, borderRadius: 8 }}
+                fallback={<Icon name={iconName} size={28} color={accentPrimary} />}
               />
             </View>
             <View className="flex-1">
@@ -152,11 +125,11 @@ const SwipeableExerciseRow: React.FC<SwipeableExerciseRowProps> = ({
                 <View className="flex-row items-center gap-2">
                   <View
                     className="rounded-full px-1.5 py-0.5"
-                    style={{ backgroundColor: isSparky ? `${accentPrimary}20` : `${textMuted}20` }}
+                    style={{ backgroundColor: canEdit ? `${accentPrimary}20` : `${textMuted}20` }}
                   >
                     <Text
-                      className="text-[10px] font-medium"
-                      style={{ color: isSparky ? accentPrimary : textSecondary }}
+                      className="text-xs font-medium"
+                      style={{ color: canEdit ? accentPrimary : textSecondary }}
                     >
                       {sourceLabel}
                     </Text>

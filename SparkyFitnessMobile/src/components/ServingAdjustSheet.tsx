@@ -1,14 +1,14 @@
-import React, { forwardRef, useCallback, useImperativeHandle, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import { View, Text } from 'react-native';
 import Button from './ui/Button';
+import { useSheetBackdrop } from './ui/sheetChrome';
 import {
   BottomSheetModal,
   BottomSheetView,
-  BottomSheetBackdrop,
   BottomSheetTextInput,
-  type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
-import { useUniwind, useCSSVariable } from 'uniwind';
+import { useCSSVariable } from 'uniwind';
 import StepperInput from './StepperInput';
 import { useUpdateFoodEntry } from '../hooks/useUpdateFoodEntry';
 import type { FoodEntry } from '../types/foodEntries';
@@ -25,15 +25,14 @@ interface ServingAdjustSheetProps {
 }
 
 const ServingAdjustSheet = forwardRef<ServingAdjustSheetRef, ServingAdjustSheetProps>(({ onViewEntry }, ref) => {
+  const { t } = useTranslation();
   const bottomSheetRef = useRef<BottomSheetModal>(null);
   const [entry, setEntry] = useState<FoodEntry | null>(null);
   const [quantityText, setQuantityText] = useState('0');
-  const { theme } = useUniwind();
   const [surfaceBg, textMuted] = useCSSVariable([
     '--color-surface',
     '--color-text-muted',
   ]) as [string, string];
-  const isDarkMode = theme === 'dark' || theme === 'amoled';
 
   const quantity = parseDecimalInput(quantityText) || 0;
   const totalCalories = entry && entry.serving_size > 0
@@ -98,17 +97,7 @@ const ServingAdjustSheet = forwardRef<ServingAdjustSheetRef, ServingAdjustSheetP
     updateEntry({ quantity });
   };
 
-  const renderBackdrop = useCallback(
-    (props: BottomSheetBackdropProps) => (
-      <BottomSheetBackdrop
-        {...props}
-        opacity={isDarkMode ? 0.7 : 0.5}
-        disappearsOnIndex={-1}
-        appearsOnIndex={0}
-      />
-    ),
-    [isDarkMode]
-  );
+  const renderBackdrop = useSheetBackdrop();
 
   return (
     <BottomSheetModal
@@ -127,10 +116,10 @@ const ServingAdjustSheet = forwardRef<ServingAdjustSheetRef, ServingAdjustSheetP
             {/* Header */}
             <View className="items-center mb-5">
               <Text className="text-text-primary text-lg font-semibold text-center" numberOfLines={2}>
-                {entry.food_name || 'Unknown food'}
+                {entry.food_name || t('foodRow.unknownFood', { defaultValue: 'Unknown food' })}
               </Text>
               <Text className="text-text-secondary text-sm mt-1">
-                {entry.serving_size} {formatServingUnit(entry.unit)} = {entry.calories} Cal
+                {entry.serving_size} {formatServingUnit(entry.unit)} = {entry.calories} {t('nutrition.caloriesUnit', { defaultValue: 'Cal' })}
               </Text>
             </View>
 
@@ -152,7 +141,7 @@ const ServingAdjustSheet = forwardRef<ServingAdjustSheetRef, ServingAdjustSheetP
             {/* Calories */}
             <View className="items-center mb-6">
               <Text className="text-text-primary text-2xl font-semibold">
-                {totalCalories} Cal
+                {totalCalories} {t('nutrition.caloriesUnit', { defaultValue: 'Cal' })}
               </Text>
             </View>
 
@@ -176,7 +165,7 @@ const ServingAdjustSheet = forwardRef<ServingAdjustSheetRef, ServingAdjustSheetP
               onPress={handleDone}
               disabled={isPending || quantity <= 0}
             >
-              {isPending ? 'Saving...' : 'Done'}
+              {isPending ? t('common.saving', { defaultValue: 'Saving…' }) : t('common.done', { defaultValue: 'Done' })}
             </Button>
           </>
         )}

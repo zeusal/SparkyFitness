@@ -4,6 +4,7 @@ import exerciseRepository from '../../models/exercise.js';
 import exerciseEntryRepository from '../../models/exerciseEntry.js';
 import sleepRepository from '../../models/sleepRepository.js';
 import activityDetailsRepository from '../../models/activityDetailsRepository.js';
+import { utcOffsetMinutesFromIsoString } from '@workspace/shared';
 /**
  * Helper to get a value from a Polar object regardless of hyphen or underscore usage.
  */
@@ -109,8 +110,10 @@ async function processPolarExercises(
           exerciseDef = searchResults[0];
         }
       }
+      const durationSeconds = duration
+        ? Math.round(iso8601ToSeconds(duration))
+        : 0;
       if (!exerciseDef) {
-        const durationSeconds = duration ? iso8601ToSeconds(duration) : 0;
         const newExerciseData = {
           user_id: userId,
           name: exerciseName,
@@ -128,9 +131,7 @@ async function processPolarExercises(
         exerciseDef = await exerciseRepository.createExercise(newExerciseData);
       }
       const entryDate = startTime.split('T')[0];
-      const durationMinutes = duration
-        ? Math.round(iso8601ToSeconds(duration) / 60)
-        : 0;
+      const durationMinutes = Math.round(durationSeconds / 60);
       const heartRateObj =
         getVal(exercise, 'heart-rate') || getVal(exercise, 'heart_rate');
       const avgHeartRate = heartRateObj
@@ -154,7 +155,7 @@ async function processPolarExercises(
             set_type: 'Working Set',
             reps: 1,
             weight: 0,
-            duration: durationMinutes,
+            duration: durationSeconds,
             rest_time: 0,
             notes: '',
           },
@@ -436,10 +437,17 @@ async function processPolarSleep(
         0;
       const totalDurationSec =
         lightSleepSec + deepSleepSec + remSleepSec + awakeSec;
+      // The raw sleep-start-time string carries the recording zone as a
+      // ±HH:MM suffix that parsePolarToUTC normalizes away; naive or
+      // date-only strings yield null and stamp nothing.
+      const recordUtcOffsetMinutes = utcOffsetMinutesFromIsoString(startTime);
       const sleepEntryData = {
         entry_date: entryDate,
         bedtime: parsePolarToUTC(startTime),
         wake_time: parsePolarToUTC(endTime),
+        ...(recordUtcOffsetMinutes !== null
+          ? { record_utc_offset_minutes: recordUtcOffsetMinutes }
+          : {}),
         duration_in_seconds: totalDurationSec,
         time_asleep_in_seconds: lightSleepSec + deepSleepSec + remSleepSec,
         sleep_score: getVal(night, 'sleep-score'),

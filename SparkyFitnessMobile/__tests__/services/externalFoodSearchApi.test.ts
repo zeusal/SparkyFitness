@@ -1297,6 +1297,37 @@ describe('externalFoodSearchApi', () => {
     };
 
     describe('transformNormalizedFood', () => {
+      test('carries the provider photo through to the search row', () => {
+        // Regression: provider results rendered a placeholder icon on mobile
+        // while web showed the photo. The server sends image_url, but this
+        // mapper dropped it — a field this function omits is invisible to the
+        // UI no matter what arrived on the wire.
+        const food = {
+          name: 'Sambar Powder',
+          brand: 'MTR',
+          is_custom: false,
+          image_url: 'https://images.openfoodfacts.org/thumb.jpg',
+          image_source_url: 'https://images.openfoodfacts.org/full.jpg',
+          default_variant: {
+            serving_size: 100,
+            serving_unit: 'g',
+            calories: 0,
+            protein: 0,
+            carbs: 0,
+            fat: 0,
+          },
+        };
+
+        const result = transformNormalizedFood(food, 'openfoodfacts');
+
+        expect(result.image_url).toBe(
+          'https://images.openfoodfacts.org/thumb.jpg',
+        );
+        expect(result.image_source_url).toBe(
+          'https://images.openfoodfacts.org/full.jpg',
+        );
+      });
+
       test('flattens default_variant to top-level fields', () => {
         const food = {
           id: 'internal-1',
@@ -1333,6 +1364,13 @@ describe('externalFoodSearchApi', () => {
           id: 'ext-123',
           name: 'Chicken Breast',
           brand: 'Farm Fresh',
+          image_url: null,
+          image_source_url: null,
+          images: undefined,
+          barcode: undefined,
+          provider_type: 'openfoodfacts',
+          provider_external_id: 'ext-123',
+          is_custom: false,
           calories: 50,
           protein: 9,
           carbs: 0,
@@ -1481,6 +1519,160 @@ describe('externalFoodSearchApi', () => {
         expect(result.variants![1].serving_description).toBe('200 g');
         expect(result.variants![1].fiber).toBe(3);
         expect(result.variants![1].trans_fat).toBe(0);
+      });
+
+      test('preserves every Yazio serving description with its gram weight', () => {
+        const food = {
+          name: 'Protein Pudding',
+          brand: 'Yazio Brand',
+          provider_external_id: 'yazio-pudding',
+          provider_type: 'yazio',
+          is_custom: false,
+          default_variant: {
+            serving_size: 100,
+            serving_unit: 'g',
+            serving_description: '100 g',
+            calories: 81,
+            protein: 5,
+            carbs: 10,
+            fat: 2,
+            is_default: true,
+          },
+          variants: [
+            {
+              serving_size: 100,
+              serving_unit: 'g',
+              serving_description: '100 g',
+              calories: 81,
+              protein: 5,
+              carbs: 10,
+              fat: 2,
+              is_default: true,
+            },
+            {
+              serving_size: 1,
+              serving_unit: 'serving',
+              serving_description: '1 serving (200 g)',
+              calories: 162,
+              protein: 10,
+              carbs: 20,
+              fat: 4,
+              is_default: false,
+            },
+            {
+              serving_size: 200,
+              serving_unit: 'g',
+              serving_description: '200 g',
+              calories: 162,
+              protein: 10,
+              carbs: 20,
+              fat: 4,
+              is_default: false,
+            },
+            {
+              serving_size: 1,
+              serving_unit: 'serving',
+              serving_description: '1 serving (400 g)',
+              calories: 324,
+              protein: 20,
+              carbs: 40,
+              fat: 8,
+              is_default: false,
+            },
+            {
+              serving_size: 400,
+              serving_unit: 'g',
+              serving_description: '400 g',
+              calories: 324,
+              protein: 20,
+              carbs: 40,
+              fat: 8,
+              is_default: false,
+            },
+          ],
+        };
+
+        const result = transformNormalizedFood(food, 'yazio');
+
+        expect(result.variants?.map(variant => variant.serving_description)).toEqual([
+          '1 serving (200 g)',
+          '100 g',
+          '200 g',
+          '1 serving (400 g)',
+          '400 g',
+        ]);
+      });
+
+      test('keeps the search-row serving when a matching variant exists', () => {
+        // Regression: a FatSecret row promising "100 g" opened a preview
+        // showing "1 small" because the details' default serving won.
+        const food = {
+          name: 'Pork Chop',
+          brand: null,
+          provider_external_id: 'fs-1',
+          is_custom: false,
+          default_variant: {
+            serving_size: 1, serving_unit: 'small', calories: 118,
+            protein: 13, carbs: 0, fat: 7, is_default: true,
+          },
+          variants: [
+            {
+              serving_size: 1, serving_unit: 'small', calories: 118,
+              protein: 13, carbs: 0, fat: 7, is_default: true,
+            },
+            {
+              serving_size: 1, serving_unit: 'medium', calories: 197,
+              protein: 22, carbs: 0, fat: 11, is_default: false,
+            },
+            {
+              serving_size: 100, serving_unit: 'g', calories: 231,
+              protein: 26, carbs: 0, fat: 13, is_default: false,
+            },
+          ],
+        };
+
+        const result = transformNormalizedFood(food, 'fatsecret', {
+          serving_size: 100,
+          serving_unit: 'g',
+        });
+
+        expect(result.serving_size).toBe(100);
+        expect(result.serving_unit).toBe('g');
+        expect(result.calories).toBe(231);
+        // The provider default stays next in line, still selectable.
+        expect(result.variants![0].serving_size).toBe(100);
+        expect(result.variants![1].serving_unit).toBe('small');
+      });
+
+      test('preferred serving overrides the named-serving swap on a 100g default', () => {
+        const food = {
+          name: 'Pork Chop',
+          brand: null,
+          provider_external_id: 'fs-1',
+          is_custom: false,
+          default_variant: {
+            serving_size: 100, serving_unit: 'g', calories: 231,
+            protein: 26, carbs: 0, fat: 13, is_default: true,
+          },
+          variants: [
+            {
+              serving_size: 1, serving_unit: 'small', calories: 118,
+              protein: 13, carbs: 0, fat: 7, is_default: false,
+            },
+          ],
+        };
+
+        // Without a preferred serving the named-serving heuristic swaps
+        // display to the household size; the caller's serving pins it back.
+        expect(transformNormalizedFood(food, 'fatsecret').serving_unit).toBe('small');
+
+        const pinned = transformNormalizedFood(food, 'fatsecret', {
+          serving_size: 100,
+          serving_unit: 'g',
+        });
+        expect(pinned.serving_size).toBe(100);
+        expect(pinned.serving_unit).toBe('g');
+        expect(pinned.calories).toBe(231);
       });
 
       test('puts default_variant first in variants array', () => {
@@ -2070,6 +2262,7 @@ describe('externalFoodSearchApi', () => {
       ['CONTENT_BLOCKED', 422],
       ['PARSE_ERROR', 422],
       ['UPSTREAM_ERROR', 502],
+      ['PRIVATE_NETWORK_FORBIDDEN', 403],
       ['TIMEOUT', 504],
       ['INVALID_REQUEST', 400],
     ] as const)('maps server %s to FoodPhotoEstimateError', async (code, status) => {

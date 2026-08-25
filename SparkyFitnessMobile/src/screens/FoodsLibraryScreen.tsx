@@ -1,31 +1,42 @@
-import React, { useState, useCallback } from 'react';
-import { Platform, View, Text, FlatList, RefreshControl } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import React, { useState, useCallback, useMemo } from 'react';
+import { View, FlatList, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCSSVariable } from 'uniwind';
-import Button from '../components/ui/Button';
-import Icon from '../components/Icon';
 import LibrarySearchBar from '../components/LibrarySearchBar';
 import PaginatedLibraryFooter from '../components/PaginatedLibraryFooter';
 import StatusView from '../components/StatusView';
 import FoodLibraryRow from '../components/FoodLibraryRow';
 import { useActiveWorkoutBarPadding } from '../components/ActiveWorkoutBar';
-import { useFoodsLibrary, useServerConnection } from '../hooks';
+import { useFavorites, useFoodsLibrary, useServerConnection, useProfile } from '../hooks';
 import { foodItemToFoodInfo } from '../types/foodInfo';
+import { useNativeIOSHeadersActive } from '../services/nativeTabBarPreference';
+import { useScreenHeader } from '../hooks/useScreenHeader';
+import { useAppPreferencesStore } from '../stores/appPreferencesStore';
+import {
+  filterByOwnership,
+  ownershipFilterEmptyState,
+  ownershipFilterHeaderMenu,
+} from '../utils/shareStatus';
 import type { RootStackScreenProps } from '../types/navigation';
 import type { FoodItem } from '../types/foods';
 
 type FoodsLibraryScreenProps = RootStackScreenProps<'FoodsLibrary'>;
 
 const FoodsLibraryScreen: React.FC<FoodsLibraryScreenProps> = ({ navigation }) => {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const usesNativeHeader = useNativeIOSHeadersActive();
   const activeWorkoutBarPadding = useActiveWorkoutBarPadding('stack');
   const accentColor = useCSSVariable('--color-accent-primary') as string;
-  const textPrimary = useCSSVariable('--color-text-primary') as string;
   const scrollBottomPadding = insets.bottom + activeWorkoutBarPadding + 16;
   const [searchText, setSearchText] = useState('');
+  const ownershipFilter = useAppPreferencesStore((s) => s.foodsLibraryOwnershipFilter);
+  const setOwnershipFilter = useAppPreferencesStore((s) => s.setFoodsLibraryOwnershipFilter);
   const [refreshing, setRefreshing] = useState(false);
 
   const { isConnected, isLoading: isConnectionLoading } = useServerConnection();
+  const { profile } = useProfile();
   const {
     foods,
     isLoading,
@@ -37,6 +48,12 @@ const FoodsLibraryScreen: React.FC<FoodsLibraryScreenProps> = ({ navigation }) =
     loadMore,
     refetch,
   } = useFoodsLibrary(searchText, { enabled: isConnected });
+  const filteredFoods = useMemo(() => filterByOwnership(foods, ownershipFilter, profile?.id), [foods, ownershipFilter, profile?.id]);
+  const { favoriteFoods } = useFavorites({ enabled: isConnected });
+  const favoriteFoodIds = useMemo(
+    () => new Set(favoriteFoods.map((f) => f.id)),
+    [favoriteFoods],
+  );
 
   const handleFoodPress = useCallback((food: FoodItem) => {
     navigation.navigate('FoodDetail', { item: foodItemToFoodInfo(food) });
@@ -48,72 +65,79 @@ const FoodsLibraryScreen: React.FC<FoodsLibraryScreenProps> = ({ navigation }) =
     setRefreshing(false);
   }, [refetch]);
 
-  const renderHeader = () => (
-    <View className="flex-row items-center px-4 pt-4 pb-5">
-      <Button
-        variant="ghost"
-        onPress={() => navigation.goBack()}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        className="py-0 px-0 mr-2"
-      >
-        <Icon name="chevron-back" size={22} color={textPrimary} />
-      </Button>
-      <Text className="text-2xl font-bold text-text-primary">Foods</Text>
-    </View>
-  );
-
-  const renderEmpty = () => (
-    <View className="px-6 py-10 items-center">
-      <Text className="text-text-primary text-base font-medium text-center">
-        {searchText.trim().length > 0 ? 'No matching foods found' : 'No foods found'}
-      </Text>
-      <Text className="text-text-secondary text-sm mt-2 text-center">
-        {searchText.trim().length > 0
-          ? 'Try a different search term to find saved foods.'
-          : 'Foods you save or log will appear here.'}
-      </Text>
-    </View>
-  );
+  const renderEmpty = () => {
+    if (ownershipFilter !== 'all' && foods.length > 0 && filteredFoods.length === 0) {
+      return (
+        <StatusView
+          inline
+          {...ownershipFilterEmptyState({
+            noun: t('foodLibrary.noun', { defaultValue: 'foods' }),
+            filter: ownershipFilter,
+            onReset: () => setOwnershipFilter('all'),
+            labels: {
+              all: t('ownership.all', { defaultValue: 'All' }),
+              mine: t('ownership.mine', { defaultValue: 'Mine' }),
+              family: t('ownership.family', { defaultValue: 'Family' }),
+              public: t('ownership.public', { defaultValue: 'Public' }),
+            },
+            emptyTitle: t('ownership.emptyTitle', { defaultValue: 'No {{noun}} in {{filter}}' }),
+            emptySubtitle: t('ownership.emptySubtitle', { defaultValue: 'Change the filter to see your other {{noun}}.' }),
+            showAllLabel: t('ownership.showAll', { defaultValue: 'Show All' }),
+          })}
+        />
+      );
+    }
+    return (
+      <StatusView
+        inline
+        title={searchText.trim().length > 0 ? t('foodLibrary.noMatch', { defaultValue: 'No matching foods found' }) : t('foodLibrary.noItems', { defaultValue: 'No foods found' })}
+        subtitle={searchText.trim().length > 0
+          ? t('foodLibrary.trySearch', { defaultValue: 'Try a different search term to find saved foods.' })
+          : t('foodLibrary.empty', { defaultValue: 'Foods you save or log will appear here.' })}
+      />
+    );
+  };
 
   const renderContent = () => {
     if (!isConnectionLoading && !isConnected) {
       return (
         <StatusView
           icon="cloud-offline"
-          iconColor="#9CA3AF"
+          iconTone="muted"
           iconSize={64}
-          title="No server configured"
-          subtitle="Configure your server connection in Settings to view your food library."
-          action={{ label: 'Go to Settings', onPress: () => navigation.navigate('Tabs', { screen: 'Settings' }), variant: 'primary' }}
+          title={t('foodLibrary.noServer', { defaultValue: 'No server configured' })}
+          subtitle={t('foodLibrary.configure', { defaultValue: 'Configure your server connection in Settings to view your food library.' })}
+          action={{ label: t('foodLibrary.go', { defaultValue: 'Go to Settings' }), onPress: () => navigation.navigate('Tabs', { screen: 'Settings' }), variant: 'primary' }}
         />
       );
     }
 
     if (isLoading || isConnectionLoading) {
-      return <StatusView loading title="Loading foods..." />;
+      return <StatusView loading title={t('foodLibrary.loading', { defaultValue: 'Loading foods...' })} />;
     }
 
     if (isError) {
       return (
         <StatusView
           icon="alert-circle"
-          iconColor="#EF4444"
+          iconTone="danger"
           iconSize={64}
-          title="Failed to load foods"
-          subtitle="Please check your connection and try again."
-          action={{ label: 'Retry', onPress: () => refetch(), variant: 'primary' }}
+          title={t('foodLibrary.failed', { defaultValue: 'Failed to load foods' })}
+          subtitle={t('foodLibrary.check', { defaultValue: 'Please check your connection and try again.' })}
+          action={{ label: t('foodLibrary.retry', { defaultValue: 'Retry' }), onPress: () => refetch(), variant: 'primary' }}
         />
       );
     }
 
     return (
       <FlatList
-        data={foods}
+        data={filteredFoods}
         keyExtractor={(item) => item.id}
         renderItem={({ item, index }) => (
           <FoodLibraryRow
             food={item}
-            showDivider={index < foods.length - 1}
+            isFavorite={favoriteFoodIds.has(item.id)}
+            showDivider={index < filteredFoods.length - 1}
             onPress={() => handleFoodPress(item)}
           />
         )}
@@ -122,7 +146,7 @@ const FoodsLibraryScreen: React.FC<FoodsLibraryScreenProps> = ({ navigation }) =
           <PaginatedLibraryFooter
             isFetchingNextPage={isFetchingNextPage}
             isFetchNextPageError={isFetchNextPageError}
-            errorMessage="Failed to load more foods."
+            errorMessage={t('foodLibrary.moreFailed', { defaultValue: 'Failed to load more foods.' })}
             onRetry={loadMore}
           />
         }
@@ -141,19 +165,38 @@ const FoodsLibraryScreen: React.FC<FoodsLibraryScreenProps> = ({ navigation }) =
     );
   };
 
+  const header = useScreenHeader({
+    title: t('foodLibrary.title', { defaultValue: 'Foods' }),
+    left: { kind: 'back' },
+    right: ownershipFilterHeaderMenu({
+      noun: t('foodLibrary.noun', { defaultValue: 'foods' }),
+      labels: {
+        all: t('ownership.all', { defaultValue: 'All' }),
+        mine: t('ownership.mine', { defaultValue: 'Mine' }),
+        family: t('ownership.family', { defaultValue: 'Family' }),
+        public: t('ownership.public', { defaultValue: 'Public' }),
+      },
+      showLabel: t('ownership.show', { defaultValue: 'Show' }),
+      filterAccessibilityLabel: t('ownership.filter', { defaultValue: 'Filter {{noun}}, filtered to {{filter}}' }),
+      identifier: 'foods-library-filter',
+      filter: ownershipFilter,
+      onSelect: setOwnershipFilter,
+    }),
+  });
+
   return (
-    <View className="flex-1 bg-background" style={Platform.OS === 'ios' ? undefined : { paddingTop: insets.top }}>
-      {Platform.OS !== 'ios' && renderHeader()}
-      {isConnected ? (
-        <LibrarySearchBar
-          value={searchText}
-          onChangeText={setSearchText}
-          placeholder="Search foods..."
-          isSearching={isSearching}
-        />
-      ) : null}
-      {renderContent()}
-    </View>
+      <View className="flex-1 bg-background" style={usesNativeHeader ? undefined : { paddingTop: insets.top }}>
+        {header}
+        {isConnected ? (
+          <LibrarySearchBar
+            value={searchText}
+            onChangeText={setSearchText}
+            placeholder={t('foodLibrary.search', { defaultValue: 'Search foods...' })}
+            isSearching={isSearching}
+          />
+        ) : null}
+        {renderContent()}
+      </View>
   );
 };
 

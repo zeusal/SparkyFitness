@@ -13,6 +13,11 @@ export interface TandoorPropertyType {
 export interface TandoorRecipe {
   id: number;
   name: string;
+  /**
+   * Recipe photo. Tandoor returns either an absolute URL or an instance-
+   * relative media path depending on its storage backend.
+   */
+  image?: string | null;
   source_url?: string | null;
   servings?: number | string | null;
   servings_text?: string[] | null;
@@ -36,6 +41,47 @@ export interface TandoorRecipe {
   >;
 }
 
+// Harvest every nutrient/property Tandoor exposes (structured nutrition, the
+// food_properties dictionary, and the generic properties array — which is where
+// instance-defined custom properties like "Magnesium" live), keyed by the
+// property's exact name, for alias discovery and custom-nutrient matching on
+// import. Tandoor's food_properties values are recipe totals, so normalize
+// those while preserving the per-serving values from its other response shapes.
+function extractTandoorProviderNutrients(
+  nutritionData: TandoorRecipe['nutrition'],
+  foodProperties: TandoorRecipe['food_properties'],
+  properties: TandoorRecipe['properties'],
+  recipeYield: number
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  const add = (rawName: unknown, rawValue: unknown) => {
+    if (typeof rawName !== 'string') return;
+    const num = Number(rawValue);
+    if (!Number.isFinite(num)) return;
+    const name = rawName.trim();
+    if (name) out[name] = num;
+  };
+  if (Array.isArray(nutritionData)) {
+    for (const item of nutritionData) add(item?.name, item?.value);
+  } else if (nutritionData && typeof nutritionData === 'object') {
+    for (const [key, value] of Object.entries(nutritionData)) add(key, value);
+  }
+  if (foodProperties && typeof foodProperties === 'object') {
+    for (const key of Object.keys(foodProperties)) {
+      const prop = foodProperties[key];
+      if (prop && prop.total_value !== undefined) {
+        add(prop.name, Number(prop.total_value) / recipeYield);
+      }
+    }
+  }
+  if (Array.isArray(properties)) {
+    for (const prop of properties) {
+      add(prop?.property_type?.name, prop?.property_amount);
+    }
+  }
+  return out;
+}
+
 export interface SparkyFoodMapping {
   food: {
     name: string;
@@ -46,6 +92,7 @@ export interface SparkyFoodMapping {
     provider_external_id: string;
     provider_type: string;
     is_quick_food: boolean;
+    image_url: string | null;
   };
   variant: {
     serving_size: number;
@@ -67,6 +114,7 @@ export interface SparkyFoodMapping {
     vitamin_c: number;
     calcium: number;
     iron: number;
+    provider_nutrients?: Record<string, number>;
     is_default: boolean;
   };
 }
@@ -411,6 +459,9 @@ class TandoorService {
     const properties = tandoorRecipe.properties || [];
     const foodProperties = tandoorRecipe.food_properties || {};
     const nutritionData = tandoorRecipe.nutrition;
+    const servings = Number(tandoorRecipe.servings);
+    const recipeYield =
+      Number.isFinite(servings) && servings > 0 ? servings : 1;
     // Generic getter that checks multiple candidate names across:
     // 1. nutrition object (explicit structured data)
     // 2. food_properties (auto-calculated data)
@@ -501,8 +552,9 @@ class TandoorService {
                     'debug',
                     `[Tandoor Mapping] Food Property Match: Found "${label}" via "${prop.name}" (slug: ${prop.open_data_slug}) = ${num}`
                   );
-                  if (num > 0) return num;
-                  if (bestValue === null) bestValue = num;
+                  const perServingValue = num / recipeYield;
+                  if (perServingValue > 0) return perServingValue;
+                  if (bestValue === null) bestValue = perServingValue;
                 }
               }
             }
@@ -661,23 +713,9 @@ class TandoorService {
         `Derived nutrition from properties for recipe ${tandoorRecipe.id}: calories=${calories}, protein=${protein}, carbs=${carbs}, fat=${fat}`
       );
     }
-    // Default serving information: preserve recipe servings count when provided (numeric)
-    let recipeYield = 1;
-    if (
-      tandoorRecipe.servings &&
-      !Number.isNaN(Number(tandoorRecipe.servings))
-    ) {
-      recipeYield = Number(tandoorRecipe.servings);
-    } else if (
-      Array.isArray(tandoorRecipe.servings_text) &&
-      tandoorRecipe.servings_text.length &&
-      !Number.isNaN(Number(tandoorRecipe.servings_text[0]))
-    ) {
-      recipeYield = Number(tandoorRecipe.servings_text[0]);
-    }
     log(
       'debug',
-      `[Tandoor Mapping] Recipe makes ${recipeYield} servings. Data is per-serving.`
+      `[Tandoor Mapping] Recipe makes ${recipeYield} servings. food_properties totals are normalized per serving.`
     );
     return {
       food: {
@@ -705,9 +743,16 @@ class TandoorService {
         provider_external_id: tandoorRecipe.id.toString(), // Use Tandoor's ID as external ID
         provider_type: 'tandoor',
         is_quick_food: false,
+        // Hotlinked in search results; localized on import. Relative media
+        // paths are resolved against the configured instance URL.
+        image_url: tandoorRecipe.image
+          ? tandoorRecipe.image.startsWith('http')
+            ? tandoorRecipe.image
+            : `${this.baseUrl}${tandoorRecipe.image.startsWith('/') ? '' : '/'}${tandoorRecipe.image}`
+          : null,
       },
       variant: {
-        // Tandoor nutrition values are alway for 1 serving
+        // Food variants represent one serving.
         serving_size: 1,
         serving_unit: 'serving',
         // Map nutrition values (fallbacks may be null -> coerce to 0)
@@ -731,6 +776,12 @@ class TandoorService {
         vitamin_c: Number(vitamin_c) || 0,
         calcium: Number(calcium) || 0,
         iron: Number(iron) || 0,
+        provider_nutrients: extractTandoorProviderNutrients(
+          nutritionData,
+          foodProperties,
+          properties,
+          recipeYield
+        ),
         is_default: true,
       },
     };

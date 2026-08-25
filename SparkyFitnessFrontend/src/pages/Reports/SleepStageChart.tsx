@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { type SleepChartData, SLEEP_STAGE_COLORS } from '@/types';
 import { usePreferences } from '@/contexts/PreferencesContext';
+import { formatTimeInZone, sleepEntryZone } from '@/utils/timeFormatters';
 import ZoomableChart from '@/components/ZoomableChart';
 import { useTheme } from '@/contexts/ThemeContext';
 
@@ -33,7 +34,8 @@ const stageLabels: { [key: string]: string } = {
 
 const SleepStageChart = ({ sleepChartData }: SleepStageChartProps) => {
   const { t } = useTranslation();
-  const { formatDateInUserTimezone, dateFormat } = usePreferences();
+  const { formatDateInUserTimezone, dateFormat, timeFormat, timezone } =
+    usePreferences();
   const { resolvedTheme } = useTheme();
   const [isMounted, setIsMounted] = React.useState(false);
 
@@ -230,17 +232,15 @@ const SleepStageChart = ({ sleepChartData }: SleepStageChartProps) => {
       );
     });
 
-    // Vertical grid lines and time labels
+    // Vertical grid lines and time labels. Axis times render in the day's
+    // recording zone (profile timezone when absent) so they agree with the
+    // header date and the analytics table.
+    const zone = sleepEntryZone(sleepChartData, timezone);
     const numTimeLabels = 5; // Number of time labels to display
     for (let i = 0; i <= numTimeLabels; i++) {
       const timeMs = minTime + (totalDurationMs / numTimeLabels) * i;
       const xPos = getX(timeMs);
-      const date = new Date(timeMs);
-      const timeString = date.toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      });
+      const timeString = formatTimeInZone(timeMs, zone, timeFormat);
 
       gridLines.push(
         <line

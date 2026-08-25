@@ -4,6 +4,7 @@ import type {
   FoodPhotoEstimateResponse,
   IndividualSessionResponse,
   PresetSessionResponse,
+  SharedPregnancy,
 } from '@workspace/shared';
 import type { FoodInfoItem } from './foodInfo';
 import type { FoodEntry } from './foodEntries';
@@ -19,6 +20,8 @@ import type {
 import type { WorkoutPreset } from './workoutPresets';
 import type { MealTypeKey } from '../utils/mealNutrition';
 import type { SaveFoodPayload } from '../services/api/foodsApi';
+import type { CompletedSetMap, PrSetMap } from '../stores/activeWorkoutStore';
+import type { AssumedSetValues } from '../utils/workoutSession';
 
 export type FoodPickerMode = 'log-entry' | 'meal-builder' | 'library';
 
@@ -33,13 +36,18 @@ export type TabParamList = {
 export type RootStackParamList = {
   Onboarding: undefined;
   Tabs: NavigatorScreenParams<TabParamList>;
+  CycleSettings: undefined;
+  CycleOnboarding: undefined;
+  CycleHub: undefined;
+  CycleLogModal: { date?: string } | undefined;
+  PregnancySetup: { pregnancy?: SharedPregnancy } | undefined;
   FoodsLibrary: undefined;
   MealsLibrary: undefined;
   ExercisesLibrary: undefined;
   WorkoutPresetsLibrary: undefined;
   WorkoutPresetDetail: { preset: WorkoutPreset; updatedPreset?: WorkoutPreset };
   WorkoutPresetForm:
-    | { mode: 'create-preset'; selectedExercise?: Exercise; selectionNonce?: number }
+    | { mode: 'create-preset'; sourceSession?: PresetSessionResponse; selectedExercise?: Exercise; selectionNonce?: number }
     | { mode: 'edit-preset'; preset: WorkoutPreset; returnKey: string; selectedExercise?: Exercise; selectionNonce?: number };
   MealDetail: { mealId: string; initialMeal?: Meal };
   FoodDetail: {
@@ -56,11 +64,25 @@ export type RootStackParamList = {
     pendingScannedBarcode?: string;
     scannedBarcodeNonce?: number;
   };
-  ExerciseDetail: { item: Exercise; updatedItem?: Exercise };
+  ExerciseDetail: {
+    item: Exercise;
+    updatedItem?: Exercise;
+    // Suppress the Start Workout / Log Exercise buttons when opened from within
+    // a workout context (active workout, workout builder/edit, preset form),
+    // where starting or logging this single exercise would be redundant.
+    hideWorkoutActions?: boolean;
+    // Route key of the workout/preset/activity form that opened ExerciseSearch.
+    // When set, the screen is a pre-add preview: an Add header action selects
+    // this exercise (importing it first if external), dispatches it to that
+    // form, and pops back past ExerciseSearch.
+    selectionReturnKey?: string;
+  };
   FoodSearch:
     | {
         date?: string;
         pickerMode?: FoodPickerMode;
+        /** Optional canonical meal type id to pre-select when logging. */
+        mealTypeId?: string;
       }
     | undefined;
   FoodEntryAdd:
@@ -75,6 +97,8 @@ export type RootStackParamList = {
         pickerMode?: FoodPickerMode;
         ingredientIndex?: number;
         returnDepth?: number;
+        /** Optional canonical meal type id to pre-select when logging. */
+        mealTypeId?: string;
       };
   EditLoggedMeal: { foodEntryMealId: string; initialMeal?: FoodEntryMeal };
   FoodEntryView: {
@@ -83,7 +107,22 @@ export type RootStackParamList = {
     adjustedUnitSelection?: FoodUnitSelectionResult;
     adjustedCustomNutrients?: Record<string, string | number> | null;
   };
-  MealTypeDetail: { date: string; mealType: MealTypeKey; mealLabel?: string };
+  MealTypeDetail: {
+    date: string;
+    /** Canonical meal type id (preferred over the legacy name key). */
+    mealTypeId?: string;
+    /** Legacy name key, kept for older callers and as a name fallback. */
+    mealType?: MealTypeKey;
+    /** Pre-resolved display label (literal custom name or localized system). */
+    mealLabel?: string;
+  };
+  DailyNutritionDetails: { date: string };
+  NutrientTrends: {
+    nutrientKey: string;
+    nutrientLabel: string;
+    unit: string;
+    goal?: number;
+  };
   FoodForm:
     | {
         mode: 'create-food';
@@ -119,13 +158,15 @@ export type RootStackParamList = {
         returnDepth?: number;
         initialMode?: 'barcode' | 'label' | 'photo';
         providerId?: string;
+        /** Preserved when the scan was started from a meal detail screen. */
+        mealTypeId?: string;
       }
     | {
         mode: 'capture-barcode';
         returnKey: string;
       }
     | undefined;
-  FoodPhotoIntro: { date?: string } | undefined;
+  FoodPhotoIntro: { date?: string; mealTypeId?: string } | undefined;
   FoodPhotoFlow: NavigatorScreenParams<FoodPhotoFlowParamList>;
   MealAdd:
     | {
@@ -140,7 +181,7 @@ export type RootStackParamList = {
       }
     | undefined;
   ExerciseSearch: { returnKey: string };
-  PresetSearch: { date?: string } | undefined;
+  PresetSearch: { selectedExercise?: Exercise; selectionNonce?: number } | undefined;
   WorkoutAdd: {
     session?: PresetSessionResponse;
     preset?: WorkoutPreset;
@@ -152,19 +193,47 @@ export type RootStackParamList = {
   } | undefined;
   ActivityAdd: { entry?: IndividualSessionResponse; date?: string; popCount?: number; selectedExercise?: Exercise; selectionNonce?: number; skipDraftLoad?: boolean } | undefined;
   WorkoutDetail: { session: PresetSessionResponse; selectedExercise?: Exercise; selectionNonce?: number };
+  ActiveWorkout: { selectedExercise?: Exercise; selectionNonce?: number } | undefined;
+  // Post-save celebration for a finished live workout. Renders entirely from
+  // the store snapshot captured before `clearWorkout()`; only calories arrive
+  // via a post-save session refetch.
+  WorkoutComplete: {
+    session: PresetSessionResponse;
+    completedSetIds: CompletedSetMap;
+    prSetIds: PrSetMap;
+    startedAt: number | null;
+    finishedAt: number;
+    // Update-preset prompt inputs, snapshotted with the rest because the
+    // store is cleared before this screen mounts. The config id scopes the
+    // numeric preset id to the server it lives on; plannedSetValues backfills
+    // skipped sets with their programmed values.
+    sourcePresetId: number | null;
+    sourceServerConfigId: string | null;
+    plannedSetValues: Record<string, AssumedSetValues>;
+  };
   ActivityDetail: { session: IndividualSessionResponse };
   FastingDetail: undefined;
   Chat: undefined;
   Logs: undefined;
   Sync: undefined;
+  ImportHistory: undefined;
   MeasurementsAdd: { date?: string } | undefined;
   CalorieSettings: undefined;
+  MealTypeSettings: undefined;
   FoodSettings: undefined;
   DashboardSettings: undefined;
+  DiarySettings: undefined;
+  WorkoutSettings: undefined;
   ServerSettings: undefined;
+  PasskeySettings: undefined;
   AppSettings: undefined;
+  NotificationSettings: undefined;
   About: undefined;
   WhatsNew: undefined;
+  MedicationsList: undefined;
+  MedicationDetail: { medicationId: string };
+  MedicationForm: { medicationId?: string };
+  MedicationScheduleForm: { medicationId: string; scheduleId?: string };
 };
 
 declare global {
@@ -184,6 +253,8 @@ export type FoodPhotoFlowParamList = {
     initialDescription?: string;
     initialTotalWeight?: string;
     initialWeightUnit?: 'g' | 'oz';
+    /** Preserved when the photo flow was started from a meal detail screen. */
+    mealTypeId?: string;
   };
   EstimateReview: {
     date?: string;
@@ -193,10 +264,14 @@ export type FoodPhotoFlowParamList = {
       totalWeight?: number;
       weightUnit?: 'g' | 'oz';
     };
+    /** Preserved when the photo flow was started from a meal detail screen. */
+    mealTypeId?: string;
   };
   LogEntry: {
     date?: string;
     saveFoodPayload: SaveFoodPayload;
+    /** Preselected meal type when the flow was started from a meal detail. */
+    mealTypeId?: string;
   };
 };
 

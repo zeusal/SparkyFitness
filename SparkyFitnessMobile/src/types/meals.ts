@@ -1,7 +1,20 @@
+// 'food' (default, omitted by legacy servers) or 'meal' when this ingredient
+// links a reusable sub-meal instead of a food. See MEAL_COMPOSITION_PLAN.md.
+export type MealComponentType = 'food' | 'meal';
+
 export interface MealFood {
   id: string;
-  food_id: string;
-  variant_id: string;
+  item_type?: MealComponentType;
+  food_id?: string;
+  // Set when item_type === 'meal': the linked sub-meal's identity/serving
+  // metadata. Nutrient fields below carry the sub-meal's server-resolved
+  // full-recipe totals, scaled the same way as a food row (quantity/serving_size).
+  child_meal_id?: string;
+  child_meal_name?: string;
+  child_meal_serving_size?: number;
+  child_meal_serving_unit?: string;
+  child_meal_total_servings?: number;
+  variant_id?: string;
   quantity: number;
   unit: string;
   food_name: string;
@@ -30,8 +43,10 @@ export interface MealFood {
 }
 
 export interface MealFoodPayload {
-  food_id: string;
-  variant_id: string;
+  item_type?: MealComponentType;
+  food_id?: string;
+  child_meal_id?: string;
+  variant_id?: string;
   quantity: number;
   unit: string;
   food_name?: string;
@@ -104,5 +119,9 @@ export interface Meal {
   total_servings: number;
   created_at: string;
   updated_at: string;
+  // Present only on items returned by the favorites endpoint.
+  favorited_at?: string;
+  // Ordered image paths; index 0 is the thumbnail. See FoodItem.images.
+  images?: string[] | null;
   foods: MealFood[];
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toHourMinute } from '@workspace/shared';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,6 +43,7 @@ const MealTypeManager = () => {
 
   const [newName, setNewName] = useState('');
   const [newSortOrder, setNewSortOrder] = useState(100);
+  const [newDefaultTime, setNewDefaultTime] = useState<string>('');
 
   const { data: mealTypes = [] } = useMealTypes();
   const { mutateAsync: createMealType } = useCreateMealTypeMutation();
@@ -54,9 +56,11 @@ const MealTypeManager = () => {
     await createMealType({
       name: newName.trim(),
       sort_order: Number(newSortOrder),
+      default_time: newDefaultTime || null,
     });
     setNewName('');
     setNewSortOrder(100);
+    setNewDefaultTime('');
     setIsAddDialogOpen(false);
   };
 
@@ -68,6 +72,7 @@ const MealTypeManager = () => {
       data: {
         name: newName.trim(),
         sort_order: Number(newSortOrder),
+        default_time: newDefaultTime || null,
       },
     });
 
@@ -97,6 +102,7 @@ const MealTypeManager = () => {
     setEditingMealType(item);
     setNewName(item.name);
     setNewSortOrder(item.sort_order);
+    setNewDefaultTime(toHourMinute(item.default_time) || '');
     setIsEditDialogOpen(true);
   };
 
@@ -113,60 +119,80 @@ const MealTypeManager = () => {
   return (
     <div className="space-y-4">
       {/* Header / Add Button */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-medium">
-          {t('mealTypeManager.title', 'Meal Categories')}
-        </h3>
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm">
-              <Plus className="w-4 h-4 mr-2" />
-              {t('mealTypeManager.add', 'Add Category')}
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>
-                {t('mealTypeManager.addTitle', 'Add Meal Category')}
-              </DialogTitle>
-              <DialogDescription>
-                {t(
-                  'mealTypeManager.addDesc',
-                  'Create a new meal category (e.g., Pre-Workout).'
-                )}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>{t('mealTypeManager.nameLabel', 'Name')}</Label>
-                <Input
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder="e.g. Midnight Snack"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>
-                  {t('mealTypeManager.sortOrderLabel', 'Sort Order')}
-                </Label>
-                <Input
-                  type="number"
-                  value={newSortOrder}
-                  onChange={(e) => setNewSortOrder(Number(e.target.value))}
-                />
-                <p className="text-xs text-muted-foreground">
-                  {t(
-                    'mealTypeManager.sortHelp',
-                    'Lower numbers appear first. (Breakfast=10, Lunch=20, Dinner=40)'
-                  )}
-                </p>
-              </div>
-              <Button onClick={handleAdd} className="w-full">
-                {t('common.save', 'Save')}
+      <div className="space-y-1">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-medium">
+            {t('mealTypeManager.title', 'Meal Categories')}
+          </h3>
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm">
+                <Plus className="w-4 h-4 mr-2" />
+                {t('mealTypeManager.add', 'Add Category')}
               </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>
+                  {t('mealTypeManager.addTitle', 'Add Meal Category')}
+                </DialogTitle>
+                <DialogDescription>
+                  {t(
+                    'mealTypeManager.addDesc',
+                    'Create a new meal category (e.g., Pre-Workout).'
+                  )}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>{t('mealTypeManager.nameLabel', 'Name')}</Label>
+                  <Input
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="e.g. Midnight Snack"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>
+                    {t('mealTypeManager.sortOrderLabel', 'Sort Order')}
+                  </Label>
+                  <Input
+                    type="number"
+                    value={newSortOrder}
+                    onChange={(e) => setNewSortOrder(Number(e.target.value))}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {t(
+                      'mealTypeManager.sortHelp',
+                      'Lower numbers appear first. (Breakfast=10, Lunch=20, Dinner=40)'
+                    )}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Default Time (optional)</Label>
+                  <Input
+                    type="time"
+                    value={newDefaultTime}
+                    onChange={(e) => setNewDefaultTime(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Used to suggest this meal category automatically based on
+                    your local time of day when logging food.
+                  </p>
+                </div>
+                <Button onClick={handleAdd} className="w-full">
+                  {t('common.save', 'Save')}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          {t(
+            'mealTypeManager.description',
+            'Customize meal categories and default start times. Suggested meal types adapt dynamically to your schedule when logging food.'
+          )}
+        </p>
       </div>
 
       {/* List */}
@@ -201,6 +227,26 @@ const MealTypeManager = () => {
                 <span className="text-xs text-muted-foreground">
                   Order: {item.sort_order}
                 </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground">
+                    Default Time:
+                  </span>
+                  <Input
+                    type="time"
+                    className="w-[100px] h-8 text-xs p-1"
+                    key={`${item.id}-${item.default_time}`}
+                    defaultValue={toHourMinute(item.default_time) || ''}
+                    onBlur={async (e) => {
+                      const val = e.target.value;
+                      if (val !== (toHourMinute(item.default_time) || '')) {
+                        await updateMealType({
+                          id: item.id,
+                          data: { default_time: val || null },
+                        });
+                      }
+                    }}
+                  />
+                </div>
                 <div className="flex gap-2">
                   <Button
                     variant="ghost"
@@ -288,6 +334,14 @@ const MealTypeManager = () => {
                 type="number"
                 value={newSortOrder}
                 onChange={(e) => setNewSortOrder(Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Default Time (optional)</Label>
+              <Input
+                type="time"
+                value={newDefaultTime}
+                onChange={(e) => setNewDefaultTime(e.target.value)}
               />
             </div>
             <DialogFooter>

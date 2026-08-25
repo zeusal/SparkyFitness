@@ -32,6 +32,7 @@ import {
   type WritebackRemovalResult,
 } from '../../WritebackMetrics';
 import { getMealTypeLabel } from '../../constants/meals';
+import i18n from '../../localization/i18n';
 import { runTasksInBatches } from '../../utils/concurrency';
 
 type DailySummary = Awaited<ReturnType<typeof fetchDailySummary>>;
@@ -158,7 +159,20 @@ const saveFoodCorrelation = async (
     HKFoodType: descriptor.name,
     SparkyWritebackVersion: version,
   };
-  const mealLabel = descriptor.mealType ? getMealTypeLabel(descriptor.mealType) : '';
+  const mealKey = descriptor.mealType?.toLowerCase();
+  const mealLabel = mealKey === 'breakfast'
+    ? i18n.t('mealTypes.breakfast', { defaultValue: 'Breakfast' })
+    : mealKey === 'lunch'
+      ? i18n.t('mealTypes.lunch', { defaultValue: 'Lunch' })
+      : mealKey === 'snacks' || mealKey === 'snack'
+        ? i18n.t('mealTypes.snacks', { defaultValue: 'Snacks' })
+        : mealKey === 'dinner'
+          ? i18n.t('mealTypes.dinner', { defaultValue: 'Dinner' })
+          : mealKey === 'other'
+            ? i18n.t('mealTypes.other', { defaultValue: 'Other' })
+            : descriptor.mealType
+              ? getMealTypeLabel(descriptor.mealType)
+              : '';
   if (mealLabel) metadata.Meal = mealLabel;
   const samples = descriptor.samples.map((sample) => ({ ...sample, metadata }));
   try {
@@ -276,6 +290,15 @@ const writeHydrationForDate = async (
   const ml = summary.waterIntake ?? 0;
   const descriptor = waterMlToSample(date, ml);
 
+  // A null descriptor with water logged means the noon anchor is still in the
+  // future — the day's sample can't be written yet. Bail before the signature
+  // check: storing the empty signature here would make every later pre-noon
+  // run report "unchanged" no matter how much the total moves.
+  if (ml > 0 && !descriptor) {
+    addLog(`[Writeback] Hydration ${date}: deferred — noon anchor still in the future`, 'DEBUG');
+    return;
+  }
+
   const signature = hydrationSignature(descriptor);
   if (signature === (await loadHealthPreference<string>(hydrationSigKey(date)))) {
     addLog(`[Writeback] Hydration ${date}: unchanged — skipped`, 'DEBUG');
@@ -320,7 +343,7 @@ const writableMetrics = (metrics: WritebackMetric[]): WritebackMetric[] =>
     const gate: QuantityTypeIdentifierWriteable =
       m.id === 'hydration' ? DIETARY_WATER_IDENTIFIER : DIETARY_ENERGY_IDENTIFIER;
     const ok = isAuthorized(gate);
-    if (!ok) addLog(`[Writeback] Skipping ${m.label}: write permission not granted`, 'WARNING');
+    if (!ok) addLog(`[Writeback] Skipping ${m.defaultLabel}: write permission not granted`, 'WARNING');
     return ok;
   });
 
@@ -365,7 +388,7 @@ export const writebackPhase = async (dates: string[]): Promise<boolean> => {
           await writeHydrationForDate(date, summary, version);
         }
       } catch (error) {
-        addLog(`[Writeback] Failed ${metric.label} for ${date}: ${message(error)}`, 'ERROR');
+        addLog(`[Writeback] Failed ${metric.defaultLabel} for ${date}: ${message(error)}`, 'ERROR');
       }
     }
   };

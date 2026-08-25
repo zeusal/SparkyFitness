@@ -192,6 +192,29 @@ describe('transformHealthRecords', () => {
     });
   });
 
+  describe('HeartRateVariabilitySDNN records', () => {
+    test('extracts SDNN value from record.value with record.time date', () => {
+      const records = [
+        { time: '2024-01-15T08:00:00Z', value: 42 },
+      ];
+      const result = transformHealthRecords(records, { recordType: 'HeartRateVariabilitySDNN', unit: 'ms', type: 'HRV_SDNN' });
+
+      expect(result).toHaveLength(1);
+      expect((result[0] as TransformOutput & { value: number }).value).toBe(42);
+      expect((result[0] as TransformOutput & { date: string }).date).toBe('2024-01-15');
+      expect((result[0] as TransformOutput & { type: string }).type).toBe('HRV_SDNN');
+    });
+
+    test('skips record when value is missing', () => {
+      const records = [
+        { time: '2024-01-15T08:00:00Z' },
+      ];
+      const result = transformHealthRecords(records, { recordType: 'HeartRateVariabilitySDNN', unit: 'ms', type: 'HRV_SDNN' });
+
+      expect(result).toHaveLength(0);
+    });
+  });
+
   describe('percentage conversions (decimal to percentage)', () => {
     test('BloodAlcoholContent multiplies decimal by 100', () => {
       const records = [
@@ -361,7 +384,7 @@ describe('transformHealthRecords', () => {
       expect(exerciseResult.source).toBe('HealthKit');
     });
 
-    test('includes sets array with duration in minutes', () => {
+    test('includes sets array with duration in seconds', () => {
       const records = [
         {
           startTime: '2024-01-15T08:00:00Z',
@@ -372,21 +395,21 @@ describe('transformHealthRecords', () => {
       ];
       const result = transformHealthRecords(records, { recordType: 'Workout', unit: '', type: 'workout' });
 
-      expect((result[0] as TransformedExerciseSession).sets).toEqual([{ set_number: 1, set_type: 'Working Set', duration: 60 }]);
+      expect((result[0] as TransformedExerciseSession).sets).toEqual([{ set_number: 1, set_type: 'Working Set', duration_seconds: 3600 }]);
     });
 
-    test('rounds non-even duration to nearest minute in sets', () => {
+    test('rounds fractional duration to whole seconds in sets', () => {
       const records = [
         {
           startTime: '2024-01-15T08:00:00Z',
-          endTime: '2024-01-15T08:01:30Z',
+          endTime: '2024-01-15T08:01:30.600Z',
           activityType: 37,
-          duration: 90,
+          duration: 90.6,
         },
       ];
       const result = transformHealthRecords(records, { recordType: 'Workout', unit: '', type: 'workout' });
 
-      expect((result[0] as TransformedExerciseSession).sets).toEqual([{ set_number: 1, set_type: 'Working Set', duration: 2 }]);
+      expect((result[0] as TransformedExerciseSession).sets).toEqual([{ set_number: 1, set_type: 'Working Set', duration_seconds: 91 }]);
     });
 
     test('sends set with duration 0 when duration is missing', () => {
@@ -399,7 +422,7 @@ describe('transformHealthRecords', () => {
       ];
       const result = transformHealthRecords(records, { recordType: 'Workout', unit: '', type: 'workout' });
 
-      expect((result[0] as TransformedExerciseSession).sets).toEqual([{ set_number: 1, set_type: 'Working Set', duration: 0 }]);
+      expect((result[0] as TransformedExerciseSession).sets).toEqual([{ set_number: 1, set_type: 'Working Set', duration_seconds: 0 }]);
     });
   });
 
@@ -720,9 +743,9 @@ describe('own-app exclusion (writeback feedback-loop guard)', () => {
       { startTime: '2024-01-15T08:00:00Z', volume: { inLiters: 0.5 }, sourceBundleId: 'com.sparky.app' },
       { startTime: '2024-01-15T12:00:00Z', volume: { inLiters: 0.25 }, sourceBundleId: 'com.other.app' },
     ];
-    const result = transformHealthRecords(records, { recordType: 'Hydration', unit: 'L', type: 'water' });
+    const result = transformHealthRecords(records, { recordType: 'Hydration', unit: 'ml', type: 'water' });
     expect(result).toHaveLength(1);
-    expect((result[0] as TransformOutput & { value: number }).value).toBe(0.25);
+    expect((result[0] as TransformOutput & { value: number }).value).toBe(250);
   });
 
   test('keeps own dietary samples when no own bundle id is set', () => {
@@ -744,7 +767,7 @@ describe('mapDietarySample (dietary reverse mapper)', () => {
   });
 
   test('treats Cal (food Calorie) as kcal — the unit MFP/Cronometer return', () => {
-    expect(mapDietarySample({ quantityType: 'HKQuantityTypeIdentifierDietaryEnergyConsumed', quantity: 500, unit: 'Cal' }))
+    expect(mapDietarySample({ quantityType: 'HKQuantityTypeIdentifierDietaryEnergyConsumed', quantity: 500, unit: 'kcal' }))
       .toEqual({ column: 'calories', value: 500 });
   });
 

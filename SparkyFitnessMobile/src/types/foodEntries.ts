@@ -2,7 +2,6 @@ export interface FoodVariant {
   id: string;
   food_id: string;
   serving_size: string;
-  serving_weight: number;
   data: string; // JSON stringified nutritional data
 }
 export interface FoodEntry {
@@ -19,6 +18,7 @@ export interface FoodEntry {
   food_name?: string;
   brand_name?: string;
   entry_date: string;
+  entry_time?: string | null;
   meal_plan_template_id?: string;
   serving_size: number;
   serving_unit?: string;
@@ -48,4 +48,11 @@ export interface FoodEntry {
   // manually-logged entries. Used by Health Connect writeback to avoid re-exporting
   // entries that were themselves imported from a provider.
   source?: string | null;
+  provider_verified?: boolean;
+
+  // Per-entry override photos. Never written back to the parent food, so an
+  // entry without an override falls back to `food_images`.
+  images?: string[] | null;
+  // The parent food's own images, returned alongside the entry by the server.
+  food_images?: string[] | null;
 }

@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
-  Platform,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
@@ -12,23 +12,52 @@ import {
   BottomSheetModal,
   BottomSheetView,
   BottomSheetScrollView,
-  BottomSheetBackdrop,
-  type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
-import { FullWindowOverlay } from 'react-native-screens';
-import { useUniwind, useCSSVariable } from 'uniwind';
+import { useCSSVariable } from 'uniwind';
 import Icon from './Icon';
-
-// Render the sheet inside an iOS UIWindow so it sits above any native modal
-// presentation. No-op on Android.
-const sheetContainer =
-  Platform.OS === 'ios'
-    ? ({ children }: React.PropsWithChildren) => <FullWindowOverlay>{children}</FullWindowOverlay>
-    : undefined;
+import { sheetContainer, useSheetBackdrop } from './ui/sheetChrome';
 
 export interface PickerOption<T> {
   label: string;
   value: T;
+}
+
+interface PickerTriggerProps {
+  label: string;
+  onPress: () => void;
+  accessibilityLabel: string;
+  accessibilityHint?: string;
+  containerStyle?: StyleProp<ViewStyle>;
+}
+
+/**
+ * The dropdown-style control BottomSheetPicker renders when no custom trigger
+ * is supplied. Exported so settings rows backed by a different sheet (e.g.
+ * RestPeriodSheet) present the same control.
+ */
+export function PickerTrigger({
+  label,
+  onPress,
+  accessibilityLabel,
+  accessibilityHint = undefined,
+  containerStyle,
+}: PickerTriggerProps) {
+  const { t } = useTranslation();
+  const [textMuted] = useCSSVariable(['--color-text-muted']) as [string];
+  return (
+    <TouchableOpacity
+      className="flex-row items-center justify-between px-3 py-2.5 rounded-lg border border-border-subtle bg-raised min-h-11"
+      style={containerStyle}
+      onPress={onPress}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint ?? t('common.openSelectionMenu', { defaultValue: 'Opens selection menu' })}
+    >
+      <Text className="text-base flex-1 text-text-primary">{label}</Text>
+      <Icon name="chevron-down" size={16} color={textMuted} />
+    </TouchableOpacity>
+  );
 }
 
 export interface PickerSection<T> {
@@ -43,6 +72,7 @@ interface BottomSheetPickerProps<T extends string | number> {
   onSelect: (value: T) => void;
   placeholder?: string;
   title?: string;
+  accessibilityHint?: string;
   containerStyle?: StyleProp<ViewStyle>;
   renderTrigger?: (props: { onPress: () => void; selectedOption: PickerOption<T> | undefined }) => React.ReactNode;
 }
@@ -52,19 +82,19 @@ function BottomSheetPicker<T extends string | number>({
   options,
   sections,
   onSelect,
-  placeholder = 'Select an option',
+  placeholder = '',
   title,
+  accessibilityHint,
   containerStyle,
   renderTrigger,
 }: BottomSheetPickerProps<T>) {
+  const { t } = useTranslation();
   const bottomSheetRef = useRef<BottomSheetModal>(null);
-  const { theme } = useUniwind();
   const [primary, textMuted, surfaceBg] = useCSSVariable([
     '--color-accent-primary',
     '--color-text-muted',
     '--color-surface',
   ]) as [string, string, string];
-  const isDarkMode = theme === 'dark' || theme === 'amoled';
 
   const normalizedSections = useMemo<PickerSection<T>[]>(() => {
     if (sections && sections.length > 0) {
@@ -79,7 +109,7 @@ function BottomSheetPicker<T extends string | number>({
   );
 
   const selectedOption = flatOptions.find((opt) => opt.value === value);
-  const displayText = selectedOption?.label || placeholder;
+  const displayText = selectedOption?.label || placeholder || t('common.selectOption', { defaultValue: 'Select an option' });
 
   // For long lists (>8 items), use a fixed max height with scrolling
   // For short lists, use dynamic sizing to fit content exactly
@@ -108,17 +138,7 @@ function BottomSheetPicker<T extends string | number>({
     };
   }, []);
 
-  const renderBackdrop = useCallback(
-    (props: BottomSheetBackdropProps) => (
-      <BottomSheetBackdrop
-        {...props}
-        opacity={isDarkMode ? 0.7 : 0.5}
-        disappearsOnIndex={-1}
-        appearsOnIndex={0}
-      />
-    ),
-    [isDarkMode]
-  );
+  const renderBackdrop = useSheetBackdrop();
 
   const renderOption = (item: PickerOption<T>) => {
     const isSelected = item.value === value;
@@ -129,6 +149,12 @@ function BottomSheetPicker<T extends string | number>({
         style={{ borderBottomWidth: StyleSheet.hairlineWidth }}
         onPress={() => handleSelect(item)}
         activeOpacity={0.7}
+        accessibilityRole="radio"
+        accessibilityLabel={item.label}
+        accessibilityState={{ selected: isSelected }}
+        accessibilityHint={t('common.selectOptionHint', {
+          defaultValue: 'Double tap to select this option',
+        })}
       >
         <Text
           className={`text-base text-text-primary ${isSelected ? 'font-semibold' : ''}`}
@@ -167,22 +193,19 @@ function BottomSheetPicker<T extends string | number>({
   return (
     <>
       {renderTrigger ? (
+        // renderTrigger is a render prop; invoking it during render is intended.
+        // handleOpen closes over bottomSheetRef but only reads it inside the
+        // deferred onPress, so no ref is actually accessed during render.
+        // eslint-disable-next-line react-hooks/refs
         renderTrigger({ onPress: handleOpen, selectedOption })
       ) : (
-        <TouchableOpacity
-          className="flex-row items-center justify-between px-3 py-2.5 rounded-lg border border-border-subtle bg-raised min-h-11"
-          style={containerStyle}
+        <PickerTrigger
+          label={displayText}
           onPress={handleOpen}
-          activeOpacity={0.7}
-          accessibilityRole="button"
           accessibilityLabel={title || placeholder}
-          accessibilityHint="Opens selection menu"
-        >
-          <Text className="text-base flex-1 text-text-primary">
-            {displayText}
-          </Text>
-          <Icon name="chevron-down" size={16} color={textMuted} />
-        </TouchableOpacity>
+          accessibilityHint={accessibilityHint}
+          containerStyle={containerStyle}
+        />
       )}
 
       <BottomSheetModal

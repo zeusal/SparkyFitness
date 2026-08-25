@@ -6,6 +6,7 @@ import {
   usePreferences,
 } from '@/contexts/PreferencesContext';
 import { ChatbotVisibilityProvider } from '@/contexts/ChatbotVisibilityContext';
+import { ChatToolCategoriesProvider } from '@/contexts/ChatToolCategoriesContext';
 import LanguageHandler from '@/components/LanguageHandler';
 import { WaterContainerProvider } from '@/contexts/WaterContainerContext';
 import {
@@ -16,6 +17,9 @@ import { ThemeProvider } from '@/contexts/ThemeContext';
 import DraggableChatbotButton from '@/components/DraggableChatbotButton';
 import AboutDialog from '@/components/AboutDialog';
 import NewReleaseDialog, { ReleaseInfo } from '@/components/NewReleaseDialog';
+import AnnouncementDialog, {
+  AnnouncementInfo,
+} from '@/components/AnnouncementDialog';
 import AppSetup from '@/components/AppSetup';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -58,6 +62,9 @@ const Reports = lazyWithChunkRecovery(() => import('./pages/Reports/Reports'));
 const Medications = lazyWithChunkRecovery(
   () => import('./pages/Medications/Medications')
 );
+const CyclePage = lazyWithChunkRecovery(
+  () => import('./pages/Cycle/CyclePage')
+);
 const ExerciseDatabaseManager = lazyWithChunkRecovery(
   () => import('./pages/Exercises/Exercises')
 );
@@ -83,6 +90,9 @@ const WithingsCallback = lazyWithChunkRecovery(
 );
 const FitbitCallback = lazyWithChunkRecovery(
   () => import('@/pages/Integrations/FitbitCallback')
+);
+const OuraCallback = lazyWithChunkRecovery(
+  () => import('@/pages/Integrations/OuraCallback')
 );
 const GoogleHealthCallback = lazyWithChunkRecovery(
   () => import('@/pages/Integrations/GoogleHealthCallback')
@@ -130,6 +140,10 @@ const Root = () => {
   const [showAboutDialog, setShowAboutDialog] = useState(false);
   const [latestRelease, setLatestRelease] = useState<ReleaseInfo | null>(null);
   const [showNewReleaseDialog, setShowNewReleaseDialog] = useState(false);
+  const [announcement, setAnnouncement] = useState<AnnouncementInfo | null>(
+    null
+  );
+  const [showAnnouncementDialog, setShowAnnouncementDialog] = useState(false);
   const { data: appVersion } = useCurrentVersionQuery();
   const navigate = useNavigate();
   const invalidateGithubVersion = useInvalidateGithubVersion();
@@ -142,6 +156,11 @@ const Root = () => {
   const handleDismissRelease = (version: string) => {
     localStorage.setItem('dismissedReleaseVersion', version);
     setShowNewReleaseDialog(false);
+  };
+
+  const handleDismissAnnouncement = (id: string) => {
+    localStorage.setItem('dismissedAnnouncementId', id);
+    setShowAnnouncementDialog(false);
   };
 
   useEffect(() => {
@@ -162,6 +181,8 @@ const Root = () => {
                 <AppSetup
                   setLatestRelease={setLatestRelease}
                   setShowNewReleaseDialog={setShowNewReleaseDialog}
+                  setAnnouncement={setAnnouncement}
+                  setShowAnnouncementDialog={setShowAnnouncementDialog}
                 />
                 <Suspense
                   fallback={
@@ -230,6 +251,24 @@ const Root = () => {
                     onDismissForVersion={handleDismissRelease}
                   />
                 </ErrorBoundary>
+                <ErrorBoundary
+                  fallback={<ComponentFallback />}
+                  onError={(error, { componentStack }) => {
+                    logError(
+                      getUserLoggingLevel(),
+                      'AnnouncementDialog failed:',
+                      error,
+                      componentStack
+                    );
+                  }}
+                >
+                  <AnnouncementDialog
+                    isOpen={showAnnouncementDialog}
+                    onClose={() => setShowAnnouncementDialog(false)}
+                    announcement={announcement}
+                    onDismiss={handleDismissAnnouncement}
+                  />
+                </ErrorBoundary>
                 <Toaster />
               </WaterContainerProvider>
             </ActiveUserProvider>
@@ -291,6 +330,11 @@ const router = createBrowserRouter([
       {
         path: '/fitbit/callback',
         Component: FitbitCallback,
+        ErrorBoundary: RootErrorBoundary,
+      },
+      {
+        path: '/oura/callback',
+        Component: OuraCallback,
         ErrorBoundary: RootErrorBoundary,
       },
       {
@@ -363,6 +407,11 @@ const router = createBrowserRouter([
             ErrorBoundary: RouteErrorBoundary,
           },
           {
+            path: 'cycle',
+            Component: CyclePage,
+            ErrorBoundary: RouteErrorBoundary,
+          },
+          {
             path: 'settings',
             Component: Settings,
             ErrorBoundary: RouteErrorBoundary,
@@ -412,7 +461,9 @@ const App = () => {
     <>
       <ReactQueryDevtools buttonPosition="top-left" initialIsOpen={false} />
       <ChatbotVisibilityProvider>
-        <RouterProvider router={router} />
+        <ChatToolCategoriesProvider>
+          <RouterProvider router={router} />
+        </ChatToolCategoriesProvider>
       </ChatbotVisibilityProvider>
     </>
   );

@@ -22,8 +22,18 @@ export const getServiceTypes = (t: (key: string) => string): ServiceType[] => [
     label: t('settings.aiService.serviceTypes.openrouter'),
   },
   { value: 'xai', label: t('settings.aiService.serviceTypes.xai') },
+  { value: 'meta', label: t('settings.aiService.serviceTypes.meta') },
   { value: 'custom', label: t('settings.aiService.serviceTypes.custom') },
 ];
+
+// Local / self-hosted server types (LM Studio, llama.cpp, Ollama) commonly run
+// without an API key, so the add/edit forms must not force one for these types.
+// Cloud providers always need a key. This mirrors the server's requiresApiKey in
+// ai/providerDispatch.ts so the form and the dispatcher stay in agreement.
+export const requiresApiKey = (serviceType: string | undefined): boolean =>
+  serviceType !== 'ollama' &&
+  serviceType !== 'openai_compatible' &&
+  serviceType !== 'custom';
 
 // The first entry in each list is the recommended default — the cheapest model
 // that handles SparkyFitness's tasks well. Keep that ordering when refreshing,
@@ -31,9 +41,14 @@ export const getServiceTypes = (t: (key: string) => string): ServiceType[] => [
 export const getModelOptions = (serviceType: string): string[] => {
   switch (serviceType) {
     case 'openai':
-    case 'openai_compatible':
+      // The gpt-5.x families accept only the default temperature; the server
+      // detects that and omits the parameter (ai/modelCapabilities.ts), so
+      // they are safe to offer here.
       return [
         'gpt-4o-mini',
+        'gpt-5.6-luna',
+        'gpt-5.6-terra',
+        'gpt-5.6-sol',
         'gpt-5.4-mini',
         'gpt-5.4-nano',
         'gpt-4.1-mini',
@@ -41,7 +56,13 @@ export const getModelOptions = (serviceType: string): string[] => {
         'gpt-5.4',
       ];
     case 'anthropic':
-      return ['claude-sonnet-4-6', 'claude-haiku-4-5', 'claude-opus-4-8'];
+      return [
+        'claude-sonnet-5',
+        'claude-sonnet-4-6',
+        'claude-haiku-4-5',
+        'claude-opus-5',
+        'claude-opus-4-8',
+      ];
     case 'google':
       return [
         'gemini-2.5-flash',
@@ -84,6 +105,14 @@ export const getModelOptions = (serviceType: string): string[] => {
         'grok-4.20-0309-reasoning',
         'grok-build-0.1',
       ];
+    case 'meta':
+      // Meta Superintelligence Labs' Muse Spark, served over an
+      // OpenAI-compatible Chat Completions API. One published model for now.
+      return ['muse-spark-1.1'];
+    // 'openai_compatible' and 'custom' point at arbitrary user-hosted servers,
+    // so there is no model name we can suggest — OpenAI's names won't exist on
+    // most of them. Returning [] makes the form fall back to the custom-model
+    // text input where the user supplies their server's own model name.
     default:
       return [];
   }

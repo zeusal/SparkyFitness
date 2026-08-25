@@ -3,7 +3,12 @@ import exerciseRepository from '../../models/exercise.js';
 import exerciseEntryRepository from '../../models/exerciseEntry.js';
 import activityDetailsRepository from '../../models/activityDetailsRepository.js';
 import measurementRepository from '../../models/measurementRepository.js';
+import * as workoutTelemetryRepo from '../../models/workoutTelemetryRepository.js';
 import { todayInZone, instantToDay } from '@workspace/shared';
+import {
+  extractStravaTelemetryFields,
+  extractStravaLaps,
+} from './stravaTelemetryExtractors.js';
 
 interface StravaActivity {
   id: number;
@@ -133,10 +138,11 @@ async function processStravaActivities(
           ? parseFloat((activity.distance / 1000).toFixed(2))
           : null;
       // Strava: moving_time in seconds -> convert to minutes
-      const durationMinutes =
+      const durationSeconds =
         activity.moving_time !== null && activity.moving_time !== undefined
-          ? Math.round(activity.moving_time / 60)
+          ? Math.round(activity.moving_time)
           : 0;
+      const durationMinutes = Math.round(durationSeconds / 60);
       // Strava SummaryActivity often lacks calories, but DetailedActivity (if available) has it.
       // Default to 0 to satisfy the NOT NULL constraint in the database.
       const detailedActivity = detailedActivities[activity.id] as
@@ -167,7 +173,7 @@ async function processStravaActivities(
           {
             set_number: 1,
             set_type: 'Working Set',
-            duration: durationMinutes,
+            duration: durationSeconds,
             notes: 'Automatically created from Strava sync summary',
           },
         ],
@@ -191,6 +197,31 @@ async function processStravaActivities(
           detail_data: detailData,
           created_by_user_id: createdByUserId,
         });
+
+        // Only the DetailedActivity response (fetched per-activity) carries laps and
+        // the fuller telemetry summary; a bare SummaryActivity has neither.
+        if (detailedActivity) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const detailedRecord = detailedActivity as any;
+          await exerciseEntryRepository.updateExerciseEntryTelemetryOnly(
+            newEntry.id,
+            String(userId),
+            extractStravaTelemetryFields(detailedRecord)
+          );
+          const laps = extractStravaLaps(detailedRecord);
+          if (laps.length > 0) {
+            await workoutTelemetryRepo.bulkInsertExerciseEntryLaps(
+              String(userId),
+              String(createdByUserId),
+              laps.map((lap) => ({
+                user_id: String(userId),
+                exercise_entry_id: newEntry.id,
+                entry_date: entryDate,
+                ...lap,
+              }))
+            );
+          }
+        }
       }
       log(
         'info',

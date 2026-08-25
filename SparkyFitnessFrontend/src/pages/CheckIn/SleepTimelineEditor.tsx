@@ -14,7 +14,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { type SleepStageEvent, SLEEP_STAGE_COLORS } from '@/types';
-import { formatSecondsToHHMM } from '@/utils/timeFormatters';
+import {
+  formatSecondsToHHMM,
+  formatTimeWithPreference,
+} from '@/utils/timeFormatters';
+import { usePreferences } from '@/contexts/PreferencesContext';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 interface SleepTimelineEditorProps {
@@ -92,6 +96,8 @@ const SleepTimelineEditor: React.FC<SleepTimelineEditorProps> = ({
   const timelineRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStartTime, setDragStartTime] = useState<Date | null>(null);
+
+  const { timeFormat } = usePreferences();
 
   const [editableBedtime, setEditableBedtime] = useState(() =>
     format(parseISO(bedtime), 'HH:mm')
@@ -528,7 +534,7 @@ const SleepTimelineEditor: React.FC<SleepTimelineEditorProps> = ({
                 className="absolute"
                 style={{ left: `${left}%` }}
               >
-                {format(hourTime, 'HH:mm')}
+                {formatTimeWithPreference(hourTime, timeFormat)}
               </span>
             );
           })}
@@ -553,7 +559,7 @@ const SleepTimelineEditor: React.FC<SleepTimelineEditorProps> = ({
                 width: `${width}%`,
                 backgroundColor: SLEEP_STAGE_COLORS[event.stage_type],
               }}
-              title={`${event.stage_type}: ${format(parseISO(event.start_time), 'p')} - ${format(parseISO(event.end_time), 'p')}`}
+              title={`${event.stage_type}: ${formatTimeWithPreference(parseISO(event.start_time), timeFormat)} - ${formatTimeWithPreference(parseISO(event.end_time), timeFormat)}`}
             />
           );
         })}

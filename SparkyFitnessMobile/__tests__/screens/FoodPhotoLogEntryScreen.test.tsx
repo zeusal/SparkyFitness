@@ -28,7 +28,14 @@ jest.mock('../../src/services/api/goalsApi', () => ({
 }));
 jest.mock('../../src/services/haptics', () => ({
   fireSuccessHaptic: jest.fn(),
+  fireImpactHaptic: jest.fn(),
 }));
+
+jest.mock('@react-navigation/native', () => ({
+  ...jest.requireActual('@react-navigation/native'),
+  useIsFocused: () => true,
+}));
+
 jest.mock('react-native-toast-message', () => ({
   __esModule: true,
   default: { show: jest.fn() },
@@ -36,7 +43,6 @@ jest.mock('react-native-toast-message', () => ({
 
 // Stub the bottom-sheet picker — surface the trigger only.
 jest.mock('../../src/components/BottomSheetPicker', () => {
-  const React = require('react');
   return {
     __esModule: true,
     default: ({ renderTrigger }: any) =>
@@ -52,6 +58,14 @@ jest.mock('../../src/components/CalendarSheet', () => {
   return {
     __esModule: true,
     default: React.forwardRef(() => null),
+  };
+});
+
+jest.mock('../../src/components/MacroCompositionRing', () => {
+  const { View } = require('react-native');
+  return {
+    __esModule: true,
+    default: () => <View testID="macro-composition-ring" />,
   };
 });
 

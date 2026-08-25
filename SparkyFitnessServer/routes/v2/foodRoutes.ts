@@ -8,6 +8,12 @@ import {
 import { log } from '../../config/logging.js';
 import checkPermissionMiddleware from '../../middleware/checkPermissionMiddleware.js';
 import foodCoreService from '../../services/foodCoreService.js';
+import customNutrientService from '../../services/customNutrientService.js';
+import {
+  buildAliasIndex,
+  applyCustomNutrientMatches,
+  FoodWithProviderNutrients,
+} from '../../utils/foodUtils.js';
 import preferenceService from '../../services/preferenceService.js';
 import {
   isValidProviderType,
@@ -52,15 +58,6 @@ function normalizeFoodVariantForResponse(variant: unknown): unknown {
     ...record,
     id: nullToUndefined(record.id as string | null | undefined),
     user_id: nullToUndefined(record.user_id as string | null | undefined),
-    serving_description: nullToUndefined(
-      record.serving_description as string | null | undefined
-    ),
-    serving_weight: nullToUndefined(
-      record.serving_weight as number | null | undefined
-    ),
-    serving_weight_unit: nullToUndefined(
-      record.serving_weight_unit as string | null | undefined
-    ),
     saturated_fat: nullToUndefined(
       record.saturated_fat as number | null | undefined
     ),
@@ -128,6 +125,24 @@ function normalizeFoodForResponse(food: unknown): unknown {
   };
 }
 
+// Match the user's custom nutrients (by name/alias) against the extra nutrient
+// fields each provider attaches as `provider_nutrients`, populating custom_nutrients
+// on the mapped foods. Mutates in place; safe to call with an empty list.
+async function enrichWithCustomNutrients(
+  userId: string,
+  foods: FoodWithProviderNutrients[]
+): Promise<void> {
+  try {
+    const defs = await customNutrientService.getCustomNutrients(userId);
+    const aliasIndex = buildAliasIndex(defs);
+    applyCustomNutrientMatches(foods, aliasIndex);
+  } catch (error) {
+    // Custom-nutrient enrichment is best-effort; never fail an import over it.
+    // provider_nutrients still flows to the client for the field viewer.
+    log('warn', 'Custom nutrient enrichment failed:', error);
+  }
+}
+
 // --- Barcode endpoint ---
 
 const barcodeHandler: RequestHandler<{ barcode: string }> = async (
@@ -150,12 +165,18 @@ const barcodeHandler: RequestHandler<{ barcode: string }> = async (
       barcode,
 
       req.userId,
-      providerId
+      // Absent means "use the user's default provider", so preserve undefined.
+      providerId === undefined ? undefined : String(providerId),
+      req.authenticatedUserId
     );
 
     // Ensure barcode is preserved on the food when present
     if (result.food && !result.food.barcode) {
       result.food.barcode = barcode;
+    }
+
+    if (result.food) {
+      await enrichWithCustomNutrients(req.userId, [result.food]);
     }
 
     const normalizedResult = {
@@ -210,7 +231,13 @@ const searchHandler: RequestHandler<{ providerType: string }> = async (
       req.userId,
       providerType,
       query,
-      { page, pageSize, providerId, autoScale }
+      { page, pageSize, providerId, autoScale },
+      req.authenticatedUserId
+    );
+
+    await enrichWithCustomNutrients(
+      req.userId,
+      foods as FoodWithProviderNutrients[]
     );
 
     const normalizedFoods = foods.map((food) => normalizeFoodForResponse(food));
@@ -229,10 +256,13 @@ const searchHandler: RequestHandler<{ providerType: string }> = async (
       );
       return;
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (error instanceof Error && (error as any).status) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      res.status((error as any).status).json({ error: error.message });
+    if (
+      error instanceof Error &&
+      typeof (error as unknown as Record<string, unknown>).status === 'number'
+    ) {
+      res
+        .status((error as unknown as Record<string, unknown>).status as number)
+        .json({ error: error.message });
       return;
     }
     next(error);
@@ -256,7 +286,7 @@ const detailHandler: RequestHandler<{
 
   try {
     const credentials = await resolveProviderCredentials(
-      req.userId,
+      req.authenticatedUserId,
       providerId,
       providerType
     );
@@ -272,7 +302,7 @@ const detailHandler: RequestHandler<{
     switch (providerType) {
       case 'openfoodfacts': {
         const offProviderId = await resolveOpenFoodFactsProviderId(
-          req.userId,
+          req.authenticatedUserId,
           providerId
         );
         const data = await searchOpenFoodFactsByBarcodeFields(
@@ -280,7 +310,7 @@ const detailHandler: RequestHandler<{
           undefined,
           language,
 
-          offProviderId ? req.userId : undefined,
+          offProviderId ? req.authenticatedUserId : undefined,
           offProviderId || undefined
         );
         if (data.status === 1 && data.product) {
@@ -374,6 +404,7 @@ const detailHandler: RequestHandler<{
           username: credentials.app_id,
           password: credentials.app_key,
           baseUrl: credentials.base_url,
+          language,
         });
         break;
       }
@@ -393,6 +424,10 @@ const detailHandler: RequestHandler<{
       return;
     }
 
+    await enrichWithCustomNutrients(req.userId, [
+      food,
+    ] as FoodWithProviderNutrients[]);
+
     const response = NormalizedFoodSchema.parse(normalizeFoodForResponse(food));
     res.status(200).json(response);
   } catch (error: unknown) {
@@ -405,10 +440,13 @@ const detailHandler: RequestHandler<{
       );
       return;
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (error instanceof Error && (error as any).status) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      res.status((error as any).status).json({ error: error.message });
+    if (
+      error instanceof Error &&
+      typeof (error as unknown as Record<string, unknown>).status === 'number'
+    ) {
+      res
+        .status((error as unknown as Record<string, unknown>).status as number)
+        .json({ error: error.message });
       return;
     }
     next(error);

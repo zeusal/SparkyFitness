@@ -5,6 +5,8 @@ import {
   performBackup,
   performRestore,
   BACKUP_DIR,
+  BACKUP_FILE_PATTERN,
+  listBackups,
 } from '../services/backupService.js';
 import { rescheduleBackups } from '../services/backupScheduler.js';
 import { authenticate, isAdmin } from '../middleware/authMiddleware.js';
@@ -26,10 +28,13 @@ const backupSettingsBodySchema = z.object({
   backupTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
   retentionDays: z.number().int().positive(),
 });
+
+const backupFileNameSchema = z.string().regex(BACKUP_FILE_PATTERN);
 // @ts-expect-error TS(7016): Could not find a declaration file for module 'mult... Remove this comment to see the full error message
 import multer from 'multer';
 import path from 'path';
 import { promises } from 'fs';
+import { randomUUID } from 'crypto';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -171,13 +176,17 @@ router.post(
     const uploadedFilePath = req.file.path;
     // @ts-expect-error TS(2339): Property 'file' does not exist on type 'Request<{}... Remove this comment to see the full error message
     const originalFileName = req.file.originalname;
+    // Never derive the on-disk path from the uploaded filename. A server-generated
+    // name keeps shell metacharacters and `..` traversal sequences out of the path
+    // entirely; tar reads the archive by content, so the name does not matter.
+    const safeFileName = `restore_${randomUUID()}.tar.gz`;
     log(
       'info',
-      `Uploaded backup file: ${originalFileName} to ${uploadedFilePath}`
+      `Uploaded backup file: ${originalFileName} -> ${safeFileName} at ${uploadedFilePath}`
     );
     try {
       // Move the uploaded file to the designated backup directory for processing
-      const finalBackupPath = path.join(BACKUP_DIR, originalFileName);
+      const finalBackupPath = path.join(BACKUP_DIR, safeFileName);
       await fs.copyFile(uploadedFilePath, finalBackupPath);
       await fs.unlink(uploadedFilePath);
       log('info', `Moved uploaded file to: ${finalBackupPath}`);
@@ -361,5 +370,124 @@ router.post('/settings', authenticate, isAdmin, async (req, res) => {
       error: error.message,
     });
   }
+});
+/**
+ * @swagger
+ * /admin/backup/list:
+ *   get:
+ *     summary: List all available backup files
+ *     tags: [System & Admin]
+ *     security:
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Backup files listed successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 backups:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       fileName:
+ *                         type: string
+ *                       size:
+ *                         type: integer
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *                         description: When the backup run started.
+ *                       completedAt:
+ *                         type: string
+ *                         format: date-time
+ *                         description: When the backup run finished.
+ *       500:
+ *         description: Server error.
+ */
+router.get('/list', authenticate, isAdmin, async (req, res) => {
+  try {
+    const backupFiles = await listBackups(BACKUP_DIR);
+    res.status(200).json({
+      backups: backupFiles.map((backup) => ({
+        fileName: backup.fileName,
+        size: backup.size,
+        createdAt: backup.createdAt.toISOString(),
+        completedAt: backup.completedAt.toISOString(),
+      })),
+    });
+  } catch (error) {
+    log('error', 'Error listing backup files:', error);
+    res.status(500).json({
+      message: 'Internal server error listing backup files.',
+      // @ts-expect-error TS(2571): Object is of type 'unknown'.
+      error: error?.message,
+    });
+  }
+});
+/**
+ * @swagger
+ * /admin/backup/download/{fileName}:
+ *   get:
+ *     summary: Download a specific backup file
+ *     tags: [System & Admin]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: fileName
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The backup file name, as returned by GET /admin/backup/list.
+ *     responses:
+ *       200:
+ *         description: Backup file downloaded successfully.
+ *         content:
+ *           application/gzip:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       400:
+ *         description: Invalid backup file name.
+ *       404:
+ *         description: Backup file not found.
+ *       500:
+ *         description: Server error.
+ */
+router.get('/download/:fileName', authenticate, isAdmin, async (req, res) => {
+  const parsedFileName = backupFileNameSchema.safeParse(req.params.fileName);
+  if (!parsedFileName.success) {
+    return res.status(400).json({
+      message: 'Invalid backup file name.',
+      errors: parsedFileName.error.flatten(),
+    });
+  }
+  const fileName = parsedFileName.data;
+
+  const backupPath = path.join(BACKUP_DIR, fileName);
+
+  try {
+    log('info', `Download backup initiated by admin: ${fileName}`);
+    await fs.access(backupPath, fs.constants.R_OK);
+  } catch {
+    return res.status(404).json({ message: 'Backup file not found.' });
+  }
+
+  res.download(backupPath, fileName, (err) => {
+    if (err) {
+      log('error', 'Error sending backup file:', err);
+      if (!res.headersSent) {
+        res.status(500).json({
+          message: 'Error downloading backup file.',
+          error: err.message,
+        });
+      }
+    } else {
+      log('info', `Backup file downloaded: ${fileName}`);
+    }
+  });
 });
 export default router;

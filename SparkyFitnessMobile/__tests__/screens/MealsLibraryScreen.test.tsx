@@ -4,11 +4,18 @@ import { render, fireEvent } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import MealsLibraryScreen from '../../src/screens/MealsLibraryScreen';
 import { useMealSearch, useMeals, useServerConnection } from '../../src/hooks';
+import {
+  useAppPreferencesStore,
+  __resetAppPreferencesStoreForTests,
+} from '../../src/stores/appPreferencesStore';
+import { pressHeaderMenuAction } from './helpers/nativeHeaderTestUtils';
 
 jest.mock('../../src/hooks', () => ({
   useMeals: jest.fn(),
   useMealSearch: jest.fn(),
   useServerConnection: jest.fn(),
+  useProfile: jest.fn(() => ({ profile: undefined, isLoading: false })),
+  useFavorites: jest.fn(() => ({ favoriteFoods: [], favoriteMeals: [], isLoading: false, isError: false, refetch: jest.fn() })),
 }));
 
 jest.mock('../../src/components/ActiveWorkoutBar', () => ({
@@ -18,6 +25,16 @@ jest.mock('../../src/components/ActiveWorkoutBar', () => ({
 const mockUseMeals = useMeals as jest.MockedFunction<typeof useMeals>;
 const mockUseMealSearch = useMealSearch as jest.MockedFunction<typeof useMealSearch>;
 const mockUseServerConnection = useServerConnection as jest.MockedFunction<typeof useServerConnection>;
+
+const mockNavigation = {
+  navigate: jest.fn(),
+  goBack: jest.fn(),
+  setOptions: jest.fn(),
+} as any;
+jest.mock('@react-navigation/native', () => ({
+  ...jest.requireActual('@react-navigation/native'),
+  useNavigation: () => mockNavigation,
+}));
 
 const insets = { top: 0, bottom: 0, left: 0, right: 0 };
 const frame = { x: 0, y: 0, width: 390, height: 844 };
@@ -54,10 +71,7 @@ function createMeal(id: string, name: string, calories: number) {
 }
 
 describe('MealsLibraryScreen', () => {
-  const navigation = {
-    navigate: jest.fn(),
-    goBack: jest.fn(),
-  } as any;
+  const navigation = mockNavigation;
 
   const route = {
     key: 'MealsLibrary-key',
@@ -74,6 +88,7 @@ describe('MealsLibraryScreen', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    __resetAppPreferencesStoreForTests();
     mockUseServerConnection.mockReturnValue({
       isConnected: true,
       isLoading: false,
@@ -147,6 +162,27 @@ describe('MealsLibraryScreen', () => {
     const screen = renderScreen();
 
     expect(screen.getByText('Protein Shake')).toBeTruthy();
+    expect(screen.queryByText('Overnight Oats')).toBeNull();
+  });
+
+  it('persists an ownership filter chosen from the header menu and filters the list', () => {
+    mockUseMeals.mockReturnValue({
+      meals: [
+        createMeal('meal-1', 'Overnight Oats', 350),
+        { ...createMeal('meal-2', 'Community Chili', 400), is_public: true },
+      ],
+      isLoading: false,
+      isError: false,
+      refetch: jest.fn(),
+    });
+
+    const screen = renderScreen();
+    expect(screen.getByText('Overnight Oats')).toBeTruthy();
+
+    pressHeaderMenuAction(navigation, 'Public');
+
+    expect(useAppPreferencesStore.getState().mealsLibraryOwnershipFilter).toBe('public');
+    expect(screen.getByText('Community Chili')).toBeTruthy();
     expect(screen.queryByText('Overnight Oats')).toBeNull();
   });
 

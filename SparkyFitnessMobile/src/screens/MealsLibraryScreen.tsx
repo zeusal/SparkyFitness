@@ -1,40 +1,44 @@
-import React, { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
-  Text,
-  TextInput,
   FlatList,
-  ActivityIndicator,
   RefreshControl,
-  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCSSVariable } from 'uniwind';
-import Button from '../components/ui/Button';
-import Icon from '../components/Icon';
 import StatusView from '../components/StatusView';
+import LibrarySearchBar from '../components/LibrarySearchBar';
 import MealLibraryRow from '../components/MealLibraryRow';
 import { useActiveWorkoutBarPadding } from '../components/ActiveWorkoutBar';
-import { useMealSearch, useMeals, useServerConnection } from '../hooks';
+import { useFavorites, useMealSearch, useMeals, useServerConnection, useProfile } from '../hooks';
+import { useNativeIOSHeadersActive } from '../services/nativeTabBarPreference';
+import { useScreenHeader } from '../hooks/useScreenHeader';
+import { useAppPreferencesStore } from '../stores/appPreferencesStore';
+import {
+  filterByOwnership,
+  ownershipFilterEmptyState,
+  ownershipFilterHeaderMenu,
+} from '../utils/shareStatus';
 import type { RootStackScreenProps } from '../types/navigation';
 import type { Meal } from '../types/meals';
 
 type MealsLibraryScreenProps = RootStackScreenProps<'MealsLibrary'>;
 
 const MealsLibraryScreen: React.FC<MealsLibraryScreenProps> = ({ navigation }) => {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const usesNativeHeader = useNativeIOSHeadersActive();
   const activeWorkoutBarPadding = useActiveWorkoutBarPadding('stack');
-  const [accentColor, textMuted, textPrimary] = useCSSVariable([
-    '--color-accent-primary',
-    '--color-text-muted',
-    '--color-text-primary',
-  ]) as [string, string, string];
+  const [accentColor] = useCSSVariable(['--color-accent-primary']) as [string];
   const scrollBottomPadding = insets.bottom + activeWorkoutBarPadding + 16;
   const [searchText, setSearchText] = useState('');
+  const ownershipFilter = useAppPreferencesStore((s) => s.mealsLibraryOwnershipFilter);
+  const setOwnershipFilter = useAppPreferencesStore((s) => s.setMealsLibraryOwnershipFilter);
   const [refreshing, setRefreshing] = useState(false);
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   const { isConnected, isLoading: isConnectionLoading } = useServerConnection();
+  const { profile } = useProfile();
   const {
     meals,
     isLoading: isMealsLoading,
@@ -48,8 +52,14 @@ const MealsLibraryScreen: React.FC<MealsLibraryScreenProps> = ({ navigation }) =
     isSearchError,
     refetch: refetchSearch,
   } = useMealSearch(searchText, { enabled: isConnected });
+  const { favoriteMeals } = useFavorites({ enabled: isConnected });
+  const favoriteMealIds = useMemo(
+    () => new Set(favoriteMeals.map((m) => m.id)),
+    [favoriteMeals],
+  );
 
   const displayedMeals = isSearchActive ? searchResults : meals;
+  const filteredMeals = useMemo(() => filterByOwnership(displayedMeals, ownershipFilter, profile?.id), [displayedMeals, ownershipFilter, profile?.id]);
   const isLoading = isSearchActive
     ? isSearching && searchResults.length === 0
     : isMealsLoading;
@@ -69,101 +79,90 @@ const MealsLibraryScreen: React.FC<MealsLibraryScreenProps> = ({ navigation }) =
     setRefreshing(false);
   }, [isSearchActive, refetchMeals, refetchSearch]);
 
-  const renderHeader = () => (
-    <View className="flex-row items-center px-4 pt-4 pb-5">
-      <Button
-        variant="ghost"
-        onPress={() => navigation.goBack()}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        className="py-0 px-0 mr-2"
-      >
-        <Icon name="chevron-back" size={22} color={textPrimary} />
-      </Button>
-      <Text className="text-2xl font-bold text-text-primary">Meals</Text>
-    </View>
-  );
-
   const renderSearchBar = () => (
-    <View className="px-4 pb-3">
-      <View
-        className="flex-row items-center bg-raised rounded-lg px-3"
-        style={{ borderWidth: 1, borderColor: isSearchFocused ? accentColor : 'transparent' }}
-      >
-        <Icon name="search" size={18} color={textMuted} />
-        <View className="flex-1 ml-2">
-          <TextInput
-            className="text-text-primary"
-            style={{ fontSize: 16, paddingVertical: Platform.OS === 'ios' ? 12 : 0 }}
-            placeholder="Search meals..."
-            placeholderTextColor={textMuted}
-            value={searchText}
-            onChangeText={setSearchText}
-            onFocus={() => setIsSearchFocused(true)}
-            onBlur={() => setIsSearchFocused(false)}
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="search"
-          />
-        </View>
-        {isSearching ? (
-          <ActivityIndicator size="small" color={accentColor} />
-        ) : null}
-      </View>
-    </View>
+    <LibrarySearchBar
+      value={searchText}
+      onChangeText={setSearchText}
+      placeholder={t('mealLibrary.search', { defaultValue: 'Search meals...' })}
+      isSearching={isSearching}
+    />
   );
 
-  const renderEmpty = () => (
-    <View className="px-6 py-10 items-center">
-      <Text className="text-text-primary text-base font-medium text-center">
-        {isSearchActive ? 'No matching meals found' : 'No meals found'}
-      </Text>
-      <Text className="text-text-secondary text-sm mt-2 text-center">
-        {isSearchActive
-          ? 'Try a different search term to find saved meals.'
-          : 'Meals you create will appear here.'}
-      </Text>
-    </View>
-  );
+  const renderEmpty = () => {
+    if (ownershipFilter !== 'all' && displayedMeals.length > 0 && filteredMeals.length === 0) {
+      return (
+        <StatusView
+          inline
+          {...ownershipFilterEmptyState({
+            noun: t('mealLibrary.noun', { defaultValue: 'meals' }),
+            filter: ownershipFilter,
+            onReset: () => setOwnershipFilter('all'),
+            labels: {
+              all: t('ownership.all', { defaultValue: 'All' }),
+              mine: t('ownership.mine', { defaultValue: 'Mine' }),
+              family: t('ownership.family', { defaultValue: 'Family' }),
+              public: t('ownership.public', { defaultValue: 'Public' }),
+            },
+            emptyTitle: t('ownership.emptyTitle', { defaultValue: 'No {{noun}} in {{filter}}' }),
+            emptySubtitle: t('ownership.emptySubtitle', { defaultValue: 'Change the filter to see your other {{noun}}.' }),
+            showAllLabel: t('ownership.showAll', { defaultValue: 'Show All' }),
+          })}
+        />
+      );
+    }
+    return (
+      <StatusView
+        inline
+        title={isSearchActive ? t('mealLibrary.noMatch', { defaultValue: 'No matching meals found' }) : t('mealLibrary.noItems', { defaultValue: 'No meals found' })}
+        subtitle={isSearchActive
+          ? t('mealLibrary.trySearch', { defaultValue: 'Try a different search term to find saved meals.' })
+          : t('mealLibrary.empty', { defaultValue: 'Meals you create will appear here.' })}
+      />
+    );
+  };
 
   const renderContent = () => {
     if (!isConnectionLoading && !isConnected) {
       return (
         <StatusView
           icon="cloud-offline"
-          iconColor="#9CA3AF"
+          iconTone="muted"
           iconSize={64}
-          title="No server configured"
-          subtitle="Configure your server connection in Settings to view your meal library."
-          action={{ label: 'Go to Settings', onPress: () => navigation.navigate('Tabs', { screen: 'Settings' }), variant: 'primary' }}
+          title={t('mealLibrary.noServer', { defaultValue: 'No server configured' })}
+          subtitle={t('mealLibrary.configure', { defaultValue: 'Configure your server connection in Settings to view your meal library.' })}
+          action={{ label: t('mealLibrary.go', { defaultValue: 'Go to Settings' }), onPress: () => navigation.navigate('Tabs', { screen: 'Settings' }), variant: 'primary' }}
         />
       );
     }
 
     if (isLoading || isConnectionLoading) {
-      return <StatusView loading title="Loading meals..." />;
+      return <StatusView loading title={t('mealLibrary.loading', { defaultValue: 'Loading meals...' })} />;
     }
 
     if (isError) {
       return (
         <StatusView
           icon="alert-circle"
-          iconColor="#EF4444"
+          iconTone="danger"
           iconSize={64}
-          title={isSearchActive ? 'Failed to search meals' : 'Failed to load meals'}
-          subtitle="Please check your connection and try again."
-          action={{ label: 'Retry', onPress: () => void (isSearchActive ? refetchSearch() : refetchMeals()), variant: 'primary' }}
+          title={isSearchActive
+            ? t('mealLibrary.searchFailed', { defaultValue: 'Failed to search meals' })
+            : t('mealLibrary.failed', { defaultValue: 'Failed to load meals' })}
+          subtitle={t('mealLibrary.check', { defaultValue: 'Please check your connection and try again.' })}
+          action={{ label: t('mealLibrary.retry', { defaultValue: 'Retry' }), onPress: () => void (isSearchActive ? refetchSearch() : refetchMeals()), variant: 'primary' }}
         />
       );
     }
 
     return (
       <FlatList
-        data={displayedMeals}
+        data={filteredMeals}
         keyExtractor={(item) => item.id}
         renderItem={({ item, index }) => (
           <MealLibraryRow
             meal={item}
-            showDivider={index < displayedMeals.length - 1}
+            isFavorite={favoriteMealIds.has(item.id)}
+            showDivider={index < filteredMeals.length - 1}
             onPress={() => handleMealPress(item)}
           />
         )}
@@ -177,12 +176,31 @@ const MealsLibraryScreen: React.FC<MealsLibraryScreenProps> = ({ navigation }) =
     );
   };
 
+  const header = useScreenHeader({
+    title: t('mealLibrary.title', { defaultValue: 'Meals' }),
+    left: { kind: 'back' },
+    right: ownershipFilterHeaderMenu({
+      noun: t('mealLibrary.noun', { defaultValue: 'meals' }),
+      labels: {
+        all: t('ownership.all', { defaultValue: 'All' }),
+        mine: t('ownership.mine', { defaultValue: 'Mine' }),
+        family: t('ownership.family', { defaultValue: 'Family' }),
+        public: t('ownership.public', { defaultValue: 'Public' }),
+      },
+      showLabel: t('ownership.show', { defaultValue: 'Show' }),
+      filterAccessibilityLabel: t('ownership.filter', { defaultValue: 'Filter {{noun}}, filtered to {{filter}}' }),
+      identifier: 'meals-library-filter',
+      filter: ownershipFilter,
+      onSelect: setOwnershipFilter,
+    }),
+  });
+
   return (
-    <View className="flex-1 bg-background" style={Platform.OS === 'ios' ? undefined : { paddingTop: insets.top }}>
-      {Platform.OS !== 'ios' && renderHeader()}
-      {isConnected ? renderSearchBar() : null}
-      {renderContent()}
-    </View>
+      <View className="flex-1 bg-background" style={usesNativeHeader ? undefined : { paddingTop: insets.top }}>
+        {header}
+        {isConnected ? renderSearchBar() : null}
+        {renderContent()}
+      </View>
   );
 };
 

@@ -2,7 +2,6 @@ import {
   syncHealthData,
   checkServerConnection,
   HealthDataPayload,
-  fetchWithTimeout,
   fetchWithRetry,
   CHUNK_SIZE,
   SESSION_CHUNK_SIZE,
@@ -54,59 +53,6 @@ describe('healthDataApi', () => {
   afterEach(() => {
     jest.useRealTimers();
     jest.restoreAllMocks();
-  });
-
-  describe('fetchWithTimeout', () => {
-    test('resolves when fetch completes before timeout', async () => {
-      const mockResponse = { ok: true, status: 200 };
-      mockFetch.mockResolvedValue(mockResponse);
-
-      const result = await fetchWithTimeout(
-        'https://example.com',
-        { method: 'GET' },
-        5000,
-      );
-
-      expect(result).toBe(mockResponse);
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-    });
-
-    test('throws when fetch exceeds timeout', async () => {
-      // Signal-aware mock that rejects on abort (like real fetch)
-      mockFetch.mockImplementation((_url: string, options?: RequestInit) => {
-        return new Promise((_resolve, reject) => {
-          options?.signal?.addEventListener('abort', () => {
-            const err = new Error('The operation was aborted');
-            err.name = 'AbortError';
-            reject(err);
-          });
-        });
-      });
-
-      const promise = fetchWithTimeout('https://example.com', {}, 5000);
-      // Attach handler BEFORE advancing timers to avoid unhandled rejection
-      const assertion = expect(promise).rejects.toThrow('Request timed out after 5000ms');
-
-      await jest.advanceTimersByTimeAsync(5000);
-
-      await assertion;
-    });
-
-    test('passes options through to fetch', async () => {
-      mockFetch.mockResolvedValue({ ok: true });
-
-      const headers = { Authorization: 'Bearer token' };
-      await fetchWithTimeout(
-        'https://example.com',
-        { method: 'POST', headers, body: '{}' },
-        5000,
-      );
-
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://example.com',
-        expect.objectContaining({ method: 'POST', headers, body: '{}' }),
-      );
-    });
   });
 
   describe('fetchWithRetry', () => {
@@ -294,10 +240,36 @@ describe('healthDataApi', () => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'X-Workout-Model-Version': '3',
             Authorization: 'Bearer test-api-key-12345',
           },
         }),
       );
+    });
+
+    // Version 3 keeps 2's seconds-based set durations and adds the optional
+    // telemetry fields; the header must be on every chunk, not just the first.
+    test('declares the workout model version on every chunk', async () => {
+      mockGetActiveServerConfig.mockResolvedValue(testConfig);
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ success: true }),
+      });
+
+      const data = Array.from({ length: CHUNK_SIZE + 1 }, (_, i) => ({
+        type: 'steps',
+        date: '2024-01-01',
+        value: i,
+      }));
+
+      await syncHealthData(data);
+
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      for (const call of mockFetch.mock.calls) {
+        expect(call[1].headers).toEqual(
+          expect.objectContaining({ 'X-Workout-Model-Version': '3' }),
+        );
+      }
     });
 
     test('ensures timezone bootstrap before syncing health data', async () => {
@@ -390,17 +362,16 @@ describe('healthDataApi', () => {
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    test('returns parsed JSON response on success', async () => {
-      const responseData = { success: true, count: 2 };
+    test('returns sync summary on success', async () => {
       mockGetActiveServerConfig.mockResolvedValue(testConfig);
       mockFetch.mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve(responseData),
+        json: () => Promise.resolve({ success: true, count: 2 }),
       });
 
       const result = await syncHealthData(testData);
 
-      expect(result).toEqual(responseData);
+      expect(result).toEqual({ recordsSent: 2, recordErrors: [] });
     });
 
     test('throws error on non-OK 4xx response without retry', async () => {
@@ -497,7 +468,7 @@ describe('healthDataApi', () => {
 
         const result = await syncHealthData(testData);
 
-        expect(result).toEqual({ success: true });
+        expect(result).toEqual({ recordsSent: 2, recordErrors: [] });
         expect(mockFetch).toHaveBeenCalled();
       });
 
@@ -511,8 +482,188 @@ describe('healthDataApi', () => {
 
         const result = await syncHealthData(testData);
 
-        expect(result).toEqual({ success: true });
+        expect(result).toEqual({ recordsSent: 2, recordErrors: [] });
         expect(mockFetch).toHaveBeenCalled();
+      });
+    });
+
+    describe('per-record error contract', () => {
+      // Poison-pill regression: a partial-failure 200 must resolve (so the
+      // cursor advances) with the rejections carried in the summary.
+      test('resolves with record errors when server reports partial failure', async () => {
+        mockGetActiveServerConfig.mockResolvedValue(testConfig);
+        const rejected = {
+          error: 'Invalid value for step. Must be an integer.',
+          entry: { type: 'steps', value: 'bad' },
+        };
+        mockFetch.mockResolvedValue({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              message: 'Some health data entries could not be processed.',
+              processed: [{ type: 'calories', status: 'success', data: {} }],
+              errors: [rejected],
+              skipped: [],
+            }),
+        });
+
+        const result = await syncHealthData(testData);
+
+        expect(result).toEqual({ recordsSent: 2, recordErrors: [rejected] });
+      });
+
+      test('resolves clean when response has no errors field (old server)', async () => {
+        mockGetActiveServerConfig.mockResolvedValue(testConfig);
+        mockFetch.mockResolvedValue({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              message: 'All health data successfully processed.',
+              processed: [{ type: 'steps', status: 'success', data: {} }],
+            }),
+        });
+
+        const result = await syncHealthData(testData);
+
+        expect(result).toEqual({ recordsSent: 2, recordErrors: [] });
+      });
+
+      test('excludes skipped records from recordErrors and the all-failed guard', async () => {
+        mockGetActiveServerConfig.mockResolvedValue(testConfig);
+        mockFetch.mockResolvedValue({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              message: 'All health data successfully processed.',
+              processed: [],
+              errors: [],
+              skipped: [
+                { reason: 'Nutrition record without source_id', entry: {} },
+              ],
+            }),
+        });
+
+        const result = await syncHealthData(testData);
+
+        expect(result).toEqual({ recordsSent: 2, recordErrors: [] });
+      });
+
+      test('throws when a chunk is rejected in full by the server', async () => {
+        mockGetActiveServerConfig.mockResolvedValue(testConfig);
+        mockFetch.mockResolvedValue({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              message: 'Some health data entries could not be processed.',
+              processed: [],
+              errors: [
+                { error: 'bad record', entry: {} },
+                { error: 'bad record', entry: {} },
+              ],
+              skipped: [],
+            }),
+        });
+
+        await expect(syncHealthData(testData)).rejects.toThrow(
+          'rejected in full by server',
+        );
+      });
+
+      test('treats legacy 400 with processed records as partial success', async () => {
+        mockGetActiveServerConfig.mockResolvedValue(testConfig);
+        const legacyBody = JSON.stringify({
+          message: 'Some health data entries could not be processed.',
+          processed: [{ type: 'steps', status: 'success', data: {} }],
+          errors: [{ error: 'Invalid value for step.', entry: { type: 'steps' } }],
+        });
+        mockFetch.mockResolvedValue({
+          ok: false,
+          status: 400,
+          text: () => Promise.resolve(legacyBody),
+        });
+
+        const result = await syncHealthData(testData);
+
+        expect(result).toEqual({
+          recordsSent: 2,
+          recordErrors: [
+            { error: 'Invalid value for step.', entry: { type: 'steps' } },
+          ],
+        });
+      });
+
+      test('throws on legacy 400 when no records were processed', async () => {
+        mockGetActiveServerConfig.mockResolvedValue(testConfig);
+        const legacyBody = JSON.stringify({
+          message: 'Some health data entries could not be processed.',
+          processed: [],
+          errors: [{ error: 'Invalid value for step.', entry: {} }],
+        });
+        mockFetch.mockResolvedValue({
+          ok: false,
+          status: 400,
+          text: () => Promise.resolve(legacyBody),
+        });
+
+        await expect(syncHealthData(testData)).rejects.toThrow(
+          'Server error: 400',
+        );
+      });
+
+      test('throws on 400 with malformed-body error shape', async () => {
+        mockGetActiveServerConfig.mockResolvedValue(testConfig);
+        mockFetch.mockResolvedValue({
+          ok: false,
+          status: 400,
+          text: () =>
+            Promise.resolve(
+              JSON.stringify({ error: 'Invalid request body format.' }),
+            ),
+        });
+
+        await expect(syncHealthData(testData)).rejects.toThrow(
+          'Server error: 400',
+        );
+      });
+
+      test('aggregates record errors across multiple chunks', async () => {
+        mockGetActiveServerConfig.mockResolvedValue(testConfig);
+        const firstError = { error: 'bad record in chunk 1', entry: { i: 1 } };
+        const secondError = { error: 'bad record in chunk 2', entry: { i: 2 } };
+        mockFetch
+          .mockResolvedValueOnce({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                processed: [{ type: 'steps', status: 'success', data: {} }],
+                errors: [firstError],
+                skipped: [],
+              }),
+          })
+          .mockResolvedValueOnce({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                processed: [{ type: 'steps', status: 'success', data: {} }],
+                errors: [secondError],
+                skipped: [],
+              }),
+          });
+
+        const totalRecords = CHUNK_SIZE + 100;
+        const data = Array.from({ length: totalRecords }, (_, i) => ({
+          type: 'steps',
+          date: '2024-01-01',
+          value: i,
+        }));
+
+        const result = await syncHealthData(data);
+
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+        expect(result).toEqual({
+          recordsSent: totalRecords,
+          recordErrors: [firstError, secondError],
+        });
       });
     });
 
@@ -679,6 +830,174 @@ describe('healthDataApi', () => {
         expect(mockFetch).toHaveBeenCalledTimes(1);
         const body = JSON.parse(mockFetch.mock.calls[0][1].body);
         expect(body).toHaveLength(CHUNK_SIZE + 500);
+      });
+
+      test('splits an oversized workout group at whole-day boundaries', async () => {
+        mockGetActiveServerConfig.mockResolvedValue(testConfig);
+        mockFetch.mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve({ success: true }),
+        });
+
+        // 30 telemetry-sized days from one source: two workouts per day, each
+        // ~150KB, so the group (~9MB) must split — but never within a day,
+        // because the server's pre-cleanup range-deletes whole days per
+        // request and a same-day split would let one chunk wipe the other's
+        // inserts.
+        const filler = 'x'.repeat(150 * 1024);
+        const data = Array.from({ length: 60 }, (_, i) => ({
+          type: 'ExerciseSession',
+          date: `2024-01-${String(Math.floor(i / 2) + 1).padStart(2, '0')}`,
+          raw_data: filler,
+          value: i,
+          source: 'healthkit',
+        })) as HealthDataPayload;
+
+        await syncHealthData(data);
+
+        expect(mockFetch.mock.calls.length).toBeGreaterThan(1);
+
+        const daysPerChunk: string[][] = mockFetch.mock.calls.map(call => {
+          const body = JSON.parse(call[1].body) as { date: string }[];
+          return [...new Set(body.map(record => record.date))].sort();
+        });
+
+        // Every day appears in exactly one chunk, and each chunk covers a
+        // contiguous run of days — chunks' server-side range deletes must not
+        // overlap another chunk's days.
+        const seen = new Set<string>();
+        for (const days of daysPerChunk) {
+          for (const day of days) {
+            expect(seen.has(day)).toBe(false);
+            seen.add(day);
+          }
+        }
+        expect(seen.size).toBe(30);
+        const flat = daysPerChunk.flat();
+        expect(flat).toEqual([...flat].sort());
+
+        // Both workouts of a day travel together.
+        for (const call of mockFetch.mock.calls) {
+          const body = JSON.parse(call[1].body) as { date: string }[];
+          const counts = new Map<string, number>();
+          for (const record of body) {
+            counts.set(record.date, (counts.get(record.date) ?? 0) + 1);
+          }
+          for (const count of counts.values()) {
+            expect(count).toBe(2);
+          }
+        }
+      });
+
+      // The server resolves a workout's day from `timestamp` in the record's
+      // own timezone/offset, ignoring the client-stamped `date`. Chunk
+      // boundaries must follow that rule: a split keyed on `date` can put two
+      // records the server resolves to the same day into different chunks,
+      // letting the later chunk's range delete wipe the earlier one's inserts.
+      test('groups oversized workout chunks by the UTC-offset-resolved day, not the date field', async () => {
+        mockGetActiveServerConfig.mockResolvedValue(testConfig);
+        mockFetch.mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve({ success: true }),
+        });
+
+        const filler = 'x'.repeat(1200 * 1024);
+        // All UTC-8: lateJan15 starts Jan 15 21:00 local but its UTC instant —
+        // and the device-local `date` a transformer in a UTC device zone would
+        // stamp — is already Jan 16.
+        const lateJan15 = {
+          type: 'ExerciseSession',
+          source: 'healthconnect',
+          date: '2024-01-16',
+          timestamp: '2024-01-16T05:00:00Z',
+          record_utc_offset_minutes: -480,
+          raw_data: filler,
+          value: 1,
+        };
+        const middayJan15 = {
+          type: 'ExerciseSession',
+          source: 'healthconnect',
+          date: '2024-01-15',
+          timestamp: '2024-01-15T22:00:00Z',
+          record_utc_offset_minutes: -480,
+          raw_data: filler,
+          value: 2,
+        };
+        const jan16 = {
+          type: 'ExerciseSession',
+          source: 'healthconnect',
+          date: '2024-01-17',
+          timestamp: '2024-01-17T01:00:00Z',
+          record_utc_offset_minutes: -480,
+          raw_data: filler,
+          value: 3,
+        };
+        const data = [lateJan15, middayJan15, jan16] as HealthDataPayload;
+
+        await syncHealthData(data);
+
+        expect(mockFetch.mock.calls.length).toBe(2);
+        const chunkFor = (value: number): number =>
+          mockFetch.mock.calls.findIndex(call =>
+            (JSON.parse(call[1].body) as { value: number }[]).some(
+              record => record.value === value,
+            ),
+          );
+
+        // Both Jan-15 (UTC-8) workouts travel together; Jan 16 ships alone.
+        expect(chunkFor(1)).toBe(chunkFor(2));
+        expect(chunkFor(3)).not.toBe(chunkFor(1));
+      });
+
+      test('groups oversized workout chunks by the record_timezone-resolved day', async () => {
+        mockGetActiveServerConfig.mockResolvedValue(testConfig);
+        mockFetch.mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve({ success: true }),
+        });
+
+        const filler = 'x'.repeat(1200 * 1024);
+        const lateJan15 = {
+          type: 'ExerciseSession',
+          source: 'healthkit',
+          date: '2024-01-16',
+          timestamp: '2024-01-16T05:00:00Z',
+          record_timezone: 'America/Los_Angeles',
+          raw_data: filler,
+          value: 1,
+        };
+        const middayJan15 = {
+          type: 'ExerciseSession',
+          source: 'healthkit',
+          date: '2024-01-15',
+          timestamp: '2024-01-15T22:00:00Z',
+          record_timezone: 'America/Los_Angeles',
+          raw_data: filler,
+          value: 2,
+        };
+        const jan16 = {
+          type: 'ExerciseSession',
+          source: 'healthkit',
+          date: '2024-01-17',
+          timestamp: '2024-01-17T01:00:00Z',
+          record_timezone: 'America/Los_Angeles',
+          raw_data: filler,
+          value: 3,
+        };
+        const data = [lateJan15, middayJan15, jan16] as HealthDataPayload;
+
+        await syncHealthData(data);
+
+        expect(mockFetch.mock.calls.length).toBe(2);
+        const chunkFor = (value: number): number =>
+          mockFetch.mock.calls.findIndex(call =>
+            (JSON.parse(call[1].body) as { value: number }[]).some(
+              record => record.value === value,
+            ),
+          );
+
+        expect(chunkFor(1)).toBe(chunkFor(2));
+        expect(chunkFor(3)).not.toBe(chunkFor(1));
       });
 
       test('preserves staged sleep session payloads inside session chunks', async () => {
@@ -892,6 +1211,26 @@ describe('healthDataApi', () => {
       const result = await checkServerConnection();
 
       expect(result).toBe(false);
+    });
+
+    test('returns false when the server never responds (timeout)', async () => {
+      mockGetActiveServerConfig.mockResolvedValue(testConfig);
+      // Signal-aware mock that rejects on abort (like real fetch)
+      mockFetch.mockImplementation((_url: string, options?: RequestInit) => {
+        return new Promise((_resolve, reject) => {
+          options?.signal?.addEventListener('abort', () => {
+            const err = new Error('The operation was aborted');
+            err.name = 'AbortError';
+            reject(err);
+          });
+        });
+      });
+
+      const promise = checkServerConnection();
+
+      await jest.advanceTimersByTimeAsync(10_000);
+
+      await expect(promise).resolves.toBe(false);
     });
 
     test('removes trailing slash from URL', async () => {

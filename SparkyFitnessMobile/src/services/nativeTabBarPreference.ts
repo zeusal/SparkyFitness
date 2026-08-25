@@ -1,20 +1,6 @@
-import { createBooleanPreference } from './booleanPreference';
-import { shouldUseNativeIOSTabs } from '../utils/nativeTabs';
-
-// Defaults to off so the iOS 26 liquid-glass tab bar is opt-in; everyone gets
-// the proven fallback tab bar (and matching header chrome) until they enable it.
-const liquidGlassTabBarPref = createBooleanPreference(
-  '@HealthConnect:liquidGlassTabBarEnabled',
-  false,
-);
-
-export const initializeLiquidGlassTabBar = liquidGlassTabBarPref.initialize;
-export const setLiquidGlassTabBarEnabled = liquidGlassTabBarPref.set;
-export const getLiquidGlassTabBarEnabled = liquidGlassTabBarPref.get;
-export const useLiquidGlassTabBarEnabled = liquidGlassTabBarPref.use;
-
-/** Test-only helper — resets module-level state. */
-export const __resetLiquidGlassTabBarForTests = liquidGlassTabBarPref.__reset;
+import { Platform } from 'react-native';
+import { useAppPreferencesStore } from '../stores/appPreferencesStore';
+import { canUseLiquidGlass } from '../utils/liquidGlass';
 
 /**
  * Reactive "effective" flag for the native iOS tab bar: true only when the
@@ -23,6 +9,19 @@ export const __resetLiquidGlassTabBarForTests = liquidGlassTabBarPref.__reset;
  * to satisfy `react-hooks/rules-of-hooks`.
  */
 export function useNativeIOSTabsActive(): boolean {
-  const enabled = useLiquidGlassTabBarEnabled();
-  return shouldUseNativeIOSTabs() && enabled;
+  const enabled = useAppPreferencesStore((s) => s.liquidGlassTabBarEnabled);
+  return canUseLiquidGlass() && enabled;
+}
+
+/**
+ * Reactive "effective" flag for the native iOS stack headers. Unlike the tab
+ * bar, native headers are not glass-only: iOS releases without the glass APIs
+ * keep the classic native header, so the Liquid Glass toggle only matters on
+ * iOS 26+, where turning it off swaps in the screen-owned fallback headers
+ * (the same ones Android renders).
+ */
+export function useNativeIOSHeadersActive(): boolean {
+  const enabled = useAppPreferencesStore((s) => s.liquidGlassTabBarEnabled);
+  if (Platform.OS !== 'ios') return false;
+  return !canUseLiquidGlass() || enabled;
 }

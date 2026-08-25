@@ -1,4 +1,10 @@
-import type { CreatePresetSessionRequest } from '@workspace/shared';
+import {
+  instantHourMinute,
+  resolveExerciseModality,
+  setsDurationMinutes,
+  type CreatePresetSessionRequest,
+  type ExerciseModality,
+} from '@workspace/shared';
 import type { WorkoutPreset, WorkoutPresetSet } from '@/types/workout';
 
 export const DEFAULT_REST_SECONDS = 90;
@@ -18,11 +24,14 @@ export interface WorkoutPlaybackRestTimer {
 
 export interface WorkoutPlaybackSetDraft extends WorkoutPresetSet {
   completed: boolean;
+  /** ISO timestamp of when the set was checked off; null while incomplete. */
+  completed_at: string | null;
 }
 
 export interface WorkoutPlaybackExerciseDraft {
   exercise_id: string;
   exercise_name: string;
+  modality?: ExerciseModality;
   image_url?: string;
   notes: string | null;
   started_at?: string | null;
@@ -298,6 +307,10 @@ export function createWorkoutPlaybackDraftFromPreset(
         exercise.exercise?.name ||
         `Exercise ${exerciseIndex + 1}`,
       image_url: exercise.image_url || exercise.exercise?.images?.[0],
+      modality: resolveExerciseModality(
+        exercise.modality ?? exercise.exercise?.modality,
+        exercise.category ?? exercise.exercise?.category
+      ),
       notes: null,
       started_at: null,
       ended_at: null,
@@ -307,10 +320,12 @@ export function createWorkoutPlaybackDraftFromPreset(
         reps: set.reps ?? null,
         weight: set.weight ?? null,
         duration: set.duration ?? null,
+        distance: set.distance ?? null,
         rest_time: set.rest_time ?? DEFAULT_REST_SECONDS,
         notes: set.notes ?? null,
         rpe: set.rpe ?? null,
         completed: false,
+        completed_at: null,
       })),
     })
   );
@@ -476,6 +491,7 @@ export function toggleWorkoutSetCompletion(
   return updateSetAtPointer(draft, pointer, (set) => ({
     ...set,
     completed: !set.completed,
+    completed_at: set.completed ? null : new Date().toISOString(),
   }));
 }
 
@@ -506,10 +522,12 @@ export function addWorkoutSetToExercise(
     reps: lastSet?.reps ?? null,
     weight: lastSet?.weight ?? null,
     duration: lastSet?.duration ?? null,
+    distance: lastSet?.distance ?? null,
     rest_time: lastSet?.rest_time ?? DEFAULT_REST_SECONDS,
     notes: lastSet?.notes ?? null,
     rpe: lastSet?.rpe ?? null,
     completed: false,
+    completed_at: null,
   };
 
   const exercises = draft.exercises.map((currentExercise, index) => {
@@ -655,6 +673,7 @@ export function completeCurrentWorkoutSet(
   let nextDraft = updateSetAtPointer(draft, currentPointer, (set) => ({
     ...set,
     completed: true,
+    completed_at: new Date().toISOString(),
   }));
 
   const nextPointer = getNextIncompletePointer(nextDraft, currentPointer);
@@ -677,14 +696,6 @@ function toNullableNumber(value: number | null | undefined): number | null {
   return value === undefined ? null : value;
 }
 
-function deriveDurationMinutes(sets: WorkoutPlaybackSetDraft[]): number {
-  return sets.reduce((sum, set) => {
-    const duration = set.duration ?? 0;
-    const rest = (set.rest_time ?? 0) / 60;
-    return sum + duration + rest;
-  }, 0);
-}
-
 function deriveExerciseDurationMinutes(
   exercise: WorkoutPlaybackExerciseDraft,
   nowMs: number = Date.now()
@@ -697,11 +708,12 @@ function deriveExerciseDurationMinutes(
     }
   }
 
-  return deriveDurationMinutes(exercise.sets);
+  return setsDurationMinutes(exercise.sets);
 }
 
 export function buildPresetSessionCreateRequestFromDraft(
-  draft: WorkoutPlaybackDraft
+  draft: WorkoutPlaybackDraft,
+  timezone: string
 ): CreatePresetSessionRequest {
   const exercises = draft.exercises
     .map((exercise, exerciseIndex) => {
@@ -710,20 +722,38 @@ export function buildPresetSessionCreateRequestFromDraft(
         return null;
       }
 
+      let entryTime: string | null = null;
+      const startTimestamp = draft.started_at;
+      if (startTimestamp) {
+        try {
+          const hm = instantHourMinute(startTimestamp, timezone);
+          entryTime = `${String(hm.hour).padStart(2, '0')}:${String(hm.minute).padStart(2, '0')}`;
+        } catch (e) {
+          console.error('Failed to parse draft started_at:', e);
+        }
+      }
+
       return {
         exercise_id: exercise.exercise_id,
         sort_order: exerciseIndex,
         duration_minutes: deriveExerciseDurationMinutes(exercise),
         notes: exercise.notes ?? null,
+        entry_time: entryTime,
         sets: completedSets.map((set, setIndex) => ({
           set_number: setIndex + 1,
           set_type: set.set_type ?? null,
           reps: toNullableNumber(set.reps),
           weight: toNullableNumber(set.weight),
           duration: toNullableNumber(set.duration),
+          distance: toNullableNumber(set.distance),
           rest_time: toNullableNumber(set.rest_time),
           notes: set.notes ?? null,
           rpe: toNullableNumber(set.rpe),
+          // `?? null` also covers persisted drafts that predate the field.
+          completed_at: set.completed_at ?? null,
+          // Web playback makes no PR claims — drafts never carry PRs, and the
+          // server owns PR detection. Always false on create.
+          is_pr: false,
         })),
       };
     })

@@ -1,5 +1,6 @@
 import { HealthMetric } from '../HealthMetrics';
 import { SleepStageEvent } from './mobileHealthData';
+import type { RecordSyncError } from '../services/api/healthDataApi';
 
 // ==========================================
 // RAW INPUT TYPES (for aggregation functions)
@@ -26,20 +27,43 @@ export interface HKSleepRecord {
 // INTERNAL ACCUMULATOR TYPES
 // ==========================================
 
-/** Sleep stage type including 'in_bed' */
+/** Sleep stage type including 'in_bed' (the output shape stored in stage_events) */
 export type SleepStageType = 'awake' | 'rem' | 'light' | 'deep' | 'in_bed' | 'unknown';
 
-/** Internal session state during sleep aggregation (uses Date objects) */
+/**
+ * Internal sleep stage classification used only during HealthKit overlap resolution.
+ * Splits Apple-Watch 'core' from generic 'asleep' so 'awake' can rank between them
+ * (the common Watch-vs-AutoSleep conflict is Watch=awake vs AutoSleep=generic-asleep,
+ * where the Watch's awake must win). Both 'core' and 'asleep_generic' map to the same
+ * output 'light' stage. See mapHealthKitSleepStage / SLEEP_STAGE_RANK in dataAggregation.ts.
+ */
+export type InternalSleepStage =
+  | 'deep'
+  | 'rem'
+  | 'core'
+  | 'awake'
+  | 'asleep_generic'
+  | 'in_bed'
+  | 'unknown';
+
+/** One raw HealthKit sleep sample collected before overlap resolution (uses epoch ms). */
+export interface SleepRawEvent {
+  startMs: number;
+  endMs: number;
+  internalStage: InternalSleepStage;
+  /** Priority for overlap resolution; higher wins. Derived from SLEEP_STAGE_RANK. */
+  rank: number;
+}
+
+/**
+ * Internal session state during sleep aggregation (uses Date objects).
+ * Collects raw, possibly-overlapping samples from all HealthKit sources; the
+ * non-overlapping timeline and per-stage buckets are derived in finalizeSession.
+ */
 export interface SleepSessionAccumulator {
   bedtime: Date;
   wake_time: Date;
-  stage_events: SleepStageEvent[];
-  total_duration_in_seconds: number;
-  total_time_asleep_in_seconds: number;
-  deep_sleep_seconds: number;
-  light_sleep_seconds: number;
-  rem_sleep_seconds: number;
-  awake_sleep_seconds: number;
+  raw_events: SleepRawEvent[];
   /** IANA timezone from the sample that set wake_time (for server-side day derivation) */
   record_timezone?: string;
 }
@@ -87,7 +111,9 @@ export interface ExerciseSet {
   set_type?: string;
   reps?: number;
   weight?: number;
-  duration?: number;    // minutes
+  // Explicitly unit-suffixed so servers without the seconds-based set model
+  // drop the field instead of misreading it (legacy `duration` was minutes).
+  duration_seconds?: number;
   rest_time?: number;   // seconds
   notes?: string;
   rpe?: number;
@@ -112,6 +138,94 @@ export interface TransformedExerciseSession extends RecordTimezoneMetadata {
   raw_data?: unknown;
   sets?: ExerciseSet[];
   source_id?: string;
+  /**
+   * Wearable telemetry (X-Workout-Model-Version 3+). All optional so an older
+   * server drops the fields it does not know, and a newer server still accepts
+   * a session from an older app that sends none of them.
+   */
+  gps_points?: WorkoutGpsPoint[];
+  hr_samples?: WorkoutHrSample[];
+  laps?: WorkoutLapWindow[];
+  telemetry?: WorkoutTelemetry;
+}
+
+/**
+ * One GPS trackpoint. Short keys because a long activity carries thousands of
+ * these and the field names would otherwise dominate the payload; they match
+ * the JSONB shape the server stores in exercise_entry_gps_points.
+ */
+export interface WorkoutGpsPoint {
+  /** ISO 8601 instant. */
+  t: string;
+  lat: number;
+  lon: number;
+  /** Metres. */
+  alt?: number | null;
+  /** Metres per second. */
+  speed?: number | null;
+  hr?: number | null;
+  cad?: number | null;
+  /** Watts. */
+  power?: number | null;
+  /** Cumulative METRES (the session-level `distance` above is kilometres). */
+  dist?: number | null;
+  /** Horizontal accuracy, metres. */
+  hacc?: number | null;
+  /** Vertical accuracy, metres. */
+  vacc?: number | null;
+  /** Degrees. */
+  course?: number | null;
+}
+
+export interface WorkoutHrSample {
+  t: string;
+  bpm: number;
+}
+
+/**
+ * A lap boundary. Only the window is sent: the server derives distance, heart
+ * rate, speed, cadence, power and elevation for each lap from the series, so
+ * that aggregation lives in one place rather than once per platform.
+ */
+export interface WorkoutLapWindow {
+  /** 1-based. */
+  lap_index: number;
+  start_time: string;
+  end_time: string;
+}
+
+/**
+ * Whole-session summary values. Keys are deliberately the exercise_entries
+ * column names so the server can apply them without a mapping table. Anything
+ * omitted is derived server-side from the series where possible.
+ */
+export interface WorkoutTelemetry {
+  avg_heart_rate?: number | null;
+  max_heart_rate?: number | null;
+  /** Metres per second. */
+  avg_speed_mps?: number | null;
+  max_speed_mps?: number | null;
+  avg_moving_speed_mps?: number | null;
+  avg_cadence?: number | null;
+  max_cadence?: number | null;
+  avg_power_watts?: number | null;
+  max_power_watts?: number | null;
+  /** Metres. */
+  elevation_gain_meters?: number | null;
+  elevation_loss_meters?: number | null;
+  min_elevation_meters?: number | null;
+  max_elevation_meters?: number | null;
+  floors_climbed?: number | null;
+  stroke_count?: number | null;
+  moving_time_seconds?: number | null;
+  elapsed_time_seconds?: number | null;
+  active_calories?: number | null;
+  /** Milliseconds. */
+  ground_contact_time_ms?: number | null;
+  /** Millimetres. */
+  vertical_oscillation_mm?: number | null;
+  /** Centimetres. */
+  stride_length_cm?: number | null;
 }
 
 // ==========================================
@@ -124,6 +238,16 @@ export interface TransformedExerciseSession extends RecordTimezoneMetadata {
  */
 export type MetricConfig = Pick<HealthMetric, 'recordType' | 'unit' | 'type'>;
 
+/**
+ * Platform-neutral read envelope. Read failures return the error alongside any
+ * partially collected records instead of throwing, so callers can surface the
+ * error (holding the sync cursor) while still syncing what was read.
+ */
+export interface ReadResult<T = unknown> {
+  records: T[];
+  error?: string;
+}
+
 /** Simple transformed record for API */
 export interface TransformedRecord extends RecordTimezoneMetadata {
   value: number;
@@ -131,6 +255,8 @@ export interface TransformedRecord extends RecordTimezoneMetadata {
   date: string;
   unit: string;
   source: string;
+  timestamp?: string;
+  source_id?: string;
 }
 
 /** Sparky meal type slug derived from Health Connect MealType constant */
@@ -204,6 +330,12 @@ export interface SyncResult {
   error?: string;
   message?: string;
   syncErrors: SyncError[];
+  /**
+   * Per-record rejections reported by the server during upload. Deliberately
+   * separate from syncErrors (read failures): upload rejections never suppress
+   * saving the sync cursor, so a poison record cannot cause a re-sync loop.
+   */
+  uploadErrors?: RecordSyncError[];
 }
 
 /**

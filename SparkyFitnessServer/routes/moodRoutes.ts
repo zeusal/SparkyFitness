@@ -1,8 +1,79 @@
 import express from 'express';
 import moodRepository from '../models/moodRepository.js';
 import { authenticate } from '../middleware/authMiddleware.js';
-import { canAccessUserData } from '../utils/permissionUtils.js';
+import checkPermissionMiddleware from '../middleware/checkPermissionMiddleware.js';
 const router = express.Router();
+router.use(authenticate);
+// Mood entries are check-in data (RLS uses the check-in policy). Guard every
+// endpoint with the matching permission: GET maps to checkin_read (also allows
+// can_view_reports), writes require can_manage_checkin. This replaces the prior
+// ad-hoc, wrong-domain ('diary') manual checks that blocked check-in delegates.
+router.use(checkPermissionMiddleware('checkin'));
+
+// --- Custom moods (user-defined mood tags). Registered before /:id routes so
+// '/custom' is not captured by the GET/PUT/DELETE '/:id' handlers. ---
+router.get('/custom', async (req, res, next) => {
+  try {
+    const list = await moodRepository.listCustomMoods(req.userId);
+    res.json(list);
+  } catch (error) {
+    next(error);
+  }
+});
+router.post('/custom', async (req, res, next) => {
+  try {
+    const { name, display_name, icon, color } = req.body;
+    if (!name || typeof name !== 'string') {
+      return res.status(400).json({ message: 'Name is required.' });
+    }
+    const created = await moodRepository.createCustomMood(req.userId, {
+      name,
+      display_name,
+      icon,
+      color,
+    });
+    res.status(201).json(created);
+  } catch (error) {
+    next(error);
+  }
+});
+router.delete('/custom/:id', async (req, res, next) => {
+  try {
+    const deleteAllHistory = req.query.deleteAllHistory === 'true';
+    const ok = await moodRepository.deleteCustomMood(
+      req.userId,
+      req.params.id,
+      deleteAllHistory
+    );
+    if (!ok) return res.status(404).json({ message: 'Custom mood not found.' });
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Mood display preferences (show/hide config). Registered before /:id.
+router.get('/display-preferences', async (req, res, next) => {
+  try {
+    const prefs = await moodRepository.getMoodDisplayPreferences(req.userId);
+    res.json(prefs);
+  } catch (error) {
+    next(error);
+  }
+});
+router.put('/display-preferences', async (req, res, next) => {
+  try {
+    const { hidden_moods } = req.body;
+    const prefs = await moodRepository.upsertMoodDisplayPreferences(
+      req.userId,
+      Array.isArray(hidden_moods) ? hidden_moods : []
+    );
+    res.json(prefs);
+  } catch (error) {
+    next(error);
+  }
+});
+
 /**
  * @swagger
  * /mood:
@@ -44,9 +115,9 @@ const router = express.Router();
  *       500:
  *         description: Internal server error.
  */
-router.post('/', authenticate, async (req, res, next) => {
+router.post('/', async (req, res, next) => {
   try {
-    const { mood_value, notes, entry_date } = req.body;
+    const { mood_value, mood_tags, notes, entry_date } = req.body;
 
     const userId = req.userId;
     if (mood_value === null) {
@@ -56,7 +127,8 @@ router.post('/', authenticate, async (req, res, next) => {
       userId,
       mood_value,
       notes,
-      entry_date
+      entry_date,
+      Array.isArray(mood_tags) ? mood_tags : null
     );
     res.status(201).json(newMoodEntry);
   } catch (error) {
@@ -110,7 +182,7 @@ router.post('/', authenticate, async (req, res, next) => {
  *       500:
  *         description: Internal server error.
  */
-router.get('/', authenticate, async (req, res, next) => {
+router.get('/', async (req, res, next) => {
   try {
     const { userId, startDate, endDate } = req.query;
 
@@ -119,22 +191,6 @@ router.get('/', authenticate, async (req, res, next) => {
       return res
         .status(400)
         .json({ message: 'Start date and end date are required.' });
-    }
-    // Check permission if accessing another user's data
-
-    if (userId && userId !== req.userId) {
-      const hasPermission = await canAccessUserData(
-        userId,
-        'diary',
-
-        req.authenticatedUserId || req.userId
-      );
-      if (!hasPermission) {
-        return res.status(403).json({
-          error:
-            "Forbidden: You do not have permission to access this user's mood data.",
-        });
-      }
     }
     const moodEntries = await moodRepository.getMoodEntriesByUserId(
       targetUserId,
@@ -171,7 +227,7 @@ router.get('/', authenticate, async (req, res, next) => {
  *       404:
  *         description: Mood entry not found.
  */
-router.get('/:id', authenticate, async (req, res, next) => {
+router.get('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -203,28 +259,12 @@ router.get('/:id', authenticate, async (req, res, next) => {
  *       200:
  *         description: The mood entry for the date (or empty object if not found).
  */
-router.get('/date/:entryDate', authenticate, async (req, res, next) => {
+router.get('/date/:entryDate', async (req, res, next) => {
   try {
     const { entryDate } = req.params;
     const { userId } = req.query;
 
     const targetUserId = userId || req.userId;
-    // Check permission if accessing another user's data
-
-    if (userId && userId !== req.userId) {
-      const hasPermission = await canAccessUserData(
-        userId,
-        'diary',
-
-        req.authenticatedUserId || req.userId
-      );
-      if (!hasPermission) {
-        return res.status(403).json({
-          error:
-            "Forbidden: You do not have permission to access this user's mood data.",
-        });
-      }
-    }
     const moodEntry = await moodRepository.getMoodEntryByDate(
       targetUserId,
       entryDate
@@ -266,16 +306,17 @@ router.get('/date/:entryDate', authenticate, async (req, res, next) => {
  *       200:
  *         description: Updated mood entry.
  */
-router.put('/:id', authenticate, async (req, res, next) => {
+router.put('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { mood_value, notes } = req.body;
+    const { mood_value, notes, mood_tags } = req.body;
     const updatedMoodEntry = await moodRepository.updateMoodEntry(
       id,
 
       req.userId,
       mood_value,
-      notes
+      notes,
+      Array.isArray(mood_tags) ? mood_tags : null
     );
     res.json(updatedMoodEntry);
   } catch (error) {
@@ -303,7 +344,7 @@ router.put('/:id', authenticate, async (req, res, next) => {
  *       404:
  *         description: Not found.
  */
-router.delete('/:id', authenticate, async (req, res, next) => {
+router.delete('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
 

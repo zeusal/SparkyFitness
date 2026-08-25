@@ -2,6 +2,7 @@ import { vi, beforeEach, describe, expect, it } from 'vitest';
 import { todayInZone } from '@workspace/shared';
 import { buildCoachTools } from '../ai/tools/coachTools.js';
 import coachRepository from '../models/coachRepository.js';
+import { getResolvedExerciseCaloriesTotal } from '../services/exerciseCalorieRangeService.js';
 
 vi.mock('../models/coachRepository', () => ({
   default: {
@@ -20,17 +21,28 @@ vi.mock('../models/coachRepository', () => ({
     getFrequentHighProteinFoods: vi.fn(),
   },
 }));
+vi.mock('../services/exerciseCalorieRangeService', () => ({
+  getResolvedExerciseCaloriesRange: vi.fn(),
+  getResolvedExerciseCaloriesTotal: vi.fn(),
+}));
 vi.mock('../config/logging', () => ({
   log: vi.fn(),
 }));
 
 const opts = { toolCallId: 'tc-1', messages: [] };
 const DB_ERROR_TEXT =
-  'Error [DB_ERROR]: A database error occurred. Please try again.\n\nSuggestion: If the issue persists, contact support.';
+  'Error [DB_ERROR]: A database error occurred.\n\nSuggestion: Do NOT retry the same call — it will fail the same way. Tell the user what failed and stop.';
 
 let tools: ReturnType<typeof buildCoachTools>;
 
 beforeEach(() => {
+  // These fixtures contain no device "Active Calories" row, so the resolved total and
+  // the raw SUM agree. Tracking the repo mock keeps every existing golden intact while
+  // routing the tool through the resolver it now uses.
+  vi.mocked(getResolvedExerciseCaloriesTotal).mockImplementation(async () => {
+    const agg = await coachRepository.getExerciseAggregates('', '', '');
+    return Number(agg.total_calories_burned) || 0;
+  });
   vi.clearAllMocks();
   tools = buildCoachTools('user-1', 'UTC');
 });
@@ -210,16 +222,32 @@ describe('sparky_get_health_summary', () => {
     );
   });
 
-  it('returns a validation error when start_date is missing', async () => {
+  it('defaults to today when start_date is missing', async () => {
+    vi.mocked(coachRepository.getNutritionAggregates).mockResolvedValue({
+      calories: 2000,
+      protein: 150,
+      carbs: 200,
+      fat: 70,
+    });
+    vi.mocked(coachRepository.getExerciseAggregates).mockResolvedValue({
+      workouts: 1,
+      active_calories: 300,
+      duration_minutes: 45,
+    });
+    vi.mocked(coachRepository.getLatestWeightInRange).mockResolvedValue({
+      weight: 75,
+    });
+    vi.mocked(coachRepository.getWaterIntakeTotal).mockResolvedValue({
+      water_ml: 2000,
+    });
+
     const result = await tools.sparky_get_health_summary.execute!(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       {} as any,
       opts
     );
 
-    expect(result).toBe(
-      'Error [VALIDATION]: start_date: Invalid input: expected string, received undefined'
-    );
+    expect(result).toContain('Health Summary');
   });
 
   it('maps repository failures to DB_ERROR', async () => {
@@ -369,6 +397,9 @@ describe('sparky_get_30_day_trends', () => {
       active_days: 6,
       total_calories_burned: '2400',
     });
+    // The 30-day tool resolves over its own window rather than reusing the range
+    // aggregate; no device summary in this fixture, so the two agree.
+    vi.mocked(getResolvedExerciseCaloriesTotal).mockResolvedValue(2400);
     vi.mocked(coachRepository.get30DayMoodAggregates).mockResolvedValue({
       entries: 10,
       avg_mood: '7.44',
@@ -656,23 +687,23 @@ describe('sparky_generate_coaching_plan', () => {
       opts
     );
 
-    // avg 2400 kcal; +1kg over 14 days -> daily balance 550 -> TDEE 1850;
-    // weight_loss deficit -> 1350 target.
+    // avg 2400 kcal; +1kg over 14 days -> daily balance (1*6000)/14 = 429 -> TDEE 1971;
+    // weight_loss deficit -> 1471 target.
     expect(result).toBe(
       '# Coaching Plan\n\n' +
         JSON.stringify(
           {
             goal: 'weight_loss',
-            current_estimated_tdee: 1850,
+            current_estimated_tdee: 1971,
             recommended_targets: {
-              daily_calories: 1350,
-              protein_grams: 101,
-              carbs_grams: 135,
-              fat_grams: 45,
+              daily_calories: 1471,
+              protein_grams: 110,
+              carbs_grams: 147,
+              fat_grams: 49,
             },
             shopping_list_suggestions: ['Chicken Breast', 'Greek Yogurt'],
             coaching_insight:
-              'Your weight is currently trending up. To hit your weight loss goal, we need to bring daily calories down to 1350.',
+              'Your weight is currently trending up. To hit your weight loss goal, we need to bring daily calories down to 1471.',
           },
           null,
           2

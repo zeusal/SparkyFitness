@@ -4,6 +4,13 @@ import { normalizeUrl } from './apiClient';
 import { ApiError } from './errors';
 import { getAuthHeaders, notifySessionExpired } from './authService';
 import { ensureTimezoneBootstrapped } from './preferencesApi';
+import { CONNECTION_CHECK_TIMEOUT_MS, fetchWithTimeout } from '../../utils/concurrency';
+import {
+  instantToDay,
+  instantToDayWithOffset,
+  isDayString,
+  isValidTimeZone,
+} from '@workspace/shared';
 import type { SleepStageEvent } from '../../types/mobileHealthData';
 
 interface BaseHealthDataPayloadItem {
@@ -47,6 +54,32 @@ export interface HealthDataPayloadItem extends BaseHealthDataPayloadItem {
 
 export type HealthDataPayload = HealthDataPayloadItem[];
 
+/** Per-record rejection reported by the server for an otherwise-accepted sync request. */
+export interface RecordSyncError {
+  error: string;
+  entry?: unknown;
+}
+
+/**
+ * Outcome of a chunked health-data upload. Per-record rejections are reported
+ * here instead of thrown so the sync cursor can advance past poison records;
+ * only whole-request failures (network, auth, all-records-rejected chunks)
+ * throw.
+ */
+export interface HealthDataSyncSummary {
+  /** Records transmitted in chunks the server accepted (including partially rejected ones). */
+  recordsSent: number;
+  /** Per-record rejections aggregated across all chunks. */
+  recordErrors: RecordSyncError[];
+}
+
+/** Shape of the server's POST /api/health-data response body (fields absent on old servers). */
+interface HealthDataResponseBody {
+  processed?: unknown[];
+  errors?: RecordSyncError[];
+  skipped?: { reason?: string; entry?: unknown }[];
+}
+
 // --- Chunking, timeout, and retry constants ---
 
 export const CHUNK_SIZE = 5_000;
@@ -60,30 +93,6 @@ export const RETRY_BASE_DELAY_MS = 1_000;
 // --- Internal helpers ---
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-/**
- * Wraps fetch with an AbortController that auto-aborts after timeoutMs.
- */
-export const fetchWithTimeout = async (
-  url: string,
-  options: RequestInit,
-  timeoutMs: number,
-): Promise<Response> => {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const response = await fetch(url, { ...options, signal: controller.signal });
-    return response;
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error(`Request timed out after ${timeoutMs}ms`);
-    }
-    throw error;
-  } finally {
-    clearTimeout(timer);
-  }
-};
 
 interface RetryConfig {
   timeoutMs: number;
@@ -150,6 +159,94 @@ export const fetchWithRetry = async (
 // chunk's pre-cleanup wipe an earlier chunk's inserts.
 const RANGE_DELETE_TYPES = new Set(['ExerciseSession', 'Workout']);
 
+// Soft cap on one workout chunk's JSON size. Reverse proxies commonly cap
+// request bodies at 10 MB; telemetry-heavy sessions run ~250 KB each, and a
+// backfill window can hold a month of them for one source, so oversized groups
+// are split at calendar-day boundaries (see splitWorkoutGroupBySize). Kept well
+// under the proxy cap to leave room for JSON escaping and header overhead.
+export const WORKOUT_CHUNK_SOFT_LIMIT_BYTES = 2 * 1024 * 1024;
+
+// Chunk day keys must match the day the server resolves for its per-request
+// range delete (resolveHealthEntryDate): the basis instant is `timestamp`,
+// bucketed in the record's own timezone or UTC offset when present. A key that
+// lands on a different day than the server's lets one chunk's pre-cleanup
+// range overlap another chunk's days and delete its freshly inserted rows.
+// Day-only basis strings are trusted as-is, exactly as the server does. The
+// final fallback must be the server's stored ACCOUNT timezone, not the device
+// timezone: ensureTimezoneBootstrapped only fills an unset account timezone
+// from the device — it preserves an existing one — so a traveling user (or a
+// device with the wrong local clock) can have a device zone that no longer
+// matches their account zone. Records with no parseable basis share one ''
+// bucket; the server excludes them from its cleanup range, so their grouping
+// is inconsequential.
+const recordDay = (
+  record: HealthDataPayloadItem,
+  accountTimezone: string
+): string => {
+  const basis =
+    record.timestamp || record.date || record.entry_date || record.startTime;
+  if (!basis) return '';
+  if (isDayString(basis)) return basis;
+  const instant = new Date(basis);
+  if (isNaN(instant.getTime())) return '';
+  if (record.record_timezone && isValidTimeZone(record.record_timezone)) {
+    return instantToDay(instant, record.record_timezone);
+  }
+  if (typeof record.record_utc_offset_minutes === 'number') {
+    return instantToDayWithOffset(instant, record.record_utc_offset_minutes);
+  }
+  return instantToDay(instant, accountTimezone);
+};
+
+/**
+ * Splits one source's workout records into chunks under the size cap without
+ * breaking the range-delete contract: whole calendar days only, packed in date
+ * order, so consecutive chunks cover disjoint contiguous day ranges and each
+ * request's server-side pre-cleanup touches no other chunk's days. A single
+ * day that alone exceeds the cap cannot be split and ships as its own chunk.
+ */
+const splitWorkoutGroupBySize = (
+  records: HealthDataPayloadItem[],
+  accountTimezone: string,
+): HealthDataPayloadItem[][] => {
+  const sizeOf = (record: HealthDataPayloadItem): number =>
+    JSON.stringify(record).length;
+
+  let totalBytes = 0;
+  const byDay = new Map<string, { records: HealthDataPayloadItem[]; bytes: number }>();
+  for (const record of records) {
+    const day = recordDay(record, accountTimezone);
+    const bytes = sizeOf(record);
+    totalBytes += bytes;
+    const bucket = byDay.get(day);
+    if (bucket) {
+      bucket.records.push(record);
+      bucket.bytes += bytes;
+    } else {
+      byDay.set(day, { records: [record], bytes });
+    }
+  }
+
+  if (totalBytes <= WORKOUT_CHUNK_SOFT_LIMIT_BYTES) return [records];
+
+  const chunks: HealthDataPayloadItem[][] = [];
+  let current: HealthDataPayloadItem[] = [];
+  let currentBytes = 0;
+  const days = [...byDay.keys()].sort();
+  for (const day of days) {
+    const bucket = byDay.get(day)!;
+    if (current.length > 0 && currentBytes + bucket.bytes > WORKOUT_CHUNK_SOFT_LIMIT_BYTES) {
+      chunks.push(current);
+      current = [];
+      currentBytes = 0;
+    }
+    current.push(...bucket.records);
+    currentBytes += bucket.bytes;
+  }
+  if (current.length > 0) chunks.push(current);
+  return chunks;
+};
+
 // Types the server ingests idempotently by natural key (no range-delete), so they
 // can be chunked freely — but each record is expensive to process server-side
 // (multiple queries / merges), so they're capped at SESSION_CHUNK_SIZE rather than
@@ -157,13 +254,40 @@ const RANGE_DELETE_TYPES = new Set(['ExerciseSession', 'Workout']);
 // Nutrition upserts each food entry by (source, source_id).
 const SMALL_CHUNK_TYPES = new Set(['SleepSession', 'Nutrition']);
 
+// Old servers (pre per-record contract) 400 the whole batch when any record
+// fails, but only after processing the valid ones. A 400 whose body carries
+// per-record results with at least one processed record is that legacy partial
+// success. A 400 with no processed records (all rejected, or a malformed-body
+// {error} shape) stays a real failure.
+const parseLegacyPartialFailure = (error: unknown): RecordSyncError[] | null => {
+  if (!(error instanceof ApiError) || error.statusCode !== 400 || !error.body) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(error.body);
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      Array.isArray(parsed.errors) &&
+      Array.isArray(parsed.processed) &&
+      parsed.processed.length > 0
+    ) {
+      return parsed.errors as RecordSyncError[];
+    }
+  } catch {
+    // body wasn't JSON — not a legacy partial-failure response
+  }
+  return null;
+};
+
 /** Splits the payload into request-sized chunks (see RANGE_DELETE_TYPES). */
 const sendHealthDataChunked = async (
   url: string,
   headers: Record<string, string>,
   data: HealthDataPayload,
   serverConfig: ServerConfig,
-): Promise<unknown> => {
+  accountTimezone: string,
+): Promise<HealthDataSyncSummary> => {
   const simpleRecords: HealthDataPayloadItem[] = [];
   const smallChunkRecords: HealthDataPayloadItem[] = [];
   const rangeDeleteBySource = new Map<string, HealthDataPayloadItem[]>();
@@ -186,9 +310,12 @@ const sendHealthDataChunked = async (
 
   const chunks: HealthDataPayloadItem[][] = [];
 
-  // Exercise/Workout: one chunk per source, never split.
+  // Exercise/Workout: one chunk per source, split only at whole-day boundaries
+  // when telemetry pushes a group past the size cap.
   for (const sessionRecords of rangeDeleteBySource.values()) {
-    chunks.push(sessionRecords);
+    for (const chunk of splitWorkoutGroupBySize(sessionRecords, accountTimezone)) {
+      chunks.push(chunk);
+    }
   }
 
   // Sleep/Nutrition: chunked by SESSION_CHUNK_SIZE.
@@ -203,7 +330,7 @@ const sendHealthDataChunked = async (
 
   const totalChunks = chunks.length;
   let recordsSent = 0;
-  let lastResult: unknown;
+  const recordErrors: RecordSyncError[] = [];
 
   for (let i = 0; i < totalChunks; i++) {
     const chunk = chunks[i];
@@ -233,9 +360,45 @@ const sendHealthDataChunked = async (
         },
       );
 
-      lastResult = await response.json();
+      const result = (await response.json()) as HealthDataResponseBody | null;
+      // Old servers omit errors/skipped — treat as clean.
+      const chunkErrors = Array.isArray(result?.errors) ? result.errors : [];
+      const chunkProcessed = Array.isArray(result?.processed) ? result.processed : [];
+      const chunkSkipped = Array.isArray(result?.skipped) ? result.skipped : [];
+
+      if (chunkSkipped.length > 0) {
+        addLog(
+          `[API] Server skipped ${chunkSkipped.length} record(s) in chunk ${i + 1}/${totalChunks} (intentionally not written)`,
+          'INFO',
+        );
+      }
+
+      // A chunk where every record was rejected is indistinguishable from a
+      // systemic failure — advancing the cursor there would silently drop the
+      // whole window, so treat it like a failed chunk.
+      if (chunkErrors.length > 0 && chunkProcessed.length === 0) {
+        addLog(
+          `[API] chunk ${i + 1}/${totalChunks} rejected in full by server: ${chunkErrors.length} records`,
+          'ERROR',
+        );
+        throw new Error(
+          `Chunk ${i + 1}/${totalChunks} rejected in full by server: ${chunkErrors.length} records rejected.`,
+        );
+      }
+
+      recordErrors.push(...chunkErrors);
       recordsSent += chunk.length;
     } catch (error) {
+      const legacyErrors = parseLegacyPartialFailure(error);
+      if (legacyErrors) {
+        addLog(
+          `[API] Legacy server reported ${legacyErrors.length} rejected record(s) in chunk ${i + 1}/${totalChunks}; continuing`,
+          'WARNING',
+        );
+        recordErrors.push(...legacyErrors);
+        recordsSent += chunk.length;
+        continue;
+      }
       const message = error instanceof Error ? error.message : String(error);
       if (recordsSent > 0) {
         throw new Error(
@@ -246,13 +409,17 @@ const sendHealthDataChunked = async (
     }
   }
 
-  return lastResult;
+  return { recordsSent, recordErrors };
 };
 
 /**
- * Sends health data to the server.
+ * Sends health data to the server. Resolves with a summary whose recordErrors
+ * carry per-record server rejections; callers must not treat those as a failed
+ * sync (see HealthDataSyncSummary).
  */
-export const syncHealthData = async (data: HealthDataPayload): Promise<unknown> => {
+export const syncHealthData = async (
+  data: HealthDataPayload,
+): Promise<HealthDataSyncSummary | undefined> => {
   const config = await getActiveServerConfig();
   if (!config) {
     throw new Error('Server configuration not found.');
@@ -269,26 +436,45 @@ export const syncHealthData = async (data: HealthDataPayload): Promise<unknown> 
     return undefined;
   }
 
-  await ensureTimezoneBootstrapped({ throwOnFailure: true });
+  // throwOnFailure guarantees a resolved timezone here, but the fallback still
+  // covers it defensively rather than assuming the non-null return holds.
+  const accountTimezone =
+    (await ensureTimezoneBootstrapped({ throwOnFailure: true })) ??
+    Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-  console.log(`[API Service] Attempting to sync to URL: ${url}/api/health-data`);
+  addLog(`[API] Syncing to ${url}/api/health-data`, 'DEBUG');
 
   addLog(`[API] Starting sync of ${data.length} records to server`, 'INFO');
 
   try {
-    const result = await sendHealthDataChunked(
+    const summary = await sendHealthDataChunked(
       `${url}/api/health-data`,
       {
         'Content-Type': 'application/json',
+        // 2 declares per-set exercise durations as integer seconds (an absent
+        // header means the legacy contract, where those durations are minutes).
+        // 3 additionally signals that workout records may carry telemetry —
+        // gps_points, hr_samples, laps and telemetry. Those fields are all
+        // optional, so a server that predates 3 simply ignores them.
+        'X-Workout-Model-Version': '3',
         ...proxyHeadersToRecord(config.proxyHeaders),
         ...getAuthHeaders(config),
       },
       data,
       config,
+      accountTimezone,
     );
 
-    addLog(`[API] Sync successful: ${data.length} records sent to server`, 'INFO');
-    return result;
+    if (summary.recordErrors.length > 0) {
+      addLog(
+        `[API] Sync sent ${summary.recordsSent} records; server rejected ${summary.recordErrors.length} record(s)`,
+        'WARNING',
+        summary.recordErrors.slice(0, 10).map((e) => e.error),
+      );
+    } else {
+      addLog(`[API] Sync successful: ${data.length} records sent to server`, 'INFO');
+    }
+    return summary;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     addLog(`[API] Sync failed: ${message}`, 'ERROR');
@@ -302,7 +488,7 @@ export const syncHealthData = async (data: HealthDataPayload): Promise<unknown> 
 export const checkServerConnection = async (): Promise<boolean> => {
   const config = await getActiveServerConfig();
   if (!config || !config.url) {
-    console.log('[API Service] No active server configuration found for connection check.');
+    addLog('[API] No active server configuration found for connection check.', 'DEBUG');
     return false; // No configuration, so no connection
   }
 
@@ -314,14 +500,18 @@ export const checkServerConnection = async (): Promise<boolean> => {
   }
 
   try {
-    const response = await fetch(`${url}/api/identity/user`, {
-      method: 'GET',
-      cache: 'no-store', // skip native HTTP cache to avoid 304 empty bodies (#1353)
-      headers: {
-        ...proxyHeadersToRecord(config.proxyHeaders),
-        ...getAuthHeaders(config),
+    const response = await fetchWithTimeout(
+      `${url}/api/identity/user`,
+      {
+        method: 'GET',
+        cache: 'no-store', // skip native HTTP cache to avoid 304 empty bodies (#1353)
+        headers: {
+          ...proxyHeadersToRecord(config.proxyHeaders),
+          ...getAuthHeaders(config),
+        },
       },
-    });
+      CONNECTION_CHECK_TIMEOUT_MS,
+    );
     if (response.ok) {
       return true;
     } else {

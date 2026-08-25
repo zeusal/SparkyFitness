@@ -1,7 +1,9 @@
 import { getClient } from '../db/poolManager.js';
 import exerciseRepository from '../models/exerciseRepository.js';
 import exerciseDb from '../models/exercise.js';
-import exerciseEntryDb from '../models/exerciseEntry.js';
+import exerciseEntryDb, {
+  type RecentSessionRow,
+} from '../models/exerciseEntry.js';
 import activityDetailsRepository from '../models/activityDetailsRepository.js';
 import exercisePresetEntryRepository from '../models/exercisePresetEntryRepository.js';
 import preferenceRepository from '../models/preferenceRepository.js';
@@ -16,8 +18,16 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { resolveExerciseIdToUuid } from '../utils/uuidUtils.js';
-
-import papa from 'papaparse';
+import { normalizeToStringArray } from '../utils/exerciseJsonFields.js';
+import {
+  deriveExerciseModality,
+  canEditGroupedWorkout,
+  setsDistanceKm,
+  setsDurationMinutes,
+  toNumber,
+  parseCsv,
+  DEFAULT_CSV_FORMAT,
+} from '@workspace/shared';
 import {
   getGroupedExerciseSessionById,
   getGroupedExerciseSessionByIdWithClient,
@@ -211,15 +221,68 @@ function mapSetStatsRow(row: any) {
     setNumber: row.set_number,
   };
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function getExerciseStats(userId: any, exerciseId: any) {
-  const [bestRow, lastRow] = await Promise.all([
-    exerciseEntryDb.getBestSetForExercise(userId, exerciseId),
-    exerciseEntryDb.getLastSetForExercise(userId, exerciseId),
+// The DB holds cross-source set_type variants ('Warm-up', 'Warm-up Set', ...);
+// mirror the fuzzy SQL warmup match so clients can compare against 'warmup'.
+function normalizeSetType(setType: string | null): string | null {
+  if (setType === null) {
+    return null;
+  }
+  return setType
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+    .startsWith('warmup')
+    ? 'warmup'
+    : setType;
+}
+function mapRecentSessionRow(row: RecentSessionRow) {
+  return {
+    entryDate: row.entry_date,
+    sets: (row.sets ?? []).map((s) => ({
+      setNumber: s.set_number,
+      setType: normalizeSetType(s.set_type),
+      weight: s.weight,
+      reps: s.reps,
+      duration: s.duration,
+      distance: s.distance,
+    })),
+  };
+}
+async function getExerciseStats(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  userId: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  exerciseId: any,
+  excludePresetEntryId: string | null = null,
+  presetId: number | null = null
+) {
+  const [bestRow, lastRow, recentRows] = await Promise.all([
+    // Best/last stay exercise-global by design: a heavier lift is a PR
+    // regardless of which preset it was performed under.
+    exerciseEntryDb.getBestSetForExercise(
+      userId,
+      exerciseId,
+      excludePresetEntryId
+    ),
+    exerciseEntryDb.getLastSetForExercise(
+      userId,
+      exerciseId,
+      excludePresetEntryId
+    ),
+    // Recent sessions feed the live "Previous" placeholders; scoping to the
+    // preset that started the workout (when supplied) means those placeholders
+    // reflect this preset's own history instead of a different preset's.
+    exerciseEntryDb.getRecentSessionsForExercise(
+      userId,
+      exerciseId,
+      excludePresetEntryId,
+      undefined,
+      presetId
+    ),
   ]);
   return {
     bestSet: bestRow ? mapSetStatsRow(bestRow) : null,
     lastSet: lastRow ? mapSetStatsRow(lastRow) : null,
+    recentSessions: recentRows.map(mapRecentSessionRow),
   };
 }
 async function getAvailableEquipment() {
@@ -245,10 +308,10 @@ async function createExercise(authenticatedUserId: any, exerciseData: any) {
   try {
     // Ensure the exercise is created for the authenticated user
     exerciseData.user_id = authenticatedUserId;
-    // If images are provided, ensure they are stored as JSON string in the database
-    if (exerciseData.images && Array.isArray(exerciseData.images)) {
-      exerciseData.images = JSON.stringify(exerciseData.images);
-    }
+    // exerciseDb.createExercise (models/exercise.ts) is the single
+    // persistence chokepoint for JSON-encoding equipment/muscles/
+    // instructions/images — encoding images here too would double-encode it
+    // into a JSON string containing a JSON string.
     const newExercise = await exerciseDb.createExercise(exerciseData);
     return newExercise;
   } catch (error) {
@@ -278,18 +341,10 @@ async function prepareExerciseEntryForCreate(
   if (!exercise) {
     throw new Error('Exercise not found for snapshot.');
   }
-  const durationFromSets = Array.isArray(entryData.sets)
-    ? entryData.sets.reduce(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (sum: any, set: any) =>
-          sum + (set.duration || 0) + (set.rest_time || 0) / 60,
-        0
-      )
-    : 0;
   const durationMinutes =
     typeof entryData.duration_minutes === 'number'
       ? entryData.duration_minutes
-      : durationFromSets;
+      : setsDurationMinutes(entryData.sets);
   let calculatedCaloriesBurned = entryData.calories_burned;
   if (
     calculatedCaloriesBurned === undefined ||
@@ -313,7 +368,9 @@ async function prepareExerciseEntryForCreate(
     duration_minutes: durationMinutes ?? 0,
     workout_plan_assignment_id: entryData.workout_plan_assignment_id || null,
     image_url: entryData.image_url || null,
-    distance: entryData.distance ?? null,
+    // Explicit client value wins; otherwise derive the total from per-set
+    // distances (null when no set carries one).
+    distance: entryData.distance ?? setsDistanceKm(entryData.sets),
     avg_heart_rate: entryData.avg_heart_rate ?? null,
   };
 }
@@ -479,12 +536,27 @@ async function updateExerciseEntry(
           updateData.image_url === undefined
             ? existingEntry.image_url
             : updateData.image_url,
-        distance: updateData.distance ?? existingEntry.distance,
+        // Explicit value (including null-to-clear) wins; omitted derives the
+        // total from per-set distances, else preserves the existing value.
+        distance:
+          updateData.distance !== undefined
+            ? updateData.distance
+            : (setsDistanceKm(updateData.sets) ?? existingEntry.distance),
         avg_heart_rate:
           updateData.avg_heart_rate ?? existingEntry.avg_heart_rate,
         steps: updateData.steps ?? existingEntry.steps,
         sort_order: updateData.sort_order ?? existingEntry.sort_order,
         exercise_name: updateData.exercise_name ?? existingEntry.exercise_name,
+        // Preserve when omitted; explicit null clears (leaving a superset).
+        superset_group:
+          updateData.superset_group === undefined
+            ? (existingEntry.superset_group ?? null)
+            : updateData.superset_group,
+        // Preserve when omitted; explicit null clears the time of day.
+        entry_time:
+          updateData.entry_time === undefined
+            ? (existingEntry.entry_time ?? null)
+            : updateData.entry_time,
       }
     );
     if (!updatedEntry) {
@@ -498,6 +570,12 @@ async function updateExerciseEntry(
           id
         );
       const incomingActivityDetails = updateData.activity_details || [];
+      const RAW_PROVIDER_TYPES = [
+        'full_activity_data',
+        'full_workout_data',
+        'fit_file_data',
+      ];
+
       // Identify details to delete
       for (const existingDetail of existingActivityDetails) {
         const found = incomingActivityDetails.find(
@@ -505,24 +583,55 @@ async function updateExerciseEntry(
           (incomingDetail: any) => incomingDetail.id === existingDetail.id
         );
         if (!found) {
+          // Do not delete raw provider dump rows during standard entry edit
+          if (RAW_PROVIDER_TYPES.includes(existingDetail.detail_type)) {
+            continue;
+          }
           await activityDetailsRepository.deleteActivityDetail(
             authenticatedUserId,
             existingDetail.id
           );
         }
       }
+
       // Identify details to create or update
       for (const incomingDetail of incomingActivityDetails) {
         if (incomingDetail.id) {
-          // Update existing detail
-          await activityDetailsRepository.updateActivityDetail(
-            authenticatedUserId,
-            incomingDetail.id,
-            {
-              ...incomingDetail,
-              updated_by_user_id: actingUserId,
+          const isMaskedOrNull =
+            incomingDetail.detail_data === null ||
+            incomingDetail.detail_data === undefined ||
+            incomingDetail.detail_data === 'null' ||
+            RAW_PROVIDER_TYPES.includes(incomingDetail.detail_type);
+
+          if (isMaskedOrNull) {
+            const existing = existingActivityDetails.find(
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (e: any) => e.id === incomingDetail.id
+            );
+            if (
+              existing &&
+              existing.detail_data !== null &&
+              existing.detail_data !== undefined &&
+              existing.detail_data !== 'null'
+            ) {
+              incomingDetail.detail_data = existing.detail_data;
             }
-          );
+          }
+
+          // Preserve existing raw detail_data if incoming value is still null/masked
+          if (
+            incomingDetail.detail_data !== null &&
+            incomingDetail.detail_data !== 'null'
+          ) {
+            await activityDetailsRepository.updateActivityDetail(
+              authenticatedUserId,
+              incomingDetail.id,
+              {
+                ...incomingDetail,
+                updated_by_user_id: actingUserId,
+              }
+            );
+          }
         } else {
           // Create new detail
           await activityDetailsRepository.createActivityDetail(
@@ -591,8 +700,10 @@ async function getExerciseById(authenticatedUserId: any, id: any) {
       authenticatedUserId
     );
     if (!exerciseOwnerId) {
-      // @ts-expect-error TS(2554): Expected 2 arguments, but got 1.
-      const publicExercise = await exerciseDb.getExerciseById(id);
+      const publicExercise = await exerciseDb.getExerciseById(
+        id,
+        authenticatedUserId
+      );
       if (publicExercise && !publicExercise.is_custom) {
         return publicExercise;
       }
@@ -626,10 +737,10 @@ async function updateExercise(
     if (!exerciseOwnerId) {
       throw new Error('Exercise not found.');
     }
-    // If images are provided, ensure they are stored as JSON string in the database
-    if (updateData.images && Array.isArray(updateData.images)) {
-      updateData.images = JSON.stringify(updateData.images);
-    }
+    // exerciseDb.updateExercise (models/exercise.ts) is the single
+    // persistence chokepoint for JSON-encoding equipment/muscles/
+    // instructions/images — encoding images here too would double-encode it
+    // into a JSON string containing a JSON string.
     const updatedExercise = await exerciseDb.updateExercise(
       id,
       authenticatedUserId,
@@ -792,19 +903,14 @@ async function getExerciseEntriesByDate(
     if (!entries || entries.length === 0) {
       return [];
     }
-    // For each entry, fetch and attach its activity details
-    const entriesWithDetails = await Promise.all(
-      entries.map(async (entry) => {
-        const activityDetails =
-          await activityDetailsRepository.getActivityDetailsByEntryOrPresetId(
-            authenticatedUserId,
-            entry.id,
-            entry.exercise_preset_entry_id
-          );
-        return { ...entry, activity_details: activityDetails };
-      })
-    );
-    return entriesWithDetails;
+    // exerciseEntryDb.getExerciseEntriesByDate already attaches `activity_details` per
+    // entry/preset via a single batched query, with raw provider sync dumps
+    // (full_activity_data/full_workout_data) stripped of their payload. Previously this
+    // function re-fetched activity details per entry (N+1 queries) and, worse, used
+    // getActivityDetailsByEntryOrPresetId — which does NOT strip the raw dump — so it
+    // silently re-inflated every diary response with the full Garmin JSON blob this
+    // fix removes. Do not re-fetch here.
+    return entries;
   } catch (error) {
     log(
       'error',
@@ -875,6 +981,20 @@ interface FreeExerciseDBResult {
     images: string[];
   }[];
 }
+
+/**
+ * wger descriptions are HTML (often a <ol>/<li> list). Normalize to the same
+ * plain-text step array free-exercise-db exercises use.
+ */
+function wgerDescriptionToInstructions(rawDescription: string): string[] {
+  return rawDescription
+    .replace(/<li>/g, '\n- ')
+    .replace(/<[^>]*>/g, '')
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 async function searchExternalExercises(
   _authenticatedUserId: string,
   query: string,
@@ -937,18 +1057,46 @@ async function searchExternalExercises(
       );
 
       totalCount = wgerResult.totalCount;
-      items = wgerResult.exercises.map((exercise) => ({
-        id: exercise.id.toString(),
-        name: exercise.name,
-        category: exercise.category?.name ?? 'Uncategorized',
-        calories_per_hour: 0,
-        source: 'wger',
-        description: exercise.instructions || exercise.name,
-        force: exercise.force,
-        mechanic: exercise.mechanic,
-        instructions: exercise.instructions,
-        images: exercise.images,
-      }));
+      const reverseMuscleMap = createReverseMap(muscleNameMap);
+      const reverseEquipmentMap = createReverseMap(equipmentNameMap);
+      items = wgerResult.exercises.map((exercise) => {
+        // `exercise.instructions` is the raw wger HTML description; normalize
+        // it the same way the import path does so previews match imports.
+        const instructions = wgerDescriptionToInstructions(
+          exercise.instructions
+        );
+        return {
+          id: exercise.id.toString(),
+          name: exercise.name,
+          category: exercise.category?.name ?? 'Uncategorized',
+          modality: deriveExerciseModality(exercise.category?.name),
+          calories_per_hour: 0,
+          source: 'wger',
+          description: instructions[0] ?? exercise.name,
+          force: exercise.force,
+          mechanic: exercise.mechanic,
+          equipment: exercise.equipment.map(
+            (e) =>
+              reverseEquipmentMap[
+                e.name.toLowerCase() as keyof typeof reverseEquipmentMap
+              ] ?? e.name
+          ),
+          primary_muscles: exercise.muscles.map(
+            (m) =>
+              reverseMuscleMap[
+                m.name.toLowerCase() as keyof typeof reverseMuscleMap
+              ] ?? m.name
+          ),
+          secondary_muscles: exercise.muscles_secondary.map(
+            (m) =>
+              reverseMuscleMap[
+                m.name.toLowerCase() as keyof typeof reverseMuscleMap
+              ] ?? m.name
+          ),
+          instructions,
+          images: exercise.images,
+        };
+      });
     } else if (providerType === 'nutritionix') {
       const nutritionixSearchResults =
         await nutritionixService.searchNutritionixExercises(query, providerId);
@@ -967,32 +1115,17 @@ async function searchExternalExercises(
         id: exercise.id,
         name: exercise.name,
         category: exercise.category,
+        modality: deriveExerciseModality(exercise.category),
         calories_per_hour: 0,
         description: exercise.description,
         source: 'free-exercise-db',
         force: exercise.force,
         level: exercise.level,
         mechanic: exercise.mechanic,
-        equipment: Array.isArray(exercise.equipment)
-          ? exercise.equipment
-          : exercise.equipment
-            ? [exercise.equipment]
-            : [],
-        primary_muscles: Array.isArray(exercise.primaryMuscles)
-          ? exercise.primaryMuscles
-          : exercise.primaryMuscles
-            ? [exercise.primaryMuscles]
-            : [],
-        secondary_muscles: Array.isArray(exercise.secondaryMuscles)
-          ? exercise.secondaryMuscles
-          : exercise.secondaryMuscles
-            ? [exercise.secondaryMuscles]
-            : [],
-        instructions: Array.isArray(exercise.instructions)
-          ? exercise.instructions
-          : exercise.instructions
-            ? [exercise.instructions]
-            : [],
+        equipment: normalizeToStringArray(exercise.equipment),
+        primary_muscles: normalizeToStringArray(exercise.primaryMuscles),
+        secondary_muscles: normalizeToStringArray(exercise.secondaryMuscles),
+        instructions: normalizeToStringArray(exercise.instructions),
         images: exercise.images.map((img: string) =>
           freeExerciseDBService.getExerciseImageUrl(img)
         ),
@@ -1028,6 +1161,17 @@ async function addExternalExerciseToUserExercises(
   language: string = 'en'
 ) {
   try {
+    // Import is idempotent: re-adding an already-imported exercise returns the
+    // user's existing copy instead of violating the (user_id, source, source_id)
+    // unique index.
+    const existingExercise = await exerciseDb.getExerciseBySourceAndSourceId(
+      'wger',
+      String(wgerExerciseId),
+      authenticatedUserId
+    );
+    if (existingExercise) {
+      return existingExercise;
+    }
     const wgerExerciseDetails =
       await wgerService.getWgerExerciseDetails(wgerExerciseId);
     if (!wgerExerciseDetails) {
@@ -1067,12 +1211,7 @@ async function addExternalExerciseToUserExercises(
         ] ?? null)
       : null;
 
-    const instructions = rawDescription
-      .replace(/<li>/g, '\n- ')
-      .replace(/<[^>]*>/g, '')
-      .split('\n')
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const instructions = wgerDescriptionToInstructions(rawDescription);
 
     const exerciseData = {
       name: exerciseName,
@@ -1082,7 +1221,12 @@ async function addExternalExerciseToUserExercises(
       user_id: authenticatedUserId,
       is_custom: true,
       shared_with_public: false,
-      source_external_id: wgerExerciseDetails.id.toString(),
+      // createExercise persists source_id (not source_external_id); the unique
+      // index and the dedup lookup above both key on it. Store the id the
+      // lookup queries by (the caller's id), not the fetched detail's id —
+      // if the two ever diverge, dedup would miss and the insert would hit
+      // the unique index.
+      source_id: String(wgerExerciseId),
       source: 'wger',
       level: 'intermediate',
       force: mappedForce,
@@ -1182,35 +1326,72 @@ async function addNutritionixExerciseToUserExercises(
   }
 }
 async function addFreeExerciseDBExerciseToUserExercises(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  authenticatedUserId: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  freeExerciseDBId: any
+  authenticatedUserId: string,
+  freeExerciseDBId: string
 ) {
   const { default: freeExerciseDBService } =
     await import('../integrations/freeexercisedb/FreeExerciseDBService.js');
   try {
+    // Import is idempotent: re-adding an already-imported exercise returns the
+    // user's existing copy instead of violating the (user_id, source, source_id)
+    // unique index.
+    const existingExercise = await exerciseDb.getExerciseBySourceAndSourceId(
+      'free-exercise-db',
+      freeExerciseDBId,
+      authenticatedUserId
+    );
+    if (existingExercise) {
+      return existingExercise;
+    }
     const exerciseDetails =
       await freeExerciseDBService.getExerciseById(freeExerciseDBId);
     if (!exerciseDetails) {
       throw new Error('Free-Exercise-DB exercise not found.');
     }
-    await Promise.all(
+    // Persist the path downloadImage actually wrote, not the upstream one:
+    // resolveImageFileName appends a URL hash (`0.jpg` -> `0_ab12cd34.jpg`), so
+    // storing the upstream `Name/0.jpg` pointed every thumbnail at a file that
+    // does not exist. Strip the `/uploads/exercises/` prefix to match the
+    // relative shape the wger importer stores.
+    const localImagePaths = await Promise.all(
       // @ts-expect-error TS(2571): Object is of type 'unknown'.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      exerciseDetails.images.map(async (imagePath: any) => {
+      exerciseDetails.images.map(async (imagePath: string) => {
         const imageUrl = freeExerciseDBService.getExerciseImageUrl(imagePath); // This now correctly forms the external URL
-        const exerciseIdFromPath = imagePath.split('/')[0]; // Extract exercise ID from path for download
-        await downloadImage(imageUrl, exerciseIdFromPath); // Download the image
-        return imagePath; // Store the original relative path in the database
+        // Sanitized before it reaches downloadImage, which path.join()s the
+        // value into the uploads dir without checking it: an upstream entry
+        // whose first segment is `..` would otherwise escape
+        // /uploads/exercises. The charset keeps `_` and `-` (unlike the wger
+        // and CSV callers' [^a-zA-Z0-9]) so a real id such as `3_4_Sit-Up`
+        // survives byte-for-byte — the /uploads/exercises/:exerciseId route
+        // re-downloads a missing file by looking the id up upstream, and a
+        // rewritten directory name would break that recovery.
+        const exerciseIdFromPath = imagePath
+          .split('/')[0]
+          .replace(/[^a-zA-Z0-9_-]/g, '_');
+        try {
+          const fullPath = await downloadImage(imageUrl, exerciseIdFromPath);
+          return fullPath.replace('/uploads/exercises/', '');
+        } catch (imgError) {
+          log(
+            'error',
+            `Failed to download image ${imageUrl} for free-exercise-db exercise ${freeExerciseDBId}:`,
+            imgError
+          );
+          return null;
+        }
       })
     );
     // Map free-exercise-db data to our generic Exercise model
+    const instructions = normalizeToStringArray(
+      // @ts-expect-error TS(2571): Object is of type 'unknown'.
+      exerciseDetails.instructions
+    );
     const exerciseData = {
       id: uuidv4(), // Generate a new UUID for the local exercise
       source: 'free-exercise-db',
-      // @ts-expect-error TS(2571): Object is of type 'unknown'.
-      source_id: exerciseDetails.id,
+      // Store the id the dedup lookup above queries by (the caller's id) so
+      // the two can never diverge and miss dedup on re-import.
+      source_id: String(freeExerciseDBId),
       // @ts-expect-error TS(2571): Object is of type 'unknown'.
       name: exerciseDetails.name,
       // @ts-expect-error TS(2571): Object is of type 'unknown'.
@@ -1220,25 +1401,29 @@ async function addFreeExerciseDBExerciseToUserExercises(
       // @ts-expect-error TS(2571): Object is of type 'unknown'.
       mechanic: exerciseDetails.mechanic,
       // @ts-expect-error TS(2571): Object is of type 'unknown'.
-      equipment: exerciseDetails.equipment,
+      equipment: normalizeToStringArray(exerciseDetails.equipment),
       // @ts-expect-error TS(2571): Object is of type 'unknown'.
-      primary_muscles: exerciseDetails.primaryMuscles,
-      // @ts-expect-error TS(2571): Object is of type 'unknown'.
-      secondary_muscles: exerciseDetails.secondaryMuscles,
-      // @ts-expect-error TS(2571): Object is of type 'unknown'.
-      instructions: exerciseDetails.instructions,
+      primary_muscles: normalizeToStringArray(exerciseDetails.primaryMuscles),
+      secondary_muscles: normalizeToStringArray(
+        // @ts-expect-error TS(2571): Object is of type 'unknown'.
+        exerciseDetails.secondaryMuscles
+      ),
+      instructions,
       // @ts-expect-error TS(2571): Object is of type 'unknown'.
       category: exerciseDetails.category,
       // @ts-expect-error TS(2571): Object is of type 'unknown'.
-      images: exerciseDetails.images, // Original relative paths — createExercise handles JSON.stringify
+      images: localImagePaths.filter((p): p is string => p !== null), // Local upload paths — createExercise handles JSON.stringify
       calories_per_hour:
         // @ts-expect-error TS(2554): Expected 3 arguments, but got 2.
         await calorieCalculationService.estimateCaloriesBurnedPerHour(
           exerciseDetails,
           authenticatedUserId
         ), // Calculate calories
+      // Same normalized array the instructions field uses, not the raw
+      // (possibly bare-string) value — indexing a bare string here would
+      // silently take its first character instead of the first instruction.
       // @ts-expect-error TS(2571): Object is of type 'unknown'.
-      description: exerciseDetails.instructions[0] || exerciseDetails.name, // Use first instruction as description or name
+      description: instructions[0] ?? exerciseDetails.name,
       user_id: authenticatedUserId,
       is_custom: true, // Imported exercises are custom to the user
       shared_with_public: false, // Imported exercises are private by default
@@ -1418,15 +1603,38 @@ async function importExercisesFromCSV(authenticatedUserId: any, filePath: any) {
   const failedRows = [];
   try {
     const fileContent = fs.readFileSync(filePath, 'utf8');
-    const { data, errors } = papa.parse(fileContent, {
-      header: true,
-      skipEmptyLines: true,
+    // parseCsv (shared, not a raw papa.parse call) so delimiter detection
+    // failures and parse issues are logged and included in warnings/failedRows
+    // naming the actual problem, instead of a blanket "CSV parsing failed".
+    const {
+      rows: data,
+      resolvedDecimal,
+      warnings,
+      fatal,
+    } = parseCsv(fileContent, DEFAULT_CSV_FORMAT, {
+      numericColumns: ['calories_per_hour'],
     });
-    if (errors.length > 0) {
-      log('error', 'CSV parsing errors:', errors);
-      throw new Error('CSV parsing failed. Please check file format.');
+    if (fatal) {
+      log('error', 'CSV parsing error:', fatal);
+      throw new Error(fatal.message);
     }
-    for (const row of data as Record<string, string>[]) {
+    const warningRowIndices = new Set<number>();
+    if (warnings.length > 0) {
+      log('warn', 'CSV parsing warnings:', warnings);
+      for (const w of warnings) {
+        if (w.row !== undefined) {
+          warningRowIndices.add(w.row);
+        }
+        failedRows.push({
+          row: w.row !== undefined ? { row: w.row } : {},
+          reason: w.message,
+        });
+        failedCount++;
+      }
+    }
+    for (let i = 0; i < data.length; i++) {
+      if (warningRowIndices.has(i)) continue;
+      const row = data[i];
       try {
         const exerciseName = row.name ? row.name.trim() : null;
         if (!exerciseName) {
@@ -1464,8 +1672,11 @@ async function importExercisesFromCSV(authenticatedUserId: any, filePath: any) {
             ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
               row.secondary_muscles.split(',').map((m: any) => m.trim())
             : [],
+          // toNumber (not parseFloat) so a locale-comma decimal like "300,5"
+          // parses to 300.5 instead of parseFloat's silent truncation at the
+          // comma — the same #1960 bug already fixed client-side.
           calories_per_hour: row.calories_per_hour
-            ? parseFloat(row.calories_per_hour)
+            ? (toNumber(row.calories_per_hour, resolvedDecimal) ?? null)
             : null,
           user_id: authenticatedUserId,
           is_custom: true,
@@ -1600,20 +1811,13 @@ function deriveDurationMinutes(
   exerciseData: any,
   { preserveLegacyPresetDurationFallback = false } = {}
 ) {
-  const durationFromSets =
-    exerciseData.sets?.reduce(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (sum: any, set: any) =>
-        sum + (set.duration || 0) + (set.rest_time || 0) / 60,
-      0
-    ) || 0;
   if (typeof exerciseData.duration_minutes === 'number') {
     return exerciseData.duration_minutes;
   }
-  if (preserveLegacyPresetDurationFallback && durationFromSets === 0) {
-    return 30;
-  }
-  return durationFromSets;
+  return setsDurationMinutes(
+    exerciseData.sets,
+    preserveLegacyPresetDurationFallback ? { fallbackMinutes: 30 } : undefined
+  );
 }
 
 async function createGroupedExerciseEntriesWithClient(
@@ -1646,24 +1850,38 @@ async function createGroupedExerciseEntriesWithClient(
     });
 
     const preparedEntry = await prepareExerciseEntryForCreate(userId, {
+      // A client-minted entry uuid (create-in-reconcile for a mid-workout add)
+      // is inserted as-is so the entry keeps its identity across saves. Only a
+      // string id is forwarded: preset exercise definitions carry a numeric
+      // `id`, and the delete-and-recreate path sends none — neither must reach
+      // the uuid `exercise_entries.id` column.
+      ...(typeof exercise.id === 'string' ? { id: exercise.id } : {}),
       exercise_id: exercise.exercise_id,
       entry_date: entryDate,
       notes: exercise.notes ?? null,
       sets: exercise.sets || [],
       duration_minutes: durationMinutes,
+      // A client-provided value is a manual override; omitting it lets
+      // prepareExerciseEntryForCreate recompute from duration and sets.
+      ...(typeof exercise.calories_burned === 'number'
+        ? { calories_burned: exercise.calories_burned }
+        : {}),
       sort_order: exercise.sort_order ?? 0,
+      superset_group: exercise.superset_group ?? null,
       workout_plan_assignment_id: workoutPlanAssignmentId,
       distance: exercise.distance,
       avg_heart_rate: exercise.avg_heart_rate,
+      entry_time: exercise.entry_time ?? null,
     });
-    const createdEntry = await exerciseEntryDb._createExerciseEntryWithClient(
-      client,
-      userId,
-      preparedEntry,
-      actingUserId,
-      entrySource,
-      presetEntryId
-    );
+    const { entry: createdEntry } =
+      await exerciseEntryDb._createExerciseEntryWithClient(
+        client,
+        userId,
+        preparedEntry,
+        actingUserId,
+        entrySource,
+        presetEntryId
+      );
     createdEntries.push(createdEntry);
   }
   return createdEntries;
@@ -1723,9 +1941,19 @@ async function createGroupedWorkoutSession(
           },
           actingUserId
         );
-      exerciseDefinitions = workoutPreset.exercises || [];
-      childEntrySource = 'Workout Preset';
-      preserveLegacyPresetDurationFallback = true;
+      if (exercises !== undefined) {
+        // Client supplied its own exercise/set structure (e.g. a live
+        // workout's Hevy-style placeholders) — use it verbatim. The entry is
+        // still tagged to the preset (for recentSessions stats scoping), but
+        // keeps its own source and stays nested-edit-able like any other
+        // client-authored session, unlike a pure workout_preset_id start
+        // (source 'Workout Preset', not in EDITABLE_SOURCES).
+        exerciseDefinitions = exercises;
+      } else {
+        exerciseDefinitions = workoutPreset.exercises || [];
+        childEntrySource = 'Workout Preset';
+        preserveLegacyPresetDurationFallback = true;
+      }
     } else {
       presetEntry =
         await exercisePresetEntryRepository.createExercisePresetEntryWithClient(
@@ -1805,10 +2033,10 @@ async function updateGroupedWorkoutSession(
     );
     const targetEntryDate = updateData.entry_date || existingSession.entry_date;
     if (updateData.exercises !== undefined) {
-      if (!['manual', 'sparky'].includes(existingSession.source)) {
+      if (!canEditGroupedWorkout(existingSession.source)) {
         throw createServiceError(
           409,
-          'Nested exercise editing is only supported for manual or sparky workouts.'
+          'Nested exercise editing is only supported for manual, sparky, or workout plan sessions.'
         );
       }
 
@@ -1828,6 +2056,17 @@ async function updateGroupedWorkoutSession(
       const useReconcile =
         withId === incomingExercises.length && incomingExercises.length > 0;
 
+      // Capture the workout plan assignment before any child rows are deleted:
+      // the assignment id lives on exercise_entries, so once delete-and-recreate
+      // removes them there is nothing left to recover it from. Returns null for
+      // sessions that never came from a workout plan.
+      const workoutPlanAssignmentId =
+        await exerciseEntryDb.getWorkoutPlanAssignmentIdByPresetEntryIdWithClient(
+          client,
+          userId,
+          presetEntryId
+        );
+
       if (!useReconcile) {
         await exerciseEntryDb.deleteExerciseEntriesByPresetEntryIdWithClient(
           client,
@@ -1844,6 +2083,7 @@ async function updateGroupedWorkoutSession(
           incomingExercises,
           {
             entrySource: existingSession.source,
+            workoutPlanAssignmentId,
           }
         );
       } else {
@@ -1852,19 +2092,6 @@ async function updateGroupedWorkoutSession(
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           existingExercises.map((e: any) => [e.id, e])
         );
-
-        for (const ex of incomingExercises) {
-          if (!existingById.has(ex.id)) {
-            log(
-              'warn',
-              `Rejected reconcile: exercise id ${ex.id} not in session ${presetEntryId} for user ${userId}`
-            );
-            throw createServiceError(
-              400,
-              'Exercise entry does not belong to this session.'
-            );
-          }
-        }
 
         const incomingIdSet = new Set(
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1883,6 +2110,28 @@ async function updateGroupedWorkoutSession(
         }
 
         for (const ex of incomingExercises) {
+          // An incoming id the session doesn't already have is a client-added
+          // exercise: a new app mints a uuid on add and sends it through the
+          // reconcile path. Create the entry under this preset entry with that
+          // client uuid, then skip the update/reconcile-sets path below — the
+          // create already inserts its sets, so falling through would
+          // double-insert them.
+          if (!existingById.has(ex.id)) {
+            await createGroupedExerciseEntriesWithClient(
+              client,
+              userId,
+              actingUserId,
+              presetEntryId,
+              targetEntryDate,
+              [ex],
+              {
+                entrySource: existingSession.source,
+                workoutPlanAssignmentId,
+              }
+            );
+            continue;
+          }
+
           // Reuse prepareExerciseEntryForCreate so calories_burned is
           // recomputed from the new duration/sets the same way the legacy
           // delete-and-recreate path does — otherwise the helper would
@@ -1893,7 +2142,11 @@ async function updateGroupedWorkoutSession(
             notes: ex.notes ?? null,
             sets: ex.sets || [],
             duration_minutes: deriveDurationMinutes(ex),
+            ...(typeof ex.calories_burned === 'number'
+              ? { calories_burned: ex.calories_burned }
+              : {}),
             sort_order: ex.sort_order ?? 0,
+            superset_group: ex.superset_group ?? null,
             distance: ex.distance,
             avg_heart_rate: ex.avg_heart_rate,
           });
@@ -1906,14 +2159,22 @@ async function updateGroupedWorkoutSession(
               exercise_id: preparedEntry.exercise_id,
               notes: preparedEntry.notes,
               sort_order: preparedEntry.sort_order ?? 0,
-              distance: preparedEntry.distance,
+              superset_group: preparedEntry.superset_group ?? null,
+              // The grouped request has no entry-level distance, so
+              // preparedEntry.distance is the set-derived total; preserve the
+              // existing value when no set carries a distance.
+              distance:
+                preparedEntry.distance ??
+                existingById.get(ex.id)?.distance ??
+                null,
               avg_heart_rate: preparedEntry.avg_heart_rate,
               duration_minutes: preparedEntry.duration_minutes,
               calories_burned: preparedEntry.calories_burned,
               entry_date: targetEntryDate,
+              entry_time: ex.entry_time ?? null,
             },
             actingUserId,
-            existingSession.source
+            existingById.get(ex.id)?.source ?? existingSession.source
           );
 
           await exerciseEntryDb._reconcileExerciseEntrySetsWithClient(
@@ -2084,6 +2345,7 @@ async function updateExerciseEntriesSnapshot(
     const newSnapshotData = {
       exercise_name: exercise.name,
       calories_per_hour: exercise.calories_per_hour,
+      modality: exercise.modality,
     };
     // Update all relevant exercise entries for the authenticated user
     await exerciseRepository.updateExerciseEntriesSnapshot(
@@ -2162,9 +2424,15 @@ async function importExercisesFromJson(
           ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
             exerciseData.secondary_muscles.split(',').map((m: any) => m.trim())
           : [],
-        calories_per_hour: exerciseData.calories_per_hour
-          ? parseFloat(exerciseData.calories_per_hour)
-          : null,
+        // toNumber (not parseFloat) so a locale-comma decimal parses
+        // correctly instead of silently truncating — same fix as the CSV
+        // import path above.
+        calories_per_hour:
+          exerciseData.calories_per_hour !== undefined &&
+          exerciseData.calories_per_hour !== null &&
+          exerciseData.calories_per_hour !== ''
+            ? (toNumber(String(exerciseData.calories_per_hour)) ?? null)
+            : null,
         user_id: authenticatedUserId,
         is_custom: exerciseData.is_custom === true,
         shared_with_public: exerciseData.shared_with_public === true,

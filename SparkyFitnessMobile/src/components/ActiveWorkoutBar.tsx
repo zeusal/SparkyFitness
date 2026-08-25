@@ -1,17 +1,45 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { View, Text, Pressable, Alert } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import {
   createNavigationContainerRef,
   type NavigationState,
 } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { useCSSVariable } from 'uniwind';
 
 import Icon from './Icon';
+import { TAB_BAR_HEIGHT } from './CustomTabBar';
 import { useActiveWorkoutStore } from '../stores/activeWorkoutStore';
+import { flushActiveWorkoutBeforeClear } from '../hooks/useActiveWorkoutAutosave';
 import { usePreferences } from '../hooks/usePreferences';
-import { weightFromKg } from '../utils/unitConversions';
+import { useRestCountdown } from '../hooks/useRestCountdown';
+import {
+  describeActiveSetAssumed,
+  formatRestCountdown,
+  formatSetLoad,
+  normalizeWeightUnit,
+} from '../utils/workoutSession';
+import { useNativeIOSTabsActive } from '../services/nativeTabBarPreference';
 import type { RootStackParamList } from '../types/navigation';
+import LiquidGlassSurface, {
+  LIQUID_GLASS_VERTICAL_GAP,
+  createLiquidGlassPillStyle,
+} from './LiquidGlassSurface';
+import { withAlpha } from '../utils/colors';
 
 /**
  * Shared navigation ref — must be passed to the app's `<NavigationContainer ref={...} />`.
@@ -21,7 +49,9 @@ import type { RootStackParamList } from '../types/navigation';
  */
 export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
-const BAR_CONTENT_HEIGHT = 76;
+const BAR_CONTENT_HEIGHT = 60;
+const PROGRESS_BAR_BOTTOM_OFFSET = 1;
+const SLIDE_ANIMATION_DURATION_MS = 220;
 
 /**
  * Bottom padding applied to the embedded variant so the floating Add button
@@ -29,9 +59,70 @@ const BAR_CONTENT_HEIGHT = 76;
  * instead of the bar's content. Cheaper than reserving a full-width center
  * gap — content flows edge to edge and only the bottom ~20pt is "dead zone".
  */
-const EMBEDDED_FAB_CLEARANCE = 8;
+const EMBEDDED_FAB_CLEARANCE = 6;
 
-export const ACTIVE_WORKOUT_BAR_HEIGHT = BAR_CONTENT_HEIGHT + EMBEDDED_FAB_CLEARANCE;
+type StackTransitionSnapshot = {
+  phase: 'idle' | 'start' | 'end';
+  closing: boolean;
+  /** Key of the route the transition belongs to; null when unknown. */
+  routeKey: string | null;
+  tick: number;
+};
+
+let stackTransitionSnapshot: StackTransitionSnapshot = {
+  phase: 'idle',
+  closing: false,
+  routeKey: null,
+  tick: 0,
+};
+
+const stackTransitionListeners = new Set<
+  (snapshot: StackTransitionSnapshot) => void
+>();
+const swipeProgressListeners = new Set<(progress: number) => void>();
+let measuredTabBarHeight: number | null = null;
+const tabBarHeightListeners = new Set<() => void>();
+
+export function notifyActiveWorkoutBarStackTransition(
+  phase: 'start' | 'end',
+  closing: boolean,
+  routeKey?: string,
+) {
+  stackTransitionSnapshot = {
+    phase,
+    closing,
+    routeKey: routeKey ?? null,
+    tick: stackTransitionSnapshot.tick + 1,
+  };
+  stackTransitionListeners.forEach(listener =>
+    listener(stackTransitionSnapshot),
+  );
+}
+
+export function notifyActiveWorkoutBarSwipeProgress(progress: number) {
+  swipeProgressListeners.forEach(listener => listener(progress));
+}
+
+export function setActiveWorkoutBarTabBarHeight(height: number) {
+  if (!Number.isFinite(height) || height <= 0) return;
+  if (measuredTabBarHeight === height) return;
+  measuredTabBarHeight = height;
+  tabBarHeightListeners.forEach(listener => listener());
+}
+
+function subscribeToTabBarHeight(listener: () => void) {
+  tabBarHeightListeners.add(listener);
+  return () => {
+    tabBarHeightListeners.delete(listener);
+  };
+}
+
+function getTabBarHeightSnapshot() {
+  return measuredTabBarHeight;
+}
+
+export const ACTIVE_WORKOUT_BAR_HEIGHT =
+  BAR_CONTENT_HEIGHT + EMBEDDED_FAB_CLEARANCE + LIQUID_GLASS_VERTICAL_GAP;
 
 /**
  * Extra bottom padding screens should reserve when the active workout bar is
@@ -45,16 +136,19 @@ export const ACTIVE_WORKOUT_BAR_HEIGHT = BAR_CONTENT_HEIGHT + EMBEDDED_FAB_CLEAR
 export function useActiveWorkoutBarPadding(
   context: 'tabs' | 'stack' = 'tabs',
 ): number {
-  const active = useActiveWorkoutStore((s) => s.sessionId !== null);
+  const active = useActiveWorkoutStore(s => s.sessionId !== null);
   if (!active) return 0;
-  return context === 'tabs' ? ACTIVE_WORKOUT_BAR_HEIGHT : BAR_CONTENT_HEIGHT;
+  return context === 'tabs'
+    ? ACTIVE_WORKOUT_BAR_HEIGHT
+    : BAR_CONTENT_HEIGHT + LIQUID_GLASS_VERTICAL_GAP;
 }
 
 /**
  * Routes where the HUD should be hidden — either modal entry flows (food /
  * exercise search), full-screen editors with their own sticky bottom footers
- * (WorkoutAdd, ActivityAdd), or the chat screen whose composer is pinned to
- * the bottom — all of which would collide with the bar.
+ * (WorkoutAdd, ActivityAdd), the chat screen whose composer is pinned to the
+ * bottom — all of which would collide with the bar — or the active-workout
+ * screen itself, which is the surface the HUD opens.
  */
 const HIDDEN_ROUTES = new Set<string>([
   'FoodSearch',
@@ -69,339 +163,102 @@ const HIDDEN_ROUTES = new Set<string>([
   'ActivityAdd',
   'MeasurementsAdd',
   'Chat',
+  'ActiveWorkout',
 ]);
-
-function formatCountdown(totalSeconds: number): string {
-  const s = Math.max(0, totalSeconds);
-  const mm = Math.floor(s / 60);
-  const ss = s % 60;
-  return `${mm}:${ss.toString().padStart(2, '0')}`;
-}
 
 function computeNavInfo(state: NavigationState | undefined): {
   suppressed: boolean;
   isOnTabs: boolean;
+  tabsUnderTop: boolean;
+  topRouteKey: string | null;
 } {
-  if (!state) return { suppressed: false, isOnTabs: false };
-  const name = state.routes[state.index]?.name ?? null;
+  if (!state) {
+    return {
+      suppressed: false,
+      isOnTabs: false,
+      tabsUnderTop: false,
+      topRouteKey: null,
+    };
+  }
+  const index = state.index ?? 0;
+  const name = state.routes[index]?.name ?? null;
+  const previousName = index > 0 ? state.routes[index - 1]?.name : null;
   return {
     suppressed: name != null && HIDDEN_ROUTES.has(name),
     isOnTabs: name === 'Tabs',
+    tabsUnderTop: previousName === 'Tabs',
+    topRouteKey: state.routes[index]?.key ?? null,
   };
+}
+
+/**
+ * The HUD may render on a suppressed route only while that route is being
+ * dismissed to reveal Tabs, so the bar can slide into its above-tab-bar
+ * position during the swipe/close. The transition must belong to the current
+ * top route: a pop can also *land* on a suppressed route with Tabs underneath
+ * (e.g. ExerciseSearch back to ActiveWorkout), and its closing snapshot —
+ * which lingers at 'end' until the next transition — must not keep the bar
+ * visible there. A null routeKey (no emitting screen known) is trusted.
+ */
+export function isClosingToTabsTransition(
+  navInfo: { tabsUnderTop: boolean; topRouteKey: string | null },
+  transition: Pick<StackTransitionSnapshot, 'phase' | 'closing' | 'routeKey'>,
+): boolean {
+  if (transition.phase !== 'start' && transition.phase !== 'end') return false;
+  if (!transition.closing || !navInfo.tabsUnderTop) return false;
+  return (
+    transition.routeKey == null || transition.routeKey === navInfo.topRouteKey
+  );
+}
+
+function clampProgress(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+function interpolateBottomOffset(
+  stackBottomOffset: number,
+  tabBarBottomOffset: number,
+  progress: number,
+) {
+  return (
+    stackBottomOffset +
+    (tabBarBottomOffset - stackBottomOffset) * clampProgress(progress)
+  );
 }
 
 interface ActiveWorkoutBarProps {
   /**
-   * - `embedded` — renders inline with no absolute positioning, intended to sit
-   *   directly above the tab bar inside the navigator's `tabBar` slot. The row
-   *   layout leaves a center gap so the floating Add button can visually
-   *   overlap the bar without colliding with its content.
-   * - `floating` — renders as an absolute-positioned overlay pinned to the
-   *   bottom safe-area inset. Used for stack screens where the tab bar (and
-   *   therefore the embedded bar) is not visible.
+   * Kept for compatibility with older call sites. The workout HUD is now
+   * rendered once globally and moves between tab and stack positions.
    */
   variant?: 'embedded' | 'floating';
 }
 
-const ActiveWorkoutBar: React.FC<ActiveWorkoutBarProps> = ({
-  variant = 'floating',
-}) => {
-  const sessionId = useActiveWorkoutStore((s) => s.sessionId);
-  const activeSession = useActiveWorkoutStore((s) => s.session);
-  const activeSetId = useActiveWorkoutStore((s) => s.activeSetId);
-  const restState = useActiveWorkoutStore((s) => s.rest.state);
-  const endsAt = useActiveWorkoutStore((s) => s.rest.endsAt);
-  const pausedRemainingMs = useActiveWorkoutStore((s) => s.rest.pausedRemainingMs);
-  const durationSec = useActiveWorkoutStore((s) => s.rest.durationSec);
-  const { preferences } = usePreferences();
-  const weightUnit = (preferences?.default_weight_unit ?? 'kg') as 'kg' | 'lbs';
+type LegacyWorkoutBarContentProps = {
+  progress: number;
+  leftButton: ReactNode;
+  rightButton: ReactNode;
+  onCenterPress: () => void;
+  topStatusLine: string | null;
+  primaryLine: string;
+  secondaryLine: string;
+  countdownLabel: string | null;
+  openLabel: string;
+};
 
-  const [navInfo, setNavInfo] = useState(() =>
-    computeNavInfo(navigationRef.isReady() ? navigationRef.getRootState() : undefined),
-  );
-
-  useEffect(() => {
-    const update = () => {
-      if (!navigationRef.isReady()) return;
-      const next = computeNavInfo(navigationRef.getRootState());
-      setNavInfo((prev) =>
-        prev.suppressed === next.suppressed && prev.isOnTabs === next.isOnTabs
-          ? prev
-          : next,
-      );
-    };
-    update();
-    const unsubscribe = navigationRef.addListener('state', update);
-    return unsubscribe;
-  }, []);
-
-  const insets = useSafeAreaInsets();
-
-  // Only kept as JS strings because `Icon` takes a `color` prop (not className),
-  // and the outer floating wrapper needs a matching solid background underneath
-  // the home-indicator safe-area inset. All other theme colors flow through
-  // className (`bg-chrome`, `text-text-primary`, etc.) so styling stays in
-  // tailwind and tracks theme changes automatically.
-  const [accentPrimary, textMuted] = useCSSVariable([
-    '--color-accent-primary',
-    '--color-text-muted',
-  ]) as [string, string];
-
-  // Tick while resting so the countdown redraws each second. We use a bare
-  // tick counter (not a cached `Date.now()`) to force re-renders — the actual
-  // "now" used in calculations is read fresh at render time below. Caching it
-  // in state would make the first render after going ready → resting show a
-  // stale value (the countdown would briefly read too high).
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    if (restState !== 'resting') return;
-    const id = setInterval(() => setTick((t) => t + 1), 1000);
-    return () => clearInterval(id);
-  }, [restState]);
-
-  // Transition resting → ready when the deadline passes.
-  useEffect(() => {
-    if (restState === 'resting' && endsAt != null && Date.now() >= endsAt) {
-      useActiveWorkoutStore.getState().markRestReady();
-    }
-  }, [restState, endsAt, tick]);
-
-  const isWorkoutComplete = sessionId != null && activeSetId == null;
-
-  // Active-set details (exercise name, set number, weight × reps) looked up
-  // against the session snapshot since `steps` only holds name/restSec.
-  // Split into discrete fields so the rendering can stack "status: name -
-  // set N/M" on one row and the load ("135 lbs × 8") on a second row.
-  const activeSetLabel = useMemo(() => {
-    if (activeSession == null || activeSetId == null) return null;
-    for (const exercise of activeSession.exercises) {
-      const set = exercise.sets.find((st) => String(st.id) === activeSetId);
-      if (!set) continue;
-      const exerciseName = exercise.exercise_snapshot?.name ?? 'Exercise';
-      const setNumber = `Set ${set.set_number}/${exercise.sets.length}`;
-      let loadText = '';
-      if (set.weight != null && set.reps != null) {
-        const w = parseFloat(weightFromKg(set.weight, weightUnit).toFixed(1));
-        loadText = `${w} ${weightUnit} × ${set.reps}`;
-      } else if (set.reps != null) {
-        loadText = `${set.reps} reps`;
-      } else if (set.weight != null) {
-        const w = parseFloat(weightFromKg(set.weight, weightUnit).toFixed(1));
-        loadText = `${w} ${weightUnit}`;
-      }
-      return { exerciseName, setNumber, loadText };
-    }
-    return null;
-  }, [activeSession, activeSetId, weightUnit]);
-
-  // The bar is a persistent workout HUD — visible for the entire active
-  // workout, not just while a rest timer is running.
-  if (sessionId == null) return null;
-  if (navInfo.suppressed) return null;
-  // The embedded variant lives inside the tab bar's layout and is always on
-  // the Tabs route when rendered. The floating variant is an overlay for
-  // stack screens, so it must hide itself while the tab bar (and embedded
-  // variant) is showing to avoid a double-bar.
-  if (variant === 'floating' && navInfo.isOnTabs) return null;
-
-  const remainingMs = (() => {
-    if (restState === 'resting' && endsAt != null) {
-      // Read `Date.now()` fresh at render time — caching it in state would
-      // briefly display a stale value on the first render after a new rest
-      // starts (the `tick` state only advances via the 1s interval).
-      return Math.max(0, endsAt - Date.now());
-    }
-    if (restState === 'paused' && pausedRemainingMs != null) return pausedRemainingMs;
-    return 0;
-  })();
-  const displaySeconds = Math.ceil(remainingMs / 1000);
-  const progress =
-    durationSec > 0 ? Math.max(0, Math.min(1, remainingMs / (durationSec * 1000))) : 0;
-
-  const handlePausePlay = () => {
-    if (restState === 'resting') {
-      useActiveWorkoutStore.getState().pauseRest();
-    } else if (restState === 'paused') {
-      useActiveWorkoutStore.getState().resumeRest();
-    }
-  };
-
-  // Skip the current rest — clears to 'ready' without advancing the cursor.
-  const handleSkipRest = () => {
-    useActiveWorkoutStore.getState().dismissRest();
-  };
-
-  // Complete the active set and advance. Bar-only shortcut so the user can
-  // rep without flipping back to WorkoutDetail.
-  const handleDoneSet = () => {
-    useActiveWorkoutStore.getState().completeActiveSet();
-  };
-
-  const handleClear = () => {
-    if (isWorkoutComplete) {
-      useActiveWorkoutStore.getState().clearWorkout();
-      return;
-    }
-    Alert.alert(
-      'Clear workout?',
-      'This will end the current workout without saving progress.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear',
-          style: 'destructive',
-          onPress: () => {
-            useActiveWorkoutStore.getState().clearWorkout();
-          },
-        },
-      ],
-    );
-  };
-
-  const handleCenterTap = () => {
-    // Read the session from the store rather than the history query cache —
-    // the cache may not contain this session on a cold start or when the HUD
-    // was started from a screen that hasn't warmed the history pages.
-    const session = useActiveWorkoutStore.getState().session;
-    if (!session) return;
-    if (!navigationRef.isReady()) return;
-    navigationRef.navigate('WorkoutDetail', { session });
-  };
-
-  // Resting / paused use a three-row layout: a top status label ("Resting"
-  // / "Paused"), a middle "Next: exercise - set N/M", and a load line. Other
-  // states collapse to two rows — "Next Up: ..." or "Workout complete" on
-  // top, load (or empty) underneath.
-  const isResting = restState === 'resting' || restState === 'paused';
-  const topStatusLine =
-    restState === 'resting'
-      ? 'Resting'
-      : restState === 'paused'
-        ? 'Paused'
-        : null;
-  const primaryLine = (() => {
-    if (isWorkoutComplete) return 'Workout complete';
-    if (!activeSetLabel) return 'Workout active';
-    const prefix = isResting ? 'Next' : 'Next Up';
-    return `${prefix}: ${activeSetLabel.exerciseName} - ${activeSetLabel.setNumber}`;
-  })();
-  const secondaryLine = isWorkoutComplete
-    ? ''
-    : (activeSetLabel?.loadText ?? '');
-  // Right-aligned countdown — only rendered while a rest timer is running.
-  const countdownLabel =
-    restState === 'resting' ? formatCountdown(displaySeconds) : null;
-
-  // Left button:
-  //  - resting → Pause (pauses the rest timer)
-  //  - ready / paused → X (clear workout)
-  //  - complete → hidden (checkmark on the right handles dismiss)
-  const leftButton =
-    restState === 'resting' ? (
-      <Pressable
-        onPress={handlePausePlay}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        accessibilityRole="button"
-        accessibilityLabel="Pause"
-        className="p-2"
-      >
-        <Icon name="pause" size={22} color={accentPrimary} weight="bold" />
-      </Pressable>
-    ) : isWorkoutComplete ? null : (
-      <Pressable
-        onPress={handleClear}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        accessibilityRole="button"
-        accessibilityLabel="Clear workout"
-        className="p-2"
-      >
-        <Icon name="close" size={22} color={textMuted} weight="bold" />
-      </Pressable>
-    );
-
-  // Right button:
-  //  - ready  → Play (complete the active set, advance + start rest)
-  //  - resting → Check (skip rest / mark next ready)
-  //  - paused → Play (resume the rest timer)
-  //  - complete → checkmark to finish and dismiss the bar
-  const rightButton = (() => {
-    if (isWorkoutComplete) {
-      return (
-        <Pressable
-          onPress={handleClear}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityRole="button"
-          accessibilityLabel="Finish workout"
-          className="p-2"
-        >
-          <Icon name="checkmark" size={22} color={accentPrimary} weight="bold" />
-        </Pressable>
-      );
-    }
-    if (restState === 'resting') {
-      return (
-        <Pressable
-          onPress={handleSkipRest}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityRole="button"
-          accessibilityLabel="Skip rest"
-          // Filled accent pill so the "complete set" affordance pops against
-          // the muted pause icon on the left and the countdown digits.
-          className="h-9 w-9 items-center justify-center rounded-full border-2 border-accent-primary"
-        >
-          <Icon name="checkmark" size={20} color={accentPrimary} weight="bold" />
-        </Pressable>
-      );
-    }
-    if (restState === 'paused') {
-      return (
-        <Pressable
-          onPress={handlePausePlay}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityRole="button"
-          accessibilityLabel="Resume"
-          className="p-2"
-        >
-          <Icon name="play" size={22} color={accentPrimary} weight="bold" />
-        </Pressable>
-      );
-    }
-    return (
-      <Pressable
-        onPress={handleDoneSet}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        accessibilityRole="button"
-        accessibilityLabel="Done — start next set"
-        className="p-2"
-      >
-        <Icon name="play" size={22} color={accentPrimary} weight="bold" />
-      </Pressable>
-    );
-  })();
-
-  // Embedded mode adds bottom padding so the floating Add button (which rises
-  // ~20pt above the tab bar top edge) overlaps an empty strip at the bottom
-  // of the bar instead of covering content. Floating mode is on stack screens
-  // where there's no FAB, so no clearance is needed.
-  //
-  // We use `minHeight` (not a fixed `height`) so the bar can grow vertically
-  // when the bottom details line wraps to two lines — e.g. small phones in
-  // the resting state where the countdown eats horizontal room. The inner row
-  // is intrinsically sized (no `flex-1`), so its py padding drives the
-  // non-wrapped height while wrapping just pushes it taller.
-  const isEmbedded = variant === 'embedded';
-  const barBody = (
-    <View
-      className="bg-chrome border-t border-chrome-border"
-      style={{
-        minHeight: isEmbedded
-          ? BAR_CONTENT_HEIGHT + EMBEDDED_FAB_CLEARANCE
-          : BAR_CONTENT_HEIGHT,
-        paddingBottom: isEmbedded ? EMBEDDED_FAB_CLEARANCE : 0,
-      }}
-    >
-      {/* Progress bar — 3px along top edge. Width is the only dynamic value;
-          track + fill colors flow through className. */}
+function LegacyWorkoutBarContent({
+  progress,
+  leftButton,
+  rightButton,
+  onCenterPress,
+  topStatusLine,
+  primaryLine,
+  secondaryLine,
+  countdownLabel,
+  openLabel,
+}: LegacyWorkoutBarContentProps) {
+  return (
+    <>
       <View className="h-[3px] bg-progress-track">
         <View
           className="h-[3px] bg-accent-primary"
@@ -409,16 +266,14 @@ const ActiveWorkoutBar: React.FC<ActiveWorkoutBarProps> = ({
         />
       </View>
 
-      {/* Primary row — left control, stacked top/bottom text, right control.
-          Intrinsically sized so the bar grows when the bottom line wraps. */}
       <View className="flex-row items-center px-2 py-2">
         <View className="w-11 items-center">{leftButton}</View>
 
         <Pressable
-          onPress={handleCenterTap}
+          onPress={onCenterPress}
           className="flex-1 justify-center px-1"
           accessibilityRole="button"
-          accessibilityLabel="Open active workout"
+          accessibilityLabel={openLabel}
         >
           {topStatusLine != null && (
             <Text
@@ -454,27 +309,566 @@ const ActiveWorkoutBar: React.FC<ActiveWorkoutBarProps> = ({
 
         <View className="w-11 items-center">{rightButton}</View>
       </View>
-    </View>
+    </>
+  );
+}
+
+const ActiveWorkoutBar: React.FC<ActiveWorkoutBarProps> = ({
+  variant = 'floating',
+}) => {
+  const sessionId = useActiveWorkoutStore(s => s.sessionId);
+  const activeSession = useActiveWorkoutStore(s => s.session);
+  const activeSetId = useActiveWorkoutStore(s => s.activeSetId);
+  const previousSessionSets = useActiveWorkoutStore(s => s.previousSessionSets);
+  const plannedSetValues = useActiveWorkoutStore(s => s.plannedSetValues);
+  const { state: restState, remainingMs, progress } = useRestCountdown();
+  const queryClient = useQueryClient();
+  const { preferences } = usePreferences();
+  const weightUnit = normalizeWeightUnit(preferences?.default_weight_unit);
+  const { t } = useTranslation();
+
+  const [navInfo, setNavInfo] = useState(() =>
+    computeNavInfo(
+      navigationRef.isReady() ? navigationRef.getRootState() : undefined,
+    ),
+  );
+  const [stackTransition, setStackTransition] = useState(
+    stackTransitionSnapshot,
   );
 
+  useEffect(() => {
+    const update = () => {
+      if (!navigationRef.isReady()) return;
+      const next = computeNavInfo(navigationRef.getRootState());
+      setNavInfo(prev =>
+        prev.suppressed === next.suppressed &&
+        prev.isOnTabs === next.isOnTabs &&
+        prev.tabsUnderTop === next.tabsUnderTop &&
+        prev.topRouteKey === next.topRouteKey
+          ? prev
+          : next,
+      );
+    };
+    update();
+    const unsubscribe = navigationRef.addListener('state', update);
+    return unsubscribe;
+  }, []);
+
+  const insets = useSafeAreaInsets();
+  const usesNativeTabs = useNativeIOSTabsActive();
+  const nativeTabBarHeight = useSyncExternalStore(
+    subscribeToTabBarHeight,
+    getTabBarHeightSnapshot,
+    getTabBarHeightSnapshot,
+  );
+  const tabBarBottomOffset =
+    nativeTabBarHeight ?? TAB_BAR_HEIGHT + Math.max(insets.bottom, 4);
+  const stackBottomOffset = insets.bottom;
+  const isClosingToTabs = isClosingToTabsTransition(navInfo, stackTransition);
+  const shouldSitAboveTabs =
+    usesNativeTabs && (isClosingToTabs || navInfo.isOnTabs);
+  const bottomOffset = useSharedValue(
+    shouldSitAboveTabs ? tabBarBottomOffset : stackBottomOffset,
+  );
+  const positionTrackingRef = useRef({
+    stackBottomOffset,
+    tabBarBottomOffset,
+    tabsUnderTop: navInfo.tabsUnderTop,
+    usesNativeTabs,
+  });
+
+  useEffect(() => {
+    positionTrackingRef.current = {
+      stackBottomOffset,
+      tabBarBottomOffset,
+      tabsUnderTop: navInfo.tabsUnderTop,
+      usesNativeTabs,
+    };
+  }, [
+    navInfo.tabsUnderTop,
+    stackBottomOffset,
+    tabBarBottomOffset,
+    usesNativeTabs,
+  ]);
+
+  useEffect(() => {
+    if (!usesNativeTabs) {
+      setStackTransition(stackTransitionSnapshot);
+      return;
+    }
+
+    const listener = (snapshot: StackTransitionSnapshot) => {
+      setStackTransition(prev => {
+        if (
+          prev.phase === snapshot.phase &&
+          prev.closing === snapshot.closing &&
+          prev.routeKey === snapshot.routeKey
+        ) {
+          return prev;
+        }
+        return snapshot;
+      });
+    };
+
+    stackTransitionListeners.add(listener);
+    return () => {
+      stackTransitionListeners.delete(listener);
+    };
+  }, [usesNativeTabs]);
+
+  useEffect(() => {
+    if (!usesNativeTabs) return;
+
+    const listener = (progress: number) => {
+      const trackedPosition = positionTrackingRef.current;
+      if (!trackedPosition.usesNativeTabs || !trackedPosition.tabsUnderTop) {
+        return;
+      }
+      bottomOffset.value = interpolateBottomOffset(
+        trackedPosition.stackBottomOffset,
+        trackedPosition.tabBarBottomOffset,
+        progress,
+      );
+    };
+
+    swipeProgressListeners.add(listener);
+    return () => {
+      swipeProgressListeners.delete(listener);
+    };
+  }, [bottomOffset, usesNativeTabs]);
+
+  // Only kept as JS strings because `Icon` takes a `color` prop (not className),
+  // and the outer floating wrapper needs a matching solid background underneath
+  // the home-indicator safe-area inset. All other theme colors flow through
+  // className (`bg-chrome`, `text-text-primary`, etc.) so styling stays in
+  // tailwind and tracks theme changes automatically.
+  const [accentPrimary, textMuted, chromeBorder, progressTrack] =
+    useCSSVariable([
+      '--color-accent-primary',
+      '--color-text-muted',
+      '--color-chrome-border',
+      '--color-progress-track',
+    ]) as [string, string, string, string];
+
+  const isWorkoutComplete = sessionId != null && activeSetId == null;
+
+  // Active-set details (exercise name, set number, weight × reps) looked up
+  // against the session snapshot since `steps` only holds name/restSec.
+  // Split into discrete fields so the rendering can stack "status: name -
+  // set N/M" on one row and the load ("135 lbs × 8") on a second row.
+  // Assumed-aware: an upcoming set with empty fields shows its placeholder
+  // target, matching the gray values the live row renders.
+  const activeSetDescription = describeActiveSetAssumed(
+    activeSession,
+    activeSetId,
+    previousSessionSets,
+    plannedSetValues,
+  );
+  const activeSetLabel =
+    activeSetDescription == null
+      ? null
+      : {
+          exerciseName: activeSetDescription.exerciseName ?? t('workout.exercise', { defaultValue: 'Exercise' }),
+          setNumber: t('workout.setOf', { defaultValue: 'Set {{number}} of {{count}}', number: activeSetDescription.setNumber, count: activeSetDescription.setCount }),
+          loadText: formatSetLoad(activeSetDescription, weightUnit, t) ?? '',
+        };
+
+  useEffect(() => {
+    const targetBottomOffset = shouldSitAboveTabs
+      ? tabBarBottomOffset
+      : stackBottomOffset;
+
+    if (usesNativeTabs) {
+      if (!isClosingToTabs) {
+        // Writing a Reanimated shared value from an effect is the supported API;
+        // the compiler's immutability rule flags it as a mutation regardless.
+        // eslint-disable-next-line react-hooks/immutability
+        bottomOffset.value = targetBottomOffset;
+      }
+      return;
+    }
+
+    const config = {
+      duration: SLIDE_ANIMATION_DURATION_MS,
+      easing: Easing.out(Easing.cubic),
+    };
+
+    bottomOffset.value = withTiming(targetBottomOffset, config);
+  }, [
+    bottomOffset,
+    isClosingToTabs,
+    shouldSitAboveTabs,
+    stackBottomOffset,
+    stackTransition.phase,
+    stackTransition.tick,
+    tabBarBottomOffset,
+    usesNativeTabs,
+  ]);
+
+  const positionStyle = useAnimatedStyle(() => ({
+    bottom: bottomOffset.value,
+  }));
+
+  // The bar is a persistent workout HUD — visible for the entire active
+  // workout, not just while a rest timer is running.
+  if (sessionId == null) return null;
+  if (navInfo.suppressed && !(usesNativeTabs && isClosingToTabs)) return null;
+  if (variant === 'floating' && navInfo.isOnTabs && !usesNativeTabs) return null;
+
+  const handlePausePlay = () => {
+    if (restState === 'resting') {
+      useActiveWorkoutStore.getState().pauseRest();
+    } else if (restState === 'paused') {
+      useActiveWorkoutStore.getState().resumeRest();
+    }
+  };
+
+  // Skip the current rest — clears to 'ready' without advancing the cursor.
+  const handleSkipRest = () => {
+    useActiveWorkoutStore.getState().dismissRest();
+  };
+
+  // Complete the active set and advance. Bar-only shortcut so the user can
+  // rep without flipping back to WorkoutDetail.
+  const handleDoneSet = () => {
+    useActiveWorkoutStore.getState().completeActiveSet();
+  };
+
+  // Clear only via flush: a cold start can leave unsaved session edits with
+  // the active-workout screen (and its autosave hook) unmounted, so dirty
+  // state is saved before the workout is dismissed.
+  const flushAndClear = async () => {
+    const ok = await flushActiveWorkoutBeforeClear(queryClient);
+    if (!ok) {
+      Alert.alert(
+        t('activeWorkout.bar.saveFailed', { defaultValue: 'Could not save your workout' }),
+        t('activeWorkout.bar.unsavedChanges', { defaultValue: 'Some changes have not reached the server.' }),
+        [
+          { text: t('common.cancel', { defaultValue: 'Cancel' }), style: 'cancel' },
+          {
+            text: t('activeWorkout.bar.discardAnyway', { defaultValue: 'Discard anyway' }),
+            style: 'destructive',
+            onPress: () => useActiveWorkoutStore.getState().clearWorkout(),
+          },
+        ],
+      );
+      return;
+    }
+    useActiveWorkoutStore.getState().clearWorkout();
+  };
+
+  const handleClear = () => {
+    if (isWorkoutComplete) {
+      void flushAndClear();
+      return;
+    }
+    Alert.alert(
+      t('activeWorkout.bar.clearWorkoutTitle', { defaultValue: 'Clear workout?' }),
+      t('activeWorkout.bar.endWithoutSaving', { defaultValue: 'This will end the current workout without saving progress.' }),
+      [
+        { text: t('common.cancel', { defaultValue: 'Cancel' }), style: 'cancel' },
+        {
+          text: t('activeWorkout.bar.clear', { defaultValue: "Clear" }),
+          style: 'destructive',
+          onPress: () => {
+            void flushAndClear();
+          },
+        },
+      ],
+    );
+  };
+
+  const handleCenterTap = () => {
+    if (!navigationRef.isReady()) return;
+    navigationRef.navigate('ActiveWorkout');
+  };
+
+  // Resting / paused use a three-row layout: a top status label ("Resting"
+  // / "Paused"), a middle "Next: exercise - set N/M", and a load line. Other
+  // states collapse to two rows — "Next Up: ..." or "Workout complete" on
+  // top, load (or empty) underneath.
+  const isResting = restState === 'resting' || restState === 'paused';
+  const topStatusLine =
+    restState === 'resting'
+      ? t('activeWorkout.bar.resting', { defaultValue: 'Resting' })
+      : restState === 'paused'
+        ? t('activeWorkout.bar.paused', { defaultValue: 'Paused' })
+        : null;
+  const primaryLine = (() => {
+    if (isWorkoutComplete) return t('activeWorkout.bar.workoutComplete', { defaultValue: 'Workout complete' });
+    if (!activeSetLabel) return t('activeWorkout.bar.workoutActive', { defaultValue: 'Workout active' });
+    const prefix = isResting
+      ? t('activeWorkout.bar.next', { defaultValue: 'Next' })
+      : t('activeWorkout.bar.nextUp', { defaultValue: 'Next Up' });
+    return t('activeWorkout.bar.nextSet', { defaultValue: '{{prefix}}: {{exercise}} — {{set}}', prefix, exercise: activeSetLabel.exerciseName, set: activeSetLabel.setNumber });
+  })();
+  const secondaryLine = isWorkoutComplete
+    ? ''
+    : (activeSetLabel?.loadText ?? '');
+  // Right-aligned countdown — only rendered while a rest timer is running.
+  const countdownLabel =
+    restState === 'resting' ? formatRestCountdown(remainingMs) : null;
+
+  // Left button:
+  //  - resting → Pause (pauses the rest timer)
+  //  - ready / paused → X (clear workout)
+  //  - complete → hidden (checkmark on the right handles dismiss)
+  const leftButton =
+    restState === 'resting' ? (
+      <Pressable
+        onPress={handlePausePlay}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        accessibilityRole="button"
+        accessibilityLabel={t('activeWorkout.bar.pause', { defaultValue: 'Pause' })}
+        className="p-2"
+      >
+        <Icon name="pause" size={20} color={accentPrimary} weight="bold" />
+      </Pressable>
+    ) : isWorkoutComplete ? null : (
+      <Pressable
+        onPress={handleClear}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        accessibilityRole="button"
+        accessibilityLabel={t('activeWorkout.bar.clearWorkout', { defaultValue: 'Clear workout' })}
+        className="p-2"
+      >
+        <Icon name="close" size={20} color={textMuted} weight="bold" />
+      </Pressable>
+    );
+
+  // Right button:
+  //  - ready  → Play (complete the active set, advance + start rest)
+  //  - resting → Check (skip rest / mark next ready)
+  //  - paused → Play (resume the rest timer)
+  //  - complete → checkmark to finish and dismiss the bar
+  const rightButton = (() => {
+    if (isWorkoutComplete) {
+      return (
+        <Pressable
+          onPress={handleClear}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel={t('activeWorkout.bar.finishWorkout', { defaultValue: 'Finish workout' })}
+          className="p-2"
+        >
+          <Icon
+            name="checkmark"
+            size={20}
+            color={accentPrimary}
+            weight="bold"
+          />
+        </Pressable>
+      );
+    }
+    if (restState === 'resting') {
+      return (
+        <Pressable
+          onPress={handleSkipRest}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel={t('activeWorkout.bar.skipRest', { defaultValue: 'Skip rest' })}
+          // Filled accent pill so the "complete set" affordance pops against
+          // the muted pause icon on the left and the countdown digits.
+          className="h-8 w-8 items-center justify-center rounded-full border-2 border-accent-primary"
+        >
+          <Icon
+            name="checkmark"
+            size={18}
+            color={accentPrimary}
+            weight="bold"
+          />
+        </Pressable>
+      );
+    }
+    if (restState === 'paused') {
+      return (
+        <Pressable
+          onPress={handlePausePlay}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel={t('activeWorkout.bar.resume', { defaultValue: 'Resume' })}
+          className="p-2"
+        >
+          <Icon name="play" size={20} color={accentPrimary} weight="bold" />
+        </Pressable>
+      );
+    }
+    return (
+      <Pressable
+        onPress={handleDoneSet}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        accessibilityRole="button"
+        accessibilityLabel={t('activeWorkout.bar.doneNext', { defaultValue: 'Done, start next set' })}
+        className="p-2"
+      >
+        <Icon name="play" size={20} color={accentPrimary} weight="bold" />
+      </Pressable>
+    );
+  })();
+
+  // Embedded mode adds bottom padding so the floating Add button (which rises
+  // ~20pt above the tab bar top edge) overlaps an empty strip at the bottom
+  // of the bar instead of covering content. Floating mode is on stack screens
+  // where there's no FAB, so no clearance is needed.
+  //
+  // Use a fixed compact height. The content row fills the pill normally while
+  // the progress bar is pinned to the bottom, which keeps text centering
+  // independent from absolute-position stretch quirks.
   if (variant === 'embedded') {
-    // Rendered inside the navigator's `tabBar` slot — no absolute positioning
-    // needed; the tab bar wrapper stacks this above CustomTabBar in a column.
-    return barBody;
+    return (
+      <View
+        className="bg-chrome border-t border-chrome-border"
+        style={{
+          minHeight: BAR_CONTENT_HEIGHT + EMBEDDED_FAB_CLEARANCE,
+          paddingBottom: EMBEDDED_FAB_CLEARANCE,
+        }}
+      >
+        <LegacyWorkoutBarContent
+          progress={progress}
+          leftButton={leftButton}
+          rightButton={rightButton}
+          onCenterPress={handleCenterTap}
+          topStatusLine={topStatusLine}
+          primaryLine={primaryLine}
+          secondaryLine={secondaryLine}
+          countdownLabel={countdownLabel}
+          openLabel={t('activeWorkout.bar.open', { defaultValue: 'Open active workout' })}
+        />
+      </View>
+    );
   }
 
-  // Floating variant — overlay pinned to the physical bottom of the screen.
-  // Only reached when the tab bar (and embedded variant) isn't visible. We
-  // extend the chrome background down through the home-indicator safe area
-  // so the dark window background doesn't peek through beneath the bar.
+  if (!usesNativeTabs) {
+    return (
+      <View
+        pointerEvents="box-none"
+        className="absolute inset-x-0 bottom-0 z-50 bg-chrome"
+        style={{ paddingBottom: insets.bottom }}
+      >
+        <View
+          className="bg-chrome border-t border-chrome-border"
+          style={{ minHeight: BAR_CONTENT_HEIGHT }}
+        >
+          <LegacyWorkoutBarContent
+            progress={progress}
+            leftButton={leftButton}
+            rightButton={rightButton}
+            onCenterPress={handleCenterTap}
+            topStatusLine={topStatusLine}
+            primaryLine={primaryLine}
+            secondaryLine={secondaryLine}
+            countdownLabel={countdownLabel}
+            openLabel={t('activeWorkout.bar.open', { defaultValue: 'Open active workout' })}
+          />
+        </View>
+      </View>
+    );
+  }
+
+  const barBody = (
+    <LiquidGlassSurface
+      style={createLiquidGlassPillStyle(chromeBorder, {
+        height: BAR_CONTENT_HEIGHT,
+        position: 'relative',
+      })}
+      colorScheme="auto"
+      glassEffectStyle="regular"
+      isInteractive
+    >
+      {/* Primary row — left control, stacked top/bottom text, right control.
+          Intrinsically sized so the bar grows when the bottom line wraps. */}
+      <View
+        className="flex-row items-center px-2"
+        style={{
+          flex: 1,
+        }}
+      >
+        <View className="w-10 items-center">{leftButton}</View>
+
+        <Pressable
+          onPress={handleCenterTap}
+          className="px-1"
+          style={{
+            alignItems: 'center',
+            flex: 1,
+            height: '100%',
+            justifyContent: 'center',
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={t('activeWorkout.bar.open', { defaultValue: 'Open active workout' })}
+        >
+          {topStatusLine != null && (
+            <Text
+              numberOfLines={1}
+              className="text-center text-sm font-semibold text-text-primary"
+              style={{ lineHeight: 16 }}
+            >
+              {topStatusLine}
+            </Text>
+          )}
+          <Text
+            numberOfLines={1}
+            className={
+              topStatusLine != null
+                ? 'text-center text-xs text-text-primary'
+                : 'text-center text-sm font-semibold text-text-primary'
+            }
+            style={{ lineHeight: topStatusLine != null ? 14 : 16 }}
+          >
+            {primaryLine}
+          </Text>
+          {secondaryLine.length > 0 && (
+            <Text
+              numberOfLines={1}
+              className="text-center text-xs text-text-secondary"
+              style={{ lineHeight: 14 }}
+            >
+              {secondaryLine}
+            </Text>
+          )}
+        </Pressable>
+
+        {countdownLabel != null && (
+          <Text
+            className="px-2 text-lg font-bold text-text-primary"
+            style={{ fontVariant: ['tabular-nums'] }}
+          >
+            {countdownLabel}
+          </Text>
+        )}
+
+        <View className="w-10 items-center">{rightButton}</View>
+      </View>
+
+      {/* Progress bar — inset into the glass surface. Width is the only dynamic
+          value; colors still track the active theme. */}
+      <View
+        pointerEvents="none"
+        className="absolute inset-x-4 h-[3px] overflow-hidden rounded-full"
+        style={{
+          bottom: PROGRESS_BAR_BOTTOM_OFFSET,
+          backgroundColor: withAlpha(progressTrack, 0.78),
+        }}
+      >
+        <View
+          className="h-[3px]"
+          style={{
+            width: `${progress * 100}%`,
+            backgroundColor: withAlpha(accentPrimary, 0.92),
+          }}
+        />
+      </View>
+    </LiquidGlassSurface>
+  );
+
   return (
-    <View
+    <Animated.View
       pointerEvents="box-none"
-      className="absolute inset-x-0 bottom-0 z-50 bg-chrome"
-      style={{ paddingBottom: insets.bottom }}
+      className="absolute inset-x-0 z-50"
+      style={positionStyle}
     >
       {barBody}
-    </View>
+    </Animated.View>
   );
 };
 

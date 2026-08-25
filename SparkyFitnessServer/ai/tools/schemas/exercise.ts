@@ -1,6 +1,8 @@
 import { z } from 'zod';
+import { EXERCISE_MODALITIES } from '@workspace/shared';
 import {
   dateSchema,
+  optionalEntryTimeSchema,
   setTypeEnum,
   paginationSchema,
   uuidSchema,
@@ -17,9 +19,15 @@ const exerciseSetSchema = z
     weight: z.coerce.number().min(0).optional().describe('Weight in kg'),
     duration: z.coerce
       .number()
+      .int()
       .min(0)
       .optional()
       .describe('Duration in seconds'),
+    distance: z.coerce
+      .number()
+      .min(0)
+      .optional()
+      .describe('Distance in km — cardio sets'),
     rest_time: z.coerce
       .number()
       .min(0)
@@ -74,6 +82,12 @@ const createExerciseSchema = z
       .max(1000)
       .optional()
       .describe('Description of the exercise'),
+    modality: z
+      .enum(EXERCISE_MODALITIES)
+      .optional()
+      .describe(
+        'Which set editor the exercise uses; defaults to a value derived from the category'
+      ),
   })
   .strict();
 
@@ -88,6 +102,7 @@ const logExerciseSchema = z
       .optional()
       .describe('Name of the exercise (alternative to ID)'),
     entry_date: dateSchema,
+    entry_time: optionalEntryTimeSchema,
     duration_minutes: z.coerce
       .number()
       .min(0)
@@ -160,6 +175,7 @@ const updateExerciseEntrySchema = z
     entry_date: dateSchema
       .optional()
       .describe('New date for the entry (YYYY-MM-DD)'),
+    entry_time: optionalEntryTimeSchema,
     duration_minutes: z.coerce
       .number()
       .min(0)
@@ -282,15 +298,24 @@ export const manageExerciseInput = z.object({
       'create_workout_preset',
       'get_exercise_progress',
     ])
-    .describe('Action to perform; see tool description for per-action fields.'),
+    .optional()
+    .describe(
+      'Optional action to perform (server infers if omitted); see tool description for per-action fields.'
+    ),
   // identity
-  exercise_id: uuidSchema.optional().describe('Exercise UUID'),
+  exercise_id: uuidSchema
+    .optional()
+    .describe(
+      'Exercise UUID. REQUIRED for "log_exercise" if exercise_name is not provided.'
+    ),
   exercise_name: z
     .string()
     .min(1)
     .max(200)
     .optional()
-    .describe('Exercise name (alternative to exercise_id)'),
+    .describe(
+      'Exercise name (e.g. "Walking", "Running", "Squats"). REQUIRED for "log_exercise" if exercise_id is not provided.'
+    ),
   exercise_ids: z
     .array(uuidSchema)
     .optional()
@@ -344,8 +369,15 @@ export const manageExerciseInput = z.object({
     .max(1000)
     .optional()
     .describe('Description of the exercise'),
+  modality: z
+    .enum(EXERCISE_MODALITIES)
+    .optional()
+    .describe(
+      'Which set editor the exercise uses; defaults to a value derived from the category'
+    ),
   // log
   entry_date: dateSchema.optional().describe('Date for the entry (YYYY-MM-DD)'),
+  entry_time: optionalEntryTimeSchema,
   duration_minutes: z.coerce
     .number()
     .min(0)
@@ -383,7 +415,8 @@ export const manageExerciseInput = z.object({
         z.object({
           reps: z.coerce.number().int().min(0).optional(),
           weight: z.coerce.number().min(0).optional(),
-          duration: z.coerce.number().min(0).optional(),
+          duration: z.coerce.number().int().min(0).optional(),
+          distance: z.coerce.number().min(0).optional(),
           rest_time: z.coerce.number().min(0).optional(),
           set_type: setTypeEnum.optional(),
           rpe: z.coerce.number().min(0).max(10).optional(),

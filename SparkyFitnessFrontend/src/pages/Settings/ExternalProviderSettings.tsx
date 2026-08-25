@@ -47,6 +47,8 @@ export interface ExternalDataProvider {
   withings_token_expires?: string | null;
   fitbit_last_sync_at?: string | null;
   fitbit_token_expires?: string | null;
+  oura_last_sync_at?: string | null;
+  oura_token_expires?: string | null;
   polar_last_sync_at?: string | null;
   polar_token_expires?: string | null;
   hevy_last_sync_at?: string | null;
@@ -67,6 +69,8 @@ const ExternalProviderSettings = () => {
     useState<string | null>(null);
   const { user } = useAuth();
   const {
+    defaultFoodDataProviderId,
+    setDefaultFoodDataProviderId,
     defaultBarcodeProviderId,
     setDefaultBarcodeProviderId,
     barcodeFallbackOpenFoodFacts,
@@ -75,6 +79,9 @@ const ExternalProviderSettings = () => {
   } = usePreferences();
   const { data: providers = [] } = useExternalProviders(user?.activeUserId);
 
+  const foodProviders = providers.filter(
+    (p) => p.is_active && (p.categories ?? []).includes('food')
+  );
   const barcodeProviders = providers.filter(
     (p) => p.is_active && p.supports_barcode
   );
@@ -119,6 +126,39 @@ const ExternalProviderSettings = () => {
                   setGarminClientStateFromAddForm(null);
                 }}
               />
+            )}
+
+            {foodProviders.length > 0 && (
+              <div className="flex items-end gap-6">
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="food-provider">
+                    Default Food Data Provider
+                  </Label>
+                  <Select
+                    value={
+                      foodProviders.find(
+                        (p) => p.id === defaultFoodDataProviderId
+                      )?.id ?? ''
+                    }
+                    onValueChange={(value) => {
+                      const id = value || null;
+                      setDefaultFoodDataProviderId(id);
+                      saveAllPreferences({ defaultFoodDataProviderId: id });
+                    }}
+                  >
+                    <SelectTrigger id="food-provider">
+                      <SelectValue placeholder="Select a food provider" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {foodProviders.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.provider_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             )}
 
             {barcodeProviders.length > 0 && (

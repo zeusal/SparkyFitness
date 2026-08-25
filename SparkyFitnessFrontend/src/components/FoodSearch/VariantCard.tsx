@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -147,6 +148,7 @@ export function VariantCard({
   onDuplicate,
   onRemove,
 }: VariantCardProps) {
+  const { t } = useTranslation();
   const equivalents = useMemo(
     () => variant.equivalents ?? [],
     [variant.equivalents]
@@ -538,7 +540,7 @@ export function VariantCard({
       />
 
       <div className="mt-4 space-y-2">
-        <Label>Allergens</Label>
+        <Label>{t('customFoodForm.allergensLabel', 'Allergens')}</Label>
         <div className="flex flex-wrap gap-1 mb-2">
           {COMMON_ALLERGENS.map((a) => (
             <Badge
@@ -584,7 +586,10 @@ export function VariantCard({
                 addAllergen(allergenInput);
               }
             }}
-            placeholder="Custom allergen…"
+            placeholder={t(
+              'customFoodForm.customAllergenPlaceholder',
+              'Custom allergen…'
+            )}
             className="max-w-xs h-8 text-sm"
           />
           <Button
@@ -594,7 +599,7 @@ export function VariantCard({
             onClick={() => addAllergen(allergenInput)}
             disabled={!allergenInput.trim()}
           >
-            Add
+            {t('customFoodForm.addAllergenButton', 'Add')}
           </Button>
         </div>
       </div>

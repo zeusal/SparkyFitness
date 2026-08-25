@@ -1,5 +1,6 @@
 import type React from 'react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useToast } from '../../hooks/use-toast';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -40,6 +41,7 @@ const COMMON_ALLERGENS = [
 ];
 
 const AllergenSettings: React.FC = () => {
+  const { t } = useTranslation();
   const [newAllergen, setNewAllergen] = useState('');
   const { toast } = useToast();
   const { handleSyncAllergens, syncingAllergens } = useSyncAllergens();
@@ -57,8 +59,11 @@ const AllergenSettings: React.FC = () => {
     if (!trimmed) return;
     if (existingNames.has(trimmed)) {
       toast({
-        title: 'Already added',
-        description: `${trimmed} is already in your list.`,
+        title: t('allergenSettings.alreadyAddedTitle', 'Already added'),
+        description: t('allergenSettings.alreadyAddedDescription', {
+          defaultValue: '{{name}} is already in your list.',
+          name: trimmed,
+        }),
       });
       return;
     }
@@ -76,14 +81,20 @@ const AllergenSettings: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold">Allergen Preferences</h2>
+      <h2 className="text-2xl font-bold">
+        {t('allergenSettings.title', 'Allergen Preferences')}
+      </h2>
       <p className="text-sm text-muted-foreground">
-        Add the allergens you want to be warned about. When a food contains one
-        of these, a warning badge will appear on food cards and search results.
+        {t(
+          'allergenSettings.intro',
+          'Add the allergens you want to be warned about. When a food contains one of these, a warning badge will appear on food cards and search results.'
+        )}
       </p>
 
       <div className="p-4 border rounded-md shadow-sm space-y-4">
-        <h3 className="text-xl font-semibold">Common Allergens</h3>
+        <h3 className="text-xl font-semibold">
+          {t('allergenSettings.commonAllergens', 'Common Allergens')}
+        </h3>
         <div className="flex flex-wrap gap-2">
           {COMMON_ALLERGENS.map((allergen) => {
             const already = existingNames.has(allergen);
@@ -101,31 +112,40 @@ const AllergenSettings: React.FC = () => {
         </div>
 
         <div className="pt-2">
-          <Label htmlFor="customAllergen">Custom allergen</Label>
+          <Label htmlFor="customAllergen">
+            {t('allergenSettings.customAllergen', 'Custom allergen')}
+          </Label>
           <div className="flex gap-2 mt-1">
             <Input
               id="customAllergen"
               value={newAllergen}
               onChange={(e) => setNewAllergen(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="e.g., lupin, molluscs…"
+              placeholder={t(
+                'allergenSettings.customPlaceholder',
+                'e.g., lupin, molluscs…'
+              )}
               className="max-w-xs"
             />
             <Button
               onClick={() => handleAdd(newAllergen)}
               disabled={!newAllergen.trim()}
             >
-              Add
+              {t('allergenSettings.add', 'Add')}
             </Button>
           </div>
         </div>
       </div>
 
       <div className="p-4 border rounded-md shadow-sm space-y-2">
-        <h3 className="text-xl font-semibold">Sync from OpenFoodFacts</h3>
+        <h3 className="text-xl font-semibold">
+          {t('allergenSettings.syncTitle', 'Sync from OpenFoodFacts')}
+        </h3>
         <p className="text-sm text-muted-foreground">
-          Fetch allergen data for your saved OpenFoodFacts foods. Only needs to
-          be done once.
+          {t(
+            'allergenSettings.syncDescription',
+            'Fetch allergen data for your saved OpenFoodFacts foods. Only needs to be done once.'
+          )}
         </p>
         <Button
           variant="outline"
@@ -135,23 +155,33 @@ const AllergenSettings: React.FC = () => {
           <RefreshCw
             className={`w-4 h-4 mr-2 ${syncingAllergens ? 'animate-spin' : ''}`}
           />
-          {syncingAllergens ? 'Syncing…' : 'Sync Allergens'}
+          {syncingAllergens
+            ? t('allergenSettings.syncing', 'Syncing…')
+            : t('allergenSettings.syncButton', 'Sync Allergens')}
         </Button>
       </div>
 
       <div className="p-4 border rounded-md shadow-sm">
-        <h3 className="text-xl font-semibold mb-4">Your Tracked Allergens</h3>
+        <h3 className="text-xl font-semibold mb-4">
+          {t('allergenSettings.trackedTitle', 'Your Tracked Allergens')}
+        </h3>
         {!preferences || preferences.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No allergens tracked yet. Add some above to get warnings on food
-            cards.
+            {t(
+              'allergenSettings.noneTracked',
+              'No allergens tracked yet. Add some above to get warnings on food cards.'
+            )}
           </p>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Allergen</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>
+                  {t('allergenSettings.allergen', 'Allergen')}
+                </TableHead>
+                <TableHead className="text-right">
+                  {t('allergenSettings.actions', 'Actions')}
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -166,7 +196,7 @@ const AllergenSettings: React.FC = () => {
                       size="icon"
                       className="text-red-500"
                       onClick={() => removeAllergen(pref.id)}
-                      title="Remove"
+                      title={t('allergenSettings.remove', 'Remove')}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>

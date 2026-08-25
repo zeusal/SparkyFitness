@@ -130,8 +130,17 @@ export const FastingReport = ({ fastingData }: FastingReportProps) => {
         zones.Ketosis = (zones.Ketosis ?? 0) + 1;
       }
     });
-    return Object.entries(zones).map(([name, value]) => ({ name, value }));
-  }, [fastingData]);
+    const zoneLabels: Record<string, string> = {
+      Anabolic: t('fasting.zones.anabolic', 'Anabolic'),
+      Catabolic: t('fasting.zones.catabolic', 'Catabolic'),
+      FatBurning: t('fasting.zones.fatBurning', 'Fat Burning'),
+      Ketosis: t('fasting.zones.ketosis', 'Ketosis'),
+    };
+    return Object.entries(zones).map(([name, value]) => ({
+      name: zoneLabels[name] ?? name,
+      value,
+    }));
+  }, [fastingData, t]);
 
   // Heatmap Data (Last 90 Days)
   const heatmapData = useMemo(() => {

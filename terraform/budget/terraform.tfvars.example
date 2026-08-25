@@ -1,0 +1,44 @@
+# Copy this file to terraform.tfvars and fill in your own values.
+#   cp terraform.tfvars.example terraform.tfvars
+# terraform.tfvars is git-ignored on purpose — it holds your secrets.
+
+# ── Region ────────────────────────────────────────────────────────────────
+# eu-west-3 = Paris (closest Lightsail region to Madrid). eu-west-1 = Ireland.
+aws_region = "eu-west-3"
+
+# ── Instance size ─────────────────────────────────────────────────────────
+# small_2_0 = 2 GB / 2 vCPU (~12 USD/mo). micro_2_0 = 1 GB (~7). medium_2_0 = 4 GB (~24).
+bundle_id = "small_2_0"
+
+# ── Application images (your own GitHub Container Registry builds) ──────────
+# Images resolve to ghcr.io/<ghcr_namespace>/sparkyfitness-{server,frontend}:<image_tag>.
+ghcr_namespace = "zeusal"
+image_tag      = "latest" # keep "latest" so Watchtower auto-updates on new CI builds
+
+# Only needed if your ghcr packages are PRIVATE. Make them public to skip this.
+# ghcr_username = "zeusal"
+# ghcr_token    = "ghp_xxx_PAT_with_read:packages"
+
+# ── Access ────────────────────────────────────────────────────────────────
+# Leave empty to start on http://<ip>. Set a domain (or free DuckDNS subdomain)
+# to get automatic HTTPS, e.g. "fitness.midominio.com" or "miSparky.duckdns.org".
+domain = ""
+
+# Keep SSH closed and use the Lightsail browser console. Set true only if you
+# really need a terminal SSH client, ideally with ssh_cidr locked to your IP.
+open_ssh = false
+# ssh_cidr = "1.2.3.4/32"
+
+# ── First-run / accounts ──────────────────────────────────────────────────
+# Boot with signup ENABLED so you can create your 2 accounts, then re-apply
+# with this set to true to lock registration down.
+disable_signup = false
+# admin_email  = "tu-email@ejemplo.com"  # optional; this account becomes admin
+
+# ── Secrets (generate fresh values!) ──────────────────────────────────────
+#   openssl rand -hex 24   -> db passwords
+#   openssl rand -hex 32   -> api key & better auth secret
+db_password        = "CHANGE_ME_openssl_rand_hex_24"
+db_app_password    = "CHANGE_ME_openssl_rand_hex_24"
+api_encryption_key = "CHANGE_ME_openssl_rand_hex_32"
+better_auth_secret = "CHANGE_ME_openssl_rand_hex_32"

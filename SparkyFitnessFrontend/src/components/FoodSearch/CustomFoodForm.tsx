@@ -172,7 +172,9 @@ const CustomFoodForm = ({
         <CardHeader>
           <div className="flex flex-wrap items-center gap-2">
             <CardTitle>
-              {food && food.id ? 'Edit Food' : 'Add Custom Food'}
+              {food && food.id
+                ? t('customFoodForm.editFoodTitle', 'Edit Food')
+                : t('customFoodForm.addCustomFoodTitle', 'Add Custom Food')}
             </CardTitle>
             {food?.provider_verified ? <ProviderVerifiedBadge /> : null}
           </div>
@@ -181,7 +183,9 @@ const CustomFoodForm = ({
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="name">Food Name *</Label>
+                <Label htmlFor="name">
+                  {t('customFoodForm.foodNameLabel', 'Food Name *')}
+                </Label>
                 <Input
                   id="name"
                   value={formData.name}
@@ -190,7 +194,9 @@ const CustomFoodForm = ({
                 />
               </div>
               <div>
-                <Label htmlFor="brand">Brand</Label>
+                <Label htmlFor="brand">
+                  {t('customFoodForm.brandLabel', 'Brand (optional)')}
+                </Label>
                 <Input
                   id="brand"
                   value={formData.brand}
@@ -243,7 +249,10 @@ const CustomFoodForm = ({
                 }
               />
               <Label htmlFor="is_quick_food" className="text-sm font-medium">
-                Quick Add (don't save to my food list for future use)
+                {t(
+                  'customFoodForm.quickAddLabel',
+                  "Quick Add (don't save to my food list for future use)"
+                )}
               </Label>
             </div>
 
@@ -254,15 +263,19 @@ const CustomFoodForm = ({
 
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Unit Variants</h3>
+                <h3 className="text-lg font-semibold">
+                  {t('customFoodForm.unitVariantsTitle', 'Unit Variants')}
+                </h3>
                 <Button type="button" onClick={addVariant} size="sm">
                   <Plus className="w-4 h-4 mr-1" />
-                  Add Unit
+                  {t('customFoodForm.addUnitButton', 'Add Unit')}
                 </Button>
               </div>
               <p className="text-sm text-gray-600">
-                Add different unit measurements for this food with specific
-                nutrition values for each unit.
+                {t(
+                  'customFoodForm.unitVariantsDescription',
+                  'Add different unit measurements for this food with specific nutrition values for each unit.'
+                )}
               </p>
 
               <div className="space-y-6">
@@ -342,10 +355,10 @@ const CustomFoodForm = ({
 
             <Button type="submit" disabled={loading} className="w-full">
               {loading
-                ? 'Saving...'
+                ? t('customFoodForm.savingButton', 'Saving...')
                 : food && food.id
-                  ? 'Update Food'
-                  : 'Add Food'}
+                  ? t('customFoodForm.updateFoodButton', 'Update Food')
+                  : t('customFoodForm.addFoodButton', 'Add Food')}
             </Button>
           </form>
         </CardContent>

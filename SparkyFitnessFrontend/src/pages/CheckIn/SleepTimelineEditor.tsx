@@ -19,6 +19,7 @@ import {
   formatTimeWithPreference,
 } from '@/utils/timeFormatters';
 import { usePreferences } from '@/contexts/PreferencesContext';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface SleepTimelineEditorProps {
   bedtime: string;
@@ -64,6 +65,7 @@ const SleepTimelineEditor: React.FC<SleepTimelineEditorProps> = ({
   onTimeChange,
 }) => {
   const { t } = useTranslation();
+  const isMobile = useIsMobile();
   const parsedBedtime = useMemo(() => parseISO(bedtime), [bedtime]);
   const parsedWakeTime = useMemo(() => parseISO(wakeTime), [wakeTime]);
   const totalDurationMinutes = useMemo(
@@ -136,10 +138,13 @@ const SleepTimelineEditor: React.FC<SleepTimelineEditorProps> = ({
     [parsedBedtime, totalDurationMinutes]
   );
 
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
       if (!timelineRef.current || !selectedStageType) return;
 
+      // Capture the pointer so dragging keeps working even if the finger/cursor
+      // moves outside the timeline element (needed for touch as well as mouse).
+      e.currentTarget.setPointerCapture(e.pointerId);
       setIsDragging(true);
       const timelineRect = timelineRef.current.getBoundingClientRect();
       const clickX = e.clientX - timelineRect.left;
@@ -157,8 +162,8 @@ const SleepTimelineEditor: React.FC<SleepTimelineEditorProps> = ({
     ]
   );
 
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
       if (!isDragging || !timelineRef.current || !dragStartTime) return;
 
       const timelineRect = timelineRef.current.getBoundingClientRect();
@@ -233,7 +238,7 @@ const SleepTimelineEditor: React.FC<SleepTimelineEditorProps> = ({
     ]
   );
 
-  const handleMouseUp = useCallback(() => {
+  const handlePointerUp = useCallback(() => {
     setIsDragging(false);
     setDragStartTime(null);
 
@@ -296,16 +301,18 @@ const SleepTimelineEditor: React.FC<SleepTimelineEditorProps> = ({
   }, [onStageEventsPreviewChange, stageEvents]);
 
   useEffect(() => {
-    const handleGlobalMouseUp = () => {
+    const handleGlobalPointerUp = () => {
       if (isDragging) {
-        handleMouseUp();
+        handlePointerUp();
       }
     };
-    window.addEventListener('mouseup', handleGlobalMouseUp);
+    window.addEventListener('pointerup', handleGlobalPointerUp);
+    window.addEventListener('pointercancel', handleGlobalPointerUp);
     return () => {
-      window.removeEventListener('mouseup', handleGlobalMouseUp);
+      window.removeEventListener('pointerup', handleGlobalPointerUp);
+      window.removeEventListener('pointercancel', handleGlobalPointerUp);
     };
-  }, [isDragging, handleMouseUp]);
+  }, [isDragging, handlePointerUp]);
 
   return (
     <div className="sleep-timeline-editor border p-4 rounded-lg my-4">
@@ -445,7 +452,7 @@ const SleepTimelineEditor: React.FC<SleepTimelineEditorProps> = ({
       </h4>
 
       {isEditing && ( // Conditionally render buttons for editing mode
-        <div className="flex space-x-2 mb-4">
+        <div className="flex flex-wrap gap-2 mb-4">
           {['awake', 'rem', 'light', 'deep'].map((stageType) => (
             <Button
               key={stageType}
@@ -507,15 +514,18 @@ const SleepTimelineEditor: React.FC<SleepTimelineEditorProps> = ({
 
       <div
         ref={timelineRef}
-        className={`relative h-12 bg-muted rounded-md ${isEditing ? 'cursor-crosshair' : ''}`}
-        onMouseDown={isEditing ? handleMouseDown : undefined}
-        onMouseMove={isEditing ? handleMouseMove : undefined}
-        onMouseUp={isEditing ? handleMouseUp : undefined}
-        onMouseLeave={isEditing ? handleMouseUp : undefined}
+        className={`relative ${isMobile ? 'h-16' : 'h-12'} bg-muted rounded-md ${isEditing ? 'cursor-crosshair select-none' : ''}`}
+        style={isEditing ? { touchAction: 'none' } : undefined}
+        onPointerDown={isEditing ? handlePointerDown : undefined}
+        onPointerMove={isEditing ? handlePointerMove : undefined}
+        onPointerUp={isEditing ? handlePointerUp : undefined}
       >
-        {/* Time Axis - hourly markers */}
-        <div className="absolute inset-0 flex text-xs ">
+        {/* Time Axis - hourly markers. On narrow screens labels are thinned out
+            (every 2 hours) so they don't overlap. */}
+        <div className="absolute inset-0 flex text-[10px] sm:text-xs">
           {Array.from({ length: totalDurationMinutes / 60 + 1 }).map((_, i) => {
+            const labelStep = isMobile ? 2 : 1;
+            if (i % labelStep !== 0) return null;
             const hourTime = addMinutes(parsedBedtime, i * 60);
             const left = ((i * 60) / (totalDurationMinutes || 1)) * 100;
             return (

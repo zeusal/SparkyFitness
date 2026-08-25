@@ -20,12 +20,23 @@ packageExtensions:
       "metro-cache": "*"
 
 onlyBuiltDependencies:
+  - "@scarf/scarf"
+  - "@shopify/react-native-skia"
+  - "@swc/core"
+  - "@parcel/watcher"
+  - bcrypt
+  - sharp
   - esbuild
   - unrs-resolver
+  - vue-demi
 
-minimumReleaseAge: 4320
-
-minimumReleaseAgeExclude: []
+# Migrated from the now-ignored `pnpm` field in the root package.json (pnpm 10
+# reads these settings from pnpm-workspace.yaml instead).
+overrides:
+  side-channel: "1.0.6"
+  tailwindcss: "4.2.1"
+  assistant-cloud: "0.1.33"
+  zustand: "5.0.14"
 
 patchedDependencies:
   "react-native-health-connect@3.5.3": "patches/react-native-health-connect@3.5.3.patch"

@@ -12,6 +12,11 @@ interface PrVisualizationWidgetProps {
   };
   exerciseName: string;
   weightUnit: WeightUnit;
+  convertWeight: (
+    value: number,
+    fromUnit: WeightUnit,
+    toUnit: WeightUnit
+  ) => number;
   formatDate: (dateString: string, formatStr: string) => string;
 }
 
@@ -19,6 +24,7 @@ export const PrVisualizationWidget = ({
   data,
   exerciseName,
   weightUnit,
+  convertWeight,
   formatDate,
 }: PrVisualizationWidgetProps) => {
   const { t } = useTranslation();
@@ -45,7 +51,10 @@ export const PrVisualizationWidget = ({
             </span>
             <span className="text-xs text-muted-foreground">
               ({data.reps} {t('exerciseReportsDashboard.repsAt', 'reps @')}{' '}
-              {formatWeight(data.weight, weightUnit)}{' '}
+              {formatWeight(
+                convertWeight(data.weight, 'kg', weightUnit),
+                weightUnit
+              )}{' '}
               {t('exerciseReportsDashboard.on', 'on')}{' '}
               {formatDate(data.date, 'MMM dd, yyyy')})
             </span>
@@ -71,7 +80,11 @@ export const PrVisualizationWidget = ({
               {t('exerciseReportsDashboard.maxReps', 'Max Reps')}
             </span>
             <span className="text-xs text-muted-foreground">
-              ({formatWeight(data.weight, weightUnit)}{' '}
+              (
+              {formatWeight(
+                convertWeight(data.weight, 'kg', weightUnit),
+                weightUnit
+              )}{' '}
               {t('exerciseReportsDashboard.on', 'on')}{' '}
               {formatDate(data.date, 'MMM dd, yyyy')})
             </span>

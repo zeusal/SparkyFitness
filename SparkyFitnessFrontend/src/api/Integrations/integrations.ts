@@ -12,14 +12,6 @@ export const linkFitbitAccount = async (
     body: data,
   });
 };
-export const linkOuraAccount = async (
-  data: IntegrationPayload
-): Promise<void> => {
-  return apiCall('/integrations/oura/callback', {
-    method: 'POST',
-    body: data,
-  });
-};
 export const linkWithingsAccount = async (
   data: IntegrationPayload
 ): Promise<void> => {

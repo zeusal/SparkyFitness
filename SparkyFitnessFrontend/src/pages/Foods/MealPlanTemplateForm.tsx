@@ -458,7 +458,7 @@ const MealPlanTemplateForm: React.FC<MealPlanTemplateFormProps> = ({
   return (
     <>
       <Dialog open={true} onOpenChange={onClose}>
-        <DialogContent className="max-w-6xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {template
@@ -516,24 +516,16 @@ const MealPlanTemplateForm: React.FC<MealPlanTemplateFormProps> = ({
                 />
               </div>
             </div>
-            <div className="flex flex-col space-y-1">
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="isActive"
-                  checked={isActive}
-                  onChange={(e) => setIsActive(e.target.checked)}
-                />
-                <Label htmlFor="isActive">
-                  {t('mealPlanTemplateForm.setActiveLabel')}
-                </Label>
-              </div>
-              <p className="text-xs text-muted-foreground ml-6">
-                {t(
-                  'mealPlanTemplateForm.multipleActiveHint',
-                  'Multiple meal plans can be active at the same time. Active plans automatically populate diary entries.'
-                )}
-              </p>
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="isActive"
+                checked={isActive}
+                onChange={(e) => setIsActive(e.target.checked)}
+              />
+              <Label htmlFor="isActive">
+                {t('mealPlanTemplateForm.setActiveLabel')}
+              </Label>
             </div>
             <div className="space-y-4">
               {daysOfWeek.map((day, dayIndex) => {

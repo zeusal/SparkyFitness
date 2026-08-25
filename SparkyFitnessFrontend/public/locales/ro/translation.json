@@ -1,12 +1,1 @@
-{
-  "chat": {
-    "toolCategories": {
-      "food": "Mancare & Apa",
-      "exercise": "Exercitiu",
-      "vision": "Viziune"
-    }
-  },
-  "foodCsvImport": {
-    "addRow": "Adauga Rand"
-  }
-}
+{}

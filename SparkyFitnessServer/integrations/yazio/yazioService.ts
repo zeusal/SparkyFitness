@@ -1,36 +1,5 @@
 import { log } from '../../config/logging.js';
 import { normalizeBarcode } from '../../utils/foodUtils.js';
-import {
-  createGuardedFetch,
-  PUBLIC_ONLY_AI_NETWORK_POLICY,
-} from '../../utils/outboundUrlPolicy.js';
-
-// The base URL is configurable per provider; route outbound requests through
-// the shared public-host guard.
-const guardedFetch = createGuardedFetch(PUBLIC_ONLY_AI_NETWORK_POLICY);
-// Harvest every nutrient YAZIO reports (keyed like "mineral.magnesium",
-// "vitamin.a", "nutrient.protein") into a readable label -> value map scaled to
-// the variant, for alias discovery and custom-nutrient matching. Note: YAZIO
-// carries no per-nutrient unit, so mineral/vitamin values stay in YAZIO's
-// native unit (grams).
-function extractYazioProviderNutrients(
-  nutrients: Record<string, unknown>,
-  scale: number
-): Record<string, number> {
-  const out: Record<string, number> = {};
-  if (!nutrients || typeof nutrients !== 'object') return out;
-  for (const [key, value] of Object.entries(nutrients)) {
-    const num = Number(value);
-    if (!Number.isFinite(num)) continue;
-    const dot = key.indexOf('.');
-    const prefix = dot >= 0 ? key.slice(0, dot) : '';
-    const rest = dot >= 0 ? key.slice(dot + 1) : key;
-    const name = (prefix === 'vitamin' ? `vitamin ${rest}` : rest).trim();
-    if (!name) continue;
-    out[name] = Math.round(num * scale * 1000) / 1000;
-  }
-  return out;
-}
 
 const DEFAULT_YAZIO_API_BASE_URL = 'https://yzapi.yazio.com/v18';
 const TOKEN_CACHE_SKEW_MS = 60_000;
@@ -58,107 +27,6 @@ interface YazioCredentials {
   clientId?: string;
   clientSecret?: string;
   baseUrl?: string | null;
-  language?: string;
-}
-
-const YAZIO_LOCALES: Record<
-  string,
-  { countries: string[]; locales: string[] }
-> = {
-  de: {
-    countries: ['DE', 'AT', 'CH'],
-    locales: ['de_DE'],
-  },
-  fr: {
-    countries: ['FR', 'BE', 'CH'],
-    locales: ['fr_FR', 'fr_BE'],
-  },
-  en: {
-    countries: ['US', 'GB', 'CA', 'AU'],
-    locales: ['en_US', 'en_GB'],
-  },
-  ru: {
-    countries: ['RU'],
-    locales: ['ru_RU'],
-  },
-  es: {
-    countries: ['ES', 'MX', 'AR'],
-    locales: ['es_ES'],
-  },
-  it: {
-    countries: ['IT', 'CH'],
-    locales: ['it_IT', 'it_CH'],
-  },
-  nl: {
-    countries: ['NL', 'BE'],
-    locales: ['nl_NL', 'nl_BE'],
-  },
-  pl: {
-    countries: ['PL'],
-    locales: ['pl_PL'],
-  },
-  pt: {
-    countries: ['PT', 'BR'],
-    locales: ['pt_PT', 'pt_BR'],
-  },
-  cs: {
-    countries: ['CZ'],
-    locales: ['cs_CZ'],
-  },
-  da: {
-    countries: ['DK'],
-    locales: ['da_DK'],
-  },
-  el: {
-    countries: ['GR'],
-    locales: ['el_GR'],
-  },
-  hu: {
-    countries: ['HU'],
-    locales: ['hu_HU'],
-  },
-  no: {
-    countries: ['NO'],
-    locales: ['nb_NO', 'no_NO'],
-  },
-  nb: {
-    countries: ['NO'],
-    locales: ['nb_NO'],
-  },
-  fi: {
-    countries: ['FI'],
-    locales: ['fi_FI'],
-  },
-  sv: {
-    countries: ['SE'],
-    locales: ['sv_SE'],
-  },
-  tr: {
-    countries: ['TR'],
-    locales: ['tr_TR'],
-  },
-  zh: {
-    countries: ['CN'],
-    locales: ['zh_CN'],
-  },
-  ja: {
-    countries: ['JP'],
-    locales: ['ja_JP'],
-  },
-  ko: {
-    countries: ['KR'],
-    locales: ['ko_KR'],
-  },
-};
-
-const SUPPORTED_LANGUAGES = Object.keys(YAZIO_LOCALES);
-
-function resolveLanguage(lang: string | null | undefined): string | null {
-  if (typeof lang !== 'string') {
-    return null;
-  }
-  const normalized = lang.trim().toLowerCase().slice(0, 2);
-  return SUPPORTED_LANGUAGES.includes(normalized) ? normalized : null;
 }
 
 interface YazioSearchOptions extends YazioCredentials {
@@ -172,8 +40,7 @@ interface YazioProductSearchResult {
   product_id?: string;
   id?: string;
   name?: string;
-  is_verified?: boolean | string | number;
-  verified?: boolean | string | number;
+  is_verified?: boolean;
   producer?: string | null;
   serving?: string;
   serving_quantity?: number;
@@ -183,23 +50,15 @@ interface YazioProductSearchResult {
   eans?: string[];
 }
 
-interface YazioServing {
-  serving?: string;
-  amount?: number;
-  serving_quantity?: number;
-  unit?: string;
-  base_unit?: string;
-}
-
 interface YazioProduct extends YazioProductSearchResult {
-  /**
-   * Yazio's API is undocumented and image fields are inconsistent across
-   * product types; both spellings are optional and read defensively.
-   */
-  image_url?: string | null;
-  image?: string | null;
   is_deleted?: boolean;
-  servings?: YazioServing[];
+  servings?: Array<{
+    serving?: string;
+    amount?: number;
+    serving_quantity?: number;
+    unit?: string;
+    base_unit?: string;
+  }>;
 }
 
 const tokenCache = new Map<string, YazioToken>();
@@ -308,7 +167,7 @@ async function getYazioAccessToken(
     tokenBody.password = resolvedCredentials.password;
   }
 
-  const tokenPromise = guardedFetch(`${baseUrl}/oauth/token`, {
+  const tokenPromise = fetch(`${baseUrl}/oauth/token`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -352,119 +211,6 @@ function numberValue(value: unknown, fallback = 0): number {
 function round(value: unknown, precision = 1): number {
   const factor = 10 ** precision;
   return Math.round(numberValue(value) * factor) / factor;
-}
-
-function isYazioProductVerified(product: YazioProductSearchResult): boolean {
-  const raw = product.is_verified ?? product.verified;
-  return raw === true || raw === 'true' || raw === 1 || raw === '1';
-}
-
-function mergeYazioSearchCandidateVerification(
-  detailed: YazioProduct,
-  candidate: YazioProductSearchResult
-): YazioProduct {
-  if (detailed.is_verified !== undefined || detailed.verified !== undefined) {
-    return detailed;
-  }
-
-  return {
-    ...detailed,
-    is_verified: candidate.is_verified,
-    verified: candidate.verified,
-  };
-}
-
-function getYazioProductId(
-  product: YazioProductSearchResult
-): string | undefined {
-  return product.id ?? product.product_id;
-}
-
-function topLevelYazioServing(
-  candidate: YazioProductSearchResult
-): YazioServing | null {
-  if (typeof candidate.serving !== 'string' || !candidate.serving.trim()) {
-    return null;
-  }
-
-  const amount = numberValue(candidate.amount);
-  if (amount <= 0) {
-    return null;
-  }
-
-  const servingQuantity = numberValue(candidate.serving_quantity, 1);
-  return {
-    serving: candidate.serving,
-    amount,
-    serving_quantity: servingQuantity > 0 ? servingQuantity : 1,
-    base_unit: candidate.base_unit,
-  };
-}
-
-function yazioServingKey(serving: YazioServing): string {
-  return [
-    normalizeYazioServingName(serving.serving)?.toLowerCase() ?? '',
-    numberValue(serving.amount),
-    numberValue(serving.serving_quantity, 1),
-    normalizeServingUnit(serving.unit ?? serving.base_unit),
-  ].join(':');
-}
-
-function mergeYazioCandidateServings(
-  product: YazioProduct,
-  candidates: YazioProductSearchResult[]
-): YazioProduct {
-  const servings = [...(product.servings ?? [])];
-  const seen = new Set(servings.map(yazioServingKey));
-
-  for (const candidate of candidates) {
-    const serving = topLevelYazioServing(candidate);
-    if (!serving) {
-      continue;
-    }
-
-    const key = yazioServingKey(serving);
-    if (!seen.has(key)) {
-      seen.add(key);
-      servings.push(serving);
-    }
-  }
-
-  return servings.length === (product.servings?.length ?? 0)
-    ? product
-    : { ...product, servings };
-}
-
-interface YazioSearchCandidateGroup {
-  product: YazioProductSearchResult;
-  productId: string;
-  candidates: YazioProductSearchResult[];
-}
-
-function groupYazioSearchCandidates(
-  products: YazioProductSearchResult[]
-): YazioSearchCandidateGroup[] {
-  const groups: YazioSearchCandidateGroup[] = [];
-  const groupIndexByProductId = new Map<string, number>();
-
-  for (const product of products) {
-    const productId = getYazioProductId(product);
-    if (!productId) {
-      continue;
-    }
-
-    const existingIndex = groupIndexByProductId.get(productId);
-
-    if (existingIndex !== undefined) {
-      groups[existingIndex]?.candidates.push(product);
-      continue;
-    }
-
-    groupIndexByProductId.set(productId, groups.length);
-    groups.push({ product, productId, candidates: [product] });
-  }
-
-  return groups;
 }
 
 function normalizeServingUnit(unit: unknown): string {
@@ -567,7 +313,6 @@ function isMetricServingName(value: string, metricUnit: string): boolean {
 
 function buildYazioServingDescription(
   servingName: string,
-  servingQuantity: unknown,
   amount: number,
   metricUnit: string
 ): string {
@@ -575,13 +320,7 @@ function buildYazioServingDescription(
     return metricServingDescription(amount, metricUnit);
   }
 
-  const parsedQuantity = numberValue(servingQuantity, 1);
-  const quantity = parsedQuantity > 0 ? parsedQuantity : 1;
-  const servingLabel = /^\d/.test(servingName)
-    ? servingName
-    : `${formatAmount(quantity)} ${servingName}`;
-
-  return `${servingLabel} (${metricServingDescription(amount, metricUnit)})`;
+  return `${servingName} (${metricServingDescription(amount, metricUnit)})`;
 }
 
 function isYazioDensityPayload(nutrients: Record<string, unknown>): boolean {
@@ -683,7 +422,6 @@ function mapYazioVariantNutrition(
     iron: round(scaledNutrient(nutrients, 'mineral.iron', scale) * 1000),
     vitamin_a: scaledMicrogramNutrient(nutrients, 'vitamin.a', scale),
     vitamin_c: round(scaledNutrient(nutrients, 'vitamin.c', scale) * 1000),
-    provider_nutrients: extractYazioProviderNutrients(nutrients, scale),
   };
 }
 
@@ -694,12 +432,16 @@ function mapYazioServingVariants(
     serving_size: number;
     serving_unit: string;
     serving_description: string;
+    serving_weight: number;
+    serving_weight_unit: string;
     is_default: boolean;
   }
 ) {
   const metricUnit = defaultVariant.serving_unit;
   const variants = [defaultVariant];
-  const seen = new Set([`${defaultVariant.serving_size}:${metricUnit}`]);
+  const seen = new Set([
+    `${defaultVariant.serving_size}:${metricUnit}:default`,
+  ]);
 
   for (const serving of product.servings ?? []) {
     const amount = numberValue(serving.amount ?? serving.serving_quantity);
@@ -722,56 +464,34 @@ function mapYazioServingVariants(
     }
 
     const isMetric = isMetricServingName(servingName, metricUnit);
-    const parsedServingQuantity = numberValue(serving.serving_quantity, 1);
-    const servingQuantity =
-      parsedServingQuantity > 0 ? parsedServingQuantity : 1;
-    const servingSize = isMetric ? amount : servingQuantity;
+    const servingSize = isMetric ? amount : 1;
     const servingUnitLabel = isMetric ? metricUnit : servingName;
-    const metricKey = `${amount}:${metricUnit}`;
-    const key = isMetric
-      ? metricKey
-      : `${servingSize}:${servingUnitLabel}:${metricKey}`;
-    const shouldAddNamedVariant = !seen.has(key);
-    const shouldAddMetricVariant = !isMetric && !seen.has(metricKey);
-    if (!shouldAddNamedVariant && !shouldAddMetricVariant) {
+    const key = `${servingSize}:${servingUnitLabel}:${amount}:${metricUnit}`;
+    if (seen.has(key)) {
       continue;
     }
+    seen.add(key);
 
-    const nutrition = mapYazioVariantNutrition(
-      nutrients,
-      isYazioDensityPayload(nutrients)
-        ? amount
-        : defaultVariant.serving_size > 0
-          ? amount / defaultVariant.serving_size
-          : 0
-    );
-
-    if (shouldAddNamedVariant) {
-      seen.add(key);
-      variants.push({
-        serving_size: servingSize,
-        serving_unit: servingUnitLabel,
-        serving_description: buildYazioServingDescription(
-          servingName,
-          servingQuantity,
-          amount,
-          metricUnit
-        ),
-        ...nutrition,
-        is_default: false,
-      });
-    }
-
-    if (shouldAddMetricVariant) {
-      seen.add(metricKey);
-      variants.push({
-        serving_size: amount,
-        serving_unit: metricUnit,
-        serving_description: metricServingDescription(amount, metricUnit),
-        ...nutrition,
-        is_default: false,
-      });
-    }
+    variants.push({
+      serving_size: servingSize,
+      serving_unit: servingUnitLabel,
+      serving_description: buildYazioServingDescription(
+        servingName,
+        amount,
+        metricUnit
+      ),
+      serving_weight: amount,
+      serving_weight_unit: metricUnit,
+      ...mapYazioVariantNutrition(
+        nutrients,
+        isYazioDensityPayload(nutrients)
+          ? amount
+          : defaultVariant.serving_weight > 0
+            ? amount / defaultVariant.serving_weight
+            : 0
+      ),
+      is_default: false,
+    });
   }
 
   return variants;
@@ -784,8 +504,6 @@ function mapYazioProduct(
   if (!product) {
     return null;
   }
-
-  product = mergeYazioCandidateServings(product, [product]);
 
   const externalId = product.id ?? product.product_id ?? options?.productId;
   const name = product.name?.trim();
@@ -804,6 +522,8 @@ function mapYazioProduct(
       serving.serving_size,
       serving.serving_unit
     ),
+    serving_weight: serving.serving_size,
+    serving_weight_unit: serving.serving_unit,
     ...mapYazioVariantNutrition(nutrients, scale),
     is_default: true,
   };
@@ -815,16 +535,8 @@ function mapYazioProduct(
     barcode: barcode || undefined,
     provider_external_id: externalId,
     provider_type: 'yazio',
-    provider_verified: isYazioProductVerified(product),
+    provider_verified: product.is_verified === true,
     is_custom: false,
-    // Yazio's API is undocumented and does not consistently return an image
-    // field; read it defensively so its absence is simply a no-op.
-    image_url:
-      typeof product.image_url === 'string'
-        ? product.image_url
-        : typeof product.image === 'string'
-          ? product.image
-          : null,
     default_variant: defaultVariant,
     variants,
   };
@@ -833,7 +545,7 @@ function mapYazioProduct(
 async function yazioFetch<T>(path: string, credentials: YazioCredentials) {
   const baseUrl = resolveBaseUrl(credentials.baseUrl);
   const accessToken = await getYazioAccessToken(credentials);
-  return guardedFetch(`${baseUrl}${path}`, {
+  return fetch(`${baseUrl}${path}`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       Accept: 'application/json',
@@ -845,21 +557,11 @@ async function searchRawYazioProducts(
   query: string,
   options: YazioSearchOptions
 ) {
-  const resolvedLang = resolveLanguage(options.language);
-  const resolvedLocales = resolvedLang ? YAZIO_LOCALES[resolvedLang] : null;
-
-  const defaultCountries = ['DE', 'AT', 'CH', 'US', 'FR'];
-  const defaultLocales = ['de_DE', 'en_US', 'fr_FR'];
-
-  const countries =
-    options.countries ?? resolvedLocales?.countries ?? defaultCountries;
-  const locales = options.locales ?? resolvedLocales?.locales ?? defaultLocales;
-
   const params = new URLSearchParams({
     query,
     sex: 'male',
-    countries: countries.join(','),
-    locales: locales.join(','),
+    countries: (options.countries ?? ['DE', 'AT', 'CH', 'US']).join(','),
+    locales: (options.locales ?? ['de_DE', 'en_US']).join(','),
   });
 
   const data = await yazioFetch<YazioProductSearchResult[]>(
@@ -874,38 +576,29 @@ async function searchYazioFoods(query: string, options: YazioSearchOptions) {
   const page = options.page ?? 1;
   const pageSize = options.pageSize ?? 20;
   const products = await searchRawYazioProducts(query, options);
-  const productGroups = groupYazioSearchCandidates(products);
   const offset = Math.max(page - 1, 0) * pageSize;
-  const pageGroups = productGroups.slice(offset, offset + pageSize);
+  const pageItems = products.slice(offset, offset + pageSize);
 
   const foods = await Promise.all(
-    pageGroups.map(
-      async ({ product, productId, candidates: siblingCandidates }) => {
-        try {
-          const detailed = await getRawYazioFoodDetails(productId, options);
-          return detailed
-            ? mapYazioProduct(
-                mergeYazioCandidateServings(
-                  mergeYazioSearchCandidateVerification(detailed, product),
-                  siblingCandidates
-                ),
-                { productId }
-              )
-            : mapYazioProduct(
-                mergeYazioCandidateServings(product, siblingCandidates)
-              );
-        } catch (error) {
-          log(
-            'debug',
-            `YAZIO search detail enrichment failed for candidate ${productId}:`,
-            error
-          );
-          return mapYazioProduct(
-            mergeYazioCandidateServings(product, siblingCandidates)
-          );
-        }
+    pageItems.map(async (product) => {
+      const productId = product.id ?? product.product_id;
+      if (!productId) {
+        return mapYazioProduct(product);
       }
-    )
+      try {
+        const detailed = await getRawYazioFoodDetails(productId, options);
+        return detailed
+          ? mapYazioProduct(detailed, { productId })
+          : mapYazioProduct(product);
+      } catch (error) {
+        log(
+          'debug',
+          `YAZIO search detail enrichment failed for candidate ${productId}:`,
+          error
+        );
+        return mapYazioProduct(product);
+      }
+    })
   );
 
   return {
@@ -913,8 +606,8 @@ async function searchYazioFoods(query: string, options: YazioSearchOptions) {
     pagination: {
       page,
       pageSize,
-      totalCount: productGroups.length,
-      hasMore: offset + pageSize < productGroups.length,
+      totalCount: products.length,
+      hasMore: offset + pageSize < products.length,
     },
   };
 }
@@ -974,14 +667,10 @@ async function searchYazioByBarcode(
   ).slice(0, 20);
 
   for (const candidate of candidates) {
-    const productId = getYazioProductId(candidate);
+    const productId = candidate.id ?? candidate.product_id;
     if (!productId) {
       continue;
     }
-
-    const siblingCandidates = candidates.filter(
-      (sibling) => getYazioProductId(sibling) === productId
-    );
 
     let detailedProduct: YazioProduct | null;
     try {
@@ -1006,13 +695,7 @@ async function searchYazioByBarcode(
       continue;
     }
 
-    const food = mapYazioProduct(
-      mergeYazioCandidateServings(
-        mergeYazioSearchCandidateVerification(detailedProduct, candidate),
-        siblingCandidates
-      ),
-      { productId }
-    );
+    const food = mapYazioProduct(detailedProduct, { productId });
     if (food) {
       return {
         ...food,

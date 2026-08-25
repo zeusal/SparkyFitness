@@ -1,13 +1,16 @@
 import * as Haptics from 'expo-haptics';
-import { useAppPreferencesStore } from '../stores/appPreferencesStore';
+import { createBooleanPreference } from './booleanPreference';
+
+const hapticsPref = createBooleanPreference('@HealthConnect:hapticsEnabled', true);
+
+export const initializeHaptics = hapticsPref.initialize;
+export const setHapticsEnabled = hapticsPref.set;
+export const useHapticsEnabled = hapticsPref.use;
+
+/** Test-only helper — resets module-level state. */
+export const __resetHapticsStateForTests = hapticsPref.__reset;
 
 export function fireSuccessHaptic(): void {
-  if (!useAppPreferencesStore.getState().hapticsEnabled) return;
+  if (!hapticsPref.get()) return;
   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-}
-
-/** Light selection tick — used for drag-reorder position changes. */
-export function fireSelectionHaptic(): void {
-  if (!useAppPreferencesStore.getState().hapticsEnabled) return;
-  Haptics.selectionAsync().catch(() => {});
 }

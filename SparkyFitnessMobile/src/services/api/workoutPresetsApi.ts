@@ -1,18 +1,37 @@
-import type {
-  WorkoutPresetCreateRequest,
-  WorkoutPresetExerciseRequest,
-  WorkoutPresetSetRequest,
-  WorkoutPresetUpdateRequest,
-} from '@workspace/shared';
 import { apiFetch } from './apiClient';
 import type { WorkoutPresetsResponse, WorkoutPreset } from '../../types/workoutPresets';
 
-// Payload shapes are the shared request schemas the server validates against;
-// these aliases keep the mobile-local names the hooks were written against.
-export type WorkoutPresetSetPayload = WorkoutPresetSetRequest;
-export type WorkoutPresetExercisePayload = WorkoutPresetExerciseRequest;
-export type WorkoutPresetCreatePayload = WorkoutPresetCreateRequest;
-export type WorkoutPresetUpdatePayload = WorkoutPresetUpdateRequest;
+export interface WorkoutPresetSetPayload {
+  set_number: number;
+  set_type: string;
+  reps: number | null;
+  weight: number | null;
+  duration: number | null;
+  rest_time: number | null;
+  notes: string | null;
+}
+
+export interface WorkoutPresetExercisePayload {
+  exercise_id: string;
+  image_url: string | null;
+  sort_order: number;
+  sets: WorkoutPresetSetPayload[];
+}
+
+export interface WorkoutPresetCreatePayload {
+  user_id: string;
+  name: string;
+  description: string | null;
+  is_public: boolean;
+  exercises: WorkoutPresetExercisePayload[];
+}
+
+export interface WorkoutPresetUpdatePayload {
+  name?: string;
+  description?: string;
+  is_public?: boolean;
+  exercises?: WorkoutPresetExercisePayload[];
+}
 
 export const fetchWorkoutPresets = async (): Promise<WorkoutPresetsResponse> => {
   return apiFetch<WorkoutPresetsResponse>({
@@ -76,14 +95,6 @@ export const searchWorkoutPresets = async (
   });
 };
 
-export const getWorkoutPresetById = async (id: number): Promise<WorkoutPreset> => {
-  return apiFetch<WorkoutPreset>({
-    endpoint: `/api/workout-presets/${id}`,
-    serviceName: 'Workout Presets API',
-    operation: 'fetch workout preset',
-  });
-};
-
 export const createWorkoutPreset = async (
   body: WorkoutPresetCreatePayload,
 ): Promise<WorkoutPreset> => {
@@ -97,7 +108,7 @@ export const createWorkoutPreset = async (
 };
 
 export const updateWorkoutPreset = async (
-  id: number,
+  id: string,
   body: WorkoutPresetUpdatePayload,
 ): Promise<WorkoutPreset> => {
   return apiFetch<WorkoutPreset>({
@@ -109,7 +120,7 @@ export const updateWorkoutPreset = async (
   });
 };
 
-export const deleteWorkoutPreset = async (id: number): Promise<{ message: string }> => {
+export const deleteWorkoutPreset = async (id: string): Promise<{ message: string }> => {
   return apiFetch<{ message: string }>({
     endpoint: `/api/workout-presets/${id}`,
     method: 'DELETE',

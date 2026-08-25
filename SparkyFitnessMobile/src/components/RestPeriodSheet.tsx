@@ -1,4 +1,4 @@
-import {
+import React, {
   forwardRef,
   useCallback,
   useImperativeHandle,
@@ -6,28 +6,27 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Text, TouchableOpacity, View } from 'react-native';
 import {
+  BottomSheetBackdrop,
   BottomSheetModal,
   BottomSheetTextInput,
   BottomSheetView,
+  type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
-import { useCSSVariable } from 'uniwind';
+import { useCSSVariable, useUniwind } from 'uniwind';
 import Button from './ui/Button';
-import { sheetContainer, useSheetBackdrop } from './ui/sheetChrome';
 import CollapsibleSection from './CollapsibleSection';
 import StepperInput from './StepperInput';
-import { formatRestLabel } from './RestPeriodChip';
-import { getDefaultRestSec } from '../utils/workoutSession';
+import { formatRest } from './RestPeriodChip';
 
-export const MIN_REST_SEC = 0;
+export const MIN_REST_SEC = 15;
 export const MAX_REST_SEC = 900;
-const REST_PRESETS: number[] = [0, 5, 15, 30, 45, 60, 90, 120, 180, 300];
+const REST_PRESETS: number[] = [30, 45, 60, 90, 120, 180, 300];
 
-/** Clamp to [MIN, MAX] and round to the nearest 5 seconds (0 = no rest). */
+/** Clamp to [MIN, MAX] and round to the nearest 5 seconds. */
 export function clampRestSeconds(seconds: number): number {
-  if (!Number.isFinite(seconds)) return getDefaultRestSec();
+  if (!Number.isFinite(seconds)) return MIN_REST_SEC;
   const clamped = Math.max(MIN_REST_SEC, Math.min(MAX_REST_SEC, seconds));
   return Math.round(clamped / 5) * 5;
 }
@@ -43,13 +42,14 @@ interface RestPeriodSheetProps {
 
 const RestPeriodSheet = forwardRef<RestPeriodSheetRef, RestPeriodSheetProps>(
   ({ onChange }, ref) => {
-    const { t } = useTranslation();
     const bottomSheetRef = useRef<BottomSheetModal>(null);
+    const { theme } = useUniwind();
     const [accentPrimary, surfaceBg, textMuted] = useCSSVariable([
       '--color-accent-primary',
       '--color-surface',
       '--color-text-muted',
     ]) as [string, string, string];
+    const isDarkMode = theme === 'dark' || theme === 'amoled';
 
     const [currentValue, setCurrentValue] = useState<number>(90);
     const [customOpen, setCustomOpen] = useState(false);
@@ -57,7 +57,7 @@ const RestPeriodSheet = forwardRef<RestPeriodSheetRef, RestPeriodSheetProps>(
 
     useImperativeHandle(ref, () => ({
       present: (sec) => {
-        const initial = clampRestSeconds(sec ?? getDefaultRestSec());
+        const initial = clampRestSeconds(sec ?? 90);
         setCurrentValue(initial);
         setCustomText(String(initial));
         setCustomOpen(!REST_PRESETS.includes(initial));
@@ -108,7 +108,17 @@ const RestPeriodSheet = forwardRef<RestPeriodSheetRef, RestPeriodSheetProps>(
       bottomSheetRef.current?.dismiss();
     };
 
-    const renderBackdrop = useSheetBackdrop();
+    const renderBackdrop = useCallback(
+      (props: BottomSheetBackdropProps) => (
+        <BottomSheetBackdrop
+          {...props}
+          opacity={isDarkMode ? 0.7 : 0.5}
+          disappearsOnIndex={-1}
+          appearsOnIndex={0}
+        />
+      ),
+      [isDarkMode],
+    );
 
     return (
       <BottomSheetModal
@@ -117,14 +127,13 @@ const RestPeriodSheet = forwardRef<RestPeriodSheetRef, RestPeriodSheetProps>(
         keyboardBehavior="interactive"
         keyboardBlurBehavior="restore"
         android_keyboardInputMode="adjustPan"
-        containerComponent={sheetContainer}
         backdropComponent={renderBackdrop}
         backgroundStyle={{ backgroundColor: surfaceBg }}
         handleIndicatorStyle={{ backgroundColor: textMuted }}
       >
         <BottomSheetView className="px-6 pb-safe-or-8">
           <Text className="text-lg font-semibold text-text-primary text-center mb-4">
-            {t('restPeriod.title', { defaultValue: 'Rest period' })}
+            Rest period
           </Text>
 
           <View className="flex-row flex-wrap justify-center" style={{ gap: 8 }}>
@@ -145,7 +154,7 @@ const RestPeriodSheet = forwardRef<RestPeriodSheetRef, RestPeriodSheetProps>(
                     className="text-sm font-medium"
                     style={{ color: selected ? '#fff' : textMuted }}
                   >
-                    {formatRestLabel(preset, t('restPeriod.off', { defaultValue: 'Off' }))}
+                    {formatRest(preset)}
                   </Text>
                 </TouchableOpacity>
               );
@@ -153,7 +162,7 @@ const RestPeriodSheet = forwardRef<RestPeriodSheetRef, RestPeriodSheetProps>(
           </View>
 
           <CollapsibleSection
-            title={t('restPeriod.custom', { defaultValue: 'Custom' })}
+            title="Custom"
             expanded={customOpen}
             onToggle={() => setCustomOpen((v) => !v)}
             itemCount={1}
@@ -170,11 +179,11 @@ const RestPeriodSheet = forwardRef<RestPeriodSheetRef, RestPeriodSheetProps>(
                   InputComponent={BottomSheetTextInput}
                 />
                 <Text className="text-text-secondary text-base ml-3">
-                  {formatRestLabel(Number.isNaN(parsedCustom) ? currentValue : parsedCustom, t('restPeriod.off', { defaultValue: 'Off' }))}
+                  {formatRest(Number.isNaN(parsedCustom) ? currentValue : parsedCustom)}
                 </Text>
               </View>
               <Button variant="primary" onPress={handleCustomSave}>
-                {t('common.save', { defaultValue: 'Save' })}
+                Save
               </Button>
             </View>
           </CollapsibleSection>

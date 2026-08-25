@@ -8,21 +8,7 @@ import labelScanService, {
 import foodPhotoEstimationService from '../services/foodPhotoEstimationService.js';
 import type { FoodPhotoEstimateErrorCode } from '@workspace/shared';
 import { backfillOffAllergens } from '../utils/backfillAllergens.js';
-import { resolveIsAdmin } from '../utils/adminCheck.js';
-import {
-  uploadImages,
-  applyImageOrder,
-  finalizeUploadedImages,
-  cleanupStagedImages,
-  stagedFilesFrom,
-  parseMultipartBody,
-} from '../middleware/imageUpload.js';
 const router = express.Router();
-
-/** Reads a food payload from either a JSON body or a multipart form. */
-function parseFoodBody(req: unknown): Record<string, unknown> {
-  return parseMultipartBody(req, ['images'], 'foodData');
-}
 router.use(express.json());
 
 function getErrorMessage(error: unknown): string | null {
@@ -81,7 +67,7 @@ router.get('/search', authenticate, async (req, res, next) => {
   try {
     const foods = await foodService.searchFoods(
       req.userId,
-      String(name),
+      name,
 
       req.userId,
       exactMatch === 'true',
@@ -160,14 +146,16 @@ router.get('/', authenticate, async (req, res, next) => {
   try {
     const result = await foodService.searchFoods(
       req.userId,
-      name === undefined ? undefined : String(name),
+      name,
 
       req.userId,
       exactMatch === 'true',
       broadMatch === 'true',
       checkCustom === 'true',
-      parseInt(String(limit), 10),
-      mealType === undefined ? undefined : String(mealType)
+      // @ts-expect-error TS(2345): Argument of type 'string | ParsedQs | (string | Pa... Remove this comment to see the full error message
+      parseInt(limit, 10),
+      // @ts-expect-error TS(2345): Argument of type 'string | ParsedQs | (string | Pa... Remove this comment to see the full error message
+      mealType
     );
     res.status(200).json(result);
   } catch (error) {
@@ -207,39 +195,11 @@ router.get('/', authenticate, async (req, res, next) => {
  *       403:
  *         description: User does not have permission to create a food.
  */
-router.post('/', authenticate, uploadImages, async (req, res, next) => {
+router.post('/', authenticate, async (req, res, next) => {
   try {
-    const body = parseFoodBody(req);
-    // A name is required by the foods table; reject here so the caller gets a
-    // 400 rather than a constraint violation from the insert.
-    if (typeof body.name !== 'string' || body.name.trim() === '') {
-      return res.status(400).json({ error: 'Food name is required.' });
-    }
-    const foodData = {
-      ...body,
-      name: body.name,
-      user_id: req.userId, // Ensure user_id is set for the food
-    };
+    const foodData = { ...req.body, user_id: req.userId }; // Ensure user_id is set for the food
 
     const newFood = await foodService.createFood(req.userId, foodData);
-
-    // Files were staged before the food had an id; move them in now and
-    // persist the resulting web paths alongside any images already set.
-    const uploadedPaths = await finalizeUploadedImages(
-      stagedFilesFrom(req),
-      'foods',
-      newFood.id
-    );
-    if (uploadedPaths.length > 0) {
-      // The client's `images` array carries __new__<n> placeholders marking
-      // where each upload belongs, so a reordered list keeps its order.
-      const merged = applyImageOrder(newFood.images, uploadedPaths);
-      const updated = await foodService.updateFood(req.userId, newFood.id, {
-        images: merged,
-      });
-      newFood.images = updated?.images ?? merged;
-    }
-
     res.status(201).json(newFood);
   } catch (error) {
     // @ts-expect-error TS(2571): Object is of type 'unknown'.
@@ -248,8 +208,6 @@ router.post('/', authenticate, uploadImages, async (req, res, next) => {
       return res.status(403).json({ error: error.message });
     }
     next(error);
-  } finally {
-    await cleanupStagedImages(req);
   }
 });
 /**
@@ -306,11 +264,11 @@ router.get('/foods-paginated', authenticate, async (req, res, next) => {
   try {
     const { foods, totalCount } = await foodService.getFoodsWithPagination(
       req.userId,
-      String(searchTerm ?? ''),
-      String(foodFilter ?? ''),
-      String(currentPage ?? ''),
-      String(itemsPerPage ?? ''),
-      String(sortBy ?? '')
+      searchTerm,
+      foodFilter,
+      currentPage,
+      itemsPerPage,
+      sortBy
     );
     res.status(200).json({ foods, totalCount });
   } catch (error) {
@@ -398,7 +356,7 @@ router.get('/food-variants', authenticate, async (req, res, next) => {
   try {
     const variants = await foodService.getFoodVariantsByFoodId(
       req.userId,
-      String(food_id)
+      food_id
     );
     res.status(200).json(variants);
   } catch (error) {
@@ -677,12 +635,7 @@ router.get('/barcode/:barcode', authenticate, async (req, res, next) => {
       barcode,
 
       req.userId,
-      // Absent means "use the user's default provider", so preserve undefined
-      // rather than coercing it to the string "undefined".
-      req.query.providerId === undefined
-        ? undefined
-        : String(req.query.providerId),
-      req.authenticatedUserId
+      req.query.providerId
     );
     res.status(200).json(result);
   } catch (error) {
@@ -694,7 +647,6 @@ const LABEL_SCAN_ERROR_HTTP_STATUS: Record<LabelScanErrorCategory, number> = {
   unsupported_provider: 422,
   api_key_missing: 422,
   custom_url_missing: 422,
-  private_network_forbidden: 403,
   unsupported_media: 400,
   refused: 422,
   truncated: 422,
@@ -710,13 +662,11 @@ router.post('/scan-label', authenticate, async (req, res, next) => {
     return res.status(400).json({ error: 'image and mime_type are required.' });
   }
   try {
-    const isAdmin = await resolveIsAdmin(req.user, req.authenticatedUserId);
     const result = await labelScanService.extractNutritionFromLabel(
       image,
       mime_type,
 
-      req.userId,
-      isAdmin
+      req.userId
     );
     if (!result.success) {
       const status = LABEL_SCAN_ERROR_HTTP_STATUS[result.category] ?? 500;
@@ -761,7 +711,6 @@ const PHOTO_ESTIMATION_ERROR_HTTP_STATUS: Record<
   CONTENT_BLOCKED: 422,
   PARSE_ERROR: 422,
   UPSTREAM_ERROR: 502,
-  PRIVATE_NETWORK_FORBIDDEN: 403,
   TIMEOUT: 504,
 };
 
@@ -815,20 +764,14 @@ router.post(
           .status(400)
           .json({ error: 'mime_type is required.', code: 'INVALID_REQUEST' });
       }
-      const currentMaxLen = process.env.TEST_MAX_BASE64_IMAGE_LENGTH
-        ? parseInt(process.env.TEST_MAX_BASE64_IMAGE_LENGTH, 10)
-        : MAX_BASE64_IMAGE_LENGTH;
-      if (img.length > currentMaxLen) {
+      if (img.length > MAX_BASE64_IMAGE_LENGTH) {
         return res.status(400).json({
           error: 'image exceeds the maximum allowed size of 8MB (base64).',
           code: 'IMAGE_TOO_LARGE',
         });
       }
       totalBase64Length += img.length;
-      const currentMaxTotalLen = process.env.TEST_MAX_TOTAL_BASE64_LENGTH
-        ? parseInt(process.env.TEST_MAX_TOTAL_BASE64_LENGTH, 10)
-        : MAX_TOTAL_BASE64_LENGTH;
-      if (totalBase64Length > currentMaxTotalLen) {
+      if (totalBase64Length > MAX_TOTAL_BASE64_LENGTH) {
         return res.status(400).json({
           error:
             'The combined size of all images exceeds the allowed limit of 24MB (base64).',
@@ -892,14 +835,12 @@ router.post(
     }
 
     try {
-      const isAdmin = await resolveIsAdmin(req.user, req.authenticatedUserId);
       const result =
         await foodPhotoEstimationService.estimateFoodPhotoNutrition({
           images: photoImages,
           userId: req.userId,
           description: typeof description === 'string' ? description : '',
           weightSlot,
-          actorIsAdmin: isAdmin,
         });
       if (result.success) {
         return res.status(200).json(result.estimate);
@@ -999,27 +940,13 @@ router.get('/:foodId', authenticate, async (req, res, next) => {
  *       404:
  *         description: Food not found or not authorized to update.
  */
-router.put('/:id', authenticate, uploadImages, async (req, res, next) => {
+router.put('/:id', authenticate, async (req, res, next) => {
   const { id } = req.params;
   if (!id) {
     return res.status(400).json({ error: 'Food ID is required.' });
   }
   try {
-    const foodData = parseFoodBody(req);
-
-    // `images` is the client's desired order, with __new__<n> placeholders
-    // marking where each uploaded file belongs. A client that sends `images`
-    // without any files is performing a removal and/or a reorder.
-    const uploadedPaths = await finalizeUploadedImages(
-      stagedFilesFrom(req),
-      'foods',
-      id
-    );
-    if (foodData.images !== undefined || uploadedPaths.length > 0) {
-      foodData.images = applyImageOrder(foodData.images, uploadedPaths);
-    }
-
-    const updatedFood = await foodService.updateFood(req.userId, id, foodData);
+    const updatedFood = await foodService.updateFood(req.userId, id, req.body);
     res.status(200).json(updatedFood);
   } catch (error) {
     // @ts-expect-error TS(2571): Object is of type 'unknown'.
@@ -1033,8 +960,6 @@ router.put('/:id', authenticate, uploadImages, async (req, res, next) => {
       return res.status(404).json({ error: error.message });
     }
     next(error);
-  } finally {
-    await cleanupStagedImages(req);
   }
 });
 /**
@@ -1182,12 +1107,12 @@ router.delete('/:id', authenticate, async (req, res, next) => {
  *         description: Food data is required.
  */
 router.post('/import-from-csv', authenticate, async (req, res, next) => {
-  const { foods, overwrite } = req.body;
+  const { foods } = req.body;
   if (!foods) {
     return res.status(400).json({ error: 'Food data is required.' });
   }
   try {
-    await foodService.importFoodsInBulk(req.userId, foods, overwrite === true);
+    await foodService.importFoodsInBulk(req.userId, foods);
     res.status(200).json({ message: 'Food data imported successfully.' });
   } catch (error) {
     next(error);
@@ -1240,15 +1165,6 @@ router.get('/needs-review', authenticate, async (req, res, next) => {
  *               variantId:
  *                 type: string
  *                 format: uuid
- *               syncImages:
- *                 type: boolean
- *                 default: true
- *                 description: >
- *                   When true (the default), past entries are forced onto the
- *                   food's current photos, replacing photos the user set on
- *                   individual diary entries; the replaced files are unlinked.
- *                   When false, nutrition is rewritten and every entry keeps
- *                   the photo it is showing.
  *     responses:
  *       200:
  *         description: The result of the snapshot update.
@@ -1256,24 +1172,15 @@ router.get('/needs-review', authenticate, async (req, res, next) => {
  *         description: foodId is required.
  */
 router.post('/update-snapshot', authenticate, async (req, res, next) => {
-  const { foodId, variantId, syncImages } = req.body;
+  const { foodId, variantId } = req.body;
   if (!foodId) {
     return res.status(400).json({ error: 'foodId is required.' });
-  }
-  // Rejected rather than coerced: every non-empty string is truthy, so a
-  // stringly-typed `"false"` would silently select the path that overwrites
-  // and deletes diary-specific photos.
-  if (syncImages !== undefined && typeof syncImages !== 'boolean') {
-    return res.status(400).json({ error: 'syncImages must be a boolean.' });
   }
   try {
     const result = await foodService.updateFoodEntriesSnapshot(
       req.userId,
       foodId,
-      variantId,
-      // Defaults to true so a client that predates this flag keeps syncing
-      // photos, which is what it has always done.
-      syncImages ?? true
+      variantId
     );
     res.status(200).json(result);
   } catch (error) {

@@ -1,4 +1,3 @@
-import { defaultMealTypeForTime } from '@workspace/shared';
 import type { IconName } from '../components/Icon';
 import type { MealType } from '../types/mealTypes';
 
@@ -10,15 +9,10 @@ export interface MealConfig {
 }
 
 export const MEAL_CONFIG: Record<string, MealConfig> = {
-  // i18n-audit-ignore-next-line hardcoded-ui-text -- canonical English metadata fallback; visible callers localize known meal keys.
   breakfast: { label: 'Breakfast', icon: 'meal-breakfast' },
-  // i18n-audit-ignore-next-line hardcoded-ui-text -- canonical English metadata fallback; visible callers localize known meal keys.
   lunch: { label: 'Lunch', icon: 'meal-lunch' },
-  // i18n-audit-ignore-next-line hardcoded-ui-text -- canonical English metadata fallback; visible callers localize known meal keys.
   snacks: { label: 'Snacks', icon: 'meal-snack' },
-  // i18n-audit-ignore-next-line hardcoded-ui-text -- canonical English metadata fallback; visible callers localize known meal keys.
   dinner: { label: 'Dinner', icon: 'meal-dinner' },
-  // i18n-audit-ignore-next-line hardcoded-ui-text -- canonical English metadata fallback; visible callers localize known meal keys.
   other: { label: 'Other', icon: 'meal-snack' },
 };
 
@@ -43,33 +37,26 @@ export function getMealTypeLabel(name: string): string {
 }
 
 /**
- * Returns the id of the best matching meal type based on the current time of day
- * and configured meal type default_time values.
- * Falls back to the first meal type's id, or null if the list is empty.
+ * Returns the icon for a meal type name. Known types get their specific icon,
+ * custom/unknown types fall back to 'meal-snack'.
  */
-export function getDefaultMealTypeId(
-  mealTypes: MealType[],
-  now?: { hour: number; minute: number }
-): string | null {
-  if (mealTypes.length === 0) return null;
-
-  const date = new Date();
-  const currentNow = now ?? { hour: date.getHours(), minute: date.getMinutes() };
-  const predictedName = defaultMealTypeForTime(mealTypes, currentNow);
-  const match = mealTypes.find(
-    (mt) => mt.name.toLowerCase() === predictedName.toLowerCase()
-  );
-  return match?.id ?? mealTypes[0].id;
+export function getMealTypeIcon(name: string): IconName {
+  const key = name.toLowerCase();
+  if (key === 'breakfast') return 'meal-breakfast';
+  if (key === 'lunch') return 'meal-lunch';
+  if (key === 'dinner') return 'meal-dinner';
+  if (key === 'snack' || key === 'snacks') return 'meal-snack';
+  return 'meal-snack';
 }
 
-/** Localized label for a KNOWN system meal type key. Unknown/custom names are returned literally. */
-export function getLocalizedMealLabel(t: (key: string, options: { defaultValue: string }) => string, key: string): string {
-  switch (key) {
-    case 'breakfast': return t('mealTypes.breakfast', { defaultValue: 'Breakfast' });
-    case 'lunch': return t('mealTypes.lunch', { defaultValue: 'Lunch' });
-    case 'snacks': return t('mealTypes.snacks', { defaultValue: 'Snacks' });
-    case 'dinner': return t('mealTypes.dinner', { defaultValue: 'Dinner' });
-    case 'other': return t('mealTypes.other', { defaultValue: 'Other' });
-    default: return MEAL_CONFIG[key]?.label ?? key;
-  }
+/**
+ * Returns the id of the best matching meal type based on the current time of day.
+ * Falls back to the first meal type's id, or null if the list is empty.
+ */
+export function getDefaultMealTypeId(mealTypes: MealType[]): string | null {
+  if (mealTypes.length === 0) return null;
+
+  const defaultName = getDefaultMealType();
+  const match = mealTypes.find((mt) => mt.name.toLowerCase().startsWith(defaultName));
+  return match?.id ?? mealTypes[0].id;
 }

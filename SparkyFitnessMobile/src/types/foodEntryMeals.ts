@@ -36,7 +36,6 @@ export interface FoodEntryMeal {
   meal_type: string;
   meal_type_id: string | null;
   entry_date: string;
-  entry_time?: string | null;
   name: string;
   description: string | null;
   quantity: number;
@@ -65,12 +64,6 @@ export interface FoodEntryMeal {
   iron?: number;
   glycemic_index?: string;
   custom_nutrients?: Record<string, string | number>;
-
-  // Per-entry override photos. Never written back to the meal template, so an
-  // entry without an override falls back to `meal_images`.
-  images?: string[] | null;
-  // The parent meal template's own images, returned alongside the entry.
-  meal_images?: string[] | null;
 }
 
 export interface FoodEntryMealCreateData {
@@ -78,7 +71,6 @@ export interface FoodEntryMealCreateData {
   meal_type: string;
   meal_type_id?: string;
   entry_date: string;
-  entry_time?: string | null;
   name: string;
   description?: string;
   quantity: number;
@@ -92,7 +84,6 @@ export interface FoodEntryMealUpdateData {
   meal_type?: string;
   meal_type_id?: string;
   entry_date?: string;
-  entry_time?: string | null;
   quantity?: number;
   unit?: string;
   meal_template_id?: string | null;

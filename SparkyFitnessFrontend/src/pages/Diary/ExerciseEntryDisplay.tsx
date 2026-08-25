@@ -20,19 +20,10 @@ import { usePreferences } from '@/contexts/PreferencesContext';
 import { formatMinutesToHHMM } from '@/utils/timeFormatters';
 import { ExerciseEntry, Exercise } from '@/types/exercises';
 import {
-  resolveExerciseImageSrc,
-  filterValidExerciseImages,
-} from '@/utils/exercises';
-import {
   EXERCISE_CATEGORY_META,
   ExerciseCategory,
 } from '@/constants/exercises';
 import { useState } from 'react';
-import {
-  resolveExerciseModality,
-  setsDurationMinutes,
-} from '@workspace/shared';
-import { formatTimeOfDayString } from '@/utils/timeFormatters';
 
 interface ExerciseEntryDisplayProps {
   exerciseEntry: ExerciseEntry;
@@ -82,13 +73,8 @@ const ExerciseEntryDisplay: React.FC<ExerciseEntryDisplayProps> = ({
   convertEnergy,
   getEnergyUnitString,
 }) => {
-  const { weightUnit, distanceUnit, convertDistance, timeFormat } =
-    usePreferences();
+  const { weightUnit } = usePreferences();
   const snapshot = exerciseEntry.exercise_snapshot;
-
-  // Distances are stored in km; render in the user's display unit.
-  const formatDistance = (km: number) =>
-    `${convertDistance(km, 'km', distanceUnit).toFixed(2)} ${distanceUnit}`;
 
   const [imageError, setImageError] = useState(false);
   const sourceBadge = snapshot?.source
@@ -102,16 +88,14 @@ const ExerciseEntryDisplay: React.FC<ExerciseEntryDisplayProps> = ({
       : null;
 
   const isActiveCalories = snapshot?.name === 'Active Calories';
-  const isTimed =
-    resolveExerciseModality(snapshot?.modality, snapshot?.category) ===
-    'duration';
 
-  const setsDuration = setsDurationMinutes(exerciseEntry.sets);
-  // Sets carry their own timers (planks, holds, rest). When those sum to 0
-  // (e.g. pure rep-based sets synced from Hevy), fall back to the entry-level
-  // duration_minutes so the workout's session time still surfaces.
   const durationDisplay = formatMinutesToHHMM(
-    setsDuration > 0 ? setsDuration : exerciseEntry.duration_minutes || 0
+    exerciseEntry.sets && exerciseEntry.sets.length > 0
+      ? exerciseEntry.sets.reduce(
+          (sum, set) => sum + (set.duration || 0) + (set.rest_time || 0) / 60,
+          0
+        )
+      : exerciseEntry.duration_minutes || 0
   );
 
   const caloriesDisplay = `${Math.round(convertEnergy(exerciseEntry.calories_burned || 0, 'kcal', energyUnit))} ${getEnergyUnitString(energyUnit)}`;
@@ -121,20 +105,13 @@ const ExerciseEntryDisplay: React.FC<ExerciseEntryDisplayProps> = ({
     Array.isArray(exerciseEntry.sets) &&
     exerciseEntry.sets.length > 0;
 
-  // resolveExerciseImageSrc (not an `exerciseEntry.source` branch) because the
-  // stored shape depends on the importer, not on whether a source is set — the
-  // old branch prefixed sourced entries that were already server-rooted and
-  // left bare relative paths from source-less entries unprefixed.
-  const snapshotImage = filterValidExerciseImages(snapshot?.images)[0];
-  // Trimmed rather than passed through resolveExerciseImageSrc: image_url is a
-  // user-set column that already holds a complete src, so resolving it would
-  // prefix a relative value that previously rendered as-is. Trimming only stops
-  // a whitespace-only value from counting as present and suppressing the
-  // snapshot fallback.
-  const entryImageUrl = exerciseEntry.image_url?.trim();
-  const imageUrl = entryImageUrl
-    ? entryImageUrl
-    : resolveExerciseImageSrc(snapshotImage) || null;
+  const imageUrl = exerciseEntry.image_url
+    ? exerciseEntry.image_url
+    : snapshot?.images && snapshot.images.length > 0
+      ? exerciseEntry.source
+        ? `/uploads/exercises/${snapshot.images[0]}`
+        : snapshot.images[0]
+      : null;
 
   const metaPills: string[] = [];
   if (snapshot?.level) metaPills.push(snapshot.level);
@@ -189,11 +166,6 @@ const ExerciseEntryDisplay: React.FC<ExerciseEntryDisplayProps> = ({
           <span className="font-semibold text-sm text-gray-800 dark:text-gray-100 leading-tight">
             {snapshot?.name || 'Unknown Exercise'}
           </span>
-          {exerciseEntry.entry_time && (
-            <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full dark:bg-blue-900/30 dark:text-blue-300 font-medium">
-              {formatTimeOfDayString(exerciseEntry.entry_time, timeFormat)}
-            </span>
-          )}
           {sourceBadge && (
             <span
               className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${sourceBadge.className}`}
@@ -212,12 +184,6 @@ const ExerciseEntryDisplay: React.FC<ExerciseEntryDisplayProps> = ({
           ) : (
             <>
               <span>{durationDisplay}</span>
-              {exerciseEntry.distance != null && (
-                <>
-                  <span className="text-gray-300 dark:text-gray-600">·</span>
-                  <span>{formatDistance(exerciseEntry.distance)}</span>
-                </>
-              )}
               <span className="text-gray-300 dark:text-gray-600">·</span>
               <span className="text-orange-600 dark:text-orange-400 font-medium">
                 {caloriesDisplay}
@@ -237,18 +203,9 @@ const ExerciseEntryDisplay: React.FC<ExerciseEntryDisplayProps> = ({
           <div className="flex flex-wrap gap-1 mb-1.5">
             {exerciseEntry.sets!.map((set, index) => {
               const parts: string[] = [];
-              if (Number.isFinite(set.reps))
-                parts.push(
-                  // Isometric sets predating the duration column stored their hold in `reps`.
-                  isTimed && set.duration == null
-                    ? `${set.reps}s`
-                    : `${set.reps} reps`
-                );
+              if (Number.isFinite(set.reps)) parts.push(`${set.reps} reps`);
               if (set.weight && Number.isFinite(set.weight))
                 parts.push(formatWeight(set.weight, weightUnit));
-              if (set.duration != null) parts.push(`${set.duration}s`);
-              if (set.distance != null)
-                parts.push(formatDistance(set.distance));
               if (Number.isFinite(set.rpe)) parts.push(`RPE ${set.rpe}`);
               if (parts.length === 0) return null;
               return (

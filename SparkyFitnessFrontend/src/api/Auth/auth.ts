@@ -225,8 +225,6 @@ export const getAccessibleUsers = async (): Promise<AccessibleUser[]> => {
               item.permissions.can_view_food_library ||
               false,
             calorie: item.permissions.calorie || false,
-            can_manage_medications:
-              item.permissions.can_manage_medications || false,
           }
         : {
             diary: false,
@@ -234,7 +232,6 @@ export const getAccessibleUsers = async (): Promise<AccessibleUser[]> => {
             reports: false,
             food_list: false,
             calorie: false,
-            can_manage_medications: false,
           },
     access_end_date: item.access_end_date,
   }));

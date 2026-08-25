@@ -1,3 +1,4 @@
+import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 
 export type Segment<T extends string> = {
@@ -26,8 +27,6 @@ const SegmentedControl = <T extends string>({
             activeKey === segment.key ? 'bg-surface' : ''
           }`}
           activeOpacity={0.7}
-          accessibilityRole="tab"
-          accessibilityState={{ selected: activeKey === segment.key }}
         >
           <Text
             className={`text-sm font-medium ${

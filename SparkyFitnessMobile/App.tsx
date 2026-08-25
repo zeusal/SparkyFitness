@@ -1,127 +1,230 @@
 import './global.css'
-import { useCallback, useEffect, useMemo } from 'react';
-import { StatusBar, Platform } from 'react-native';
-import { useTranslation } from 'react-i18next';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { StatusBar, Platform, Alert, AppState } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import * as NavigationBar from 'expo-navigation-bar';
 import {
+  CommonActions,
   DarkTheme,
   DefaultTheme,
   NavigationContainer,
   type LinkingOptions,
+  type NavigationProp,
   type Theme,
 } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { FoodImageSourceProvider } from './src/components/FoodImageSourceProvider';
-import { LightboxProvider } from './src/components/LightboxProvider';
 import { Uniwind, useUniwind, useCSSVariable } from 'uniwind';
 
-import { queryClient, serverConnectionQueryKey, serverConfigsQueryKey, useSyncHealthData, useCycleMode } from './src/hooks';
-import { useAppStartup } from './src/hooks/useAppStartup';
-import { useAppBootstrap } from './src/hooks/useAppBootstrap';
-import { useAppLanguageForegroundSync } from './src/hooks/useAppLanguageForegroundSync';
-import { useAutoSyncOnOpen } from './src/hooks/useAutoSyncOnOpen';
-import { useAddSheetActions } from './src/hooks/useAddSheetActions';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { queryClient, serverConnectionQueryKey, serverConfigsQueryKey, useSyncHealthData } from './src/hooks';
 
 import { createNativeStackNavigator, type NativeStackNavigationOptions } from '@react-navigation/native-stack';
-import FoodPhotoFlow from './src/components/FoodPhotoFlow';
-import {
-  SafeOnboarding,
-  SafeFoodsLibrary,
-  SafeMealsLibrary,
-  SafeExercisesLibrary,
-  SafeWorkoutPresetsLibrary,
-  SafeFoodDetail,
-  SafeMealDetail,
-  SafeExerciseDetail,
-  SafeWorkoutPresetDetail,
-  SafeFoodSearch,
-  SafeFoodEntryAdd,
-  SafeFoodForm,
-  SafeEditBarcode,
-  SafeExerciseForm,
-  SafeWorkoutPresetForm,
-  SafeFoodScan,
-  SafeFoodPhotoIntro,
-  SafeMealAdd,
-  SafeFoodEntryView,
-  SafeEditLoggedMeal,
-  SafeMealTypeDetail,
-  SafeExerciseSearch,
-  SafePresetSearch,
-  SafeWorkoutAdd,
-  SafeActivityAdd,
-  SafeWorkoutDetail,
-  SafeActiveWorkout,
-  SafeWorkoutComplete,
-  SafeActivityDetail,
-  SafeFastingDetail,
-  SafeLogs,
-  SafeSync,
-  SafeImportHistory,
-  SafeMeasurementsAdd,
-  SafeChat,
-  SafeCalorieSettings,
-  SafeMealTypeSettings,
-  SafeFoodSettings,
-  SafeDashboardSettings,
-  SafeDiarySettings,
-  SafeWorkoutSettings,
-  SafeServerSettings,
-  SafePasskeySettings,
-  SafeAppSettings,
-  SafeNotificationSettings,
-  SafeAbout,
-  SafeWhatsNew,
-  SafeDailyNutritionDetails,
-  SafeNutrientTrends,
-  SafeCycleSettings,
-  SafeCycleOnboarding,
-  SafeCycleHub,
-  SafeCycleLogModal,
-  SafePregnancySetup,
-  SafeMedicationsList,
-  SafeMedicationDetail,
-  SafeMedicationForm,
-  SafeMedicationScheduleForm,
-} from './src/navigation/safeScreens';
+import SyncScreen from './src/screens/SyncScreen';
+import LibraryScreen from './src/screens/LibraryScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
+import DashboardScreen from './src/screens/DashboardScreen';
+import DiaryScreen from './src/screens/DiaryScreen';
+import LogScreen from './src/screens/LogScreen';
+import FoodSearchScreen from './src/screens/FoodSearchScreen';
+import FoodEntryAddScreen from './src/screens/FoodEntryAddScreen';
+import FoodEntryViewScreen from './src/screens/FoodEntryViewScreen';
+import EditLoggedMealScreen from './src/screens/EditLoggedMealScreen';
+import MealTypeDetailScreen from './src/screens/MealTypeDetailScreen';
+import FoodFormScreen from './src/screens/FoodFormScreen';
+import EditBarcodeScreen from './src/screens/EditBarcodeScreen';
+import ExerciseFormScreen from './src/screens/ExerciseFormScreen';
+import WorkoutPresetFormScreen from './src/screens/WorkoutPresetFormScreen';
+import FoodScanScreen from './src/screens/FoodScanScreen';
+import FoodPhotoIntroScreen from './src/screens/FoodPhotoIntroScreen';
+import FoodPhotoFlow from './src/navigation/FoodPhotoFlow';
+import FoodsLibraryScreen from './src/screens/FoodsLibraryScreen';
+import MealsLibraryScreen from './src/screens/MealsLibraryScreen';
+import ExercisesLibraryScreen from './src/screens/ExercisesLibraryScreen';
+import WorkoutPresetsLibraryScreen from './src/screens/WorkoutPresetsLibraryScreen';
+import FoodDetailScreen from './src/screens/FoodDetailScreen';
+import MealDetailScreen from './src/screens/MealDetailScreen';
+import ExerciseDetailScreen from './src/screens/ExerciseDetailScreen';
+import WorkoutPresetDetailScreen from './src/screens/WorkoutPresetDetailScreen';
+import MealAddScreen from './src/screens/MealAddScreen';
+import WorkoutAddScreen from './src/screens/WorkoutAddScreen';
+import ActivityAddScreen from './src/screens/ActivityAddScreen';
+import WorkoutDetailScreen from './src/screens/WorkoutDetailScreen';
+import ActivityDetailScreen from './src/screens/ActivityDetailScreen';
+import FastingDetailScreen from './src/screens/FastingDetailScreen';
+import ExerciseSearchScreen from './src/screens/ExerciseSearchScreen';
+import PresetSearchScreen from './src/screens/PresetSearchScreen';
+import CalorieSettingsScreen from './src/screens/CalorieSettingsScreen';
+import FoodSettingsScreen from './src/screens/FoodSettingsScreen';
+import DashboardSettingsScreen from './src/screens/DashboardSettingsScreen';
+import ServerSettingsScreen from './src/screens/ServerSettingsScreen';
+import AppSettingsScreen from './src/screens/AppSettingsScreen';
+import AboutScreen from './src/screens/AboutScreen';
+import WhatsNewScreen from './src/screens/WhatsNewScreen';
+import MeasurementsAddScreen from './src/screens/MeasurementsAddScreen';
+import ChatScreen from './src/screens/ChatScreen';
+import OnboardingScreen from './src/screens/OnboardingScreen';
 import ReauthModal from './src/components/ReauthModal';
 import ServerConfigModal from './src/components/ServerConfigModal';
 import { useAuth } from './src/hooks/useAuth';
-import { addLog } from './src/services/LogService';
+import {
+  loadBackgroundSyncEnabled,
+  loadTimeRange,
+  getActiveServerConfig,
+  loadSyncOnOpenEnabled,
+} from './src/services/storage';
+import type { TimeRange } from './src/services/storage';
+import { initHealthConnect, loadHealthPreference , startObservers, stopObservers } from './src/services/healthConnectService';
+import { HEALTH_METRICS } from './src/HealthMetrics';
+import {
+  configureBackgroundSync,
+  performBackgroundSync,
+  flushPendingHealthSyncCacheRefresh,
+} from './src/services/backgroundSyncService';
+import {
+  tryClaimAutoSync,
+  isSyncClaimed,
+  isForegroundAutoSyncWindowOpen,
+  setForegroundAutoSyncWindowOpen,
+  shouldRunForegroundResumeAutoSync,
+  recordAutoSyncTime,
+} from './src/services/autoSyncCoordinator';
+import { initializeTheme } from './src/services/themeService';
+import { initializeHaptics } from './src/services/haptics';
+import { initializeSounds } from './src/services/sounds';
+import { initializeFastingCardVisibility } from './src/services/fastingCardVisibility';
+import { initializeHydrationCardVisibility } from './src/services/hydrationCardVisibility';
+import { initializeLiquidGlassTabBar } from './src/services/nativeTabBarPreference';
+import { initializeAskSparkyVisibility } from './src/services/askSparkyVisibility';
+import { loadActiveDraft, clearDraft } from './src/services/workoutDraftService';
+import { addLog, initLogService } from './src/services/LogService';
+import {
+  initNotifications,
+  initializeNotificationsEnabled,
+} from './src/services/notifications';
+import { ensureTimezoneBootstrapped } from './src/services/api/preferencesApi';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
-import { FullWindowOverlay } from 'react-native-screens';
-import type { RootStackParamList } from './src/types/navigation';
+import type { RootStackParamList, TabParamList } from './src/types/navigation';
 import AddSheet, { addSheetRef } from './src/components/AddSheet';
 import { toastConfig } from './src/components/ui/toastConfig';
-import { TabsLayout } from './src/components/TabsLayout';
+import { NON_ADD_TABS, TabsLayout, type NonAddTabName } from './src/components/TabsLayout';
 import { createIOSSmallNativeHeaderOptions } from './src/utils/nativeHeaderItems';
 import { useHeaderActionColors } from './src/hooks/useHeaderActionColors';
-import ActiveWorkoutBar, {
-  navigationRef as rootNavigationRef,
-  notifyActiveWorkoutBarStackTransition,
-  notifyActiveWorkoutBarSwipeProgress,
-} from './src/components/ActiveWorkoutBar';
-import { ActiveWorkoutTransitionScreenLayout } from './src/components/ActiveWorkoutTransitionProbe';
-import ActiveWorkoutKeepAwake from './src/components/ActiveWorkoutKeepAwake';
-import MedicationReminderReconciler from './src/components/MedicationReminderReconciler';
-import { useNativeIOSTabsActive, useNativeIOSHeadersActive } from './src/services/nativeTabBarPreference';
-import { useWidgetLanguageRefresh } from './src/hooks/useWidgetLanguageRefresh';
-import { useIOSWidgetLanguageRefresh } from './src/hooks/useIOSWidgetLanguageRefresh';
+import ActiveWorkoutBar, { navigationRef as rootNavigationRef } from './src/components/ActiveWorkoutBar';
+import { withErrorBoundary } from './src/components/ScreenErrorBoundary';
 
 SplashScreen.preventAutoHideAsync();
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
+type TabStateSnapshot = {
+  index?: number;
+  routes: Array<{
+    name: string;
+    params?: unknown;
+    state?: TabStateSnapshot;
+  }>;
+};
+const AUTO_SYNC_WATCHDOG_MS = 90_000;
+
+function findRouteState(
+  state: TabStateSnapshot | undefined,
+  routeName: string,
+): TabStateSnapshot | undefined {
+  if (!state) return undefined;
+
+  const activeRoute = state.routes[state.index ?? 0];
+  if (activeRoute?.name === routeName && activeRoute.state) {
+    return activeRoute.state;
+  }
+
+  for (const route of state.routes) {
+    if (route.name === routeName && route.state) {
+      return route.state;
+    }
+    const nested = findRouteState(route.state, routeName);
+    if (nested) return nested;
+  }
+
+  return undefined;
+}
+
+function findRouteParams<T extends object>(
+  state: TabStateSnapshot | undefined,
+  routeName: string,
+): T | undefined {
+  if (!state) return undefined;
+
+  const activeRoute = state.routes[state.index ?? 0];
+  if (activeRoute?.name === routeName) {
+    return activeRoute.params as T | undefined;
+  }
+
+  for (const route of state.routes) {
+    if (route.name === routeName) {
+      return route.params as T | undefined;
+    }
+    const nested = findRouteParams<T>(route.state, routeName);
+    if (nested) return nested;
+  }
+
+  return undefined;
+}
 const androidModalAnimation =
   Platform.OS === 'android' ? ({ animation: 'slide_from_bottom' } as const) : {};
 
+// Tab screens — no Go Back (tab bar provides navigation)
+const SafeDashboard = withErrorBoundary(DashboardScreen, 'Dashboard');
+const SafeDiary = withErrorBoundary(DiaryScreen, 'Diary');
+const SafeLibrary = withErrorBoundary(LibraryScreen, 'Library');
+
+// Onboarding — no Go Back (initial route for new users)
+const SafeOnboarding = withErrorBoundary(OnboardingScreen, 'Onboarding');
+
+// Stack screens — with Go Back
+const SafeFoodsLibrary = withErrorBoundary(FoodsLibraryScreen, 'FoodsLibrary', { canGoBack: true });
+const SafeMealsLibrary = withErrorBoundary(MealsLibraryScreen, 'MealsLibrary', { canGoBack: true });
+const SafeExercisesLibrary = withErrorBoundary(ExercisesLibraryScreen, 'ExercisesLibrary', { canGoBack: true });
+const SafeWorkoutPresetsLibrary = withErrorBoundary(WorkoutPresetsLibraryScreen, 'WorkoutPresetsLibrary', { canGoBack: true });
+const SafeFoodDetail = withErrorBoundary(FoodDetailScreen, 'FoodDetail', { canGoBack: true });
+const SafeMealDetail = withErrorBoundary(MealDetailScreen, 'MealDetail', { canGoBack: true });
+const SafeExerciseDetail = withErrorBoundary(ExerciseDetailScreen, 'ExerciseDetail', { canGoBack: true });
+const SafeWorkoutPresetDetail = withErrorBoundary(WorkoutPresetDetailScreen, 'WorkoutPresetDetail', { canGoBack: true });
+const SafeFoodSearch = withErrorBoundary(FoodSearchScreen, 'FoodSearch', { canGoBack: true });
+const SafeFoodEntryAdd = withErrorBoundary(FoodEntryAddScreen, 'FoodEntryAdd', { canGoBack: true });
+const SafeFoodForm = withErrorBoundary(FoodFormScreen, 'FoodForm', { canGoBack: true });
+const SafeEditBarcode = withErrorBoundary(EditBarcodeScreen, 'EditBarcode', { canGoBack: true });
+const SafeExerciseForm = withErrorBoundary(ExerciseFormScreen, 'ExerciseForm', { canGoBack: true });
+const SafeWorkoutPresetForm = withErrorBoundary(WorkoutPresetFormScreen, 'WorkoutPresetForm', { canGoBack: true });
+const SafeFoodScan = withErrorBoundary(FoodScanScreen, 'FoodScan', { canGoBack: true });
+const SafeFoodPhotoIntro = withErrorBoundary(FoodPhotoIntroScreen, 'FoodPhotoIntro', { canGoBack: true });
+const SafeMealAdd = withErrorBoundary(MealAddScreen, 'MealAdd', { canGoBack: true });
+const SafeFoodEntryView = withErrorBoundary(FoodEntryViewScreen, 'FoodEntryView', { canGoBack: true });
+const SafeEditLoggedMeal = withErrorBoundary(EditLoggedMealScreen, 'EditLoggedMeal', { canGoBack: true });
+const SafeMealTypeDetail = withErrorBoundary(MealTypeDetailScreen, 'MealTypeDetail', { canGoBack: true });
+const SafeExerciseSearch = withErrorBoundary(ExerciseSearchScreen, 'ExerciseSearch', { canGoBack: true });
+const SafePresetSearch = withErrorBoundary(PresetSearchScreen, 'PresetSearch', { canGoBack: true });
+const SafeWorkoutAdd = withErrorBoundary(WorkoutAddScreen, 'WorkoutAdd', { canGoBack: true });
+const SafeActivityAdd = withErrorBoundary(ActivityAddScreen, 'ActivityAdd', { canGoBack: true });
+const SafeWorkoutDetail = withErrorBoundary(WorkoutDetailScreen, 'WorkoutDetail', { canGoBack: true });
+const SafeActivityDetail = withErrorBoundary(ActivityDetailScreen, 'ActivityDetail', { canGoBack: true });
+const SafeFastingDetail = withErrorBoundary(FastingDetailScreen, 'FastingDetail', { canGoBack: true });
+const SafeLogs = withErrorBoundary(LogScreen, 'Logs', { canGoBack: true });
+const SafeSync = withErrorBoundary(SyncScreen, 'Sync', { canGoBack: true });
+const SafeMeasurementsAdd = withErrorBoundary(MeasurementsAddScreen, 'MeasurementsAdd', { canGoBack: true });
+const SafeChat = withErrorBoundary(ChatScreen, 'Chat', { canGoBack: true });
+const SafeCalorieSettings = withErrorBoundary(CalorieSettingsScreen, 'CalorieSettings', { canGoBack: true });
+const SafeFoodSettings = withErrorBoundary(FoodSettingsScreen, 'FoodSettings', { canGoBack: true });
+const SafeDashboardSettings = withErrorBoundary(DashboardSettingsScreen, 'DashboardSettings', { canGoBack: true });
+const SafeServerSettings = withErrorBoundary(ServerSettingsScreen, 'ServerSettings', { canGoBack: true });
+const SafeAppSettings = withErrorBoundary(AppSettingsScreen, 'AppSettings', { canGoBack: true });
+const SafeAbout = withErrorBoundary(AboutScreen, 'About', { canGoBack: true });
+const SafeWhatsNew = withErrorBoundary(WhatsNewScreen, 'WhatsNew', { canGoBack: true });
+
 function AppContent() {
-  const { t } = useTranslation();
   const { theme } = useUniwind();
   const {
     showReauthModal, showSetupModal, showApiKeySwitchModal,
@@ -129,50 +232,51 @@ function AppContent() {
     dismissModal, handleLoginSuccess, handleSwitchToApiKey, handleSwitchToApiKeyDone,
   } = useAuth();
 
-  // Language bootstrap + initial route. `useAppBootstrap` initializes the
-  // effective locale (Android 13+ native LocaleManager, Android <=12 local
-  // i18next preference) before the app renders, then resolves the first route
-  // from the active server config.
-  const { initialRoute, linkingEnabled, setLinkingEnabled } = useAppBootstrap();
+  const [initialRoute, setInitialRoute] = useState<'Tabs' | 'Onboarding' | null>(null);
+  const [linkingEnabled, setLinkingEnabled] = useState(false);
 
-  // Adopt language changes made outside the app (Android App Languages) when
-  // the app returns to the foreground.
-  useAppLanguageForegroundSync();
+  useEffect(() => {
+    const determine = async () => {
+      try {
+        const config = await getActiveServerConfig();
+        const route = config ? 'Tabs' : 'Onboarding';
+        setInitialRoute(route);
+        setLinkingEnabled(route === 'Tabs');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        addLog(`[App] Failed to load active server config on startup: ${message}`, 'ERROR');
+        setInitialRoute('Onboarding');
+      } finally {
+        await SplashScreen.hideAsync();
+      }
+    };
+    determine();
+  }, []);
 
-  // Keep the native surfaces (Android Glance widgets, iOS WidgetKit, Workout
-  // Live Activity) in sync with the effective app locale. These hooks listen
-  // to i18n 'languageChanged' and reload/update the native surfaces without
-  // touching any React Native screen strings.
-  useWidgetLanguageRefresh();
-  useIOSWidgetLanguageRefresh();
+  const navigationRef = useRef<NavigationProp<TabParamList> | null>(null);
+  const foregroundAutoSyncWindowRef = useRef(false);
+  const backgroundEnteredAtRef = useRef<number | null>(null);
+  const wasInBackgroundRef = useRef(false);
+  const addSheetDismissNavigationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastActiveTabRef = useRef<NonAddTabName>('Dashboard');
+  const rememberActiveTab = useCallback((routeName: string) => {
+    if ((NON_ADD_TABS as readonly string[]).includes(routeName)) {
+      lastActiveTabRef.current = routeName as NonAddTabName;
+    }
+  }, []);
+  const getLastActiveTab = useCallback(() => lastActiveTabRef.current, []);
+  const setForegroundAutoSyncWindowState = useCallback((isOpen: boolean) => {
+    foregroundAutoSyncWindowRef.current = isOpen;
+    setForegroundAutoSyncWindowOpen(isOpen);
+  }, []);
 
-  const usesLiquidGlassNavigation = useNativeIOSTabsActive();
-  const usesNativeIOSHeaders = useNativeIOSHeadersActive();
-
-  const syncMutation = useSyncHealthData();
-  const { shouldYieldObserverSync } = useAutoSyncOnOpen({ initialRoute, syncMutation });
-  useAppStartup({ shouldYieldObserverSync });
-  const {
-    rememberActiveTab,
-    getLastActiveTab,
-    handleAddFood,
-    handleBarcodeScan,
-    handleStartWorkout,
-    handleLogWorkout,
-    handleAddActivity,
-    handleAddMeasurements,
-    handleAskSparky,
-    handleOpenCycle,
-    handleSyncHealthData,
-    handleAddSheetDismissWithoutAction,
-  } = useAddSheetActions({ syncMutation });
-
-  const { enabled: cycleEnabled, mode: cycleMode, discreetMode: cycleDiscreet } = useCycleMode();
-  const cycleSheetLabel = cycleDiscreet
-    ? t('addSheet.wellness', { defaultValue: 'Wellness' })
-    : cycleMode === 'pregnant' || cycleMode === 'postpartum'
-      ? t('addSheet.logPregnancyEntry', { defaultValue: 'Log Pregnancy Entry' })
-      : t('addSheet.logCycle', { defaultValue: 'Log Cycle' });
+  useEffect(() => {
+    return () => {
+      if (addSheetDismissNavigationTimeoutRef.current != null) {
+        clearTimeout(addSheetDismissNavigationTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const [primary, chromeBorder, bgPrimary, textPrimary] = useCSSVariable([
     '--color-accent-primary',
@@ -190,7 +294,7 @@ function AppContent() {
       title: string,
       options: NativeStackNavigationOptions = {},
     ): NativeStackNavigationOptions => (
-      usesNativeIOSHeaders
+      Platform.OS === 'ios'
         ? {
             ...iosSmallHeaderOptions,
             title,
@@ -203,7 +307,7 @@ function AppContent() {
             ...options,
           }
     ),
-    [iosSmallHeaderOptions, usesNativeIOSHeaders],
+    [iosSmallHeaderOptions],
   );
 
   // Determine if we're in dark mode based on current theme
@@ -247,6 +351,411 @@ function AppContent() {
     };
   }, [isDarkMode, primary, bgPrimary, textPrimary, chromeBorder]);
 
+  const getActiveDiaryDate = useCallback(() => {
+    const navigation = navigationRef.current;
+    const rootOrTabState =
+      navigation?.getState() ??
+      (rootNavigationRef.isReady()
+        ? (rootNavigationRef.getRootState() as TabStateSnapshot | undefined)
+        : undefined);
+
+    const tabState =
+      rootOrTabState?.routes?.some((route) => route.name === 'Tabs')
+        ? findRouteState(rootOrTabState, 'Tabs')
+        : rootOrTabState;
+    const diaryState = findRouteState(tabState, 'Diary');
+    const diaryParams =
+      findRouteParams<{ selectedDate?: string }>(diaryState, 'DiaryRoot') ??
+      findRouteParams<{ selectedDate?: string }>(tabState, 'Diary');
+
+    return diaryParams?.selectedDate;
+  }, []);
+
+  const navigateFromSheet = useCallback(<T extends keyof RootStackParamList>(
+    screen: T,
+    params?: RootStackParamList[T],
+  ) => {
+    if (rootNavigationRef.isReady()) {
+      rootNavigationRef.dispatch(CommonActions.navigate({ name: screen, params }));
+      return;
+    }
+
+    navigationRef.current?.getParent()?.dispatch(CommonActions.navigate({ name: screen, params }));
+  }, []);
+
+  const handleAddFood = useCallback(() => {
+    const date = getActiveDiaryDate();
+    navigateFromSheet('FoodSearch', { date });
+  }, [getActiveDiaryDate, navigateFromSheet]);
+
+  const handleBarcodeScan = useCallback(() => {
+    const date = getActiveDiaryDate();
+    navigateFromSheet('FoodScan', { date });
+  }, [getActiveDiaryDate, navigateFromSheet]);
+
+  const handleStartExerciseForm = useCallback(
+    async (screen: 'WorkoutAdd' | 'ActivityAdd' | 'PresetSearch') => {
+      const isConnected = queryClient.getQueryData(serverConnectionQueryKey);
+      if (!isConnected) {
+        Alert.alert(
+          'No Server Connected',
+          'Configure your server connection in Settings to add an exercise.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Go to Settings',
+              onPress: () => navigateFromSheet('Tabs', { screen: 'Settings' }),
+            },
+          ],
+        );
+        return;
+      }
+
+      const date = getActiveDiaryDate();
+      const draft = await loadActiveDraft();
+      if (draft) {
+        Alert.alert(
+          'Draft in Progress',
+          `You have an unsaved ${draft.type === 'workout' ? 'workout' : 'activity'} draft. What would you like to do?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Resume Draft',
+              onPress: () => {
+                if (draft.type === 'workout') {
+                  navigateFromSheet('WorkoutAdd');
+                } else {
+                  navigateFromSheet('ActivityAdd');
+                }
+              },
+            },
+            {
+              text: 'Discard & Continue',
+              style: 'destructive',
+              onPress: async () => {
+                await clearDraft();
+                if (screen === 'PresetSearch') {
+                  navigateFromSheet('PresetSearch', { date });
+                } else {
+                  navigateFromSheet(screen, { date, skipDraftLoad: true });
+                }
+              },
+            },
+          ],
+        );
+        return;
+      }
+
+      if (screen === 'PresetSearch') {
+        navigateFromSheet('PresetSearch', { date });
+      } else {
+        navigateFromSheet(screen, { date, skipDraftLoad: true });
+      }
+    },
+    [navigateFromSheet, getActiveDiaryDate],
+  );
+
+  const handleAddWorkout = useCallback(() => handleStartExerciseForm('WorkoutAdd'), [handleStartExerciseForm]);
+  const handleAddActivity = useCallback(() => handleStartExerciseForm('ActivityAdd'), [handleStartExerciseForm]);
+  const handleAddFromPreset = useCallback(() => handleStartExerciseForm('PresetSearch'), [handleStartExerciseForm]);
+
+  const syncMutation = useSyncHealthData();
+
+  const handleAddMeasurements = useCallback(() => {
+    const date = getActiveDiaryDate();
+    navigateFromSheet('MeasurementsAdd', { date });
+  }, [getActiveDiaryDate, navigateFromSheet]);
+
+  const handleAskSparky = useCallback(() => {
+    navigateFromSheet('Chat');
+  }, [navigateFromSheet]);
+
+  const handleSyncHealthData = useCallback(async () => {
+    if (syncMutation.isPending || isSyncClaimed()) return;
+
+    const initialized = await initHealthConnect();
+    if (!initialized) {
+      Alert.alert('Health Data Unavailable', 'Could not initialize health data access. Check your permissions in Settings.');
+      return;
+    }
+
+    const loadedTimeRange = await loadTimeRange();
+    const timeRange: TimeRange = loadedTimeRange ?? '3d';
+
+    const healthMetricStates: Record<string, boolean> = {};
+    for (const metric of HEALTH_METRICS) {
+      const enabled = await loadHealthPreference<boolean>(metric.preferenceKey);
+      healthMetricStates[metric.stateKey] = enabled === true;
+    }
+
+    syncMutation.mutate({ timeRange, healthMetricStates });
+  }, [syncMutation]);
+
+  const handleAddSheetDismissWithoutAction = useCallback(() => {
+    if (!rootNavigationRef.isReady()) return;
+
+    const navigateBackToPreviousTab = () => {
+      if (!rootNavigationRef.isReady()) return;
+
+      rootNavigationRef.dispatch(
+        CommonActions.navigate('Tabs', {
+          screen: lastActiveTabRef.current,
+        }),
+      );
+    };
+
+    if (addSheetDismissNavigationTimeoutRef.current != null) {
+      clearTimeout(addSheetDismissNavigationTimeoutRef.current);
+      addSheetDismissNavigationTimeoutRef.current = null;
+    }
+
+    // Native tabs can briefly re-select the Add route while the bottom sheet
+    // dismissal animation settles. These idempotent retries keep the user on
+    // the last content tab without depending on one exact UIKit transition tick.
+    navigateBackToPreviousTab();
+
+    requestAnimationFrame(navigateBackToPreviousTab);
+    addSheetDismissNavigationTimeoutRef.current = setTimeout(() => {
+      addSheetDismissNavigationTimeoutRef.current = null;
+      navigateBackToPreviousTab();
+    }, 150);
+  }, []);
+
+  const triggerAutoSync = useCallback(async (configId: string, release: () => void) => {
+    let committed = false;
+    try {
+      if (syncMutation.isPending) return;
+
+      const initialized = await initHealthConnect();
+      if (!initialized) return;
+
+      const loadedTimeRange = await loadTimeRange();
+      const timeRange: TimeRange = loadedTimeRange ?? '3d';
+      const healthMetricStates: Record<string, boolean> = {};
+      await Promise.all(
+        HEALTH_METRICS.map(async (metric) => {
+          const enabled = await loadHealthPreference<boolean>(metric.preferenceKey);
+          healthMetricStates[metric.stateKey] = enabled === true;
+        }),
+      );
+
+      committed = true;
+      syncMutation.mutate({
+        timeRange,
+        healthMetricStates,
+      }, {
+        onSuccess: () => {
+          void recordAutoSyncTime(configId);
+        },
+        onSettled: () => {
+          release();
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      addLog(`[App] Auto sync on open failed: ${message}`, 'ERROR');
+    } finally {
+      if (!committed) release();
+    }
+  }, [syncMutation]);
+
+  const triggerAutoSyncRef = useRef(triggerAutoSync);
+  useEffect(() => {
+    triggerAutoSyncRef.current = triggerAutoSync;
+  }, [triggerAutoSync]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    // Initialize theme from storage on app start
+    initializeTheme();
+    initializeHaptics();
+    initializeSounds();
+    initializeNotificationsEnabled();
+    initializeFastingCardVisibility();
+    initializeHydrationCardVisibility();
+    initializeLiquidGlassTabBar();
+    initializeAskSparkyVisibility();
+
+    // Reset the auto-open flag on every app start
+    const initializeApp = async () => {
+      // Remove the flag so the dashboard will auto-open on first SyncScreen visit
+      await AsyncStorage.removeItem('@HealthConnect:hasAutoOpenedDashboard');
+      await initNotifications();
+    };
+
+    initializeApp();
+
+    // Initialize log service (warms cache, prunes old logs, registers AppState listener)
+    initLogService().catch(error => {
+      const message = error instanceof Error ? error.message : String(error);
+      addLog(`[App] Failed to initialize log service: ${message}`, 'ERROR');
+    });
+
+    const initializeSyncServices = async () => {
+      // Bootstrap timezone before any sync path is configured so the server
+      // has a stable timezone for the very first sync.
+      const timezone = await ensureTimezoneBootstrapped();
+      if (!timezone) {
+        addLog('[App] Timezone bootstrap did not resolve a timezone before sync setup.', 'WARNING');
+      }
+
+      if (cancelled) return;
+
+      try {
+        await configureBackgroundSync();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        addLog(`[App] Failed to configure background sync: ${message}`, 'ERROR');
+      }
+
+      if (cancelled || Platform.OS !== 'ios') return;
+
+      try {
+        const enabled = await loadBackgroundSyncEnabled();
+        if (!enabled || cancelled) return;
+
+        startObservers(() => {
+          // Yield only during a deliberate foreground auto-sync window (cold-start or
+          // foreground-return). Outside that narrow window, let background delivery fire normally.
+          if (
+            AppState.currentState === 'active' &&
+            foregroundAutoSyncWindowRef.current &&
+            isForegroundAutoSyncWindowOpen()
+          ) {
+            return;
+          }
+
+          const release = tryClaimAutoSync();
+          if (!release) return;
+
+          performBackgroundSync('healthkit-observer')
+            .catch(error => {
+              const message = error instanceof Error ? error.message : String(error);
+              addLog(`[App] Observer-triggered sync failed: ${message}`, 'ERROR');
+            })
+            .finally(() => {
+              release();
+            });
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        addLog(`[App] Failed to configure HealthKit observers: ${message}`, 'ERROR');
+      }
+    };
+
+    initializeSyncServices().catch(error => {
+      const message = error instanceof Error ? error.message : String(error);
+      addLog(`[App] Failed to initialize sync services: ${message}`, 'ERROR');
+    });
+
+    flushPendingHealthSyncCacheRefresh().catch(error => {
+      const message = error instanceof Error ? error.message : String(error);
+      addLog(`[App] Failed to flush pending health sync refresh: ${message}`, 'ERROR');
+    });
+
+    return () => {
+      cancelled = true;
+      if (Platform.OS === 'ios') {
+        stopObservers();
+      }
+    };
+  }, [setForegroundAutoSyncWindowState]);
+
+  useEffect(() => {
+    if (initialRoute !== 'Tabs') return;
+
+    const triggerColdStartSync = async () => {
+      const syncOnOpen = await loadSyncOnOpenEnabled();
+      if (!syncOnOpen) return;
+      const config = await getActiveServerConfig();
+      if (!config) return;
+
+      setForegroundAutoSyncWindowState(true);
+      const coordRelease = tryClaimAutoSync();
+      if (!coordRelease) {
+        setForegroundAutoSyncWindowState(false);
+        return;
+      }
+
+      const cleanup = () => {
+        setForegroundAutoSyncWindowState(false);
+        coordRelease();
+      };
+      const watchdog = setTimeout(cleanup, AUTO_SYNC_WATCHDOG_MS);
+      const safeCleanup = () => {
+        clearTimeout(watchdog);
+        cleanup();
+      };
+
+      await triggerAutoSyncRef.current(config.id, safeCleanup);
+    };
+
+    triggerColdStartSync().catch(error => {
+      setForegroundAutoSyncWindowState(false);
+      const message = error instanceof Error ? error.message : String(error);
+      addLog(`[App] Cold-start sync on open failed: ${message}`, 'ERROR');
+    });
+  }, [initialRoute, setForegroundAutoSyncWindowState]);
+
+  useEffect(() => {
+    const FOREGROUND_SYNC_MIN_AWAY_MS = 5 * 60 * 1000;
+
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
+      try {
+        if (nextAppState === 'background') {
+          backgroundEnteredAtRef.current = Date.now();
+          wasInBackgroundRef.current = true;
+          return;
+        }
+
+        if (nextAppState !== 'active') return;
+
+        await flushPendingHealthSyncCacheRefresh();
+        if (!wasInBackgroundRef.current) return;
+
+        const enteredAt = backgroundEnteredAtRef.current;
+        wasInBackgroundRef.current = false;
+        backgroundEnteredAtRef.current = null;
+
+        const timeAway = enteredAt !== null ? Date.now() - enteredAt : Infinity;
+        if (timeAway < FOREGROUND_SYNC_MIN_AWAY_MS) return;
+
+        const config = await getActiveServerConfig();
+        if (!config) return;
+
+        const syncOnOpen = await loadSyncOnOpenEnabled();
+        if (!syncOnOpen) return;
+        if (!(await shouldRunForegroundResumeAutoSync(config.id))) return;
+
+        setForegroundAutoSyncWindowState(true);
+        const coordRelease = tryClaimAutoSync();
+        if (!coordRelease) {
+          setForegroundAutoSyncWindowState(false);
+          return;
+        }
+
+        const cleanup = () => {
+          setForegroundAutoSyncWindowState(false);
+          coordRelease();
+        };
+        const watchdog = setTimeout(cleanup, AUTO_SYNC_WATCHDOG_MS);
+        const safeCleanup = () => {
+          clearTimeout(watchdog);
+          cleanup();
+        };
+
+        await triggerAutoSyncRef.current(config.id, safeCleanup);
+      } catch (error) {
+        setForegroundAutoSyncWindowState(false);
+        const message = error instanceof Error ? error.message : String(error);
+        addLog(`[App] Foreground-return sync on open failed: ${message}`, 'ERROR');
+      }
+    });
+
+    return () => subscription.remove();
+  }, [setForegroundAutoSyncWindowState]);
+
   const linking = useMemo<LinkingOptions<RootStackParamList>>(() => ({
     prefixes: ['sparkyfitnessmobile://'],
     config: {
@@ -259,8 +768,6 @@ function AppContent() {
         },
         FoodScan: 'scan',
         FoodSearch: 'search',
-        // Tapping the workout Live Activity opens its associated URL.
-        ActiveWorkout: 'active-workout',
       },
     },
   }), []);
@@ -284,36 +791,9 @@ function AppContent() {
       }}
     >
       <SafeAreaProvider>
-        {/* Inside SafeAreaProvider on purpose: the viewer positions its close
-            button against the insets, so mounting it at the app root crashes
-            with "No safe area value available". */}
-        <LightboxProvider>
         <UniwindInsetsBridge />
         <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
         <Stack.Navigator
-          screenLayout={usesLiquidGlassNavigation
-            ? ({ children, route }) => (
-              <ActiveWorkoutTransitionScreenLayout routeName={route.name} routeKey={route.key}>
-                {children}
-              </ActiveWorkoutTransitionScreenLayout>
-            )
-            : undefined}
-          screenListeners={usesLiquidGlassNavigation
-            ? {
-              transitionStart: (event) => {
-                notifyActiveWorkoutBarStackTransition('start', Boolean(event.data?.closing), event.target);
-              },
-              transitionEnd: (event) => {
-                const closing = Boolean(event.data?.closing);
-                if (!closing) notifyActiveWorkoutBarSwipeProgress(0);
-                notifyActiveWorkoutBarStackTransition('end', closing, event.target);
-              },
-              gestureCancel: (event) => {
-                notifyActiveWorkoutBarSwipeProgress(0);
-                notifyActiveWorkoutBarStackTransition('end', false, event.target);
-              },
-            }
-            : undefined}
           screenOptions={{
             headerShown: false,
             animation: 'default',
@@ -339,58 +819,59 @@ function AppContent() {
           <Stack.Screen
             name="FoodsLibrary"
             component={SafeFoodsLibrary}
-            options={createStackScreenOptions(t('screens.foods', { defaultValue: 'Foods' }), { headerBackTitle: t('navigation.library', { defaultValue: 'Library' }) })}
+            options={createStackScreenOptions('Foods', { headerBackTitle: 'Library' })}
           />
           <Stack.Screen
             name="MealsLibrary"
             component={SafeMealsLibrary}
-            options={createStackScreenOptions(t('screens.meals', { defaultValue: 'Meals' }), { headerBackTitle: t('navigation.library', { defaultValue: 'Library' }) })}
+            options={createStackScreenOptions('Meals', { headerBackTitle: 'Library' })}
           />
           <Stack.Screen
             name="ExercisesLibrary"
             component={SafeExercisesLibrary}
-            options={createStackScreenOptions(t('screens.exercises', { defaultValue: 'Exercises' }), { headerBackTitle: t('navigation.library', { defaultValue: 'Library' }) })}
+            options={createStackScreenOptions('Exercises', { headerBackTitle: 'Library' })}
           />
           <Stack.Screen
             name="WorkoutPresetsLibrary"
             component={SafeWorkoutPresetsLibrary}
-            options={createStackScreenOptions(t('screens.workoutPresets', { defaultValue: 'Workout Presets' }), { headerBackTitle: t('navigation.library', { defaultValue: 'Library' }) })}
+            options={createStackScreenOptions('Workout Presets', { headerBackTitle: 'Library' })}
           />
           <Stack.Screen
             name="WorkoutPresetDetail"
             component={SafeWorkoutPresetDetail}
-            options={({ route }) => createStackScreenOptions(route.params.updatedPreset?.name ?? route.params.preset.name, { headerBackTitle: t('navigation.presets', { defaultValue: 'Presets' }) })}
+            options={({ route }) => createStackScreenOptions(route.params.updatedPreset?.name ?? route.params.preset.name)}
           />
           <Stack.Screen
             name="FoodDetail"
             component={SafeFoodDetail}
-            options={({ route }) => createStackScreenOptions(route.params.updatedItem?.name ?? route.params.item.name, { headerBackTitle: t('screens.foods', { defaultValue: 'Foods' }) })}
+            options={({ route }) => createStackScreenOptions(route.params.updatedItem?.name ?? route.params.item.name)}
           />
           <Stack.Screen
             name="MealDetail"
             component={SafeMealDetail}
-            options={createStackScreenOptions(t('screens.meal', { defaultValue: 'Meal' }), { headerBackTitle: t('screens.meals', { defaultValue: 'Meals' }) })}
+            options={
+              Platform.OS === 'ios'
+                ? {
+                    ...iosSmallHeaderOptions,
+                    title: '',
+                    gestureEnabled: true,
+                  }
+                : {
+                    headerShown: false,
+                    gestureEnabled: true,
+                  }
+            }
           />
           <Stack.Screen
             name="ExerciseDetail"
             component={SafeExerciseDetail}
-            options={({ route }) => createStackScreenOptions(route.params.updatedItem?.name ?? route.params.item.name, {
-              headerBackTitle: t('screens.exercises', { defaultValue: 'Exercises' }),
-              // iOS 26 defaults the pop gesture to full-screen swipes; keep it
-              // edge-only here so interior right-swipes switch tabs instead of
-              // navigating back.
-              fullScreenGestureEnabled: false,
-            })}
+            options={({ route }) => createStackScreenOptions(route.params.updatedItem?.name ?? route.params.item.name)}
           />
           <Stack.Screen
             name="FoodSearch"
             component={SafeFoodSearch}
-            options={createStackScreenOptions(t('screens.addFood', { defaultValue: 'Add Food' }), {
-              headerBackVisible: false,
-              // 'modal' (not 'fullScreenModal') so iOS keeps the swipe-down
-              // dismiss gesture — UIModalPresentationFullScreen has no
-              // interactive dismissal.
-              presentation: 'modal',
+            options={createStackScreenOptions('Add Food', {
+              presentation: 'fullScreenModal',
               ...(Platform.OS === 'android' ? androidModalAnimation : {}),
             })}
           />
@@ -407,10 +888,10 @@ function AppContent() {
             component={SafeFoodForm}
             options={({ route }) => createStackScreenOptions(
               route.params.mode === 'create-food'
-                ? t('screens.newFood', { defaultValue: 'New Food' })
+                ? 'New Food'
                 : route.params.mode === 'edit-food'
-                  ? t('screens.editFood', { defaultValue: 'Edit Food' })
-                  : t('screens.adjustNutrition', { defaultValue: 'Adjust Nutrition' }),
+                  ? 'Edit Food'
+                  : 'Adjust Nutrition',
               {
               presentation: 'modal',
               ...(Platform.OS === 'android' ? androidModalAnimation : {}),
@@ -420,13 +901,13 @@ function AppContent() {
           <Stack.Screen
             name="EditBarcode"
             component={SafeEditBarcode}
-            options={createStackScreenOptions(t('screens.barcodes', { defaultValue: 'Barcodes' }), { headerBackTitle: t('navigation.settings', { defaultValue: 'Settings' }) })}
+            options={createStackScreenOptions('Barcodes', { headerBackTitle: 'Settings' })}
           />
           <Stack.Screen
             name="ExerciseForm"
             component={SafeExerciseForm}
             options={({ route }) => createStackScreenOptions(
-              route.params.mode === 'edit-exercise' ? t('screens.editExercise', { defaultValue: 'Edit Exercise' }) : t('screens.newExercise', { defaultValue: 'New Exercise' }),
+              route.params.mode === 'edit-exercise' ? 'Edit Exercise' : 'New Exercise',
               {
               presentation: 'modal',
               ...(Platform.OS === 'android' ? androidModalAnimation : {}),
@@ -437,7 +918,7 @@ function AppContent() {
             name="WorkoutPresetForm"
             component={SafeWorkoutPresetForm}
             options={({ route }) => createStackScreenOptions(
-              route.params.mode === 'edit-preset' ? t('screens.editPreset', { defaultValue: 'Edit Preset' }) : t('screens.newPreset', { defaultValue: 'New Preset' }),
+              route.params.mode === 'edit-preset' ? 'Edit Preset' : 'New Preset',
               {
               presentation: 'modal',
               ...(Platform.OS === 'android' ? androidModalAnimation : {}),
@@ -447,7 +928,7 @@ function AppContent() {
           <Stack.Screen
             name="FoodScan"
             component={SafeFoodScan}
-            options={createStackScreenOptions(t('screens.scanFood', { defaultValue: 'Scan Food' }), {
+            options={createStackScreenOptions('Scan Food', {
               presentation: 'modal',
               ...(Platform.OS === 'android' ? androidModalAnimation : {}),
             })}
@@ -455,7 +936,7 @@ function AppContent() {
           <Stack.Screen
             name="FoodPhotoIntro"
             component={SafeFoodPhotoIntro}
-            options={createStackScreenOptions(t('screens.photoFood', { defaultValue: 'Photo Food' }), {
+            options={createStackScreenOptions('Photo Food', {
               presentation: 'modal',
               ...(Platform.OS === 'android' ? androidModalAnimation : {}),
             })}
@@ -473,13 +954,16 @@ function AppContent() {
           <Stack.Screen
             name="Chat"
             component={SafeChat}
-            options={createStackScreenOptions(t('screens.sparky', { defaultValue: 'Sparky' }), { headerBackButtonDisplayMode: 'minimal' })}
+            options={{
+              headerShown: false,
+              gestureEnabled: true,
+            }}
           />
           <Stack.Screen
             name="MealAdd"
             component={SafeMealAdd}
             options={({ route }) => createStackScreenOptions(
-              route.params?.mode === 'edit' ? t('screens.editMeal', { defaultValue: 'Edit Meal' }) : t('screens.createMeal', { defaultValue: 'Create Meal' }),
+              route.params?.mode === 'edit' ? 'Edit Meal' : 'Create Meal',
               {
               presentation: 'modal',
               ...(Platform.OS === 'android' ? androidModalAnimation : {}),
@@ -489,83 +973,61 @@ function AppContent() {
           <Stack.Screen
             name="FoodEntryView"
             component={SafeFoodEntryView}
-            options={({ route }) => createStackScreenOptions(route.params.entry.food_name ?? t('screens.foodEntry', { defaultValue: 'Food Entry' }), { headerBackTitle: t('navigation.diary', { defaultValue: 'Diary' }) })}
+            options={({ route }) => createStackScreenOptions(route.params.entry.food_name ?? 'Food Entry', { headerBackTitle: 'Diary' })}
           />
           <Stack.Screen
             name="EditLoggedMeal"
             component={SafeEditLoggedMeal}
-            options={createStackScreenOptions(t('screens.editMeal', { defaultValue: 'Edit Meal' }), { headerBackTitle: t('navigation.diary', { defaultValue: 'Diary' }) })}
+            options={createStackScreenOptions('Edit Meal')}
           />
           <Stack.Screen
             name="MealTypeDetail"
             component={SafeMealTypeDetail}
-            options={({ route }) => createStackScreenOptions(route.params.mealLabel ?? t('screens.meal', { defaultValue: 'Meal' }), { headerBackTitle: t('navigation.diary', { defaultValue: 'Diary' }) })}
-          />
-          <Stack.Screen
-            name="DailyNutritionDetails"
-            component={SafeDailyNutritionDetails}
-            options={createStackScreenOptions(t('screens.nutritionDetails', { defaultValue: 'Nutrition Details' }), {
-              presentation: 'modal',
-              headerBackButtonDisplayMode: 'minimal',
-              ...(Platform.OS === 'android' ? androidModalAnimation : {}),
-            })}
-          />
-          <Stack.Screen
-            name="NutrientTrends"
-            component={SafeNutrientTrends}
-            options={createStackScreenOptions(t('screens.trends', { defaultValue: 'Trends' }), { headerBackTitle: t('navigation.details', { defaultValue: 'Details' }) })}
+            options={({ route }) => createStackScreenOptions(route.params.mealLabel ?? 'Meal', { headerBackTitle: 'Diary' })}
           />
           <Stack.Screen
             name="ExerciseSearch"
             component={SafeExerciseSearch}
-            options={createStackScreenOptions(t('screens.selectExercise', { defaultValue: 'Select Exercise' }), {
+            options={createStackScreenOptions('Select Exercise', {
               presentation: 'modal',
             })}
           />
           <Stack.Screen
             name="PresetSearch"
             component={SafePresetSearch}
-            options={createStackScreenOptions(t('screens.startWorkout', { defaultValue: 'Start Workout' }))}
+            options={createStackScreenOptions('Workout Presets')}
           />
           <Stack.Screen
             name="WorkoutAdd"
             component={SafeWorkoutAdd}
-            options={({ route }) => createStackScreenOptions(route.params?.session ? t('screens.editWorkout', { defaultValue: 'Edit Workout' }) : t('screens.newWorkout', { defaultValue: 'New Workout' }))}
+            options={({ route }) => createStackScreenOptions(route.params?.session ? 'Edit Workout' : 'New Workout')}
           />
           <Stack.Screen
             name="ActivityAdd"
             component={SafeActivityAdd}
-            options={({ route }) => createStackScreenOptions(route.params?.entry ? t('screens.editActivity', { defaultValue: 'Edit Activity' }) : t('screens.newActivity', { defaultValue: 'New Activity' }))}
+            options={({ route }) => createStackScreenOptions(route.params?.entry ? 'Edit Activity' : 'New Activity')}
           />
           <Stack.Screen
             name="WorkoutDetail"
             component={SafeWorkoutDetail}
             options={({ route }) =>
-              createStackScreenOptions(route.params?.session?.name ?? t('screens.workout', { defaultValue: 'Workout' }), {
-                headerBackTitle: t('navigation.diary', { defaultValue: 'Diary' }),
-              })
+              Platform.OS === 'ios'
+                ? {
+                    ...iosSmallHeaderOptions,
+                    title: route.params?.session?.name ?? 'Workout',
+                    headerBackTitle: 'Diary',
+                    gestureEnabled: true,
+                  }
+                : {
+                    headerShown: false,
+                    gestureEnabled: true,
+                  }
             }
-          />
-          <Stack.Screen
-            name="ActiveWorkout"
-            component={SafeActiveWorkout}
-            options={{
-              headerShown: false,
-              gestureEnabled: true,
-            }}
-          />
-          <Stack.Screen
-            name="WorkoutComplete"
-            component={SafeWorkoutComplete}
-            options={{
-              headerShown: false,
-              gestureEnabled: true,
-            }}
           />
           <Stack.Screen
             name="ActivityDetail"
             component={SafeActivityDetail}
-            options={({ route }) => createStackScreenOptions(route.params.session.name ?? t('screens.activity', { defaultValue: 'Activity' }), { headerBackTitle: t('navigation.diary', { defaultValue: 'Diary' }) })}
+            options={({ route }) => createStackScreenOptions(route.params.session.name ?? 'Activity', { headerBackTitle: 'Diary' })}
           />
           <Stack.Screen
             name="FastingDetail"
@@ -578,22 +1040,17 @@ function AppContent() {
           <Stack.Screen
             name="Logs"
             component={SafeLogs}
-            options={createStackScreenOptions(t('screens.logs', { defaultValue: 'Logs' }), { headerBackTitle: t('navigation.settings', { defaultValue: 'Settings' }) })}
+            options={createStackScreenOptions('Logs', { headerBackTitle: 'Settings' })}
           />
           <Stack.Screen
             name="Sync"
             component={SafeSync}
-            options={createStackScreenOptions(t('screens.healthSync', { defaultValue: 'Health Sync' }), { headerBackTitle: t('navigation.settings', { defaultValue: 'Settings' }) })}
-          />
-          <Stack.Screen
-            name="ImportHistory"
-            component={SafeImportHistory}
-            options={createStackScreenOptions(t('screens.importHistory', { defaultValue: 'Import History' }), { headerBackTitle: t('screens.healthSync', { defaultValue: 'Health Sync' }) })}
+            options={createStackScreenOptions('Health Sync', { headerBackTitle: 'Settings' })}
           />
           <Stack.Screen
             name="MeasurementsAdd"
             component={SafeMeasurementsAdd}
-            options={createStackScreenOptions(t('screens.measurements', { defaultValue: 'Measurements' }), {
+            options={createStackScreenOptions('Measurements', {
               presentation: 'modal',
               ...(Platform.OS === 'android' ? androidModalAnimation : {}),
             })}
@@ -601,130 +1058,40 @@ function AppContent() {
           <Stack.Screen
             name="CalorieSettings"
             component={SafeCalorieSettings}
-            options={createStackScreenOptions(t('screens.calorieSettings', { defaultValue: 'Calorie Settings' }), { headerBackTitle: t('navigation.settings', { defaultValue: 'Settings' }) })}
+            options={createStackScreenOptions('Calorie Settings', { headerBackTitle: 'Settings' })}
           />
           <Stack.Screen
             name="FoodSettings"
             component={SafeFoodSettings}
-            options={createStackScreenOptions(t('screens.foodSettings', { defaultValue: 'Food Settings' }), { headerBackTitle: t('navigation.settings', { defaultValue: 'Settings' }) })}
-          />
-          <Stack.Screen
-            name="MealTypeSettings"
-            component={SafeMealTypeSettings}
-            options={createStackScreenOptions(t('screens.mealTypes', { defaultValue: 'Meal Types' }), { headerBackTitle: t('navigation.settings', { defaultValue: 'Settings' }) })}
+            options={createStackScreenOptions('Food Settings', { headerBackTitle: 'Settings' })}
           />
           <Stack.Screen
             name="DashboardSettings"
             component={SafeDashboardSettings}
-            options={createStackScreenOptions(t('screens.dashboardSettings', { defaultValue: 'Dashboard Settings' }), { headerBackTitle: t('navigation.settings', { defaultValue: 'Settings' }) })}
-          />
-          <Stack.Screen
-            name="DiarySettings"
-            component={SafeDiarySettings}
-            options={createStackScreenOptions(t('screens.diarySettings', { defaultValue: 'Diary Settings' }), { headerBackTitle: t('navigation.settings', { defaultValue: 'Settings' }) })}
-          />
-          <Stack.Screen
-            name="WorkoutSettings"
-            component={SafeWorkoutSettings}
-            options={createStackScreenOptions(t('screens.workoutSettings', { defaultValue: 'Workout Settings' }), { headerBackTitle: t('navigation.settings', { defaultValue: 'Settings' }) })}
+            options={createStackScreenOptions('Dashboard Settings', { headerBackTitle: 'Settings' })}
           />
           <Stack.Screen
             name="ServerSettings"
             component={SafeServerSettings}
-            options={createStackScreenOptions(t('screens.serverSettings', { defaultValue: 'Server Settings' }), { headerBackTitle: t('navigation.settings', { defaultValue: 'Settings' }) })}
-          />
-          <Stack.Screen
-            name="PasskeySettings"
-            component={SafePasskeySettings}
-            options={createStackScreenOptions(t('screens.passkeys', { defaultValue: 'Passkeys' }), { headerBackTitle: t('navigation.settings', { defaultValue: 'Settings' }) })}
+            options={createStackScreenOptions('Server Settings', { headerBackTitle: 'Settings' })}
           />
           <Stack.Screen
             name="AppSettings"
             component={SafeAppSettings}
-            options={createStackScreenOptions(t('settings.app', { defaultValue: 'App Settings' }), { headerBackTitle: t('navigation.settings', { defaultValue: 'Settings' }) })}
-          />
-          <Stack.Screen
-            name="NotificationSettings"
-            component={SafeNotificationSettings}
-            options={createStackScreenOptions(t('notifications.title', { defaultValue: 'Notifications' }), { headerBackTitle: t('settings.app', { defaultValue: 'App Settings' }) })}
+            options={createStackScreenOptions('App Settings', { headerBackTitle: 'Settings' })}
           />
           <Stack.Screen
             name="About"
             component={SafeAbout}
-            options={createStackScreenOptions(t('screens.about', { defaultValue: 'About' }), { headerBackTitle: t('navigation.settings', { defaultValue: 'Settings' }) })}
+            options={createStackScreenOptions('About', { headerBackTitle: 'Settings' })}
           />
           <Stack.Screen
             name="WhatsNew"
             component={SafeWhatsNew}
-            options={createStackScreenOptions(t('screens.whatsNew', { defaultValue: "What's New" }), { headerBackTitle: t('navigation.settings', { defaultValue: 'Settings' }) })}
-          />
-          <Stack.Screen
-            name="CycleSettings"
-            component={SafeCycleSettings}
-            options={createStackScreenOptions(t('screens.cyclePregnancy', { defaultValue: 'Cycle & Pregnancy' }), { headerBackTitle: t('navigation.settings', { defaultValue: 'Settings' }) })}
-          />
-          <Stack.Screen
-            name="CycleOnboarding"
-            component={SafeCycleOnboarding}
-            options={createStackScreenOptions(t('screens.cycleSetup', { defaultValue: 'Cycle Setup' }), {
-              presentation: 'modal',
-              headerBackButtonDisplayMode: 'minimal',
-              ...(Platform.OS === 'android' ? androidModalAnimation : {}),
-            })}
-          />
-          <Stack.Screen
-            name="CycleHub"
-            component={SafeCycleHub}
-            options={createStackScreenOptions(t('screens.wellnessHub', { defaultValue: 'Wellness Hub' }), { headerBackTitle: t('navigation.dashboard', { defaultValue: 'Dashboard' }) })}
-          />
-          <Stack.Screen
-            name="CycleLogModal"
-            component={SafeCycleLogModal}
-            options={createStackScreenOptions(t('screens.logDailyEntry', { defaultValue: 'Log Daily Entry' }), {
-              presentation: 'modal',
-              headerBackButtonDisplayMode: 'minimal',
-              ...(Platform.OS === 'android' ? androidModalAnimation : {}),
-            })}
-          />
-          <Stack.Screen
-            name="PregnancySetup"
-            component={SafePregnancySetup}
-            options={createStackScreenOptions(t('screens.pregnancySetup', { defaultValue: 'Pregnancy Setup' }), {
-              presentation: 'modal',
-              headerBackButtonDisplayMode: 'minimal',
-              ...(Platform.OS === 'android' ? androidModalAnimation : {}),
-            })}
-          />
-          <Stack.Screen
-            name="MedicationsList"
-            component={SafeMedicationsList}
-            options={createStackScreenOptions(t('screens.medications', { defaultValue: 'Medications' }), { headerBackButtonDisplayMode: 'minimal' })}
-          />
-          <Stack.Screen
-            name="MedicationDetail"
-            component={SafeMedicationDetail}
-            options={createStackScreenOptions(t('screens.medication', { defaultValue: 'Medication' }), { headerBackTitle: t('screens.medications', { defaultValue: 'Medications' }) })}
-          />
-          <Stack.Screen
-            name="MedicationForm"
-            component={SafeMedicationForm}
-            options={createStackScreenOptions(t('screens.medication', { defaultValue: 'Medication' }), {
-              presentation: 'modal',
-              headerBackButtonDisplayMode: 'minimal',
-              ...(Platform.OS === 'android' ? androidModalAnimation : {}),
-            })}
-          />
-          <Stack.Screen
-            name="MedicationScheduleForm"
-            component={SafeMedicationScheduleForm}
-            options={createStackScreenOptions(t('screens.medication', { defaultValue: 'Medication' }), {
-              presentation: 'modal',
-              headerBackButtonDisplayMode: 'minimal',
-              ...(Platform.OS === 'android' ? androidModalAnimation : {}),
-            })}
+            options={createStackScreenOptions("What's New", { headerBackTitle: 'Settings' })}
           />
         </Stack.Navigator>
-        <AddSheet ref={addSheetRef} onAddFood={handleAddFood} onStartWorkout={handleStartWorkout} onAddActivity={handleAddActivity} onLogWorkout={handleLogWorkout} onSyncHealthData={handleSyncHealthData} onBarcodeScan={handleBarcodeScan} onAddMeasurements={handleAddMeasurements} onAskSparky={handleAskSparky} onOpenCycle={handleOpenCycle} showCycleCard={cycleEnabled} cycleLabel={cycleSheetLabel} onDismissWithoutAction={handleAddSheetDismissWithoutAction} />
+        <AddSheet ref={addSheetRef} onAddFood={handleAddFood} onAddWorkout={handleAddWorkout} onAddActivity={handleAddActivity} onAddFromPreset={handleAddFromPreset} onSyncHealthData={handleSyncHealthData} onBarcodeScan={handleBarcodeScan} onAddMeasurements={handleAddMeasurements} onAskSparky={handleAskSparky} onDismissWithoutAction={handleAddSheetDismissWithoutAction} />
         <ReauthModal
           visible={showReauthModal}
           expiredConfigId={expiredConfigId}
@@ -757,10 +1124,7 @@ function AppContent() {
           }}
         />
         <ActiveWorkoutBar />
-        <ActiveWorkoutKeepAwake />
-        <MedicationReminderReconciler />
         <SafeAreaToast />
-        </LightboxProvider>
       </SafeAreaProvider>
     </NavigationContainer>
   );
@@ -768,13 +1132,7 @@ function AppContent() {
 
 function SafeAreaToast() {
   const insets = useSafeAreaInsets();
-  const toast = <Toast config={toastConfig} topOffset={insets.top + 8} />;
-  // On iOS a plain Toast renders in the normal view tree, so it appears *under*
-  // native modals (rename dialogs, form sheets, anchored menus). A
-  // FullWindowOverlay hoists it above every window — matching how the app's
-  // bottom sheets escape modal contexts. Android modal layering doesn't have
-  // this problem, and FullWindowOverlay is a no-op there.
-  return Platform.OS === 'ios' ? <FullWindowOverlay>{toast}</FullWindowOverlay> : toast;
+  return <Toast config={toastConfig} topOffset={insets.top + 8} />;
 }
 
 function UniwindInsetsBridge() {
@@ -791,12 +1149,7 @@ function App() {
       <KeyboardProvider>
         <GestureHandlerRootView className="flex-1">
           <BottomSheetModalProvider>
-            {/* One resolver for the whole app: food/meal image paths only need
-                the active server's origin and proxy headers, so there is no
-                reason for each screen to own a copy (or its own cache). */}
-            <FoodImageSourceProvider>
-              <AppContent />
-            </FoodImageSourceProvider>
+            <AppContent />
           </BottomSheetModalProvider>
         </GestureHandlerRootView>
       </KeyboardProvider>

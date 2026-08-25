@@ -3,62 +3,10 @@ import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { Search, Layers, ChevronRight, Loader2, Filter } from 'lucide-react';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Search, Layers, ChevronRight } from 'lucide-react';
 import type { WorkoutPreset } from '@/types/workout';
-import {
-  useWorkoutPresets,
-  useSearchWorkoutPresets,
-} from '@/hooks/Exercises/useWorkoutPresets';
+import { useWorkoutPresets } from '@/hooks/Exercises/useWorkoutPresets';
 import { useAuth } from '@/hooks/useAuth';
-import { useDebounce } from '@/hooks/useDebounce';
-
-interface OwnershipFields {
-  user_id?: string | null;
-  userId?: string | null;
-  is_public?: boolean | null;
-  shared_with_public?: boolean | null;
-  sharedWithPublic?: boolean | null;
-}
-
-const filterItems = <T,>(
-  items: T[],
-  filter: 'all' | 'mine' | 'family' | 'public',
-  currentUserId?: string
-): T[] => {
-  if (filter === 'all') return items;
-  return items.filter((item) => {
-    const raw = item as unknown as OwnershipFields;
-    const isOwner = !!(
-      (raw.user_id && raw.user_id === currentUserId) ||
-      (raw.userId && raw.userId === currentUserId)
-    );
-    const isPublic = !!(
-      raw.is_public ||
-      raw.shared_with_public ||
-      raw.sharedWithPublic
-    );
-
-    if (filter === 'mine') {
-      return isOwner;
-    }
-    if (filter === 'family') {
-      return (
-        !isOwner && !isPublic && (raw.user_id != null || raw.userId != null)
-      );
-    }
-    if (filter === 'public') {
-      return isPublic;
-    }
-    return true;
-  });
-};
 
 interface WorkoutPresetSelectorProps {
   onPresetSelected: (preset: WorkoutPreset) => void;
@@ -69,100 +17,39 @@ const WorkoutPresetSelector: React.FC<WorkoutPresetSelectorProps> = ({
 }) => {
   const { t } = useTranslation();
   const [searchTerm, setSearchTerm] = useState('');
-  const debouncedSearchTerm = useDebounce(searchTerm, 300);
   const { user } = useAuth();
 
   const { data: presetData } = useWorkoutPresets(user?.id);
-  const {
-    data: searchResults,
-    isLoading: isSearchLoading,
-    isFetching: isSearchFetching,
-  } = useSearchWorkoutPresets(debouncedSearchTerm, user?.id);
 
   const allPresets = useMemo(
     () => presetData?.pages.flatMap((page) => page.presets) ?? [],
     [presetData]
   );
 
-  const [ownershipFilter, setOwnershipFilter] = useState<
-    'all' | 'mine' | 'family' | 'public'
-  >('all');
-
-  const filteredAllPresets = useMemo(
-    () => filterItems(allPresets, ownershipFilter, user?.id),
-    [allPresets, ownershipFilter, user?.id]
+  const filteredPresets = useMemo(
+    () =>
+      allPresets.filter((preset) =>
+        preset.name.toLowerCase().includes(searchTerm.toLowerCase())
+      ),
+    [allPresets, searchTerm]
   );
 
-  const filteredPresets = useMemo(() => {
-    if (!debouncedSearchTerm) return [];
-    return searchResults ?? [];
-  }, [searchResults, debouncedSearchTerm]);
-
-  const filteredSearchPresets = useMemo(
-    () => filterItems(filteredPresets, ownershipFilter, user?.id),
-    [filteredPresets, ownershipFilter, user?.id]
-  );
-
-  const filteredRecentPresets = useMemo(
-    () => (searchTerm === '' ? filteredAllPresets.slice(0, 3) : []),
-    [filteredAllPresets, searchTerm]
-  );
-  const filteredTopPresets = useMemo(
-    () => (searchTerm === '' ? filteredAllPresets.slice(3, 6) : []),
-    [filteredAllPresets, searchTerm]
-  );
-
-  const showLoader = searchTerm !== '' && (isSearchLoading || isSearchFetching);
+  const recentPresets = searchTerm === '' ? allPresets.slice(0, 3) : [];
+  const topPresets = searchTerm === '' ? allPresets.slice(3, 6) : [];
 
   return (
     <div className="flex flex-col h-full py-4 space-y-6">
-      <div className="flex gap-2 items-center px-1">
-        <div className="relative flex-1">
-          {showLoader ? (
-            <Loader2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-500 animate-spin" />
-          ) : (
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+      <div className="relative px-1">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <Input
+          placeholder={t(
+            'exercise.workoutPresetSelector.searchPlaceholder',
+            'Search your workout presets...'
           )}
-          <Input
-            placeholder={t(
-              'exercise.workoutPresetSelector.searchPlaceholder',
-              'Search your workout presets...'
-            )}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-11 bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-800 focus:ring-blue-500 rounded-xl h-11"
-          />
-        </div>
-        <div className="flex items-center gap-1 shrink-0">
-          <Filter className="h-4 w-4 text-gray-500 shrink-0" />
-          <Select
-            value={ownershipFilter}
-            onValueChange={(value: 'all' | 'mine' | 'family' | 'public') =>
-              setOwnershipFilter(value)
-            }
-          >
-            <SelectTrigger className="w-32 h-11 border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 rounded-xl focus:ring-blue-500">
-              <SelectValue placeholder="All" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">
-                {t('exercise.workoutPresetSelector.ownership.all', 'All')}
-              </SelectItem>
-              <SelectItem value="mine">
-                {t(
-                  'exercise.workoutPresetSelector.ownership.mine',
-                  'My Presets'
-                )}
-              </SelectItem>
-              <SelectItem value="family">
-                {t('exercise.workoutPresetSelector.ownership.family', 'Family')}
-              </SelectItem>
-              <SelectItem value="public">
-                {t('exercise.workoutPresetSelector.ownership.public', 'Public')}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-11 bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-800 focus:ring-blue-500 rounded-xl h-11"
+        />
       </div>
 
       <div className="flex-grow overflow-y-auto px-1 space-y-8 custom-scrollbar">
@@ -173,7 +60,7 @@ const WorkoutPresetSelector: React.FC<WorkoutPresetSelectorProps> = ({
                 'exercise.workoutPresetSelector.recentPresetsTitle',
                 'Recent Presets'
               )}
-              presets={filteredRecentPresets}
+              presets={recentPresets}
               onSelect={onPresetSelected}
               emptyMessage={t(
                 'exercise.workoutPresetSelector.noRecentPresets',
@@ -185,7 +72,7 @@ const WorkoutPresetSelector: React.FC<WorkoutPresetSelectorProps> = ({
                 'exercise.workoutPresetSelector.topPresetsTitle',
                 'Top Presets'
               )}
-              presets={filteredTopPresets}
+              presets={topPresets}
               onSelect={onPresetSelected}
               emptyMessage={t(
                 'exercise.workoutPresetSelector.noTopPresets',
@@ -193,20 +80,13 @@ const WorkoutPresetSelector: React.FC<WorkoutPresetSelectorProps> = ({
               )}
             />
           </>
-        ) : showLoader && filteredSearchPresets.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 space-y-3">
-            <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {t('exercise.workoutPresetSelector.searching', 'Searching...')}
-            </p>
-          </div>
         ) : (
           <PresetSection
             title={t(
               'exercise.workoutPresetSelector.searchResultsTitle',
               'Search Results'
             )}
-            presets={filteredSearchPresets}
+            presets={filteredPresets}
             onSelect={onPresetSelected}
             emptyMessage={t(
               'exercise.workoutPresetSelector.noMatchingPresets',

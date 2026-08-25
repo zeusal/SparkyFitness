@@ -44,23 +44,14 @@ import androidx.glance.unit.ColorProvider
 import {{APPLICATION_ID}}.R
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlin.math.roundToLong
 import org.json.JSONObject
 
-/**
- * Classic base composition, unchanged from the pre-localization macro widget
- * (22415819): one-line localized kcal header, three inline macro rows with
- * progress bars, and the search/scan shortcut row — all rendered in the fixed
- * 2x2 footprint. Only strings, accessibility labels and number formatting
- * follow the app/system language; geometry, footprint and behavior are
- * untouched.
- */
 class MacroWidget : GlanceAppWidget() {
 
     override val stateDefinition = PreferencesGlanceStateDefinition
 
-    // Classic pre-localization size mode: a single 200x200 responsive size
-    // matching the fixed 2x2 launcher footprint. No resizing.
     override val sizeMode: SizeMode = SizeMode.Responsive(
         setOf(DpSize(200.dp, 200.dp)),
     )
@@ -77,14 +68,7 @@ class MacroWidget : GlanceAppWidget() {
     @Composable
     private fun WidgetContent(context: Context, fallbackSnapshot: MacroSnapshot?) {
         val state = currentState<Preferences>()
-        // Observe the dedicated revision so an active Glance session recomposes
-        // after a language-only invalidation.
-        currentState(WidgetLocale.LOCALE_RENDER_REVISION_STATE_KEY)
         val snapshot = parseSnapshot(state[SNAPSHOT_STATE_KEY]) ?: fallbackSnapshot
-
-        // Widget-only locale override: localized string and number resolution
-        // stay local to widget rendering (see WidgetLocale).
-        val widgetContext = WidgetLocale.localizedContext(context)
 
         val openAppIntent = Intent(Intent.ACTION_VIEW, Uri.parse("sparkyfitnessmobile://"))
             .setPackage(context.packageName)
@@ -92,8 +76,6 @@ class MacroWidget : GlanceAppWidget() {
             .setPackage(context.packageName)
         val scanIntent = Intent(Intent.ACTION_VIEW, Uri.parse("sparkyfitnessmobile://scan"))
             .setPackage(context.packageName)
-        val searchFoodLabel = widgetContext.getString(R.string.widget_search_food)
-        val scanBarcodeLabel = widgetContext.getString(R.string.widget_scan_barcode)
 
         Box(
             modifier = GlanceModifier
@@ -105,9 +87,9 @@ class MacroWidget : GlanceAppWidget() {
             contentAlignment = Alignment.Center,
         ) {
             Column(modifier = GlanceModifier.fillMaxWidth()) {
-                CalorieHeader(context = widgetContext, snapshot = snapshot)
+                CalorieHeader(snapshot = snapshot)
                 Spacer(modifier = GlanceModifier.height(10.dp))
-                MacroRows(context = widgetContext, snapshot = snapshot, spacing = 7)
+                MacroRows(snapshot = snapshot, spacing = 7)
                 Spacer(modifier = GlanceModifier.height(14.dp))
                 Row(
                     modifier = GlanceModifier.fillMaxWidth(),
@@ -116,7 +98,7 @@ class MacroWidget : GlanceAppWidget() {
                     ActionButton(
                         intent = searchIntent,
                         icon = R.drawable.ic_widget_search,
-                        contentDescription = searchFoodLabel,
+                        contentDescription = "Search food",
                         modifier = GlanceModifier
                             .defaultWeight()
                             .height(40.dp),
@@ -130,7 +112,7 @@ class MacroWidget : GlanceAppWidget() {
                     ActionButton(
                         intent = scanIntent,
                         icon = R.drawable.ic_widget_scan,
-                        contentDescription = scanBarcodeLabel,
+                        contentDescription = "Scan barcode",
                         modifier = GlanceModifier
                             .defaultWeight()
                             .height(40.dp),
@@ -141,12 +123,12 @@ class MacroWidget : GlanceAppWidget() {
     }
 
     @Composable
-    private fun CalorieHeader(context: Context, snapshot: MacroSnapshot?, fontSize: Int = 20) {
+    private fun CalorieHeader(snapshot: MacroSnapshot?, fontSize: Int = 20) {
         val calories = snapshot?.displayCalories
         val text = if (snapshot?.hasData == true && calories != null) {
-            context.getString(R.string.widget_kcal_left, formatInt(context, calories))
+            "${formatInt(calories)} kcal left"
         } else {
-            context.getString(R.string.widget_kcal_left_empty)
+            "— kcal left"
         }
         Text(
             text = text,
@@ -161,26 +143,23 @@ class MacroWidget : GlanceAppWidget() {
     }
 
     @Composable
-    private fun MacroRows(context: Context, snapshot: MacroSnapshot?, spacing: Int) {
+    private fun MacroRows(snapshot: MacroSnapshot?, spacing: Int) {
         MacroRow(
-            context = context,
-            label = context.getString(R.string.widget_protein),
+            label = "Protein",
             grams = snapshot?.protein ?: 0.0,
             progress = snapshot.progressFor(MacroKind.PROTEIN),
             color = MacroPalette.protein,
         )
         Spacer(modifier = GlanceModifier.height(spacing.dp))
         MacroRow(
-            context = context,
-            label = context.getString(R.string.widget_carbs),
+            label = "Carbs",
             grams = snapshot?.carbs ?: 0.0,
             progress = snapshot.progressFor(MacroKind.CARBS),
             color = MacroPalette.carbs,
         )
         Spacer(modifier = GlanceModifier.height(spacing.dp))
         MacroRow(
-            context = context,
-            label = context.getString(R.string.widget_fat),
+            label = "Fat",
             grams = snapshot?.fat ?: 0.0,
             progress = snapshot.progressFor(MacroKind.FAT),
             color = MacroPalette.fat,
@@ -189,7 +168,6 @@ class MacroWidget : GlanceAppWidget() {
 
     @Composable
     private fun MacroRow(
-        context: Context,
         label: String,
         grams: Double,
         progress: Float,
@@ -217,7 +195,7 @@ class MacroWidget : GlanceAppWidget() {
                 )
                 Spacer(modifier = GlanceModifier.defaultWeight())
                 Text(
-                    text = context.getString(R.string.widget_grams, formatInt(context, grams)),
+                    text = "${formatInt(grams)} g",
                     style = TextStyle(
                         color = GlanceTheme.colors.onSurface,
                         fontSize = 14.sp,
@@ -229,9 +207,7 @@ class MacroWidget : GlanceAppWidget() {
             Spacer(modifier = GlanceModifier.height(2.dp))
             LinearProgressIndicator(
                 progress = progress,
-                modifier = GlanceModifier
-                    .fillMaxWidth()
-                    .height(4.dp),
+                modifier = GlanceModifier.fillMaxWidth().height(4.dp),
                 color = color,
                 backgroundColor = GlanceTheme.colors.surfaceVariant,
             )
@@ -344,10 +320,8 @@ class MacroWidget : GlanceAppWidget() {
         }
     }
 
-    private fun formatInt(context: Context, value: Double): String {
-        // Pre-localization rounding preserved: the macro widget rounds
-        // (1240.7 -> 1241) — see 22415819.
-        return formatWidgetInt(context, value.roundToLong())
+    private fun formatInt(value: Double): String {
+        return String.format(Locale.getDefault(), "%,d", value.roundToLong())
     }
 
     companion object {

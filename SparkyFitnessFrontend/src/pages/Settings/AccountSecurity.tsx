@@ -36,7 +36,6 @@ export const AccountSecurity = () => {
   const isLoading = isEmailPending || isPasswordPending;
 
   const [newEmail, setNewEmail] = useState<string>(user?.email || '');
-  const [emailPassword, setEmailPassword] = useState<string>('');
   const handleEmailChange = async () => {
     if (!newEmail || newEmail === user?.email) {
       toast({
@@ -46,10 +45,7 @@ export const AccountSecurity = () => {
       });
       return;
     }
-    changeEmail(
-      { newEmail, currentPassword: emailPassword || undefined },
-      { onSuccess: () => setEmailPassword('') }
-    );
+    changeEmail({ newEmail });
   };
 
   const handlePasswordChange = async () => {
@@ -71,10 +67,10 @@ export const AccountSecurity = () => {
       return;
     }
 
-    if (passwordForm.new_password.length < 8) {
+    if (passwordForm.new_password.length < 6) {
       toast({
         title: 'Error',
-        description: t('settings.accountSecurity.passwordLengthError'),
+        description: 'Password must be at least 6 characters long',
         variant: 'destructive',
       });
       return;
@@ -128,29 +124,10 @@ export const AccountSecurity = () => {
               {t('settings.accountSecurity.updateEmail', 'Update Email')}
             </Button>
           </div>
-          <div className="mt-2">
-            <Label htmlFor="email_current_password">
-              {t(
-                'settings.accountSecurity.currentPassword',
-                'Current Password'
-              )}
-            </Label>
-            <Input
-              id="email_current_password"
-              type="password"
-              autoComplete="current-password"
-              value={emailPassword}
-              onChange={(e) => setEmailPassword(e.target.value)}
-              placeholder={t(
-                'settings.accountSecurity.enterCurrentPassword',
-                'Enter current password'
-              )}
-            />
-          </div>
           <p className="text-xs text-muted-foreground mt-1">
             {t(
               'settings.accountSecurity.updateEmailHint',
-              'Confirm your current password to change your email. Leave blank if you sign in with SSO.'
+              'Your email address will be updated immediately.'
             )}
           </p>
         </div>

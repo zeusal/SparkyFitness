@@ -6,7 +6,6 @@ export interface ExerciseEntry {
   duration_minutes: number;
   calories_burned: number;
   entry_date: string;
-  entry_time?: string | null;
   notes?: string;
   sets?: WorkoutPresetSet[]; // Add sets property
   image_url?: string;
@@ -35,7 +34,6 @@ export interface MealTypeDefinition {
   user_id: string | null;
   is_visible?: boolean;
   show_in_quick_log?: boolean;
-  default_time?: string | null;
 }
 
 export interface FoodEntryUpdateData {
@@ -43,31 +41,4 @@ export interface FoodEntryUpdateData {
   unit?: string;
   variant_id?: string | null;
   meal_type_id?: string;
-  entry_time?: string | null;
-}
-
-export interface FoodDiaryImportRow {
-  date: string;
-  meal_type: string;
-  meal_name?: string;
-  food_name?: string;
-  brand?: string;
-  quantity: string;
-  unit: string;
-  // Assembled client-side from the CSV's extra (non-standard) columns, keyed
-  // by custom-nutrient name.
-  custom_nutrients?: Record<string, number>;
-  [key: string]: string | Record<string, number> | undefined;
-}
-
-export interface FoodDiaryImportScope {
-  family?: boolean;
-  public?: boolean;
-}
-
-export interface FoodDiaryImportResult {
-  message: string;
-  processed: unknown[];
-  errors: { error: string; entry: unknown }[];
-  skipped: unknown[];
 }

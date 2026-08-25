@@ -347,7 +347,8 @@ async function getMealPlanTemplateOwnerId(templateId: any) {
     client.release();
   }
 }
-async function getActiveMealPlansForDate(userId: string, date: Date | string) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getActiveMealPlanForDate(userId: any, date: any) {
   const client = await getClient(userId); // User-specific operation
   try {
     const query = `
@@ -380,22 +381,17 @@ async function getActiveMealPlansForDate(userId: string, date: Date | string) {
                     '[]'::json
                 ) as assignments
             FROM meal_plan_templates t
-            WHERE t.user_id = $1
-              AND t.is_active = TRUE
-              AND t.start_date <= $2
-              AND (t.end_date IS NULL OR t.end_date >= $2)
+            WHERE t.is_active = TRUE
+              AND t.start_date <= $1
+              AND (t.end_date IS NULL OR t.end_date >= $1)
             ORDER BY t.start_date DESC
+            LIMIT 1
         `;
-    const result = await client.query(query, [userId, date]);
-    return result.rows;
+    const result = await client.query(query, [date]);
+    return result.rows[0];
   } finally {
     client.release();
   }
-}
-
-async function getActiveMealPlanForDate(userId: string, date: Date | string) {
-  const plans = await getActiveMealPlansForDate(userId, date);
-  return plans[0] || null;
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getMealPlanTemplatesByMealId(mealId: any) {
@@ -448,7 +444,6 @@ export { deleteMealPlanTemplate };
 export { deactivateAllMealPlanTemplates };
 export { getMealPlanTemplateOwnerId };
 export { getActiveMealPlanForDate };
-export { getActiveMealPlansForDate };
 export { getMealPlanTemplatesByMealId };
 export { getMealPlanTemplateAssignments };
 export default {
@@ -459,7 +454,6 @@ export default {
   deactivateAllMealPlanTemplates,
   getMealPlanTemplateOwnerId,
   getActiveMealPlanForDate,
-  getActiveMealPlansForDate,
   getMealPlanTemplatesByMealId,
   getMealPlanTemplateAssignments,
 };

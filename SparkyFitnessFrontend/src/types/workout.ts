@@ -2,7 +2,6 @@ import {
   ExerciseEntryResponse,
   ExerciseEntrySetRequest,
   ExerciseEntrySetResponse,
-  ExerciseModality,
   PresetSessionResponse,
 } from '@workspace/shared';
 import { Exercise } from './exercises';
@@ -26,8 +25,6 @@ export interface WorkoutPresetExercise {
   exercise: Exercise; // Full exercise object
   sets: WorkoutPresetSet[];
   category?: string;
-  modality?: ExerciseModality | null; // Populated from backend join
-  superset_group?: number | null;
 }
 
 export interface WorkoutPreset {
@@ -60,7 +57,6 @@ export interface WorkoutPlanAssignment {
   created_at?: string;
   updated_at?: string;
   category?: string;
-  modality?: ExerciseModality | null; // Populated from backend join
 }
 
 export interface WorkoutPlanTemplate {
@@ -82,7 +78,7 @@ export interface ExerciseToLog extends Exercise {
   sets?: WorkoutPresetSet[];
   reps?: number;
   weight?: number;
-  duration?: number; // Entry-level duration in minutes; per-set `duration` is seconds
+  duration?: number; // Duration in minutes (optional) - Changed from duration_minutes
   notes?: string;
   image_url?: string;
   exercise_name?: string; // Added to match PresetExercise

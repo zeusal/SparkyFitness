@@ -13,6 +13,8 @@ export interface FoodVariant {
   serving_size: number;
   serving_unit: string;
   serving_description?: string;
+  serving_weight?: number;
+  serving_weight_unit?: string;
   calories: number;
   protein: number;
   carbs: number;
@@ -34,14 +36,6 @@ export interface FoodVariant {
   is_locked?: boolean;
   glycemic_index?: GlycemicIndex;
   custom_nutrients?: Record<string, string | number>;
-  // All nutrient fields the provider reported, keyed by the provider's EXACT
-  // label (e.g. "Magnesium, Mg"). Import-only (present on provider search/detail
-  // results, never persisted); used to let users discover and add aliases.
-  provider_nutrients?: Record<string, number>;
-  // Unit per provider field (same label keys as provider_nutrients), when the
-  // provider reports units (USDA, OFF). Import-only; used to prefill/display
-  // a custom nutrient's unit.
-  provider_nutrient_units?: Record<string, string>;
   source?: 'manual' | 'ai_estimate' | 'imported';
   ai_confidence?: 'high' | 'medium' | 'low' | null;
   allergens?: string[] | null;
@@ -52,23 +46,6 @@ export interface Food {
   id: string;
   name: string;
   brand?: string | null;
-  /**
-   * Image paths for this food. Locally uploaded images are server-relative
-   * (`/uploads/foods/<id>/...`); provider images that failed to download stay
-   * as absolute URLs.
-   */
-  images?: string[];
-  /**
-   * Single upstream image on a provider search result that has not been
-   * imported yet. Once imported the downloaded copy lives in `images`.
-   */
-  image_url?: string | null;
-  /**
-   * Full-size counterpart of `image_url`, when a provider serves more than one
-   * size. The UI shows the smaller `image_url` and falls back to this if that
-   * file is missing; imports always archive this one.
-   */
-  image_source_url?: string | null;
   is_custom: boolean;
   user_id?: string;
   shared_with_public?: boolean;
@@ -90,9 +67,6 @@ export interface Food {
   is_quick_food?: boolean;
   glycemic_index?: GlycemicIndex;
   custom_nutrients?: Record<string, string | number>; // New field for custom nutrients
-  // ISO timestamp of when the current user starred this food. Present only on
-  // items returned by the favorites endpoint; used to order the Favorites list.
-  favorited_at?: string;
 }
 
 export interface FoodDeletionImpact {
@@ -128,15 +102,7 @@ export interface FoodEntry {
   food_name?: string; // Snapshotted food name
   brand_name?: string; // Snapshotted brand name
   entry_date: string;
-  entry_time?: string | null;
   meal_plan_template_id?: string;
-  /**
-   * Per-entry override photos. Apply only to this diary entry and never change
-   * the parent food/meal. Empty means "fall back to `food_images`".
-   */
-  images?: string[] | null;
-  /** The parent food's own images, used as the fallback when no override. */
-  food_images?: string[] | null;
   // Add water_ml to FoodEntry if it's a water entry
   water_ml?: number;
 
@@ -233,12 +199,11 @@ export type NumericFoodVariantKeys = Exclude<
   | 'id'
   | 'serving_unit'
   | 'serving_description'
+  | 'serving_weight_unit'
   | 'is_default'
   | 'is_locked'
   | 'glycemic_index'
   | 'custom_nutrients'
-  | 'provider_nutrients'
-  | 'provider_nutrient_units'
   // AI-Assisted Unit Conversions provenance — these are strings/enums, not
   // numerics, so the form-variant `string | ''` mapping must not include them.
   | 'user_id'

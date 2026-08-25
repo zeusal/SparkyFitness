@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Canvas, Path, Circle as SkiaCircle, Skia } from '@shopify/react-native-skia';
 import { useSharedValue, useDerivedValue, withTiming, Easing } from 'react-native-reanimated';
-import { useIsFocused } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 
 interface ProgressRingProps {
   progress: number; // 0-1 value (capped at 1 for display)
@@ -24,32 +24,30 @@ const ProgressRing: React.FC<ProgressRingProps> = ({
 
   const animatedProgress = useSharedValue(0);
 
-  // Replay the 0 -> current entrance animation each time the screen regains
-  // focus, then smoothly follow later progress changes (e.g. a per-second timer
-  // tick) without resetting to zero. Both writes to `animatedProgress` live in
-  // a single effect (React's compiler can't optimize a shared value mutated
-  // across two effects); `wasFocused` distinguishes a fresh focus — which resets
-  // to zero first — from an in-place value change.
-  const isFocused = useIsFocused();
-  const wasFocused = useRef(false);
-  useEffect(() => {
-    // Skip animating while blurred so a mounted-but-hidden ring (e.g. the
-    // fasting/calorie ring on the Dashboard while another screen is on top)
-    // doesn't schedule frames for a per-second progress tick no one can see.
-    if (!isFocused) {
-      wasFocused.current = false;
-      return;
-    }
-    const justFocused = !wasFocused.current;
-    wasFocused.current = true;
-    if (justFocused) {
+  // Latest progress kept in a ref so the focus effect can read it without
+  // re-firing the entrance animation whenever progress changes (e.g. a
+  // per-second timer tick).
+  const progressRef = useRef(progressCapped);
+  progressRef.current = progressCapped;
+
+  // Replay the 0 -> current entrance animation each time the screen regains focus.
+  useFocusEffect(
+    useCallback(() => {
       animatedProgress.value = 0;
-    }
+      animatedProgress.value = withTiming(progressRef.current, {
+        duration: 500,
+        easing: Easing.out(Easing.cubic),
+      });
+    }, [animatedProgress])
+  );
+
+  // Smoothly follow subsequent progress changes without resetting to zero.
+  useEffect(() => {
     animatedProgress.value = withTiming(progressCapped, {
       duration: 500,
       easing: Easing.out(Easing.cubic),
     });
-  }, [isFocused, progressCapped, animatedProgress]);
+  }, [progressCapped, animatedProgress]);
 
   const oval = useMemo(() => ({
     x: center - radius,
@@ -59,12 +57,12 @@ const ProgressRing: React.FC<ProgressRingProps> = ({
   }), [center, radius]);
 
   const progressPath = useDerivedValue(() => {
-    const builder = Skia.PathBuilder.Make();
+    const path = Skia.Path.Make();
     const sweepAngle = animatedProgress.value * 360;
     if (sweepAngle > 0) {
-      builder.addArc(oval, -90, sweepAngle);
+      path.addArc(oval, -90, sweepAngle);
     }
-    return builder.build();
+    return path;
   });
 
   return (

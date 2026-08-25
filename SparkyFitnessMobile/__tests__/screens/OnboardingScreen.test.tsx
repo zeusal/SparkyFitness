@@ -2,9 +2,8 @@ import React from 'react';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import OnboardingScreen from '../../src/screens/OnboardingScreen';
-import { login, fetchAuthSettings } from '../../src/services/api/authService';
+import { login, verifyTotp } from '../../src/services/api/authService';
 import { saveServerConfig } from '../../src/services/storage';
-import { TimeoutError } from '../../src/utils/concurrency';
 
 // Mock navigation
 const mockReplace = jest.fn();
@@ -26,7 +25,6 @@ jest.mock('../../src/services/api/authService', () => ({
   verifyTotp: jest.fn(),
   sendEmailOtp: jest.fn(),
   verifyEmailOtp: jest.fn(),
-  fetchAuthSettings: jest.fn(),
 }));
 
 jest.mock('../../src/services/storage', () => ({
@@ -48,15 +46,12 @@ global.fetch = mockFetch;
 
 const mockLogin = login as jest.MockedFunction<typeof login>;
 const mockSaveServerConfig = saveServerConfig as jest.MockedFunction<typeof saveServerConfig>;
-const mockFetchAuthSettings = fetchAuthSettings as jest.MockedFunction<typeof fetchAuthSettings>;
+const mockVerifyTotp = verifyTotp as jest.MockedFunction<typeof verifyTotp>;
 
 describe('OnboardingScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockFetch.mockReset();
-    // Settings fetch fails by default so page-1 navigation exercises the
-    // reachability fallback (global fetch), like the pre-existing tests expect.
-    mockFetchAuthSettings.mockRejectedValue(new Error('settings unavailable'));
   });
 
   const insets = { top: 0, bottom: 0, left: 0, right: 0 };
@@ -82,22 +77,6 @@ describe('OnboardingScreen', () => {
       expect(getByText('Later')).toBeTruthy();
     });
 
-    test('unfocused URL field echoes the value as plain text', () => {
-      // iOS wraps overflowing text in unfocused TextInputs (RN #29068),
-      // hiding everything after "https://"; the echo Text is what keeps the
-      // URL readable.
-      const { getByPlaceholderText, getByText } = renderScreen();
-
-      fireEvent.changeText(
-        getByPlaceholderText('https://your-sparky-app.com'),
-        'https://a-long-enough-server-url.example.com',
-      );
-
-      expect(
-        getByText('https://a-long-enough-server-url.example.com'),
-      ).toBeTruthy();
-    });
-
     test('learn more section toggles on press', () => {
       const { getByText, queryByText } = renderScreen();
 
@@ -119,7 +98,7 @@ describe('OnboardingScreen', () => {
         fireEvent.press(getByText('Next'));
       });
 
-      expect(getByText(/Enter a valid Frontend URL/)).toBeTruthy();
+      expect(getByText(/Enter a valid SparkyFitness URL/)).toBeTruthy();
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
@@ -172,30 +151,6 @@ describe('OnboardingScreen', () => {
       });
 
       expect(mockReplace).toHaveBeenCalledWith('Tabs', { screen: 'Settings' });
-    });
-
-    test('settings-fetch timeout skips the reachability fallback', async () => {
-      mockFetchAuthSettings.mockRejectedValueOnce(new TimeoutError('Request', 10_000));
-
-      const { getByText, getByPlaceholderText } = renderScreen();
-
-      fireEvent.changeText(
-        getByPlaceholderText('https://your-sparky-app.com'),
-        'https://example.com',
-      );
-
-      await act(async () => {
-        fireEvent.press(getByText('Next'));
-      });
-
-      await waitFor(() => {
-        expect(
-          getByText('Could not reach server. Check the URL and try again.'),
-        ).toBeTruthy();
-      });
-      // The fallback would probe the same host that just spent the full
-      // timeout budget, doubling the spinner time (#1767).
-      expect(mockFetch).not.toHaveBeenCalled();
     });
   });
 

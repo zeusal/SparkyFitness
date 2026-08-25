@@ -25,8 +25,7 @@ vi.mock('undici', () => {
   const Agent = vi.fn(function () {
     return { destroy: vi.fn() };
   });
-  const buildConnector = vi.fn(() => vi.fn());
-  return { default: { Agent, buildConnector }, Agent, buildConnector };
+  return { default: { Agent }, Agent };
 });
 
 const TEST_USER_ID = 'user-123';
@@ -288,11 +287,7 @@ describe('estimateUnitConversion', () => {
       setProvider(service_type, { api_key, custom_url: custom_url ?? null });
       mockFetch(bodyFor(service_type, sampleAiResponse));
 
-      const result = await estimateUnitConversion(
-        TEST_USER_ID,
-        baseRequest,
-        service_type === 'ollama'
-      );
+      const result = await estimateUnitConversion(TEST_USER_ID, baseRequest);
       expect(result).toEqual({
         estimatedAmount: 227,
         confidence: 'medium',
@@ -306,7 +301,7 @@ describe('estimateUnitConversion', () => {
   it('sends the prompt, temperature 0, and the unit_conversion schema to OpenAI', async () => {
     setProvider();
     const m = mockFetch(openAiBody(sampleAiResponse));
-    await estimateUnitConversion(TEST_USER_ID, baseRequest, true);
+    await estimateUnitConversion(TEST_USER_ID, baseRequest);
 
     const body = capturedBody(m);
     const messages = body.messages as Array<{ content: string }>;
@@ -329,10 +324,10 @@ describe('estimateUnitConversion', () => {
       custom_url: 'http://localhost:11434',
     });
     const m = mockFetch(ollamaBody(sampleAiResponse));
-    await estimateUnitConversion(TEST_USER_ID, baseRequest, true);
+    await estimateUnitConversion(TEST_USER_ID, baseRequest);
 
     const body = capturedBody(m);
-    expect(body.options).toEqual({ num_ctx: 8192, temperature: 0 });
+    expect(body.options).toEqual({ temperature: 0 });
     expect(body.format).toEqual(STRUCTURED_OUTPUT_SCHEMA);
   });
 

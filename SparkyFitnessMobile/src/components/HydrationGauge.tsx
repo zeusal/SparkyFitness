@@ -1,5 +1,4 @@
 import React, { useMemo, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
 import { View, Text, Pressable } from 'react-native';
 import { Canvas, Group, Path, Rect, Skia } from '@shopify/react-native-skia';
 import Button from './ui/Button';
@@ -7,7 +6,6 @@ import { useSharedValue, useDerivedValue, withTiming, Easing } from 'react-nativ
 import { useCSSVariable } from 'uniwind';
 import Icon from './Icon';
 import { WATER_UNIT_LABELS } from '../utils/unitConversions';
-import { formatLocalizedNumber } from '../localization';
 
 interface ContainerOption {
   id: number;
@@ -48,7 +46,6 @@ const HydrationGauge: React.FC<HydrationGaugeProps> = ({
   onIncrement, onDecrement, disableDecrement,
   containers, activeContainerId, onSelectContainer,
 }) => {
-  const { t } = useTranslation();
   const hydrationColor = useCSSVariable('--color-hydration') as string;
   const trackColor = useCSSVariable('--color-progress-track') as string;
   const outlineColor = useCSSVariable('--color-border-strong') as string;
@@ -65,58 +62,55 @@ const HydrationGauge: React.FC<HydrationGaugeProps> = ({
   }, [progress, animatedProgress]);
 
   const bottlePath = useMemo(() => {
-    const b = Skia.PathBuilder.Make();
+    const p = Skia.Path.Make();
 
     // Neck
-    b.moveTo(26, 6);
-    b.lineTo(26, 23);
+    p.moveTo(26, 6);
+    p.lineTo(26, 23);
 
     // Lip (cap ridge)
-    b.lineTo(23, 23);
-    b.lineTo(23, 28);
+    p.lineTo(23, 23);
+    p.lineTo(23, 28);
 
     // Left shoulder curve
-    b.cubicTo(23, 34, 12, 37, 12, 42);
+    p.cubicTo(23, 34, 12, 37, 12, 42);
 
     // Left body
-    b.lineTo(12, 112);
+    p.lineTo(12, 112);
 
     // Bottom curves
-    b.cubicTo(12, 121, 20, 124, 35, 124);
-    b.cubicTo(50, 124, 58, 121, 58, 112);
+    p.cubicTo(12, 121, 20, 124, 35, 124);
+    p.cubicTo(50, 124, 58, 121, 58, 112);
 
     // Right body
-    b.lineTo(58, 42);
+    p.lineTo(58, 42);
 
     // Right shoulder curve
-    b.cubicTo(58, 37, 47, 34, 47, 28);
+    p.cubicTo(58, 37, 47, 34, 47, 28);
 
     // Lip right
-    b.lineTo(47, 23);
-    b.lineTo(44, 23);
+    p.lineTo(47, 23);
+    p.lineTo(44, 23);
 
     // Right neck
-    b.lineTo(44, 6);
+    p.lineTo(44, 6);
 
-    b.close();
-    return b.build();
+    p.close();
+    return p;
   }, []);
 
   const fillPath = useDerivedValue(() => {
+    const p = Skia.Path.Make();
     const y = FILL_BOTTOM - FILL_HEIGHT * animatedProgress.value;
-    return Skia.Path.Rect(Skia.XYWHRect(0, y, CANVAS_WIDTH, CANVAS_HEIGHT - y));
+    p.addRect(Skia.XYWHRect(0, y, CANVAS_WIDTH, CANVAS_HEIGHT - y));
+    return p;
   });
 
   const convertedConsumed = convertFromMl(consumed, unit);
   const convertedGoal = convertFromMl(goal, unit);
-  const formatUnitVolume = (val: number, u: string): string => {
-    const decimals = u === 'oz' ? 1 : u === 'liter' ? 2 : 0;
-    // formatLocalizedNumber keeps thousands grouping and the app locale's
-    // decimal separator; maximumFractionDigits alone strips trailing zeros.
-    return formatLocalizedNumber(val, { maximumFractionDigits: decimals });
-  };
-  const displayConsumed = formatUnitVolume(convertedConsumed, unit);
-  const displayGoal = formatUnitVolume(convertedGoal, unit);
+  const useDecimals = unit === 'liter' || unit === 'oz';
+  const displayConsumed = useDecimals ? parseFloat(convertedConsumed.toFixed(1)) : Math.round(convertedConsumed);
+  const displayGoal = useDecimals ? parseFloat(convertedGoal.toFixed(1)) : Math.round(convertedGoal);
   const unitLabel = WATER_UNIT_LABELS[unit] ?? unit;
 
   const showButtons = !!onIncrement || !!onDecrement;
@@ -124,8 +118,8 @@ const HydrationGauge: React.FC<HydrationGaugeProps> = ({
   const showChips = (containers?.length ?? 0) > 1;
 
   return (
-    <View className="bg-surface rounded-xl p-4 mb-3 shadow-sm">
-      <Text className="text-md font-bold text-text-secondary mb-3">{t('dashboard.hydration', { defaultValue: 'Hydration' })}</Text>
+    <View className="bg-surface rounded-xl p-4 my-2 shadow-sm">
+      <Text className="text-md font-bold text-text-secondary mb-3">Hydration</Text>
       <View className="flex-row items-center">
         <View className="flex-row items-center mr-4">
           {showButtons && (
@@ -134,8 +128,6 @@ const HydrationGauge: React.FC<HydrationGaugeProps> = ({
               onPress={onDecrement}
               disabled={disableDecrement || noContainer}
               className="p-2"
-              accessibilityRole="button"
-              accessibilityLabel={t('dashboard.removeWater', { defaultValue: 'Remove water' })}
               style={disableDecrement || noContainer ? { opacity: 0.3 } : undefined}
             >
               <Icon name="remove-circle" size={28} color={hydrationColor} />
@@ -156,8 +148,6 @@ const HydrationGauge: React.FC<HydrationGaugeProps> = ({
               onPress={onIncrement}
               disabled={noContainer}
               className="p-2"
-              accessibilityRole="button"
-              accessibilityLabel={t('dashboard.addWater', { defaultValue: 'Add water' })}
               style={noContainer ? { opacity: 0.3 } : undefined}
             >
               <Icon name="add-circle" size={28} color={hydrationColor} />
@@ -166,10 +156,10 @@ const HydrationGauge: React.FC<HydrationGaugeProps> = ({
         </View>
         <View className="flex-1 items-center mr-2">
           <Text className="text-2xl font-bold text-text-primary">
-            {displayConsumed} {unitLabel}
+            {displayConsumed.toLocaleString()} {unitLabel}
           </Text>
           <Text className="text-sm text-text-secondary mt-0.5">
-            {t('dashboard.ofVolume', { defaultValue: 'of {{value}} {{unit}}', value: displayGoal, unit: unitLabel })}
+            of {displayGoal.toLocaleString()} {unitLabel}
           </Text>
           {showChips && (
             <View className="flex-row flex-wrap justify-center mt-2 gap-1">
@@ -179,9 +169,6 @@ const HydrationGauge: React.FC<HydrationGaugeProps> = ({
                   <Pressable
                     key={c.id}
                     onPress={() => onSelectContainer?.(c.id)}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('dashboard.selectContainer', { defaultValue: 'Select {{container}}', container: c.name })}
-                    accessibilityState={{ selected: active }}
                     className={`rounded-full px-3 py-1 border ${active ? 'bg-accent-primary border-accent-primary' : 'bg-raised border-border-subtle'}`}
                   >
                     <Text className={`text-xs font-medium ${active ? 'text-white' : 'text-text-primary'}`}>
@@ -196,12 +183,12 @@ const HydrationGauge: React.FC<HydrationGaugeProps> = ({
       </View>
       {showButtons && containerVolume != null && !showChips && (
         <Text className="text-xs text-text-muted text-center mt-2">
-          {t('dashboard.perContainer', { defaultValue: '{{value}} {{unit}} per container', value: formatLocalizedNumber(convertFromMl(containerVolume, unit), { maximumFractionDigits: 1 }), unit: unitLabel })}
+          {convertFromMl(containerVolume, unit).toLocaleString(undefined, { maximumFractionDigits: 1 })} {unitLabel} per bottle
         </Text>
       )}
       {showButtons && containerVolume == null && (
         <Text className="text-xs text-text-muted text-center mt-2">
-          {t('dashboard.configureWaterContainer', { defaultValue: 'Configure water container on server to\nenable quick add/remove buttons' })}
+          Configure water container on server to{'\n'}enable quick add/remove buttons
         </Text>
       )}
     </View>

@@ -15,7 +15,6 @@ import {
   UuidParamSchema,
   DateRangeParamSchema,
   CustomMeasurementsRangeParamSchema,
-  ImportHealthDataBodySchema,
 } from '../schemas/measurementSchemas.js';
 import { canAccessUserData } from '../utils/permissionUtils.js';
 import { clearUserTdeeCache } from '../services/AdaptiveTdeeService.js';
@@ -40,53 +39,9 @@ const router = express.Router();
  *               description: Flexible health data object.
  *     responses:
  *       200:
- *         description: >
- *           Request processed. Per-record outcomes are reported in the body:
- *           `processed` lists successful records, `errors` lists rejected
- *           records with their reasons, and `skipped` lists records that were
- *           intentionally not written (e.g. Nutrition records without a
- *           source_id). `errors` and `skipped` are always present, possibly
- *           empty. A 200 response with a non-empty `errors` array means the
- *           remaining records were still saved.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                 processed:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       type:
- *                         type: string
- *                       status:
- *                         type: string
- *                         enum: [success]
- *                       data:
- *                         type: object
- *                 errors:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       error:
- *                         type: string
- *                       entry:
- *                         type: object
- *                 skipped:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       reason:
- *                         type: string
- *                       entry:
- *                         type: object
+ *         description: Health data processed successfully.
  *       400:
- *         description: Malformed request body (invalid JSON, or entries that are not non-null objects).
+ *         description: Invalid JSON format.
  *       401:
  *         description: Unauthorized (missing or invalid API key).
  *       403:
@@ -98,143 +53,56 @@ router.post(
   async (req, res, next) => {
     const rawBody = req.body;
     let healthDataArray = [];
-    if (typeof rawBody === 'object' && rawBody !== null) {
-      if (Array.isArray(rawBody)) {
-        healthDataArray = rawBody;
-      } else {
-        healthDataArray = [rawBody];
+    if (rawBody.startsWith('[') && rawBody.endsWith(']')) {
+      try {
+        healthDataArray = JSON.parse(rawBody);
+      } catch {
+        return res.status(400).json({ error: 'Invalid JSON array format.' });
       }
-    } else if (typeof rawBody === 'string') {
-      if (rawBody.startsWith('[') && rawBody.endsWith(']')) {
+    } else if (rawBody.includes('}{')) {
+      const jsonStrings = rawBody
+        .split('}{')
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .map((part: any, index: any, arr: any) => {
+          if (index === 0) return part + '}';
+          if (index === arr.length - 1) return '{' + part;
+          return '{' + part + '}';
+        });
+      for (const jsonStr of jsonStrings) {
         try {
-          healthDataArray = JSON.parse(rawBody);
-        } catch {
-          return res.status(400).json({ error: 'Invalid JSON array format.' });
-        }
-      } else if (rawBody.includes('}{')) {
-        const jsonStrings = rawBody
-          .split('}{')
-          .map((part: string, index: number, arr: string[]) => {
-            if (index === 0) return part + '}';
-            if (index === arr.length - 1) return '{' + part;
-            return '{' + part + '}';
-          });
-        for (const jsonStr of jsonStrings) {
-          try {
-            healthDataArray.push(JSON.parse(jsonStr));
-          } catch (parseError) {
-            log(
-              'error',
-              'Error parsing individual concatenated JSON string:',
-              jsonStr,
-              parseError
-            );
-          }
-        }
-      } else {
-        try {
-          healthDataArray.push(JSON.parse(rawBody));
-        } catch {
-          return res.status(400).json({ error: 'Invalid single JSON format.' });
+          healthDataArray.push(JSON.parse(jsonStr));
+        } catch (parseError) {
+          log(
+            'error',
+            'Error parsing individual concatenated JSON string:',
+            jsonStr,
+            parseError
+          );
         }
       }
     } else {
-      return res.status(400).json({ error: 'Invalid request body format.' });
-    }
-    if (
-      healthDataArray.some(
-        (item: unknown) => typeof item !== 'object' || item === null
-      )
-    ) {
-      return res.status(400).json({
-        error:
-          'Invalid health data format. All entries must be non-null objects.',
-      });
+      try {
+        healthDataArray.push(JSON.parse(rawBody));
+      } catch {
+        return res.status(400).json({ error: 'Invalid single JSON format.' });
+      }
     }
     try {
-      // Backwards compatibility (issue #1903): clients on the seconds-based set
-      // model send X-Workout-Model-Version: 2 (or higher). Older clients omit
-      // the header and send per-set duration in minutes.
-      const workoutModelVersion =
-        Number(req.header('x-workout-model-version')) || 1;
       const result = await measurementService.processHealthData(
         healthDataArray,
 
         req.userId,
 
-        req.originalUserId || req.userId,
-        { legacyWorkoutSetMinutes: workoutModelVersion < 2 }
+        req.originalUserId || req.userId
       );
       res.status(200).json(result);
     } catch (error) {
-      next(error);
-    }
-  }
-);
-/**
- * @swagger
- * /measurements/import-health-data:
- *   post:
- *     summary: Import health data from a CSV (session authenticated)
- *     tags: [Wellness & Metrics]
- *     description: >
- *       Bulk-imports client-parsed health data rows (body measurements, sleep,
- *       vitals, daily activity totals, hydration) through the same
- *       processHealthData pipeline used by mobile sync. Rows without a `source`
- *       default to `CSV_Import` so re-imports dedup on the same natural keys.
- *     security:
- *       - cookieAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [items]
- *             properties:
- *               items:
- *                 type: array
- *                 items:
- *                   type: object
- *                   description: Flat health data object (type + value/date + optional unit/source).
- *     responses:
- *       200:
- *         description: >
- *           Request processed. Per-record outcomes are reported in the body:
- *           `processed`, `errors`, and `skipped`. A 200 with a non-empty
- *           `errors` array means the remaining rows were still saved.
- *       400:
- *         description: Malformed request body (fails schema validation).
- *       401:
- *         description: Unauthorized.
- *       403:
- *         description: Forbidden (lacks checkin permission).
- */
-router.post(
-  '/import-health-data',
-  authenticate,
-  checkPermissionMiddleware('checkin'),
-  async (req, res, next) => {
-    const parsed = ImportHealthDataBodySchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({
-        error: parsed.error.issues.map((i) => i.message).join(', '),
-      });
-    }
-    // Default the source per row so re-imports dedup on the same natural key
-    // that mobile sync relies on. Keep processHealthData itself untouched.
-    const items = parsed.data.items.map((item) => ({
-      ...item,
-      source: item.source || 'CSV_Import',
-    }));
-    try {
-      const result = await measurementService.processHealthData(
-        items,
-        req.userId,
-        req.authenticatedUserId || req.userId
-      );
-      res.status(200).json(result);
-    } catch (error) {
+      // @ts-expect-error TS(2571): Object is of type 'unknown'.
+      if (error.message.startsWith('{') && error.message.endsWith('}')) {
+        // @ts-expect-error TS(2571): Object is of type 'unknown'.
+        const parsedError = JSON.parse(error.message);
+        return res.status(400).json(parsedError);
+      }
       next(error);
     }
   }

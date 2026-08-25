@@ -3,7 +3,7 @@ import { log } from '../../config/logging.js';
 import exerciseRepository from '../../models/exercise.js';
 import exerciseEntryRepository from '../../models/exerciseEntry.js';
 import sleepRepository from '../../models/sleepRepository.js';
-import { instantToDay, isValidTimeZone } from '@workspace/shared';
+import { instantToDay } from '@workspace/shared';
 import activityDetailsRepository from '../../models/activityDetailsRepository.js';
 // Define a mapping for Withings metric types to SparkyFitness measurement types
 // This can be extended as more Withings metrics are integrated
@@ -99,15 +99,10 @@ const WITHINGS_METRIC_MAPPING = {
   76: {
     name: 'Muscle Mass',
     unit: 'kg',
-    sparky_unit: 'kg',
-    type: 'check_in_measurement',
-    column: 'muscle_mass_kg',
+    type: 'custom_measurement',
+    categoryName: 'Muscle Mass',
     frequency: 'Daily',
   },
-  // Withings type 77 is water MASS in kg, not the body-water percentage that
-  // check_in_measurements.body_water_percentage stores. Deriving a percentage
-  // would need a same-day weight and would go stale when weight changes, so
-  // this deliberately stays a custom measurement.
   77: {
     name: 'Hydration',
     unit: 'kg',
@@ -118,9 +113,8 @@ const WITHINGS_METRIC_MAPPING = {
   88: {
     name: 'Bone Mass',
     unit: 'kg',
-    sparky_unit: 'kg',
-    type: 'check_in_measurement',
-    column: 'bone_mass_kg',
+    type: 'custom_measurement',
+    categoryName: 'Bone Mass',
     frequency: 'Daily',
   },
   91: {
@@ -609,25 +603,10 @@ async function processWithingsSleepData(
     }
     const bedtime = new Date(bedtimeTs * 1000).toISOString();
     const wakeTime = new Date(wakeTimeTs * 1000).toISOString();
-    // Sleep v2 getsummary items carry their own IANA `timezone` (sibling of
-    // date/startdate/data) — the device's zone at recording time. The
-    // caller-level `timezone` param is the profile zone and must NOT be
-    // stamped: it is redundant with the read-side fallback and one caller
-    // defaults it to 'UTC'. Only a validating value is stamped, so an
-    // absent or malformed field just falls back.
-    // @ts-expect-error TS(2339): Property 'timezone' does not exist on type 'never'.
-    const summaryTimezone: unknown = summary.timezone;
-    const recordTimezone =
-      typeof summaryTimezone === 'string' &&
-      summaryTimezone.trim() !== '' &&
-      isValidTimeZone(summaryTimezone)
-        ? summaryTimezone
-        : null;
     const sleepEntryData = {
       entry_date: entryDate,
       bedtime: bedtime,
       wake_time: wakeTime,
-      ...(recordTimezone ? { record_timezone: recordTimezone } : {}),
       // @ts-expect-error TS(2339): Property 'data' does not exist on type 'never'.
       duration_in_seconds: summary.data.total_timeinbed || 0,
       // @ts-expect-error TS(2339): Property 'data' does not exist on type 'never'.
@@ -1061,12 +1040,6 @@ async function processWithingsWorkouts(
         entry_date: entryDate,
         // @ts-expect-error TS(2339): Property 'data' does not exist on type 'never'.
         notes: `Logged from Withings workout: ${exercise.name}. Distance: ${workout.data.distance || 0}m, Steps: ${workout.data.steps || 0}. Intensity: ${workout.data.intensity || 0}/100.`,
-        // Withings reports metres; the column is kilometres.
-        // @ts-expect-error TS(2339): Property 'data' does not exist on type 'never'.
-        distance: workout.data.distance
-          ? // @ts-expect-error TS(2339): Property 'data' does not exist on type 'never'.
-            parseFloat((workout.data.distance / 1000).toFixed(2))
-          : null,
         // @ts-expect-error TS(2339): Property 'data' does not exist on type 'never'.
         avg_heart_rate: workout.data.hr_average || null,
         sets: [
@@ -1075,7 +1048,7 @@ async function processWithingsWorkouts(
             set_type: 'Working Set',
             reps: 1,
             weight: 0,
-            duration: durationSeconds,
+            duration: durationMinutes,
             rest_time: 0,
             notes: '',
           },

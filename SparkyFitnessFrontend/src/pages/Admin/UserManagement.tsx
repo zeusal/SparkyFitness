@@ -29,7 +29,6 @@ import {
 import { type User } from '../../api/Admin/userManagementService';
 import { useUsers } from '@/hooks/Admin/useUsers';
 import { useDebounce } from '@/hooks/useDebounce';
-import { parseSearchTerms } from '@workspace/shared';
 
 import {
   useUpdateUserFullName,
@@ -227,14 +226,13 @@ const UserManagement: React.FC = () => {
       return sortOrder === 'asc' ? result : -result;
     });
 
-    const terms = parseSearchTerms(searchTerm);
-    if (terms.length === 0) return sorted;
-
-    return sorted.filter((user) => {
-      const searchStr =
-        `${user.full_name ?? ''} ${user.email ?? ''}`.toLowerCase();
-      return terms.every((term) => searchStr.includes(term));
-    });
+    return sorted.filter(
+      (user) =>
+        (user.full_name?.toLowerCase() ?? '').includes(
+          searchTerm.toLowerCase()
+        ) ||
+        (user.email?.toLowerCase() ?? '').includes(searchTerm.toLowerCase())
+    );
   }, [users, sortBy, sortOrder, searchTerm]);
 
   if (isLoading)

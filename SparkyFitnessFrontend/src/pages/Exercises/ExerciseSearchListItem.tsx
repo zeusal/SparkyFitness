@@ -5,10 +5,6 @@ import { usePreferences } from '@/contexts/PreferencesContext';
 import { Exercise } from '@/types/exercises';
 import { getEnergyUnitString } from '@/utils/nutritionCalculations';
 import {
-  resolveExerciseImageSrc,
-  filterValidExerciseImages,
-} from '@/utils/exercises';
-import {
   Share2,
   Users,
   Volume2,
@@ -54,13 +50,13 @@ export const ExerciseSearchListItem = ({
   const [isActioning, setIsActioning] = useState(false);
   const { energyUnit, convertEnergy } = usePreferences();
   const [imageError, setImageError] = useState(false);
-  const validImages = filterValidExerciseImages(exercise.images);
-  const imageCount = validImages.length;
   const handleNextImage = () =>
-    setCurrentImageIndex((prev) => (prev + 1) % (imageCount || 1));
+    setCurrentImageIndex((prev) => (prev + 1) % (exercise.images?.length || 1));
   const handlePrevImage = () =>
     setCurrentImageIndex(
-      (prev) => (prev - 1 + (imageCount || 1)) % (imageCount || 1)
+      (prev) =>
+        (prev - 1 + (exercise.images?.length || 1)) %
+        (exercise.images?.length || 1)
     );
 
   const handleSpeak = () => {
@@ -93,9 +89,9 @@ export const ExerciseSearchListItem = ({
   if (exercise.force) metaPills.push(exercise.force);
   if (exercise.mechanic) metaPills.push(exercise.mechanic);
 
-  const hasImage = imageCount > 0;
+  const hasImage =
+    exercise.images && exercise.images.some((img) => img.trim() !== '[]');
   const showFallback = !hasImage || imageError;
-  const safeImageIndex = imageCount > 0 ? currentImageIndex % imageCount : 0;
 
   return (
     <div className="group flex gap-3 p-3 rounded-lg bg-white dark:bg-gray-800/80 border border-gray-100 dark:border-gray-700/60 hover:border-blue-200 dark:hover:border-blue-800 hover:shadow-sm transition-all duration-150">
@@ -103,12 +99,16 @@ export const ExerciseSearchListItem = ({
       {hasImage && !showFallback ? (
         <div className="relative flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden ring-1 ring-gray-200 dark:ring-gray-700 bg-gray-50 dark:bg-gray-800">
           <img
-            src={resolveExerciseImageSrc(validImages[safeImageIndex])}
+            src={
+              exercise.source
+                ? exercise.images![currentImageIndex]
+                : '/uploads/exercises/' + exercise.images![currentImageIndex]
+            }
             alt={exercise.name}
             className="w-full h-full object-contain"
             onError={() => setImageError(true)}
           />
-          {imageCount > 1 && (
+          {exercise.images!.length > 1 && (
             <div className="absolute inset-x-0 bottom-0 flex justify-between px-0.5">
               <button
                 onClick={handlePrevImage}

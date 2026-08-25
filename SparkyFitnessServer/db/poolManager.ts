@@ -1,11 +1,6 @@
 import pg from 'pg';
 import { log } from '../config/logging.js';
-import { AsyncLocalStorage } from 'node:async_hooks';
 const { Pool, types } = pg;
-
-export const dbContextStorage = new AsyncLocalStorage<{
-  authenticatedUserId: string;
-}>();
 // Parse numeric types
 types.setTypeParser(types.builtins.NUMERIC, (value) => parseFloat(value));
 // Keep DATE columns (oid 1082) as raw 'YYYY-MM-DD' calendar-day strings. The default
@@ -67,19 +62,16 @@ function _getRawAppPool() {
   return appPoolInstance;
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function getClient(
-  userId: any,
-  authenticatedUserId: string | null = null
-) {
+async function getClient(userId: any, authenticatedUserId = null) {
   if (!userId) {
     throw new Error(
       'userId is required for getClient to ensure RLS is applied.'
     );
   }
   const client = await _getRawAppPool().connect();
-  const store = dbContextStorage.getStore();
-  const actualAuthUserId =
-    authenticatedUserId || store?.authenticatedUserId || userId;
+  // If authenticatedUserId is not provided, it means the user is acting as themselves.
+  // In this case, the authenticated actor IS the target user.
+  const actualAuthUserId = authenticatedUserId || userId;
   await client.query('SELECT public.set_app_context($1, $2)', [
     userId,
     actualAuthUserId,

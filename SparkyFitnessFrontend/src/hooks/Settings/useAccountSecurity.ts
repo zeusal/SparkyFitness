@@ -7,16 +7,8 @@ export const useChangeEmailMutation = () => {
   const { t } = useTranslation();
 
   return useMutation({
-    mutationFn: async ({
-      newEmail,
-      currentPassword,
-    }: {
-      newEmail: string;
-      currentPassword?: string;
-    }) => {
-      return api.post('/identity/update-email', {
-        body: { newEmail, currentPassword },
-      });
+    mutationFn: async ({ newEmail }: { newEmail: string }) => {
+      return api.post('/identity/update-email', { body: { newEmail } });
     },
     meta: {
       successMessage: t(

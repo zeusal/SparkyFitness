@@ -6,5 +6,4 @@ export interface MealType {
   created_at: string;
   is_visible: boolean;
   show_in_quick_log: boolean;
-  default_time?: string | null;
 }

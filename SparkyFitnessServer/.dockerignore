@@ -16,5 +16,3 @@ yarn-error.log*
 
 # Ignore Garmin mock data
 SparkyFitnessGarmin/mock_data/
-
-.mcp.json

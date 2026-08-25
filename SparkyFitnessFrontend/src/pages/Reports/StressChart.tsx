@@ -9,7 +9,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { usePreferences } from '@/contexts/PreferencesContext';
+import { format, parseISO } from 'date-fns';
 
 interface StressDataPoint {
   time: string;
@@ -22,7 +22,6 @@ interface StressChartProps {
 }
 
 const StressChart = ({ data, title }: StressChartProps) => {
-  const { formatTime } = usePreferences();
   const [isMounted, setIsMounted] = React.useState(false);
 
   React.useEffect(() => {
@@ -34,7 +33,7 @@ const StressChart = ({ data, title }: StressChartProps) => {
 
   // Format data for recharts
   const formattedData = filteredData.map((point) => ({
-    name: formatTime(point.time),
+    name: format(parseISO(point.time), 'HH:mm'),
     Stress: point.stress_level,
   }));
 

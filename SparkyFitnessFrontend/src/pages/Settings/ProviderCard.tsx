@@ -15,14 +15,12 @@ import SyncRangeDialog from './SyncRangeDialog';
 import {
   useConnectFitbitMutation,
   useConnectGoogleHealthMutation,
-  useConnectOuraMutation,
   useConnectPolarMutation,
   useConnectStravaMutation,
   useConnectWithingsMutation,
   useDisconnectFitbitMutation,
   useDisconnectGarminMutation,
   useDisconnectGoogleHealthMutation,
-  useDisconnectOuraMutation,
   useDisconnectPolarMutation,
   useDisconnectStravaMutation,
   useDisconnectWithingsMutation,
@@ -30,7 +28,6 @@ import {
   useManualSyncFitbitMutation,
   useManualSyncGarminMutation,
   useManualSyncGoogleHealthMutation,
-  useManualSyncOuraMutation,
   useManualSyncPolarMutation,
   useManualSyncStravaMutation,
   useSyncHevyMutation,
@@ -60,10 +57,6 @@ const PROVIDER_PORTALS: Record<string, { label: string; url: string }> = {
   fitbit: {
     label: 'Fitbit Developer Portal',
     url: 'https://dev.fitbit.com/apps',
-  },
-  oura: {
-    label: 'Oura Developer Portal',
-    url: 'https://developer.ouraring.com/applications',
   },
   withings: {
     label: 'Withings Partner Dashboard',
@@ -115,8 +108,6 @@ export const ProviderCard = ({
 
   const { mutate: handleConnectFitbit, isPending: isConnectFitbitPending } =
     useConnectFitbitMutation();
-  const { mutate: handleConnectOura, isPending: isConnectOuraPending } =
-    useConnectOuraMutation();
   const {
     mutate: handleConnectGoogleHealth,
     isPending: isConnectGoogleHealthPending,
@@ -132,8 +123,6 @@ export const ProviderCard = ({
     mutate: handleDisconnectFitbit,
     isPending: isDisconnectFitbitPending,
   } = useDisconnectFitbitMutation();
-  const { mutate: handleDisconnectOura, isPending: isDisconnectOuraPending } =
-    useDisconnectOuraMutation();
   const {
     mutate: handleDisconnectGoogleHealth,
     isPending: isDisconnectGoogleHealthPending,
@@ -157,8 +146,6 @@ export const ProviderCard = ({
     useManualSyncWithingsMutation();
   const { mutate: handleManualSyncFitbit, isPending: isSyncFitbitPending } =
     useManualSyncFitbitMutation();
-  const { mutate: handleManualSyncOura, isPending: isSyncOuraPending } =
-    useManualSyncOuraMutation();
   const { mutate: handleManualSyncGarmin, isPending: isSyncGarminPending } =
     useManualSyncGarminMutation();
   const { mutate: handleManualSyncPolar, isPending: isSyncPolarPending } =
@@ -191,9 +178,6 @@ export const ProviderCard = ({
       case 'fitbit':
         handleManualSyncFitbit({ startDate, endDate });
         break;
-      case 'oura':
-        handleManualSyncOura({ startDate, endDate });
-        break;
       case 'polar':
         handleManualSyncPolar({ providerId: provider.id, startDate, endDate });
         break;
@@ -224,13 +208,11 @@ export const ProviderCard = ({
     globalUpdatePending ||
     globalDeletePending ||
     isConnectFitbitPending ||
-    isConnectOuraPending ||
     isConnectGoogleHealthPending ||
     isConnectPolarPending ||
     isConnectStravaPending ||
     isConnectWithingsPending ||
     isDisconnectFitbitPending ||
-    isDisconnectOuraPending ||
     isDisconnectGoogleHealthPending ||
     isDisconnectGarminPending ||
     isDisconnectPolarPending ||
@@ -238,7 +220,6 @@ export const ProviderCard = ({
     isDisconnectWithingsPending ||
     isSyncWithingsPending ||
     isSyncFitbitPending ||
-    isSyncOuraPending ||
     isSyncGarminPending ||
     isSyncGoogleHealthPending ||
     isSyncPolarPending ||
@@ -338,15 +319,6 @@ export const ProviderCard = ({
           sync: () => setIsSyncDialogOpen(true),
           lastSync: provider.fitbit_last_sync_at,
           tokenExpires: provider.fitbit_token_expires,
-          hasToken: isLinked && provider.is_active,
-        };
-      case 'oura':
-        return {
-          connect: () => handleConnectOura(),
-          disconnect: () => handleDisconnectOura(),
-          sync: () => setIsSyncDialogOpen(true),
-          lastSync: provider.oura_last_sync_at,
-          tokenExpires: provider.oura_token_expires,
           hasToken: isLinked && provider.is_active,
         };
       case 'googlehealth':
@@ -630,7 +602,6 @@ export const ProviderCard = ({
 
       {[
         'fitbit',
-        'oura',
         'googlehealth',
         'withings',
         'polar',

@@ -1,8 +1,6 @@
 import React, { useRef } from 'react';
 import { Alert, View, Text, TouchableOpacity } from 'react-native';
-import { useTranslation } from 'react-i18next';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
-import { DeleteRowAction } from './SwipeableDeleteRow';
 
 interface SwipeableIngredientRowProps {
   foodName: string;
@@ -17,6 +15,8 @@ interface SwipeableIngredientRowProps {
   onPress?: () => void;
 }
 
+const DELETE_ACTION_WIDTH = 80;
+
 const SwipeableIngredientRow: React.FC<SwipeableIngredientRowProps> = ({
   foodName,
   quantityLabel,
@@ -27,20 +27,24 @@ const SwipeableIngredientRow: React.FC<SwipeableIngredientRowProps> = ({
   onConfirmDelete,
   onPress,
 }) => {
-  const { t } = useTranslation();
+  // Matches the existing `SwipeableFoodRow` convention in this codebase. A more
+  // specific ref type (e.g. `React.ComponentRef<typeof ReanimatedSwipeable>`)
+  // resolves to `{}` and breaks `.close()` under the current Expo SDK 55 React
+  // types; until upstream tightens this, `any` is what the rest of the project
+  // uses for the same ref.
   const swipeableRef = useRef<any>(null);
 
   const handleDeletePress = () => {
     const message = isLastIngredient
-      ? t('ingredientRow.lastWarning', { defaultValue: 'This is the last ingredient. Add another before you can save, or use Delete Meal to remove the whole meal.' })
+      ? 'This is the last ingredient. Add another before you can save, or use Delete Meal to remove the whole meal.'
       : undefined;
     Alert.alert(
-      t('ingredientRow.removeTitle', { defaultValue: 'Remove {{name}}?', name: foodName }),
+      `Remove ${foodName}?`,
       message,
       [
-        { text: t('common.cancel', { defaultValue: 'Cancel' }), style: 'cancel', onPress: () => swipeableRef.current?.close() },
+        { text: 'Cancel', style: 'cancel', onPress: () => swipeableRef.current?.close() },
         {
-          text: t('common.remove', { defaultValue: 'Remove' }),
+          text: 'Remove',
           style: 'destructive',
           onPress: () => {
             swipeableRef.current?.close();
@@ -64,17 +68,28 @@ const SwipeableIngredientRow: React.FC<SwipeableIngredientRowProps> = ({
       style?: 'cancel' | 'destructive';
       onPress?: () => void;
     }[] = [];
-    if (onPress) buttons.push({ text: t('common.edit', { defaultValue: 'Edit' }), onPress });
-    buttons.push({ text: t('common.delete', { defaultValue: 'Delete' }), style: 'destructive', onPress: onConfirmDelete });
-    buttons.push({ text: t('common.cancel', { defaultValue: 'Cancel' }), style: 'cancel' });
+    if (onPress) buttons.push({ text: 'Edit', onPress });
+    buttons.push({ text: 'Delete', style: 'destructive', onPress: onConfirmDelete });
+    buttons.push({ text: 'Cancel', style: 'cancel' });
     const message = isLastIngredient
-      ? t('ingredientRow.lastWarning', { defaultValue: 'This is the last ingredient. Add another before you can save, or use Delete Meal to remove the whole meal.' })
+      ? 'This is the last ingredient. Add another before you can save, or use Delete Meal to remove the whole meal.'
       : undefined;
     Alert.alert(foodName, message, buttons);
   };
 
+  // RN TouchableOpacity + className here, matching SwipeableFoodRow /
+  // SwipeableExerciseRow: NativeWind styles it reliably (the red background) and
+  // it works inside ReanimatedSwipeable, as those shipped rows demonstrate.
   const renderRightActions = () => (
-    <DeleteRowAction onPress={handleDeletePress} disabled={disabled} />
+    <TouchableOpacity
+      className="bg-bg-danger justify-center items-center"
+      style={{ width: DELETE_ACTION_WIDTH }}
+      onPress={handleDeletePress}
+      activeOpacity={0.7}
+      disabled={disabled}
+    >
+      <Text className="text-text-danger font-semibold text-sm">Delete</Text>
+    </TouchableOpacity>
   );
 
   const rowBody = (
@@ -105,7 +120,7 @@ const SwipeableIngredientRow: React.FC<SwipeableIngredientRowProps> = ({
           onPress={onPress}
           onLongPress={handleLongPress}
           disabled={disabled}
-          accessibilityLabel={t('ingredientRow.edit', { defaultValue: 'Edit {{name}}', name: foodName })}
+          accessibilityLabel={`Edit ${foodName}`}
           accessibilityRole="button"
         >
           {rowBody}

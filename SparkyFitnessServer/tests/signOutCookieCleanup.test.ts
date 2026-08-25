@@ -21,9 +21,8 @@ function fakeBetterAuthHandler(cookies: string[]) {
 
 function buildApp(handler: (req: Request, res: Response) => void) {
   const app = express();
-  app.set('trust proxy', 1);
   app.post('/api/auth/sign-out', (req, res) => {
-    applySignOutCookieCleanup(res, req.secure);
+    applySignOutCookieCleanup(res);
     handler(req, res);
   });
   return app;
@@ -117,17 +116,15 @@ describe('applySignOutCookieCleanup', () => {
     );
   });
 
-  it('omits Secure attribute on plain HTTP requests', async () => {
-    const app = buildApp(fakeBetterAuthHandler([]));
-    const res = await request(app).post('/api/auth/sign-out');
-    expect(res.headers['set-cookie'][0]).not.toContain('Secure');
-  });
-
-  it('includes Secure attribute on HTTPS requests', async () => {
-    const app = buildApp(fakeBetterAuthHandler([]));
-    const res = await request(app)
-      .post('/api/auth/sign-out')
-      .set('X-Forwarded-Proto', 'https');
-    expect(res.headers['set-cookie'][0]).toContain('Secure');
+  it('includes Secure attribute in production', async () => {
+    const prev = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      const app = buildApp(fakeBetterAuthHandler([]));
+      const res = await request(app).post('/api/auth/sign-out');
+      expect(res.headers['set-cookie'][0]).toContain('Secure');
+    } finally {
+      process.env.NODE_ENV = prev;
+    }
   });
 });

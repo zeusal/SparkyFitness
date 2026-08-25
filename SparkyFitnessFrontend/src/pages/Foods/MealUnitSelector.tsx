@@ -20,9 +20,6 @@ interface MealUnitSelectorProps {
   onSelect: (meal: Meal, quantity: number, unit: string) => void;
   initialQuantity?: number;
   initialUnit?: string;
-  title?: string;
-  description?: string;
-  confirmLabel?: string;
 }
 
 const MealUnitSelector = ({
@@ -32,9 +29,6 @@ const MealUnitSelector = ({
   onSelect,
   initialQuantity,
   initialUnit,
-  title,
-  description,
-  confirmLabel,
 }: MealUnitSelectorProps) => {
   const { loggingLevel, energyUnit, convertEnergy } = usePreferences();
   debug(loggingLevel, 'MealUnitSelector component rendered.', { meal, open });
@@ -122,16 +116,14 @@ const MealUnitSelector = ({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {title ??
-              (initialQuantity
-                ? `Edit ${meal?.name}`
-                : `Add ${meal?.name} to Meal Plan`)}
+            {initialQuantity
+              ? `Edit ${meal?.name}`
+              : `Add ${meal?.name} to Meal Plan`}
           </DialogTitle>
           <DialogDescription>
-            {description ??
-              (initialQuantity
-                ? `Edit the quantity for ${meal?.name}.`
-                : `Select the quantity for this meal in your meal plan.`)}
+            {initialQuantity
+              ? `Edit the quantity for ${meal?.name}.`
+              : `Select the quantity for this meal in your meal plan.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -143,8 +135,8 @@ const MealUnitSelector = ({
                 <Input
                   id="quantity"
                   type="number"
-                  step="any"
-                  min="0.01"
+                  step="0.1"
+                  min="0.1"
                   value={quantity}
                   ref={focusAndSelect}
                   onChange={(e) => {
@@ -194,8 +186,7 @@ const MealUnitSelector = ({
                 Cancel
               </Button>
               <Button type="submit">
-                {confirmLabel ??
-                  (initialQuantity ? 'Update Meal' : 'Add to Meal Plan')}
+                {initialQuantity ? 'Update Meal' : 'Add to Meal Plan'}
               </Button>
             </div>
           </div>

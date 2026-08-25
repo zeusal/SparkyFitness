@@ -78,13 +78,10 @@ const ActivityReportLapTable: React.FC<LapTableProps> = ({
   const processedLaps = useMemo<ProcessedLap[]>(() => {
     return lapDTOs.reduce<ProcessedLap[]>((acc, lap, i) => {
       const prev = acc[acc.length - 1];
-      // Handle distance whether passed in raw meters (>100) or kilometers
-      const rawKm = lap.distance
-        ? lap.distance > 100
-          ? lap.distance / 1000
-          : lap.distance
+      // lap.distance is always in metres as stored by the Garmin server pipeline.
+      const dist = lap.distance
+        ? convertDistance(lap.distance / 1000, 'km', distanceUnit)
         : 0;
-      const dist = convertDistance(rawKm, 'km', distanceUnit);
       const durSec = lap.duration ?? 0;
       acc.push({
         lapIndex: lap.lapIndex ?? i + 1,

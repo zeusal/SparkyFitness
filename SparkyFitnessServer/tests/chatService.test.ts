@@ -1,26 +1,14 @@
 import { vi, beforeEach, describe, expect, it } from 'vitest';
 import { MockLanguageModelV3 } from 'ai/test';
-import { APICallError } from 'ai';
 import { simulateReadableStream } from 'ai';
 import type { UIMessageChunk } from 'ai';
-import chatService, {
-  mapUsageToMetadata,
-  buildChatStopConditions,
-} from '../services/chatService.js';
-import { ASK_USER_TOOL_NAME } from '@workspace/shared';
+import chatService, { mapUsageToMetadata } from '../services/chatService.js';
 import chatRepository from '../models/chatRepository.js';
-import {
-  recordRejectedParam,
-  resetLearnedRejections,
-  supportsTemperature,
-} from '../ai/modelCapabilities.js';
 import measurementRepository from '../models/measurementRepository.js';
 import preferenceRepository from '../models/preferenceRepository.js';
 import foodRepository from '../models/foodRepository.js';
-import mealTypeRepository from '../models/mealType.js';
 import foodEntryService from '../services/foodEntryService.js';
 import { log } from '../config/logging.js';
-import { createOpenAI } from '@ai-sdk/openai';
 // Mock dependencies
 vi.mock('../models/chatRepository');
 vi.mock('../models/userRepository');
@@ -49,14 +37,6 @@ vi.mock('../models/foodRepository', () => ({
     getFoodsWithPagination: vi.fn(),
     countFoods: vi.fn(),
     getFoodById: vi.fn(),
-    getFoodVariantById: vi.fn(),
-    getFoodVariantsByFoodId: vi.fn(),
-  },
-}));
-vi.mock('../models/mealType.js', () => ({
-  default: {
-    getAllMealTypes: vi.fn(),
-    getMealTypeById: vi.fn(),
   },
 }));
 vi.mock('../services/preferenceService', () => ({
@@ -82,9 +62,6 @@ describe('chatService', () => {
   const mockTargetUserId = 'user-456';
   beforeEach(() => {
     vi.clearAllMocks();
-    // Learned parameter rejections are module-level; keep them from leaking
-    // between tests.
-    resetLearnedRejections();
   });
   describe('handleAiServiceSettings', () => {
     it('should save AI service settings', async () => {
@@ -394,16 +371,6 @@ describe('chatService', () => {
       warnings: [],
     });
 
-    // The AI SDK passes tools to the model as an array of function-tool defs
-    // (each with a `.name`); normalize to a name list for assertions.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const modelToolNames = (model: any): string[] => {
-      const raw = model.doGenerateCalls[0]?.tools ?? [];
-      return Array.isArray(raw)
-        ? raw.map((t: { name: string }) => t.name)
-        : Object.keys(raw);
-    };
-
     const textStep = (text: string) => ({
       finishReason: { unified: 'stop' as const, raw: undefined },
       usage,
@@ -438,46 +405,12 @@ describe('chatService', () => {
       vi.mocked(measurementRepository.getCustomCategories).mockResolvedValue(
         []
       );
-      vi.mocked(mealTypeRepository.getAllMealTypes).mockResolvedValue([
-        {
-          id: 'breakfast-id',
-          name: 'Breakfast',
-          sort_order: 1,
-          user_id: null,
-        },
-        {
-          id: 'lunch-id',
-          name: 'Lunch',
-          sort_order: 2,
-          user_id: null,
-        },
-        {
-          id: 'dinner-id',
-          name: 'Dinner',
-          sort_order: 3,
-          user_id: null,
-        },
-        {
-          id: 'snacks-id',
-          name: 'Snacks',
-          sort_order: 4,
-          user_id: null,
-        },
-      ]);
     });
 
     it('executes a log_food tool call in-process, derives food_added from call input, and saves history', async () => {
       vi.mocked(foodRepository.getFoodsWithPagination).mockResolvedValue([
-        {
-          ...eggsRow,
-          default_variant: {
-            ...eggsRow.default_variant,
-            serving_size: 1,
-            serving_unit: 'serving',
-          },
-        },
+        eggsRow,
       ]);
-      vi.mocked(foodRepository.getFoodVariantsByFoodId).mockResolvedValue([]);
       vi.mocked(foodEntryService.createFoodEntry).mockResolvedValue({
         id: 'entry-1',
         food_name: 'Eggs',
@@ -518,7 +451,7 @@ describe('chatService', () => {
           entry_date: '2026-06-10',
           quantity: 2,
           unit: 'serving',
-          meal_type_id: 'breakfast-id',
+          meal_type: 'breakfast',
         }
       );
       expect(chatRepository.saveChatHistory).toHaveBeenCalledWith(
@@ -535,43 +468,6 @@ describe('chatService', () => {
           content: 'Logged 2 eggs for breakfast!',
         })
       );
-    });
-
-    it('limits the tool set passed to the model when toolCategories is provided', async () => {
-      const model = scriptModel([textStep('Sure.')]);
-
-      await chatService.processChatMessage(
-        [{ role: 'user', content: 'hello' }],
-        'svc-1',
-        activeUserId,
-        actorUserId,
-        false,
-        ['exercise']
-      );
-
-      const toolNames = modelToolNames(model);
-      // Exercise domain present, food/goals/reports excluded.
-      expect(toolNames.some((n) => n.includes('exercise'))).toBe(true);
-      expect(toolNames).not.toContain('sparky_manage_food');
-      expect(toolNames).not.toContain('sparky_manage_goals');
-      expect(toolNames).not.toContain('sparky_get_report');
-    });
-
-    it('falls back to the full tool set when toolCategories is omitted', async () => {
-      const model = scriptModel([textStep('Sure.')]);
-
-      await chatService.processChatMessage(
-        [{ role: 'user', content: 'hello' }],
-        'svc-1',
-        activeUserId,
-        actorUserId
-      );
-
-      const toolNames = modelToolNames(model);
-      // openai is a cloud provider -> full profile default.
-      expect(toolNames).toContain('sparky_manage_food');
-      expect(toolNames).toContain('sparky_manage_exercise');
-      expect(toolNames).toContain('sparky_get_report');
     });
 
     it('completes with an ERRORS string as the tool result when a backing service throws', async () => {
@@ -636,11 +532,10 @@ describe('chatService', () => {
         {
           ...aiServiceSetting,
           service_type: 'ollama',
-          custom_url: 'http://localhost:11434',
           chat_tool_profile: 'core',
         }
       );
-      const model = scriptModel([textStep('Hi there!')]);
+      scriptModel([textStep('Hi there!')]);
 
       await chatService.processChatMessage(
         [{ role: 'user', content: 'hello' }],
@@ -651,66 +546,8 @@ describe('chatService', () => {
 
       expect(log).toHaveBeenCalledWith(
         'info',
-        expect.stringMatching(
-          /Loaded 21\/38 active tools for chatbot \(profile=core/
-        )
+        expect.stringMatching(/Loaded 18 core tools/)
       );
-      // The core profile is the mitigation, so no context-window warning.
-      expect(log).not.toHaveBeenCalledWith(
-        'warn',
-        expect.stringMatching(/default 4096-token context/)
-      );
-      // Small local models get a low temperature for steadier tool JSON.
-      expect(model.doGenerateCalls[0].temperature).toBe(0.2);
-    });
-
-    // Regression for issue #2165: some models accept only the default
-    // temperature, so sending the core-profile 0.2 would 400 the turn. The core
-    // profile is honored only for self-hosted service types, so the rejection
-    // reaches this path through the learned gate rather than the static one.
-    it('withholds the core-profile temperature from a model that rejects it', async () => {
-      recordRejectedParam('openai_compatible', 'reasoning-1', 'temperature');
-      vi.mocked(chatRepository.getAiServiceSettingForBackend).mockResolvedValue(
-        {
-          ...aiServiceSetting,
-          service_type: 'openai_compatible',
-          custom_url: 'http://localhost:1234/v1',
-          model_name: 'reasoning-1',
-          chat_tool_profile: 'core',
-        }
-      );
-      const model = scriptModel([textStep('Hi there!')]);
-
-      await chatService.processChatMessage(
-        [{ role: 'user', content: 'hello' }],
-        'svc-1',
-        activeUserId,
-        actorUserId
-      );
-
-      expect(model.doGenerateCalls[0].temperature).toBeUndefined();
-    });
-
-    it('still applies the core-profile temperature to a model that accepts it', async () => {
-      vi.mocked(chatRepository.getAiServiceSettingForBackend).mockResolvedValue(
-        {
-          ...aiServiceSetting,
-          service_type: 'openai_compatible',
-          custom_url: 'http://localhost:1234/v1',
-          model_name: 'reasoning-1',
-          chat_tool_profile: 'core',
-        }
-      );
-      const model = scriptModel([textStep('Hi there!')]);
-
-      await chatService.processChatMessage(
-        [{ role: 'user', content: 'hello' }],
-        'svc-1',
-        activeUserId,
-        actorUserId
-      );
-
-      expect(model.doGenerateCalls[0].temperature).toBe(0.2);
     });
 
     it('ships the full tool set for an Ollama service left on the full profile', async () => {
@@ -718,11 +555,10 @@ describe('chatService', () => {
         {
           ...aiServiceSetting,
           service_type: 'ollama',
-          custom_url: 'http://localhost:11434',
           chat_tool_profile: 'full',
         }
       );
-      const model = scriptModel([textStep('Hi there!')]);
+      scriptModel([textStep('Hi there!')]);
 
       await chatService.processChatMessage(
         [{ role: 'user', content: 'hello' }],
@@ -733,18 +569,8 @@ describe('chatService', () => {
 
       expect(log).toHaveBeenCalledWith(
         'info',
-        expect.stringMatching(
-          /Loaded 38\/38 active tools for chatbot \(profile=full/
-        )
+        expect.stringMatching(/Loaded 35 full tools/)
       );
-      // Ollama + full profile is the risky combo, so warn about the 4096 default.
-      expect(log).toHaveBeenCalledWith(
-        'warn',
-        expect.stringMatching(/default 4096-token context/)
-      );
-      // A capable full-profile model (incl. remote/cloud Ollama) keeps the
-      // provider default temperature — we don't flatten it.
-      expect(model.doGenerateCalls[0].temperature).toBeUndefined();
     });
 
     it('defaults to the full tool set when an Ollama service has no stored profile', async () => {
@@ -752,7 +578,6 @@ describe('chatService', () => {
         {
           ...aiServiceSetting,
           service_type: 'ollama',
-          custom_url: 'http://localhost:11434',
         }
       );
       scriptModel([textStep('Hi there!')]);
@@ -766,16 +591,13 @@ describe('chatService', () => {
 
       expect(log).toHaveBeenCalledWith(
         'info',
-        expect.stringMatching(
-          /Loaded 38\/38 active tools for chatbot \(profile=full/
-        )
+        expect.stringMatching(/Loaded 35 full tools/)
       );
     });
 
     it('never trims a non-Ollama service even with a stale core profile stored', async () => {
       // The profile gate keys on service_type, so a service that was Ollama+core
-      // and later switched to OpenAI still loads the full 38-tool surface
-      // (36 domain tools + sparky_enable_tools + sparky_ask_user).
+      // and later switched to OpenAI still loads the full 35-tool surface.
       vi.mocked(chatRepository.getAiServiceSettingForBackend).mockResolvedValue(
         {
           ...aiServiceSetting,
@@ -794,289 +616,8 @@ describe('chatService', () => {
 
       expect(log).toHaveBeenCalledWith(
         'info',
-        expect.stringMatching(
-          /Loaded 38\/38 active tools for chatbot \(profile=full/
-        )
+        expect.stringMatching(/Loaded 35 full tools/)
       );
-      // The context-window warning is Ollama-only; cloud providers never see it.
-      expect(log).not.toHaveBeenCalledWith(
-        'warn',
-        expect.stringMatching(/default 4096-token context/)
-      );
-    });
-
-    // Regression: keyless local servers (LM Studio, llama.cpp) configured as
-    // openai_compatible/custom must work on the non-stream chat path. Previously
-    // an ollama-only guard rejected them with "API key missing" even though the
-    // stream path, test-connection, and dispatcher all tolerate a blank key.
-    it.each(['openai_compatible', 'custom'])(
-      'does NOT require an api_key for keyless %s services',
-      async (serviceType) => {
-        vi.mocked(
-          chatRepository.getAiServiceSettingForBackend
-        ).mockResolvedValue({
-          ...aiServiceSetting,
-          service_type: serviceType,
-          api_key: null,
-          custom_url: 'http://localhost:1234/v1',
-          model_name: 'local-model',
-        });
-        scriptModel([textStep('Hello from a local server!')]);
-
-        const result = await chatService.processChatMessage(
-          [{ role: 'user', content: 'hi' }],
-          'svc-1',
-          activeUserId,
-          actorUserId,
-          true
-        );
-
-        expect(result.content).toBe('Hello from a local server!');
-        expect(createOpenAI).toHaveBeenCalledWith(
-          expect.objectContaining({ fetch: expect.any(Function) })
-        );
-      }
-    );
-
-    // Guard: a URL-requiring service (ollama/openai_compatible/custom) with no
-    // custom_url resolves to an undefined baseURL, which would make the AI SDK
-    // silently fall back to OpenAI's default host. Reject it instead.
-    it.each(['ollama', 'openai_compatible', 'custom'])(
-      'rejects a %s service that is missing its custom_url',
-      async (serviceType) => {
-        vi.mocked(
-          chatRepository.getAiServiceSettingForBackend
-        ).mockResolvedValue({
-          ...aiServiceSetting,
-          service_type: serviceType,
-          custom_url: null,
-        });
-
-        await expect(
-          chatService.processChatMessage(
-            [{ role: 'user', content: 'hi' }],
-            'svc-1',
-            activeUserId,
-            actorUserId
-          )
-        ).rejects.toThrow(
-          `Custom URL is required for service type: ${serviceType}`
-        );
-      }
-    );
-
-    it('still rejects a cloud service that is missing its api_key', async () => {
-      vi.mocked(chatRepository.getAiServiceSettingForBackend).mockResolvedValue(
-        {
-          ...aiServiceSetting,
-          service_type: 'openai',
-          api_key: null,
-        }
-      );
-
-      await expect(
-        chatService.processChatMessage(
-          [{ role: 'user', content: 'hi' }],
-          'svc-1',
-          activeUserId,
-          actorUserId
-        )
-      ).rejects.toThrow('API key missing for selected AI service.');
-    });
-
-    // A manual in-chat category selection is a strict ceiling: only the chosen
-    // categories are sent, and the sparky_enable_tools escalation tool is NOT
-    // offered (the model is prompted to send the user to the tool selector
-    // instead — see the getSystemPrompt strict-mode test in
-    // chatServiceClassifier.test.ts). Auto-classification keeps escalation; the
-    // widening logic itself is unit-tested via buildEscalationPrepareStep.
-    it('enforces a strict tool ceiling for a manual category selection (no escalation tool)', async () => {
-      const model = scriptModel([textStep('Sure.')]);
-
-      await chatService.processChatMessage(
-        [{ role: 'user', content: 'log my lunch' }],
-        'svc-1',
-        activeUserId,
-        actorUserId,
-        false,
-        ['food']
-      );
-
-      const sentTools = modelToolNames(model);
-      // Chosen category is present...
-      expect(sentTools).toContain('sparky_manage_food');
-      // ...unchosen categories are not...
-      expect(sentTools).not.toContain('sparky_manage_exercise');
-      // ...and the escalation tool is withheld in manual mode.
-      expect(sentTools).not.toContain('sparky_enable_tools');
-      // ...but quick replies survive: they belong to no category, so a manual
-      // selection must not strip the model's ability to offer chips.
-      expect(sentTools).toContain(ASK_USER_TOOL_NAME);
-    });
-
-    // Quick replies are full-profile only: the small local models the 'core'
-    // profile exists for pick tools unreliably from a wider surface.
-    it('withholds the quick-reply tool from the core profile', async () => {
-      vi.mocked(chatRepository.getAiServiceSettingForBackend).mockResolvedValue(
-        {
-          ...aiServiceSetting,
-          service_type: 'ollama',
-          custom_url: 'http://localhost:11434',
-          chat_tool_profile: 'core',
-        }
-      );
-      const model = scriptModel([textStep('Hi there!')]);
-
-      await chatService.processChatMessage(
-        [{ role: 'user', content: 'log my lunch' }],
-        'svc-1',
-        activeUserId,
-        actorUserId
-      );
-
-      expect(modelToolNames(model)).not.toContain(ASK_USER_TOOL_NAME);
-    });
-
-    // Tool parts are stripped from the LLM window, so an assistant turn that
-    // was only a quick-reply call used to collapse to nothing: the model then
-    // saw a bare "75g each" with no idea what it answered, and would re-ask or
-    // invent what had happened. The call has to survive as text.
-    it('replays a previous quick-reply call as text so the model remembers what it asked', async () => {
-      const model = scriptModel([textStep('Updated.')]);
-
-      await chatService.processChatMessage(
-        [
-          { role: 'user', content: 'i had 5 pancakes for snacks' },
-          {
-            role: 'assistant',
-            content: '',
-            parts: [
-              {
-                type: `tool-${ASK_USER_TOOL_NAME}`,
-                input: {
-                  mode: 'ask',
-                  question: 'How big were they?',
-                  options: ['75g each — small', '225g each — large'],
-                },
-              },
-            ],
-          },
-          { role: 'user', content: '75g each — small' },
-        ] as unknown as Parameters<typeof chatService.processChatMessage>[0],
-        'svc-1',
-        activeUserId,
-        actorUserId
-      );
-
-      const sent = JSON.stringify(model.doGenerateCalls[0].prompt);
-      expect(sent).toContain('How big were they?');
-      expect(sent).toContain('75g each — small');
-    });
-
-    // Without this the model forgets what it already looked up: after the user
-    // answers a quick reply it no longer has the food's id, and emits a
-    // half-formed log call (missing action/food_id) or invents a result.
-    it('replays earlier tool calls and their results as text', async () => {
-      const model = scriptModel([textStep('Logged.')]);
-
-      await chatService.processChatMessage(
-        [
-          { role: 'user', content: 'i had 3 pancakes for breakfast' },
-          {
-            role: 'assistant',
-            content: '',
-            parts: [
-              {
-                type: 'tool-sparky_manage_food',
-                input: {
-                  action: 'lookup_food_nutrition',
-                  food_name: 'pancake',
-                },
-                output:
-                  'Found match in internal: Pancakes, plain. ID: fb932a4f-9862-4a4d-8c2d-fcf7f4688acb',
-              },
-            ],
-          },
-          { role: 'user', content: '100g each — standard' },
-        ] as unknown as Parameters<typeof chatService.processChatMessage>[0],
-        'svc-1',
-        activeUserId,
-        actorUserId
-      );
-
-      const sent = JSON.stringify(model.doGenerateCalls[0].prompt);
-      expect(sent).toContain('sparky_manage_food');
-      // The food id is the part the follow-up turn actually needs.
-      expect(sent).toContain('fb932a4f-9862-4a4d-8c2d-fcf7f4688acb');
-    });
-
-    // Whole diaries would otherwise be dragged back into every later request.
-    it('truncates a huge replayed tool result', async () => {
-      const model = scriptModel([textStep('Done.')]);
-
-      await chatService.processChatMessage(
-        [
-          { role: 'user', content: 'show my diary' },
-          {
-            role: 'assistant',
-            content: '',
-            parts: [
-              {
-                type: 'tool-sparky_get_food_diary',
-                input: { action: 'list_diary' },
-                output: 'x'.repeat(5000),
-              },
-            ],
-          },
-          { role: 'user', content: 'thanks' },
-        ] as unknown as Parameters<typeof chatService.processChatMessage>[0],
-        'svc-1',
-        activeUserId,
-        actorUserId
-      );
-
-      const sent = JSON.stringify(model.doGenerateCalls[0].prompt);
-      expect(sent).toContain('[truncated]');
-      expect(sent).not.toContain('x'.repeat(1000));
-    });
-
-    it('offers the quick-reply tool on the full profile', async () => {
-      const model = scriptModel([textStep('Sure.')]);
-
-      await chatService.processChatMessage(
-        [{ role: 'user', content: 'log my lunch' }],
-        'svc-1',
-        activeUserId,
-        actorUserId
-      );
-
-      expect(modelToolNames(model)).toContain(ASK_USER_TOOL_NAME);
-    });
-  });
-
-  // The agent loop must halt the moment the model offers chips. Without this the
-  // echoed tool result feeds straight back and the model answers its own
-  // question instead of waiting for the user's tap.
-  describe('buildChatStopConditions', () => {
-    const askCallStep = {
-      steps: [{ toolCalls: [{ toolName: ASK_USER_TOOL_NAME }] }],
-    };
-
-    it('stops the loop as soon as sparky_ask_user is called', () => {
-      const [, stopOnAsk] = buildChatStopConditions('full');
-      expect(
-        stopOnAsk(askCallStep as unknown as Parameters<typeof stopOnAsk>[0])
-      ).toBe(true);
-    });
-
-    it('does not stop the loop for an ordinary tool call', () => {
-      const [, stopOnAsk] = buildChatStopConditions('full');
-      const loggingStep = {
-        steps: [{ toolCalls: [{ toolName: 'sparky_manage_food' }] }],
-      };
-      expect(
-        stopOnAsk(loggingStep as unknown as Parameters<typeof stopOnAsk>[0])
-      ).toBe(false);
     });
   });
 
@@ -1130,111 +671,6 @@ describe('chatService', () => {
       );
     });
 
-    // The streaming path cannot retry a rejected parameter in place, so the
-    // rejection has to be learned for the next turn. It is the first request a
-    // model sees more often than not: the intent classifier returns early on
-    // any keyword match and is skipped entirely for manual tool selection.
-    it('records a stream-time temperature rejection so later turns omit it', async () => {
-      vi.mocked(chatRepository.getAiServiceSettingForBackend).mockResolvedValue(
-        {
-          ...aiServiceSetting,
-          service_type: 'openai_compatible',
-          custom_url: 'http://localhost:1234/v1',
-          model_name: 'reasoning-1',
-          chat_tool_profile: 'core',
-        }
-      );
-      const model = new MockLanguageModelV3({
-        doStream: async () => {
-          throw new APICallError({
-            message: 'Unsupported value: temperature',
-            url: 'http://localhost:1234/v1/chat/completions',
-            requestBodyValues: {},
-            statusCode: 400,
-            responseBody: JSON.stringify({
-              error: {
-                message:
-                  "Unsupported value: 'temperature' does not support 0.2 with this model. Only the default (1) value is supported.",
-                type: 'invalid_request_error',
-                param: 'temperature',
-                code: 'unsupported_value',
-              },
-            }),
-          });
-        },
-      });
-      mockModelHolder.current = model;
-
-      expect(supportsTemperature('openai_compatible', 'reasoning-1')).toBe(
-        true
-      );
-
-      const { stream } = await chatService.processChatMessageStream(
-        [{ role: 'user', content: 'hello' }],
-        'svc-1',
-        activeUserId,
-        actorUserId
-      );
-      await drainStream(stream);
-
-      // Learned, so the next turn builds the request without it.
-      expect(supportsTemperature('openai_compatible', 'reasoning-1')).toBe(
-        false
-      );
-    });
-
-    // APICallError.requestBodyValues holds the whole request — the user's chat
-    // messages, the system prompt, tool args. It must never reach the logger,
-    // which forwards objects to console.error at a level that is on by default.
-    it('never logs the provider error object or the request body it carries', async () => {
-      const SENTINEL = 'SENSITIVE-CHAT-CONTENT-b7f3';
-      vi.mocked(chatRepository.getAiServiceSettingForBackend).mockResolvedValue(
-        {
-          ...aiServiceSetting,
-          service_type: 'openai_compatible',
-          custom_url: 'http://localhost:1234/v1',
-          model_name: 'reasoning-1',
-          chat_tool_profile: 'core',
-        }
-      );
-      const model = new MockLanguageModelV3({
-        doStream: async () => {
-          throw new APICallError({
-            message: 'Provider rejected the request',
-            url: 'http://localhost:1234/v1/chat/completions',
-            requestBodyValues: {
-              messages: [{ role: 'user', content: SENTINEL }],
-              system: SENTINEL,
-            },
-            statusCode: 400,
-            responseBody: JSON.stringify({ error: { message: 'bad request' } }),
-          });
-        },
-      });
-      mockModelHolder.current = model;
-
-      const { stream } = await chatService.processChatMessageStream(
-        [{ role: 'user', content: 'hello' }],
-        'svc-1',
-        activeUserId,
-        actorUserId
-      );
-      await drainStream(stream);
-
-      const logged = vi.mocked(log).mock.calls.flat();
-      expect(logged.length).toBeGreaterThan(0);
-      for (const arg of logged) {
-        // No raw Error objects, and no sentinel anywhere in the rendered args.
-        expect(arg).not.toBeInstanceOf(Error);
-        expect(JSON.stringify(arg) ?? '').not.toContain(SENTINEL);
-      }
-      // The failure is still reported, just redacted.
-      expect(log).toHaveBeenCalledWith(
-        'error',
-        expect.stringContaining('stream error')
-      );
-    });
-
     it('injects an error chunk and skips the assistant save when the model errors out with an empty completion', async () => {
       // Gemini's MALFORMED_FUNCTION_CALL surfaces as finishReason 'error' with
       // no content instead of a thrown error.
@@ -1274,29 +710,6 @@ describe('chatService', () => {
           messageType: 'user',
           content: 'Show my goal timeline',
         })
-      );
-    });
-
-    it('injects guarded fetch for streamed local custom providers', async () => {
-      vi.mocked(chatRepository.getAiServiceSettingForBackend).mockResolvedValue(
-        {
-          ...aiServiceSetting,
-          service_type: 'ollama',
-          custom_url: 'http://localhost:11434',
-        }
-      );
-      streamModel([{ type: 'text', text: 'hello' }]);
-
-      await chatService.processChatMessageStream(
-        [{ role: 'user', content: 'hello' }],
-        'svc-1',
-        activeUserId,
-        actorUserId,
-        true
-      );
-
-      expect(createOpenAI).toHaveBeenCalledWith(
-        expect.objectContaining({ fetch: expect.any(Function) })
       );
     });
 

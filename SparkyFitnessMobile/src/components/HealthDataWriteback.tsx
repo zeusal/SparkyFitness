@@ -1,11 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, Image, Platform } from 'react-native';
+import { View, Text, Switch, Image, Platform } from 'react-native';
+import { useCSSVariable } from 'uniwind';
 import CollapsibleSection from './CollapsibleSection';
 import Button from './ui/Button';
 import BottomSheetPicker from './BottomSheetPicker';
-import Switch from './ui/Switch';
-import { useTranslation } from 'react-i18next';
-import { getHealthMetricLabel, getHealthCategoryLabel } from '../HealthMetrics';
 import {
   WRITEBACK_METRICS,
   WRITEBACK_CATEGORY_ORDER,
@@ -44,14 +42,17 @@ const HealthDataWriteback: React.FC<HealthDataWritebackProps> = ({
   onRemoveAllData,
   onRemoveDateRange,
 }) => {
-  const { t } = useTranslation();
+  const [formEnabled, formDisabled] = useCSSVariable([
+    '--color-form-enabled',
+    '--color-form-disabled',
+  ]) as [string, string];
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
 
   if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
     return null;
   }
 
-  const storeName = Platform.OS === 'ios' ? t('healthSync.appleHealth', { defaultValue: 'Apple Health' }) : t('healthSync.healthConnect', { defaultValue: 'Health Connect' });
+  const storeName = Platform.OS === 'ios' ? 'Apple Health' : 'Health Connect';
   const grouped = groupByCategory(WRITEBACK_METRICS);
 
   const toggleCategory = (category: string) => {
@@ -66,31 +67,28 @@ const HealthDataWriteback: React.FC<HealthDataWritebackProps> = ({
     });
   };
 
-  const renderMetricItem = (metric: WritebackMetric) => {
-    const metricLabel = getHealthMetricLabel(t, metric);
-    return (
+  const renderMetricItem = (metric: WritebackMetric) => (
     <View key={metric.id} className="flex-row justify-between items-center mb-2">
       <View className="flex-row items-center flex-1 mr-2">
         <Image source={metric.icon} className="w-6 h-6" />
         <Text className="ml-2 text-base text-text-primary flex-shrink" numberOfLines={1}>
-          {metricLabel}
+          {metric.label}
         </Text>
       </View>
       <Switch
-        accessibilityLabel={t('healthSync.writeMetricLabel', { defaultValue: 'Write {{metric}} to {{store}}', metric: metricLabel, store: storeName })}
-        accessibilityHint={t('healthSync.writeMetricHint', { defaultValue: 'Toggles writing this metric to the health store.' })}
         onValueChange={(newValue) => handleToggleWriteback(metric, newValue)}
         value={!!writebackStates[metric.id]}
+        trackColor={{ false: formDisabled, true: formEnabled }}
+        thumbColor="#FFFFFF"
       />
     </View>
-    );
-  };
+  );
 
   return (
     <View className="bg-surface rounded-xl p-4 mb-4 shadow-sm">
-      <Text className="text-lg font-bold mb-1 text-text-primary">{t('healthSync.writeTitle', { defaultValue: 'Write to {{store}}', store: storeName })}</Text>
+      <Text className="text-lg font-bold mb-1 text-text-primary">Write to {storeName}</Text>
       <Text className="text-sm text-text-muted mb-3">
-        {t('healthSync.writeSummary', { defaultValue: 'Syncs the data you log in SparkyFitness out to {{store}}, keeping the two in sync.', store: storeName })}
+        Syncs the data you log in SparkyFitness out to {storeName}, keeping the two in sync.
       </Text>
       {WRITEBACK_CATEGORY_ORDER.map((category) => {
         const metricsInCategory = grouped[category];
@@ -100,7 +98,7 @@ const HealthDataWriteback: React.FC<HealthDataWritebackProps> = ({
         return (
           <CollapsibleSection
             key={category}
-            title={getHealthCategoryLabel(t, category)}
+            title={category}
             expanded={!collapsedCategories.has(category)}
             onToggle={() => toggleCategory(category)}
             itemCount={metricsInCategory.length}
@@ -111,16 +109,16 @@ const HealthDataWriteback: React.FC<HealthDataWritebackProps> = ({
       })}
       <BottomSheetPicker<RemoveScope>
         value={'' as RemoveScope}
-        title={t('healthSync.removeFrom', { defaultValue: 'Remove from {{store}}', store: storeName })}
+        title={`Remove from ${storeName}`}
         options={[
-          { label: t('healthSync.allTime', { defaultValue: 'All time' }), value: 'all' },
-          { label: t('healthSync.pickDateRange', { defaultValue: 'Pick a date range…' }), value: 'range' },
+          { label: 'All time', value: 'all' },
+          { label: 'Pick a date range…', value: 'range' },
         ]}
         onSelect={(scope) => (scope === 'all' ? onRemoveAllData() : onRemoveDateRange())}
         renderTrigger={({ onPress }) => (
           <Button variant="ghost" onPress={onPress} className="mt-2 py-1 px-0 self-start">
             <Text className="text-sm font-medium text-text-danger-subtle">
-              {t('healthSync.removeData', { defaultValue: 'Remove SparkyFitness data from {{store}}', store: storeName })}
+              Remove SparkyFitness data from {storeName}
             </Text>
           </Button>
         )}

@@ -15,7 +15,6 @@ import {
   runWriteback,
   removeWrittenData,
 } from '../../../src/services/healthkit/writeback';
-import i18n, { initializeI18n } from '../../../src/localization/i18n';
 
 jest.mock('../../../src/services/api/dailySummaryApi', () => ({
   fetchDailySummary: jest.fn(),
@@ -142,14 +141,6 @@ describe('writebackPhase', () => {
     });
   });
 
-  it('localizes known meal metadata for Polish HealthKit users', async () => {
-    await initializeI18n('pl');
-    prefs({ writebackNutritionEnabled: true });
-    await writebackPhase(['2026-06-01']);
-    expect(mockSaveCorrelation.mock.calls[0][4]).toMatchObject({ Meal: 'Śniadanie' });
-    await i18n.changeLanguage('en');
-  });
-
   it('stamps the food name and meal label onto each contained sample (Apple Health reads sample metadata, not the correlation)', async () => {
     prefs({ writebackNutritionEnabled: true });
     await writebackPhase(['2026-06-01']);
@@ -268,21 +259,6 @@ describe('writebackPhase', () => {
     await writebackPhase(['2026-06-01']);
     expect(mockSaveQuantity).not.toHaveBeenCalled(); // ml<=0 → no record
     expect(mockDeleteObjects).toHaveBeenCalledWith(WATER, { uuids: ['old-water'] });
-  });
-
-  // Regression: a pre-noon run used to store the empty signature, making every
-  // later run that day report "unchanged — skipped" regardless of the total.
-  it('defers hydration without storing a signature while the noon anchor is in the future', async () => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1); // local tomorrow: noon anchor guaranteed future
-    const tomorrow = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-
-    prefs({ writebackHydrationEnabled: true });
-    mockSummary.mockResolvedValue({ foodEntries: [], waterIntake: 750 });
-    await writebackPhase([tomorrow]);
-
-    expect(mockSaveQuantity).not.toHaveBeenCalled();
-    expect(store[`writebackHydrationSig:${tomorrow}`]).toBeUndefined();
   });
 
   it('returns true once all dates are attempted (no quota concept)', async () => {

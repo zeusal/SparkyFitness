@@ -1,5 +1,4 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
@@ -23,7 +22,7 @@ import FoodLibraryRow from '../components/FoodLibraryRow';
 import Icon from '../components/Icon';
 import MealLibraryRow from '../components/MealLibraryRow';
 import StatusView from '../components/StatusView';
-import { useFavorites, useFoods, useMeals, useMedications, useRecentMeals, useServerConnection, useSuggestedExercises } from '../hooks';
+import { useFoods, useMeals, useRecentMeals, useServerConnection, useSuggestedExercises } from '../hooks';
 import { fetchExercisesCount } from '../services/api/exerciseApi';
 import { fetchFoodsPage } from '../services/api/foodsApi';
 import { fetchWorkoutPresetsPage } from '../services/api/workoutPresetsApi';
@@ -46,7 +45,6 @@ type RecentItem =
   | { type: 'exercise'; data: Exercise };
 
 const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigation }) => {
-  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const activeWorkoutBarPadding = useActiveWorkoutBarPadding();
   const usesNativeTabs = useNativeIOSTabsActive();
@@ -54,15 +52,6 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigation }) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { isNavigationLocked, runNavigationAction } = useNavigationActionGuard(navigation);
   const { isConnected, isLoading: isConnectionLoading } = useServerConnection();
-  const { favoriteFoods, favoriteMeals } = useFavorites({ enabled: isConnected });
-  const favoriteFoodIds = useMemo(
-    () => new Set(favoriteFoods.map((f) => f.id)),
-    [favoriteFoods],
-  );
-  const favoriteMealIds = useMemo(
-    () => new Set(favoriteMeals.map((m) => m.id)),
-    [favoriteMeals],
-  );
   const {
     recentFoods,
     isLoading: isFoodsLoading,
@@ -76,7 +65,6 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigation }) => {
     refetch: refetchRecentMeals,
   } = useRecentMeals({ enabled: isConnected, limit: RECENT_LIMIT });
   const { meals, refetch: refetchMeals } = useMeals({ enabled: isConnected });
-  const { data: medications, refetch: refetchMedications } = useMedications({ enabled: isConnected });
   const {
     recentExercises,
     isLoading: isRecentExercisesLoading,
@@ -117,7 +105,6 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigation }) => {
         refetchExercisesCount(),
         refetchPresetsCount(),
         refetchRecentExercises(),
-        refetchMedications(),
       ]);
     } finally {
       setIsRefreshing(false);
@@ -131,7 +118,6 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigation }) => {
     refetchExercisesCount,
     refetchPresetsCount,
     refetchRecentExercises,
-    refetchMedications,
   ]);
 
   const recentItems = useMemo<RecentItem[]>(() => {
@@ -174,11 +160,11 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigation }) => {
       <View className="flex-1 bg-background" style={usesNativeTabs ? undefined : { paddingTop: insets.top }}>
         <StatusView
           icon="cloud-offline"
-          iconTone="muted"
+          iconColor="#9CA3AF"
           iconSize={64}
-          title={t('screens.library.noServerConfigured', { defaultValue: 'No server configured' })}
-          subtitle={t('screens.library.configureServer', { defaultValue: 'Configure your server connection in Settings to view your library.' })}
-          action={{ label: t('screens.library.goToSettings', { defaultValue: 'Go to Settings' }), onPress: () => navigation.navigate('Settings'), variant: 'primary' }}
+          title="No server configured"
+          subtitle="Configure your server connection in Settings to view your library."
+          action={{ label: 'Go to Settings', onPress: () => navigation.navigate('Settings'), variant: 'primary' }}
         />
       </View>
     );
@@ -187,13 +173,13 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigation }) => {
   if (isConnectionLoading) {
     return (
       <View className="flex-1 bg-background" style={usesNativeTabs ? undefined : { paddingTop: insets.top }}>
-        <StatusView loading title={t('screens.library.loading', { defaultValue: 'Loading library...' })} />
+        <StatusView loading title="Loading library..." />
       </View>
     );
   }
 
   return (
-      <ScrollView
+    <ScrollView
         className="flex-1 bg-background"
         style={[{ flex: 1 }, usesNativeTabs ? undefined : { paddingTop: insets.top }]}
         contentContainerStyle={{
@@ -214,19 +200,19 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigation }) => {
       >
         {!usesNativeTabs && (
           <View className="mb-6">
-            <Text className="text-2xl font-bold text-text-primary">{t('screens.library.title', { defaultValue: 'Library' })}</Text>
+            <Text className="text-2xl font-bold text-text-primary">Library</Text>
           </View>
         )}
 
         <View className="mb-3">
-          <Text className="text-lg font-semibold text-text-primary">{t('screens.library.create', { defaultValue: 'Create' })}</Text>
+          <Text className="text-lg font-semibold text-text-primary">Create</Text>
         </View>
 
         <View className="flex-row flex-wrap justify-between mb-6">
           <CreateTile
             icon="food"
-            title={t('screens.library.food', { defaultValue: 'Food' })}
-            subtitle={t('screens.library.manualEntry', { defaultValue: 'Manual entry' })}
+            title="Food"
+            subtitle="Manual entry"
             disabled={isNavigationLocked}
             onPress={() =>
               runNavigationAction(() =>
@@ -237,16 +223,16 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigation }) => {
           />
           <CreateTile
             icon="meal"
-            title={t('screens.library.meal', { defaultValue: 'Meal' })}
-            subtitle={t('screens.library.groupFoods', { defaultValue: 'Group foods' })}
+            title="Meal"
+            subtitle="Group foods"
             disabled={isNavigationLocked}
             onPress={() => runNavigationAction(() => navigation.navigate('MealAdd'))}
             className="w-[48%] mb-3"
           />
           <CreateTile
             icon="exercise-weights"
-            title={t('screens.library.exercise', { defaultValue: 'Exercise' })}
-            subtitle={t('screens.library.manualEntry', { defaultValue: 'Manual entry' })}
+            title="Exercise"
+            subtitle="Manual entry"
             disabled={isNavigationLocked}
             onPress={() =>
               runNavigationAction(() =>
@@ -257,8 +243,8 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigation }) => {
           />
           <CreateTile
             icon="bookmark-filled"
-            title={t('screens.library.workoutPreset', { defaultValue: 'Workout preset' })}
-            subtitle={t('screens.library.exerciseRoutine', { defaultValue: 'Exercise routine' })}
+            title="Workout preset"
+            subtitle="Exercise routine"
             disabled={isNavigationLocked}
             onPress={() =>
               runNavigationAction(() =>
@@ -270,7 +256,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigation }) => {
         </View>
 
         <View className="mb-3">
-          <Text className="text-lg font-semibold text-text-primary">{t('screens.library.browse', { defaultValue: 'Browse' })}</Text>
+          <Text className="text-lg font-semibold text-text-primary">Browse</Text>
         </View>
 
         <View className="bg-surface rounded-xl mb-6 shadow-sm overflow-hidden">
@@ -279,9 +265,9 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigation }) => {
             onPress={() => navigation.navigate('FoodsLibrary')}
             style={({ pressed }) => (pressed ? { opacity: 0.7 } : null)}
           >
-            <Text className="text-base font-semibold text-text-primary">{t('screens.library.foods', { defaultValue: 'Foods' })}</Text>
+            <Text className="text-base font-semibold text-text-primary">Foods</Text>
             <View className="flex-row items-center">
-              <Text className="text-text-secondary text-base mr-2">{foodsCount ?? '-'}</Text>
+              <Text className="text-text-secondary text-base mr-2">{foodsCount ?? '—'}</Text>
               <Icon name="chevron-forward" size={20} color="#999" />
             </View>
           </Pressable>
@@ -291,7 +277,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigation }) => {
             onPress={() => navigation.navigate('MealsLibrary')}
             style={({ pressed }) => (pressed ? { opacity: 0.7 } : null)}
           >
-            <Text className="text-base font-semibold text-text-primary">{t('screens.library.meals', { defaultValue: 'Meals' })}</Text>
+            <Text className="text-base font-semibold text-text-primary">Meals</Text>
             <View className="flex-row items-center">
               <Text className="text-text-secondary text-base mr-2">{meals.length}</Text>
               <Icon name="chevron-forward" size={20} color="#999" />
@@ -302,38 +288,27 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigation }) => {
             onPress={() => navigation.navigate('ExercisesLibrary')}
             style={({ pressed }) => (pressed ? { opacity: 0.7 } : null)}
           >
-            <Text className="text-base font-semibold text-text-primary">{t('screens.library.exercises', { defaultValue: 'Exercises' })}</Text>
+            <Text className="text-base font-semibold text-text-primary">Exercises</Text>
             <View className="flex-row items-center">
-              <Text className="text-text-secondary text-base mr-2">{exercisesCount ?? '-'}</Text>
-              <Icon name="chevron-forward" size={20} color="#999" />
-            </View>
-          </Pressable>
-          <Pressable
-            className="px-4 py-4 flex-row items-center justify-between border-b border-border-subtle"
-            onPress={() => navigation.navigate('WorkoutPresetsLibrary')}
-            style={({ pressed }) => (pressed ? { opacity: 0.7 } : null)}
-          >
-            <Text className="text-base font-semibold text-text-primary">{t('screens.library.workoutPresets', { defaultValue: 'Workout presets' })}</Text>
-            <View className="flex-row items-center">
-              <Text className="text-text-secondary text-base mr-2">{presetsCount ?? '-'}</Text>
+              <Text className="text-text-secondary text-base mr-2">{exercisesCount ?? '—'}</Text>
               <Icon name="chevron-forward" size={20} color="#999" />
             </View>
           </Pressable>
           <Pressable
             className="px-4 py-4 flex-row items-center justify-between"
-            onPress={() => navigation.navigate('MedicationsList')}
+            onPress={() => navigation.navigate('WorkoutPresetsLibrary')}
             style={({ pressed }) => (pressed ? { opacity: 0.7 } : null)}
           >
-            <Text className="text-base font-semibold text-text-primary">{t('screens.library.medications', { defaultValue: 'Medications' })}</Text>
+            <Text className="text-base font-semibold text-text-primary">Workout presets</Text>
             <View className="flex-row items-center">
-              <Text className="text-text-secondary text-base mr-2">{medications?.length ?? '-'}</Text>
+              <Text className="text-text-secondary text-base mr-2">{presetsCount ?? '—'}</Text>
               <Icon name="chevron-forward" size={20} color="#999" />
             </View>
           </Pressable>
         </View>
 
         <View className="mb-3">
-          <Text className="text-lg font-semibold text-text-primary">{t('screens.library.recentlyLogged', { defaultValue: 'Recently Logged' })}</Text>
+          <Text className="text-lg font-semibold text-text-primary">Recently Logged</Text>
         </View>
 
         <View className="bg-surface rounded-xl overflow-hidden shadow-sm">
@@ -341,13 +316,13 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigation }) => {
             <View className="px-4 py-8 items-center">
               <ActivityIndicator size="small" color="#6B7280" />
               <Text className="text-text-secondary text-sm mt-3">
-                {t('screens.library.loadingRecentItems', { defaultValue: 'Loading recent items...' })}
+                Loading recent items...
               </Text>
             </View>
           ) : showRecentError ? (
             <View className="px-4 py-6 items-start">
               <Text className="text-text-secondary text-sm">
-                {t('screens.library.failedRecentItems', { defaultValue: 'Failed to load recent items.' })}
+                Failed to load recent items.
               </Text>
               <Button
                 variant="link"
@@ -355,7 +330,7 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigation }) => {
                 textClassName="text-sm"
                 onPress={retryRecent}
               >
-                {t('common.retry', { defaultValue: 'Retry' })}
+                Retry
               </Button>
             </View>
           ) : recentItems.length > 0 ? (
@@ -366,7 +341,6 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigation }) => {
                   <MealLibraryRow
                     key={`meal-${item.data.id}`}
                     meal={item.data}
-                    isFavorite={favoriteMealIds.has(item.data.id)}
                     showDivider={showDivider}
                     onPress={() =>
                       navigation.navigate('MealDetail', {
@@ -382,7 +356,6 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigation }) => {
                   <FoodLibraryRow
                     key={`food-${item.data.id}`}
                     food={item.data}
-                    isFavorite={favoriteFoodIds.has(item.data.id)}
                     showDivider={showDivider}
                     onPress={() =>
                       navigation.navigate('FoodDetail', { item: foodItemToFoodInfo(item.data) })
@@ -409,10 +382,10 @@ const LibraryScreen: React.FC<LibraryScreenProps> = ({ navigation }) => {
           ) : (
             <View className="px-4 py-6">
               <Text className="text-text-primary text-base font-medium">
-                {t('screens.library.noRecentItems', { defaultValue: 'No recent items yet' })}
+                No recent items yet
               </Text>
               <Text className="text-text-secondary text-sm mt-1">
-                {t('screens.library.recentItemsHint', { defaultValue: 'Foods, meals, and exercises you log will appear here for quick access.' })}
+                Foods, meals, and exercises you log will appear here for quick access.
               </Text>
             </View>
           )}

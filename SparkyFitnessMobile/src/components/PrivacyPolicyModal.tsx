@@ -1,5 +1,4 @@
 import React from 'react';
-import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
@@ -7,7 +6,6 @@ import {
   Linking,
 } from 'react-native';
 import Button from './ui/Button';
-import { addLog } from '../services/LogService';
 import { useCSSVariable } from 'uniwind';
 import Icon from './Icon';
 
@@ -23,13 +21,12 @@ const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({
   onClose,
 }) => {
   const primary = useCSSVariable('--color-accent-primary') as string;
-  const { t } = useTranslation();
 
   const handleOpenPrivacyPolicy = async () => {
     try {
       await Linking.openURL(PRIVACY_POLICY_URL);
     } catch (error) {
-      addLog(`Failed to open privacy policy URL: ${error}`, 'ERROR');
+      console.error('Failed to open privacy policy URL:', error);
     }
   };
 
@@ -49,18 +46,18 @@ const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({
           <View className="items-center mb-5">
             <Icon name="shield-checkmark" size={48} color={primary} />
             <Text className="text-[22px] font-bold mt-3 text-center text-text-primary">
-              {t('privacyPolicy.title', { defaultValue: 'Privacy Policy' })}
+              Privacy Policy
             </Text>
           </View>
 
           {/* Content */}
           <View className="mb-6">
             <Text className="text-base leading-6 text-center mb-4 text-text-primary">
-              {t('privacyPolicy.noData', { defaultValue: 'This app does not collect, store, or sell your personal data.' })}
+              This app does not collect, store, or sell your personal data.
             </Text>
 
             <Text className="text-base leading-6 text-center mb-4 text-text-primary">
-              {t('privacyPolicy.healthData', { defaultValue: 'All HealthKit data stays on your device and is transmitted only to your own server.' })}
+              All HealthKit data stays on your device and is transmitted only to your own server.
             </Text>
 
             <Button
@@ -69,7 +66,7 @@ const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({
               className="py-0 px-0"
               textClassName="text-base leading-6 text-center underline"
             >
-              {t('privacyPolicy.learnMore', { defaultValue: 'Learn more in our Privacy Policy.' })}
+              Learn more in our Privacy Policy.
             </Button>
           </View>
 
@@ -79,7 +76,7 @@ const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({
             onPress={onClose}
             textClassName="text-[17px]"
           >
-            {t('common.close', { defaultValue: 'Close' })}
+            Close
           </Button>
         </View>
       </View>

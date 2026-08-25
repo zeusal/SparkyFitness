@@ -21,7 +21,6 @@ interface FoodPayload {
   shared_with_public?: boolean;
   provider_external_id?: string;
   provider_type?: string;
-  provider_verified?: boolean;
   saturated_fat?: number;
   polyunsaturated_fat?: number;
   monounsaturated_fat?: number;
@@ -116,18 +115,12 @@ export const getFoodById = async (foodId: string): Promise<Food> => {
   });
 };
 
-/**
- * `syncImages` true forces the food's current photos onto every matching past
- * entry, replacing photos the user set on individual diary entries; false
- * rewrites nutrition only and leaves every entry's photo untouched.
- */
 export const updateFoodEntriesSnapshot = async (
-  foodId: string,
-  syncImages: boolean = true
+  foodId: string
 ): Promise<void> => {
   return apiCall(`/foods/update-snapshot`, {
     method: 'POST',
-    body: { foodId, syncImages },
+    body: { foodId },
   });
 };
 
@@ -157,12 +150,11 @@ export const searchDatabaseFoods = async (
 };
 
 export const importFoodsFromCsv = async (
-  foods: FoodDataForBackend[],
-  overwrite = false
+  foods: FoodDataForBackend[]
 ): Promise<void> => {
   await apiCall('/foods/import-from-csv', {
     method: 'POST',
-    body: JSON.stringify({ foods, overwrite }),
+    body: JSON.stringify({ foods }),
   });
 };
 

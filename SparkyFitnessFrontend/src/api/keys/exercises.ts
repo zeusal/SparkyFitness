@@ -29,8 +29,6 @@ export const presetKeys = {
   detail: (id: string) => [...presetKeys.details(), id] as const,
   infinite: (userId?: string, limit: number = 10) =>
     [...presetKeys.lists(), 'infinite', { userId, limit }] as const,
-  search: (searchTerm: string, userId?: string, limit: number = 10) =>
-    [...presetKeys.lists(), 'search', { searchTerm, userId, limit }] as const,
 };
 
 export const exerciseSearchKeys = {
@@ -120,12 +118,8 @@ export const exerciseEntryKeys = {
       entryId,
       providerName,
     ] as const,
-  detail: (entryId: string) =>
-    [...exerciseEntryKeys.all, 'detail', entryId] as const,
   dailyStats: (date: string) =>
     [...exerciseEntryKeys.all, 'dailyStats', date] as const,
-  groupedSession: (presetEntryId: string) =>
-    [...exerciseEntryKeys.all, 'groupedSession', presetEntryId] as const,
 };
 export const suggestedExercisesKeys = {
   all: ['exercises', 'suggested'] as const,

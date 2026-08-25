@@ -8,11 +8,6 @@ export type NativeHeaderDatePickerOptions = {
   onNextDate: () => void;
   tintColor: string;
   accessibilityLabel: string;
-  previousDayLabel?: string;
-  nextDayLabel?: string;
-  dateLabel?: string;
-  t: import('i18next').TFunction;
-  locale: string;
 };
 
 export type NativeHeaderDatePickerNavigation = {
@@ -38,11 +33,6 @@ export function createNativeHeaderDatePickerItems({
   onNextDate,
   tintColor,
   accessibilityLabel,
-  previousDayLabel,
-  nextDayLabel,
-  dateLabel,
-  t,
-  locale,
 }: NativeHeaderDatePickerOptions): NativeStackHeaderItem[] {
   return [
     {
@@ -51,15 +41,14 @@ export function createNativeHeaderDatePickerItems({
       icon: { type: 'sfSymbol', name: 'chevron.left' },
       onPress: onPreviousDate,
       tintColor,
-      // i18n-audit-ignore-next-line hardcoded-ui-text -- legacy API fallback; production callers pass localized previousDayLabel.
-      accessibilityLabel: `${accessibilityLabel}${previousDayLabel ?? ': previous day'}`,
+      accessibilityLabel: `${accessibilityLabel}: previous day`,
       identifier: 'date-picker-previous',
       sharesBackground: true,
       disabled: false,
     },
     {
       type: 'button',
-      label: dateLabel ?? `${formatDateLabel(selectedDate, t, locale)} ▾`,
+      label: `${formatDateLabel(selectedDate)} ▾`,
       onPress: onDatePress,
       tintColor,
       labelStyle: { fontSize: 15, fontWeight: '600', color: tintColor },
@@ -73,8 +62,7 @@ export function createNativeHeaderDatePickerItems({
       icon: { type: 'sfSymbol', name: 'chevron.right' },
       onPress: onNextDate,
       tintColor,
-      // i18n-audit-ignore-next-line hardcoded-ui-text -- legacy API fallback; production callers pass localized nextDayLabel.
-      accessibilityLabel: `${accessibilityLabel}${nextDayLabel ?? ': next day'}`,
+      accessibilityLabel: `${accessibilityLabel}: next day`,
       identifier: 'date-picker-next',
       sharesBackground: true,
       disabled: false,

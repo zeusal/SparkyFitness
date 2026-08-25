@@ -1,14 +1,13 @@
 import { log } from '../config/logging.js';
 import userRepository from '../models/userRepository.js';
+import { serializeSignedCookie } from 'better-call';
 import { auth } from '../auth.js';
 import { canAccessUserData } from '../utils/permissionUtils.js';
 import { resolveIsAdmin } from '../utils/adminCheck.js';
-import { dbContextStorage } from '../db/poolManager.js';
 import {
   getCachedSession,
   setCachedSession,
 } from '../utils/apiKeySessionCache.js';
-import { bridgeBearerAuthHeader } from '../utils/bearerAuthBridge.js';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const authenticate = async (req: any, res: any, next: any) => {
   //log("debug", `authenticate middleware: req.path = ${req.path}, req.headers.cookie = ${req.headers.cookie}`);
@@ -16,13 +15,51 @@ const authenticate = async (req: any, res: any, next: any) => {
   // Tracks the raw API key when this request is API-key-authed, so we can
   // short-circuit Better Auth's per-request verify (which ticks the per-key
   // rate-limit bucket — see issue #1302).
+  let apiKeyToken: string | null = null;
   try {
-    // Route Bearer tokens to the correct auth mechanism (shared with the early
-    // /api/auth interceptor in SparkyFitnessServer.ts):
+    // Route Bearer tokens to the correct auth mechanism:
     // - API keys (64+ alphanumeric chars, no dots) → x-api-key header
     // - Session tokens (shorter, or contain dots) → signed session cookie
-    let apiKeyToken: string | null = (await bridgeBearerAuthHeader(req))
-      .apiKeyToken;
+    if (
+      req.headers.authorization &&
+      req.headers.authorization.startsWith('Bearer ')
+    ) {
+      const token = req.headers.authorization.split(' ')[1];
+      if (token && token.length >= 64 && !token.includes('.')) {
+        req.headers['x-api-key'] = token;
+        delete req.headers.authorization;
+        apiKeyToken = token;
+        log(
+          'debug',
+          'Authentication: Mapped Bearer token to x-api-key (API key detected).'
+        );
+      } else if (token) {
+        // Session token: sign it and inject as a session cookie so getSession() resolves it.
+        // We do this here instead of relying on the bearer plugin due to a compatibility
+        // issue with Buffer secrets in @better-auth/utils/hmac.
+        const prefix = auth.options.advanced?.cookiePrefix || 'better-auth';
+        const secureCookiePrefix = auth.options.advanced?.useSecureCookies
+          ? '__Secure-'
+          : '';
+        const cookieName = `${secureCookiePrefix}${prefix}.session_token`;
+        const signed = await serializeSignedCookie(
+          '',
+          token,
+          // @ts-expect-error TS(2345): Argument of type 'string | undefined' is not assig... Remove this comment to see the full error message
+          auth.options.secret
+        );
+        const signedValue = signed.replace('=', ''); // Strip leading = from empty cookie name
+        const cookieHeader = `${cookieName}=${signedValue}`;
+        req.headers.cookie = req.headers.cookie
+          ? `${req.headers.cookie}; ${cookieHeader}`
+          : cookieHeader;
+        delete req.headers.authorization;
+        log(
+          'debug',
+          'Authentication: Converted Bearer session token to session cookie.'
+        );
+      }
+    }
     // Pre-existing x-api-key header (i.e. not from the Bearer mapping above)
     // is also subject to the same per-key rate-limit ticking. Treat it the
     // same as a mapped Bearer for cache purposes.
@@ -68,21 +105,12 @@ const authenticate = async (req: any, res: any, next: any) => {
       // Handle 'sparky_active_user_id' cookie for context switching
       const activeUserId = req.cookies.sparky_active_user_id;
       if (activeUserId && activeUserId !== req.authenticatedUserId) {
-        // Must stay in sync with authService.switchUserContext: any permission
-        // that lets a delegate switch context must also be honored here, or the
-        // cookie is set on switch but silently reverted on every later request.
-        const [hasReports, hasDiary, hasCheckin, hasMedications] =
-          await Promise.all([
-            canAccessUserData(activeUserId, 'reports', req.authenticatedUserId),
-            canAccessUserData(activeUserId, 'diary', req.authenticatedUserId),
-            canAccessUserData(activeUserId, 'checkin', req.authenticatedUserId),
-            canAccessUserData(
-              activeUserId,
-              'medications',
-              req.authenticatedUserId
-            ),
-          ]);
-        if (hasReports || hasDiary || hasCheckin || hasMedications) {
+        const [hasReports, hasDiary, hasCheckin] = await Promise.all([
+          canAccessUserData(activeUserId, 'reports', req.authenticatedUserId),
+          canAccessUserData(activeUserId, 'diary', req.authenticatedUserId),
+          canAccessUserData(activeUserId, 'checkin', req.authenticatedUserId),
+        ]);
+        if (hasReports || hasDiary || hasCheckin) {
           req.activeUserId = activeUserId;
           log(
             'info',
@@ -112,10 +140,7 @@ const authenticate = async (req: any, res: any, next: any) => {
           err
         );
       }
-      return dbContextStorage.run(
-        { authenticatedUserId: req.originalUserId || req.authenticatedUserId },
-        next
-      );
+      return next();
     }
   } catch (error) {
     log('error', 'Error checking Better Auth identity:', error);

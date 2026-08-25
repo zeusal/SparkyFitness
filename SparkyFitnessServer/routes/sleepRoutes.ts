@@ -103,14 +103,6 @@ router.get(
  *                 type: array
  *                 items:
  *                   type: object
- *               record_timezone:
- *                 type: string
- *                 nullable: true
- *                 description: IANA timezone the entry was recorded in.
- *               record_utc_offset_minutes:
- *                 type: integer
- *                 nullable: true
- *                 description: UTC offset in minutes at recording time.
  *             required: [entry_date, bedtime, wake_time, duration_in_seconds]
  *     responses:
  *       200:
@@ -132,8 +124,6 @@ router.post(
         wake_time,
         duration_in_seconds,
         stage_events,
-        record_timezone,
-        record_utc_offset_minutes,
       } = req.body;
       if (!entry_date || !bedtime || !wake_time || !duration_in_seconds) {
         return res.status(400).json({
@@ -148,8 +138,6 @@ router.post(
         duration_in_seconds: duration_in_seconds,
         source: 'manual',
         stage_events: stage_events,
-        record_timezone: record_timezone,
-        record_utc_offset_minutes: record_utc_offset_minutes,
       };
       const result = await measurementService.processSleepEntry(
         req.userId,
@@ -338,14 +326,6 @@ router.get(
  *                 type: array
  *                 items:
  *                   type: object
- *               record_timezone:
- *                 type: string
- *                 nullable: true
- *                 description: IANA timezone the entry was recorded in. Omit to preserve the stored value.
- *               record_utc_offset_minutes:
- *                 type: integer
- *                 nullable: true
- *                 description: UTC offset in minutes at recording time. Omit to preserve the stored value.
  *     responses:
  *       200:
  *         description: Sleep entry updated successfully.
@@ -357,23 +337,13 @@ router.put(
   async (req, res, next) => {
     try {
       const { id } = req.params;
-      const {
-        bedtime,
-        wake_time,
-        duration_in_seconds,
-        stage_events,
-        record_timezone,
-        record_utc_offset_minutes,
-      } = req.body;
-      // Omitted zone fields stay undefined so the dynamic update builder
-      // leaves the stored recording-zone metadata untouched.
+      const { bedtime, wake_time, duration_in_seconds, stage_events } =
+        req.body;
       const updatedSleepEntryData = {
         bedtime: bedtime ? new Date(bedtime) : undefined,
         wake_time: wake_time ? new Date(wake_time) : undefined,
         duration_in_seconds: duration_in_seconds,
         stage_events: stage_events,
-        record_timezone: record_timezone,
-        record_utc_offset_minutes: record_utc_offset_minutes,
       };
       const result = await measurementService.updateSleepEntry(
         req.userId,

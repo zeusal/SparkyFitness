@@ -1,4 +1,4 @@
-import {
+import React, {
   forwardRef,
   useCallback,
   useImperativeHandle,
@@ -7,21 +7,49 @@ import {
   useState,
 } from 'react';
 import { Platform, Pressable, Text, TouchableOpacity, View } from 'react-native';
-import { useTranslation } from 'react-i18next';
-import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet';
-import { useCSSVariable } from 'uniwind';
+import {
+  BottomSheetBackdrop,
+  BottomSheetModal,
+  BottomSheetScrollView,
+  type BottomSheetBackdropProps,
+} from '@gorhom/bottom-sheet';
+import { FullWindowOverlay } from 'react-native-screens';
+import { useCSSVariable, useUniwind } from 'uniwind';
 import DateTimePicker, { type DateType } from 'react-native-ui-datepicker';
 import Toast from 'react-native-toast-message';
 
 import Icon from './Icon';
-import { sheetContainer, useSheetBackdrop } from './ui/sheetChrome';
 import { useEndFast } from '../hooks/useFasting';
-import { formatHoursMinutes, formatDateTime } from '../utils/fasting';
-import { dateTypeToDate } from './TimeSheet';
+import { formatHoursMinutes } from '../utils/fasting';
 import { addLog } from '../services/LogService';
 import type { FastingLog } from '../types/fasting';
 
+// Render the sheet inside an iOS UIWindow so it sits above any native modal
+// presentation. No-op on Android.
+const sheetContainer =
+  Platform.OS === 'ios'
+    ? ({ children }: React.PropsWithChildren) => <FullWindowOverlay>{children}</FullWindowOverlay>
+    : undefined;
+
 /** Normalizes the picker's 6-way `DateType` into a JS `Date`, preserving time. */
+function dateTypeToDate(date: DateType): Date | null {
+  if (!date) return null;
+  if (date instanceof Date) return date;
+  if (typeof date === 'object' && 'toDate' in date) return date.toDate();
+  if (typeof date === 'string') return new Date(date);
+  return new Date(date);
+}
+
+function formatDateTime(date: Date): string {
+  return date.toLocaleString([], {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 export interface EndFastSheetRef {
   present: (fast: FastingLog) => void;
   dismiss: () => void;
@@ -32,8 +60,9 @@ interface EndFastSheetProps {
 }
 
 const EndFastSheet = forwardRef<EndFastSheetRef, EndFastSheetProps>(({ onEnded }, ref) => {
-  const { t } = useTranslation();
   const bottomSheetRef = useRef<BottomSheetModal>(null);
+  const { theme } = useUniwind();
+  const isDarkMode = theme === 'dark' || theme === 'amoled';
 
   const [surfaceBg, textMuted, accentPrimary, textPrimary, textSecondary] = useCSSVariable([
     '--color-surface',
@@ -62,7 +91,17 @@ const EndFastSheet = forwardRef<EndFastSheetRef, EndFastSheetProps>(({ onEnded }
     dismiss: () => bottomSheetRef.current?.dismiss(),
   }));
 
-  const renderBackdrop = useSheetBackdrop();
+  const renderBackdrop = useCallback(
+    (props: BottomSheetBackdropProps) => (
+      <BottomSheetBackdrop
+        {...props}
+        opacity={isDarkMode ? 0.7 : 0.5}
+        disappearsOnIndex={-1}
+        appearsOnIndex={0}
+      />
+    ),
+    [isDarkMode],
+  );
 
   const handleStartChange = useCallback(({ date }: { date: DateType }) => {
     const js = dateTypeToDate(date);
@@ -76,9 +115,8 @@ const EndFastSheet = forwardRef<EndFastSheetRef, EndFastSheetProps>(({ onEnded }
 
   const isValid = startDate.getTime() < endDate.getTime();
   const durationLabel = useMemo(
-    () =>
-      formatHoursMinutes(Math.max(0, endDate.getTime() - startDate.getTime()), t),
-    [startDate, endDate, t],
+    () => formatHoursMinutes(Math.max(0, endDate.getTime() - startDate.getTime())),
+    [startDate, endDate],
   );
 
   const pickerStyles = useMemo(
@@ -90,10 +128,6 @@ const EndFastSheet = forwardRef<EndFastSheetRef, EndFastSheetProps>(({ onEnded }
       weekday_label: { color: textSecondary },
       month_selector_label: { color: textPrimary, fontWeight: '600' as const },
       year_selector_label: { color: textPrimary, fontWeight: '600' as const },
-      time_selector_label: { color: textPrimary, fontWeight: '600' as const },
-      // Hide the calendar header's time button — we render a dedicated time
-      // wheel below the calendar instead.
-      time_selector: { display: 'none' as const },
       disabled_label: { color: textMuted },
       month_label: { color: textPrimary },
       year_label: { color: textPrimary },
@@ -125,23 +159,19 @@ const EndFastSheet = forwardRef<EndFastSheetRef, EndFastSheetProps>(({ onEnded }
       {
         onSuccess: () => {
           bottomSheetRef.current?.dismiss();
-          Toast.show({ type: 'success', text1: t('fastingEdit.fastEnded', { defaultValue: 'Fast ended' }) });
+          Toast.show({ type: 'success', text1: 'Fast ended' });
           onEnded?.();
         },
         onError: (error) => {
           addLog(`Failed to end fast: ${error}`, 'ERROR');
           Toast.show({
             type: 'error',
-            text1: t('fastingEdit.failedEnd', { defaultValue: 'Failed to end fast' }),
-            text2: t('common.tryAgain', { defaultValue: 'Please try again.' }),
+            text1: 'Failed to end fast',
+            text2: 'Please try again.',
           });
         },
       },
     );
-  };
-
-  const togglePicker = (picker: 'start' | 'end') => {
-    setOpenPicker((p) => (p === picker ? null : picker));
   };
 
   const renderRow = (
@@ -150,7 +180,7 @@ const EndFastSheet = forwardRef<EndFastSheetRef, EndFastSheetProps>(({ onEnded }
     picker: 'start' | 'end',
   ) => (
     <TouchableOpacity
-      onPress={() => togglePicker(picker)}
+      onPress={() => setOpenPicker((p) => (p === picker ? null : picker))}
       activeOpacity={0.7}
       className="flex-row items-center justify-between py-3 border-b border-border-subtle"
     >
@@ -169,73 +199,48 @@ const EndFastSheet = forwardRef<EndFastSheetRef, EndFastSheetProps>(({ onEnded }
     </TouchableOpacity>
   );
 
-  const renderInlinePicker = (
-    value: Date,
-    onChange: (payload: { date: DateType }) => void,
-  ) => (
-    <View className="mt-2">
-      {/* Calendar for the date. `timePicker` keeps the time-of-day when a day
-          is tapped (otherwise the library zeroes it). */}
-      <DateTimePicker
-        mode="single"
-        date={value}
-        timePicker
-        onChange={onChange}
-        components={pickerComponents}
-        styles={pickerStyles}
-      />
-      {/* Dedicated time wheel below the calendar, sharing the same value. */}
-      <View className="border-t border-border-subtle mt-1 pt-2">
-        <Text className="text-xs font-semibold uppercase text-text-muted tracking-wide mb-1 px-1">
-          {t('fastingEdit.time', { defaultValue: 'Time' })}
-        </Text>
-        <DateTimePicker
-          mode="single"
-          date={value}
-          timePicker
-          initialView="time"
-          hideHeader
-          onChange={onChange}
-          styles={pickerStyles}
-        />
-      </View>
-    </View>
-  );
-
   return (
     <BottomSheetModal
       ref={bottomSheetRef}
       enableDynamicSizing
-      // On Android the sheet's content pan gesture steals vertical drags from
-      // the time picker's wheels (plain FlatLists), so content panning stays
-      // off there. Must be static: toggling this prop swaps the sheet's
-      // content wrapper component, remounting the content and dismissing the
-      // modal.
-      enableContentPanningGesture={Platform.OS !== 'android'}
       backdropComponent={renderBackdrop}
       containerComponent={sheetContainer}
       backgroundStyle={{ backgroundColor: surfaceBg }}
       handleIndicatorStyle={{ backgroundColor: textMuted }}
     >
-      {/* bg-surface is a touch shield, not decoration: with content panning off
-          on Android, gesture-handler lets taps on background-less views fall
-          through to the backdrop's tap-to-close. A background makes this
-          container absorb them. */}
-      <BottomSheetScrollView contentContainerClassName="bg-surface px-5 pb-safe-or-8">
+      <BottomSheetScrollView contentContainerClassName="px-5 pb-safe-or-8">
         <Text className="text-lg font-semibold text-text-primary text-center mb-1">
-          {t('fastingEdit.endTitle', { defaultValue: 'End fast' })}
+          End fast
         </Text>
-        <Text className="text-center text-text-secondary mb-4">{t('fastingEdit.fasted', { defaultValue: '{{duration}} fasted', duration: durationLabel })}</Text>
+        <Text className="text-center text-text-secondary mb-4">{durationLabel} fasted</Text>
 
-        {renderRow(t('fastingEdit.started', { defaultValue: 'Started' }), formatDateTime(startDate), 'start')}
-        {openPicker === 'start' && renderInlinePicker(startDate, handleStartChange)}
+        {renderRow('Started', formatDateTime(startDate), 'start')}
+        {openPicker === 'start' && (
+          <DateTimePicker
+            mode="single"
+            date={startDate}
+            timePicker
+            onChange={handleStartChange}
+            components={pickerComponents}
+            styles={pickerStyles}
+          />
+        )}
 
-        {renderRow(t('fastingEdit.ended', { defaultValue: 'Ended' }), formatDateTime(endDate), 'end')}
-        {openPicker === 'end' && renderInlinePicker(endDate, handleEndChange)}
+        {renderRow('Ended', formatDateTime(endDate), 'end')}
+        {openPicker === 'end' && (
+          <DateTimePicker
+            mode="single"
+            date={endDate}
+            timePicker
+            onChange={handleEndChange}
+            components={pickerComponents}
+            styles={pickerStyles}
+          />
+        )}
 
         {!isValid && (
-          <Text className="text-text-danger-subtle text-sm mt-3 text-center">
-            {t('fastingEdit.beforeEnd', { defaultValue: 'Start time must be before the end time.' })}
+          <Text className="text-bg-danger text-sm mt-3 text-center">
+            Start time must be before the end time.
           </Text>
         )}
 
@@ -248,7 +253,7 @@ const EndFastSheet = forwardRef<EndFastSheetRef, EndFastSheetProps>(({ onEnded }
         >
           <Icon name="stop" size={15} color="#FFFFFF" />
           <Text className="text-white text-base font-semibold ml-2">
-            {isPending ? t('fastingEdit.ending', { defaultValue: 'Ending...' }) : t('fastingEdit.endAction', { defaultValue: 'End Fast' })}
+            {isPending ? 'Ending...' : 'End Fast'}
           </Text>
         </Pressable>
       </BottomSheetScrollView>

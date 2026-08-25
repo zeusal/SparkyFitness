@@ -66,7 +66,6 @@ describe('WorkoutPresetFormScreen — buildPresetEditPayload', () => {
         initialDescription: basePreset.description ?? '',
         exercisesModified: false,
         weightUnit: 'kg',
-        distanceUnit: 'km',
       }),
     ).toEqual({});
   });
@@ -79,7 +78,6 @@ describe('WorkoutPresetFormScreen — buildPresetEditPayload', () => {
       initialDescription: basePreset.description ?? '',
       exercisesModified: false,
       weightUnit: 'kg',
-      distanceUnit: 'km',
     });
     expect(payload).toEqual({ name: 'Push Day Reload' });
   });
@@ -92,7 +90,6 @@ describe('WorkoutPresetFormScreen — buildPresetEditPayload', () => {
       initialDescription: basePreset.description ?? '',
       exercisesModified: false,
       weightUnit: 'kg',
-      distanceUnit: 'km',
     });
     expect(payload).not.toHaveProperty('description');
   });
@@ -105,7 +102,6 @@ describe('WorkoutPresetFormScreen — buildPresetEditPayload', () => {
       initialDescription: basePreset.description ?? '',
       exercisesModified: false,
       weightUnit: 'kg',
-      distanceUnit: 'km',
     });
     expect(payload.description).toBe('');
   });
@@ -118,7 +114,6 @@ describe('WorkoutPresetFormScreen — buildPresetEditPayload', () => {
       initialDescription: basePreset.description ?? '',
       exercisesModified: false,
       weightUnit: 'kg',
-      distanceUnit: 'km',
     });
     expect(payload.description).toBe('Updated notes');
   });
@@ -131,7 +126,6 @@ describe('WorkoutPresetFormScreen — buildPresetEditPayload', () => {
       initialDescription: basePreset.description ?? '',
       exercisesModified: false,
       weightUnit: 'kg',
-      distanceUnit: 'km',
     });
     expect(payload).toEqual({ name: 'New Name' });
   });
@@ -144,7 +138,6 @@ describe('WorkoutPresetFormScreen — buildPresetEditPayload', () => {
       initialDescription: basePreset.description ?? '',
       exercisesModified: false,
       weightUnit: 'kg',
-      distanceUnit: 'km',
     });
     expect(payload).not.toHaveProperty('exercises');
   });
@@ -156,37 +149,11 @@ describe('WorkoutPresetFormScreen — buildPresetEditPayload', () => {
       initialDescription: basePreset.description ?? '',
       exercisesModified: true,
       weightUnit: 'kg',
-      distanceUnit: 'km',
     });
     expect(payload.exercises).toHaveLength(1);
     expect(payload.exercises?.[0].exercise_id).toBe('ex-1');
     expect(payload.exercises?.[0].sets[0].weight).toBe(100);
     expect(payload.exercises?.[0].sets[0].reps).toBe(10);
-  });
-
-  it('emits superset_group when exercises are modified', () => {
-    const state: PresetDraft = {
-      ...baseDraft,
-      exercises: [
-        { ...baseDraft.exercises[0], supersetGroup: 1 },
-        {
-          ...baseDraft.exercises[0],
-          clientId: 'c2',
-          exerciseId: 'ex-2',
-          supersetGroup: 1,
-        },
-        { ...baseDraft.exercises[0], clientId: 'c3', exerciseId: 'ex-3' },
-      ],
-    };
-    const payload = buildPresetEditPayload({
-      state,
-      initialPreset: basePreset,
-      initialDescription: basePreset.description ?? '',
-      exercisesModified: true,
-      weightUnit: 'kg',
-      distanceUnit: 'km',
-    });
-    expect(payload.exercises?.map(e => e.superset_group)).toEqual([1, 1, null]);
   });
 
   it('round-trips set_type, duration, and notes via exercises payload', () => {
@@ -195,9 +162,6 @@ describe('WorkoutPresetFormScreen — buildPresetEditPayload', () => {
       exercises: [
         {
           ...baseDraft.exercises[0],
-          // Duration only survives on duration-modality exercises; on a
-          // weights exercise the payload builder sanitizes it to null.
-          exerciseCategory: 'Isometric',
           sets: [
             {
               ...baseDraft.exercises[0].sets[0],
@@ -215,7 +179,6 @@ describe('WorkoutPresetFormScreen — buildPresetEditPayload', () => {
       initialDescription: basePreset.description ?? '',
       exercisesModified: true,
       weightUnit: 'kg',
-      distanceUnit: 'km',
     });
     expect(payload.exercises?.[0].sets[0].set_type).toBe('warmup');
     expect(payload.exercises?.[0].sets[0].duration).toBe(30);
@@ -230,7 +193,6 @@ describe('WorkoutPresetFormScreen — buildPresetEditPayload', () => {
       initialDescription: basePreset.description ?? '',
       exercisesModified: true,
       weightUnit: 'kg',
-      distanceUnit: 'km',
     });
     expect(payload).not.toHaveProperty('is_public');
   });
@@ -243,7 +205,6 @@ describe('WorkoutPresetFormScreen — buildPresetEditPayload', () => {
       initialDescription: basePreset.description ?? '',
       exercisesModified: false,
       weightUnit: 'kg',
-      distanceUnit: 'km',
     });
     expect(payload).not.toHaveProperty('description');
   });
@@ -257,7 +218,6 @@ describe('WorkoutPresetFormScreen — buildPresetEditPayload', () => {
       initialDescription: '',
       exercisesModified: false,
       weightUnit: 'kg',
-      distanceUnit: 'km',
     });
     expect(payload).not.toHaveProperty('description');
   });

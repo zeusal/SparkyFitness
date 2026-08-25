@@ -318,14 +318,14 @@ async function syncHevyData(
         hasMore = currentPage < pageCount;
         currentPage++;
       } else {
-        const newestWorkout = workouts[0];
-        if (newestWorkout) {
-          const newestTime = new Date(newestWorkout.start_time);
-          hasMore = newestTime >= sevenDaysAgo && currentPage < pageCount;
-        } else {
+        const oldestWorkout = workouts[workouts.length - 1];
+        const oldestTime = new Date(oldestWorkout.start_time);
+        if (oldestTime < sevenDaysAgo) {
           hasMore = false;
+        } else {
+          hasMore = currentPage < pageCount;
+          currentPage++;
         }
-        currentPage++;
       }
     }
     // 2. Process EVERYTHING second (The Action Phase)

@@ -1,6 +1,8 @@
 import { addLog } from '../LogService';
-import { attachWorkoutTelemetry } from '../shared/workoutTelemetryPayload';
 import {
+  MetricConfig,
+  TransformOutput,
+  TransformedRecord,
   TransformedExerciseSession,
   TransformedNutritionEntry,
   SparkyMealType,
@@ -8,20 +10,8 @@ import {
   RecordTimezoneMetadata,
   HEALTHKIT_SOURCE,
 } from '../../types/healthRecords';
-import {
-  createBloodPressureTransformer,
-  createGetDateString,
-  createHydrationTransformer,
-  createTransformHealthRecords,
-  extractDirectValue,
-  extractNestedValue,
-  BLOOD_GLUCOSE_MG_DL_PER_MMOL_L,
-  G_TO_MG,
-  G_TO_MCG,
-  tidyNumber,
-  type DirectTransformer,
-  type ValueTransformer,
-} from '../shared/dataTransformation';
+import { toLocalDateString } from './dataAggregation';
+import { G_TO_MG, G_TO_MCG, tidyNumber } from '../healthconnect/dataTransformation';
 import { DIETARY_HK_MAP, DIETARY_ENERGY_IDENTIFIER } from './writebackMappers';
 
 // ============================================================================
@@ -48,11 +38,50 @@ const isOwnRecord = (rec: Record<string, unknown>): boolean => {
 // ============================================================================
 
 // Wrapper for toLocalDateString that handles unknown input and errors
-const getDateString = createGetDateString('[HealthKitService]');
+const getDateString = (date: unknown): string | null => {
+  if (!date) return null;
+  try {
+    return toLocalDateString(new Date(date as string | number | Date));
+  } catch (e) {
+    addLog(`[HealthKitService] Could not convert date: ${date}. ${e}`, 'WARNING');
+    return null;
+  }
+};
+
+// Result from a value transformer - either value/date pair or null to skip
+interface ValueTransformResult {
+  value: number;
+  date: string;
+  type?: string;  // Optional override for output type
+}
+
+// Transformer that extracts value and date for standard record output
+type ValueTransformer = (
+  rec: Record<string, unknown>,
+  metricConfig: MetricConfig
+) => ValueTransformResult | null;
+
+// Transformer that directly pushes to output array (for complex records)
+type DirectTransformer = (
+  rec: Record<string, unknown>,
+  record: unknown,
+  metricConfig: MetricConfig,
+  output: TransformOutput[]
+) => void;
 
 // ============================================================================
 // Value Extractors - reusable functions for nested property extraction
 // ============================================================================
+
+const extractNestedValue = (rec: Record<string, unknown>, key: string, nestedKey: string): number | null => {
+  const nested = rec[key] as Record<string, number> | undefined;
+  return nested?.[nestedKey] ?? null;
+};
+
+const extractDirectValue = (rec: Record<string, unknown>, key: string): number | null => {
+  const val = rec[key];
+  return typeof val === 'number' ? val : null;
+};
 
 const extractPercentAsDecimal = (rec: Record<string, unknown>): number | null => {
   const val = rec.value;
@@ -208,7 +237,12 @@ const VALUE_TRANSFORMERS: Record<string, ValueTransformer> = {
     return value !== null && date ? { value, date } : null;
   },
 
-  Hydration: createHydrationTransformer(isOwnRecord, getDateString),
+  Hydration: (rec) => {
+    if (isOwnRecord(rec)) return null; // don't re-import water Sparky wrote
+    const value = extractNestedValue(rec, 'volume', 'inLiters');
+    const date = getDateString(rec.startTime);
+    return value !== null && date ? { value, date } : null;
+  },
 
   BodyTemperature: (rec) => {
     const value = extractNestedValue(rec, 'temperature', 'inCelsius');
@@ -242,7 +276,7 @@ const VALUE_TRANSFORMERS: Record<string, ValueTransformer> = {
     if (level?.inMillimolesPerLiter != null) {
       value = level.inMillimolesPerLiter;
     } else if (level?.inMilligramsPerDeciliter != null) {
-      value = level.inMilligramsPerDeciliter / BLOOD_GLUCOSE_MG_DL_PER_MMOL_L;
+      value = level.inMilligramsPerDeciliter / 18.018;
     }
     const date = getDateString(rec.time);
     return value !== null && date ? { value, date } : null;
@@ -257,11 +291,6 @@ const VALUE_TRANSFORMERS: Record<string, ValueTransformer> = {
 
   RestingHeartRate: (rec) => {
     const value = extractDirectValue(rec, 'beatsPerMinute');
-    const date = getDateString(rec.time);
-    return value !== null && date ? { value, date } : null;
-  },
-  HeartRateVariabilitySDNN: (rec) => {
-    const value = extractDirectValue(rec, 'value');
     const date = getDateString(rec.time);
     return value !== null && date ? { value, date } : null;
   },
@@ -334,7 +363,7 @@ const DIETARY_READ_TYPES = ['DietaryFatTotal', 'DietaryProtein', 'DietarySodium'
 
 DIETARY_READ_TYPES.forEach(type => {
   const base = createSimpleValueTransformer(true);
-  VALUE_TRANSFORMERS[type] = (rec, metricConfig, index) => (isOwnRecord(rec) ? null : base(rec, metricConfig, index));
+  VALUE_TRANSFORMERS[type] = (rec, metricConfig) => (isOwnRecord(rec) ? null : base(rec, metricConfig));
 });
 
 // Qualitative record types - pass raw value with warning
@@ -442,7 +471,35 @@ const DIRECT_TRANSFORMERS: Record<string, DirectTransformer> = {
     output.push(entry);
   },
 
-  BloodPressure: createBloodPressureTransformer(HEALTHKIT_SOURCE, getDateString),
+  BloodPressure: (rec, _record, metricConfig, output) => {
+    const { unit, type } = metricConfig;
+    if (!rec.time) return;
+
+    const date = getDateString(rec.time);
+    if (!date) return;
+
+    const systolic = rec.systolic as Record<string, number> | undefined;
+    const diastolic = rec.diastolic as Record<string, number> | undefined;
+
+    if (systolic?.inMillimetersOfMercury) {
+      output.push({
+        value: parseFloat(systolic.inMillimetersOfMercury.toFixed(2)),
+        unit,
+        date,
+        type: `${type}_systolic`,
+        source: HEALTHKIT_SOURCE,
+      });
+    }
+    if (diastolic?.inMillimetersOfMercury) {
+      output.push({
+        value: parseFloat(diastolic.inMillimetersOfMercury.toFixed(2)),
+        unit,
+        date,
+        type: `${type}_diastolic`,
+        source: HEALTHKIT_SOURCE,
+      });
+    }
+  },
 
   SleepSession: (rec, _record, _metricConfig, output) => {
     const sleepRec = rec as unknown as AggregatedSleepSession;
@@ -509,23 +566,122 @@ const DIRECT_TRANSFORMERS: Record<string, DirectTransformer> = {
       distance: parseFloat((totalDistanceMeters / 1000).toFixed(2)),
       notes: 'Source: HealthKit',
       raw_data: record,
-      // duration_seconds instead of duration: servers without the seconds-based
-      // set model drop the unknown field rather than misreading it as minutes.
-      sets: [{ set_number: 1, set_type: 'Working Set', duration_seconds: Math.round(durationInSeconds) }],
+      sets: [{ set_number: 1, set_type: 'Working Set', duration: Math.round(durationInSeconds / 60) }],
       source_id: rec.uuid as string | undefined,
       ...timezone,
     };
-    output.push(attachWorkoutTelemetry(exerciseSession, rec));
+    output.push(exerciseSession);
   },
 };
 
 // ExerciseSession uses same transformer as Workout
 DIRECT_TRANSFORMERS['ExerciseSession'] = DIRECT_TRANSFORMERS['Workout'];
 
-export const transformHealthRecords = createTransformHealthRecords({
-  source: HEALTHKIT_SOURCE,
-  logTag: '[HealthKitService]',
-  valueTransformers: VALUE_TRANSFORMERS,
-  directTransformers: DIRECT_TRANSFORMERS,
-  extractTimezoneMetadata,
-});
+export const transformHealthRecords = (records: unknown[], metricConfig: MetricConfig): TransformOutput[] => {
+  if (!Array.isArray(records) || records.length === 0) return [];
+
+  const transformedData: TransformOutput[] = [];
+  const { recordType, unit, type } = metricConfig;
+  let successCount = 0;
+  let skipCount = 0;
+
+  // Check if this record type has a direct transformer (handles its own output)
+  const directTransformer = DIRECT_TRANSFORMERS[recordType];
+
+  // Check if this record type has a value transformer
+  const valueTransformer = VALUE_TRANSFORMERS[recordType];
+
+  records.forEach((record: unknown) => {
+    try {
+      const rec = record as Record<string, unknown>;
+
+      // Handle aggregated records first (they have date and value at top level)
+      if (rec.date && rec.value !== undefined) {
+        const value = rec.value as number;
+        const recordDate = rec.date as string;
+        const outputType = (rec.type as string) || type;
+
+        if (value !== null && !isNaN(value)) {
+          const transformedRecord: TransformedRecord = {
+            value: parseFloat(value.toFixed(2)),
+            type: outputType,
+            date: recordDate,
+            unit,
+            source: HEALTHKIT_SOURCE,
+          };
+          // Forward timezone metadata from aggregation layer
+          if (rec.record_timezone != null) {
+            transformedRecord.record_timezone = rec.record_timezone as string;
+          }
+          if (rec.record_utc_offset_minutes != null) {
+            transformedRecord.record_utc_offset_minutes = rec.record_utc_offset_minutes as number;
+          }
+          transformedData.push(transformedRecord);
+          successCount++;
+        } else {
+          skipCount++;
+        }
+        return;
+      }
+
+      // Use direct transformer if available (handles complex records)
+      if (directTransformer) {
+        directTransformer(rec, record, metricConfig, transformedData);
+        return;
+      }
+
+      // Use value transformer if available
+      if (valueTransformer) {
+        const result = valueTransformer(rec, metricConfig);
+        if (result && !isNaN(result.value)) {
+          const transformedRecord: TransformedRecord = {
+            value: parseFloat(result.value.toFixed(2)),
+            type: result.type || type,
+            date: result.date,
+            unit,
+            source: HEALTHKIT_SOURCE,
+            ...extractTimezoneMetadata(rec),
+          };
+          transformedData.push(transformedRecord);
+          successCount++;
+        } else {
+          skipCount++;
+        }
+        return;
+      }
+
+      // Fallback: try to handle as simple aggregated record
+      if (rec.value !== undefined && rec.date) {
+        const value = rec.value as number;
+        const recordDate = rec.date as string;
+        const outputType = (rec.type as string) || type;
+
+        if (value !== null && !isNaN(value)) {
+          const transformedRecord: TransformedRecord = {
+            value: parseFloat(value.toFixed(2)),
+            type: outputType,
+            date: recordDate,
+            unit,
+            source: HEALTHKIT_SOURCE,
+          };
+          transformedData.push(transformedRecord);
+          successCount++;
+        } else {
+          skipCount++;
+        }
+      } else {
+        skipCount++;
+      }
+    } catch (error) {
+      skipCount++;
+      addLog(`[HealthKitService] Error transforming record: ${(error as Error).message}`, 'WARNING');
+    }
+  });
+
+  // Log transformation summary for debugging
+  if (skipCount > 0) {
+    addLog(`[HealthKitService] ${recordType} transformation: ${successCount} succeeded, ${skipCount} skipped (of ${records.length} total)`, 'DEBUG');
+  }
+
+  return transformedData;
+};

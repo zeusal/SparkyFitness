@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { usePreferences } from '@/contexts/PreferencesContext';
@@ -31,10 +31,7 @@ import {
   excludeIncompleteDay,
   getChartConfig,
 } from '@/utils/chartUtils';
-import {
-  calculateAverage,
-  effectiveCalorieGoal as calorieBudgetFor,
-} from '@/utils/reportUtil';
+import { calculateAverage } from '@/utils/reportUtil';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -42,26 +39,17 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import type { DailyCalorieBalanceRow } from '@workspace/shared';
 
 interface NutritionPeriodSummaryProps {
   nutritionData: NutritionData[];
   customNutrients: UserCustomNutrient[];
   goals?: Record<string, ExpandedGoals>;
-  /**
-   * Server-computed calorie balance per date, from `GET /daily-summary/range`.
-   *
-   * Only the calories series uses it. Undefined while loading, or when the viewer lacks
-   * diary permission on a shared account -- both fall back to the raw goal.
-   */
-  calorieBalanceByDate?: Record<string, DailyCalorieBalanceRow>;
 }
 
 const NutritionPeriodSummary = ({
   nutritionData,
   customNutrients,
   goals,
-  calorieBalanceByDate,
 }: NutritionPeriodSummaryProps) => {
   const { t } = useTranslation();
   const { formatDateInUserTimezone, energyUnit, convertEnergy, showNetCarbs } =
@@ -156,14 +144,6 @@ const NutritionPeriodSummary = ({
       : effectiveNutritionData;
   }, [effectiveNutritionData, config.excludeIncompleteDay]);
 
-  // `dayEaten` is this component's own unrounded total, so `dayEaten - budget` resolves
-  // to exactly `-remaining` and the cumulative series carries no rounding residue.
-  const effectiveCalorieGoal = useCallback(
-    (date: string, dayEaten: number): number | undefined =>
-      calorieBudgetFor(calorieBalanceByDate?.[date], dayEaten),
-    [calorieBalanceByDate]
-  );
-
   // Calculate KPIs and prepare cumulative chart data using the same filtered dataset
   const { totalEaten, totalGoal, validDaysCount, cumulativeData, netBalance } =
     useMemo(() => {
@@ -194,20 +174,13 @@ const NutritionPeriodSummary = ({
             const dayEatenRaw = point[nutKey as keyof NutritionData];
             const dayEaten = typeof dayEatenRaw === 'number' ? dayEatenRaw : 0;
 
-            // Calories come from the server-computed balance; every other nutrient
-            // keeps its plain stored goal.
-            const effectiveDayGoal =
-              nutKey === 'calories'
-                ? (effectiveCalorieGoal(point.date, dayEaten) ?? dayGoal)
-                : dayGoal;
-
             // Allow goal to be 0 (e.g. 0g sugar target)
-            if (effectiveDayGoal !== undefined) {
-              const variance = dayEaten - effectiveDayGoal;
+            if (dayGoal !== undefined) {
+              const variance = dayEaten - dayGoal;
               acc.running[nutKey] = (acc.running[nutKey] || 0) + variance;
 
               if (nutKey === primaryNutrient) {
-                acc.tGoal += effectiveDayGoal;
+                acc.tGoal += dayGoal;
                 acc.tEaten += dayEaten;
                 acc.vDays += 1;
               }
@@ -244,68 +217,9 @@ const NutritionPeriodSummary = ({
       primaryNutrient,
       selectedNutrients,
       customNutrients,
-      effectiveCalorieGoal,
     ]);
 
   const averageVariance = validDaysCount > 0 ? netBalance / validDaysCount : 0;
-
-  /**
-   * Length of the report window, taken from the balance map.
-   *
-   * `/daily-summary/range` emits a row for every calendar day it was asked for, whereas
-   * `nutritionData` only carries days that have entries. The difference is the number of
-   * untracked days, and it is worth naming: these totals are sums over *logged* days, so
-   * a reader reconciling them against the Diary by hand — which is how #2094 was
-   * reported — would otherwise be adding days this card never counted.
-   */
-  const windowDayCount = useMemo(
-    () =>
-      calorieBalanceByDate
-        ? Object.keys(calorieBalanceByDate).length
-        : undefined,
-    [calorieBalanceByDate]
-  );
-
-  /**
-   * Why the totals cover fewer days than the window, which is not always the same reason.
-   *
-   * `validDaysCount` counts days that contributed to the totals, and a day only
-   * contributes when the *primary* nutrient resolved a goal. So a day can be missing
-   * because nothing was logged, or because it was logged and simply has no goal for the
-   * selected nutrient — and for `sodium` the reduce skips every day, making the count
-   * zero outright. Attributing all of those to "nothing logged" is wrong for a caption
-   * whose whole purpose is telling a hand-reconciling reader which days were added.
-   *
-   * For calories — the case #2094 is about — `effectiveCalorieGoal` resolves whenever a
-   * balance row exists, and the range endpoint emits one per calendar day, so the only
-   * possible cause really is an unlogged day.
-   */
-  const loggedDayCount = filteredNutritionData.length;
-  const totalDayCount = windowDayCount ?? loggedDayCount;
-  const excludedForMissingGoal = loggedDayCount > validDaysCount;
-  const excludedAsUntracked = totalDayCount > loggedDayCount;
-  const primaryNutrientLabel = selectedOption?.label ?? primaryNutrient;
-
-  const coverageMessage = !excludedForMissingGoal
-    ? excludedAsUntracked
-      ? t(
-          'reports.daysCountedPartial',
-          'Counted {{counted}} of {{total}} days — days with nothing logged are excluded',
-          { counted: validDaysCount, total: totalDayCount }
-        )
-      : t('reports.daysCounted', 'Counted {{counted}} days', {
-          counted: validDaysCount,
-        })
-    : // Covers the both-causes case too, so it never names a reason that does not apply.
-      t(
-        'reports.daysCountedNoGoal',
-        'Counted {{counted}} of {{total}} days — days without a {{nutrient}} goal, or with nothing logged, are excluded',
-        {
-          counted: validDaysCount,
-          total: totalDayCount,
-          nutrient: primaryNutrientLabel,
-        }
-      );
 
   const getDisplayValue = (val: number) => {
     if (primaryNutrient === 'calories') {
@@ -357,24 +271,14 @@ const NutritionPeriodSummary = ({
         const dayEaten = typeof dayEatenRaw === 'number' ? dayEatenRaw : 0;
 
         newPoint[nutKey] = dayEaten;
-        const effectiveDayGoal =
-          nutKey === 'calories'
-            ? (effectiveCalorieGoal(point.date, dayEaten) ?? dayGoal)
-            : dayGoal;
-        if (effectiveDayGoal !== undefined) {
-          newPoint[`${nutKey}_goal`] = effectiveDayGoal;
+        if (dayGoal !== undefined) {
+          newPoint[`${nutKey}_goal`] = dayGoal;
         }
       });
 
       return newPoint;
     });
-  }, [
-    filteredNutritionData,
-    goals,
-    selectedNutrients,
-    customNutrients,
-    effectiveCalorieGoal,
-  ]);
+  }, [filteredNutritionData, goals, selectedNutrients, customNutrients]);
 
   const yAxisDomain = calculateSmartYAxisDomain(
     dailyChartData as unknown as NutritionData[],
@@ -453,7 +357,6 @@ const NutritionPeriodSummary = ({
                 {t('reports.totalGoal', 'Total Goal')}: {displayTotalGoal}{' '}
                 {unitStr}
               </p>
-              <p className="text-xs text-muted-foreground">{coverageMessage}</p>
             </CardContent>
           </Card>
 

@@ -46,17 +46,7 @@ const router = express.Router();
 router.post('/add', authenticate, async (req, res, next) => {
   try {
     const { exerciseId } = req.body;
-    // Checked for type, not just presence: the service now declares a string,
-    // and a JSON body can carry an object or array through a falsiness check.
-    if (typeof exerciseId !== 'string') {
-      return res.status(400).json({ message: 'Exercise ID is required.' });
-    }
-    // Trimmed value forwarded, not the raw one: free-exercise-db ids carry no
-    // surrounding whitespace, so ' Air_Bike ' would reach the upstream lookup
-    // as exercises/ Air_Bike .json and 404, and would miss the dedup check
-    // against the already-imported copy.
-    const freeExerciseDBId = exerciseId.trim();
-    if (freeExerciseDBId === '') {
+    if (!exerciseId) {
       return res.status(400).json({ message: 'Exercise ID is required.' });
     }
 
@@ -64,7 +54,7 @@ router.post('/add', authenticate, async (req, res, next) => {
     const newExercise =
       await exerciseService.addFreeExerciseDBExerciseToUserExercises(
         authenticatedUserId,
-        freeExerciseDBId
+        exerciseId
       );
     res.status(201).json(newExercise);
   } catch (error) {

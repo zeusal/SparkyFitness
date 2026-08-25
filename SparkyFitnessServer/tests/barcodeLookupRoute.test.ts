@@ -65,8 +65,7 @@ describe('GET /food-crud/barcode/:barcode', () => {
     expect(foodService.lookupBarcode).toHaveBeenCalledWith(
       '12345678',
       'user-123',
-      undefined,
-      'user-123'
+      undefined
     );
   });
   it('should accept a 14-digit barcode', async () => {
@@ -80,8 +79,7 @@ describe('GET /food-crud/barcode/:barcode', () => {
     expect(foodService.lookupBarcode).toHaveBeenCalledWith(
       '12345678901234',
       'user-123',
-      undefined,
-      'user-123'
+      undefined
     );
   });
   it('should return local food result', async () => {
@@ -159,8 +157,7 @@ describe('GET /food-crud/barcode/:barcode', () => {
     expect(foodService.lookupBarcode).toHaveBeenCalledWith(
       '3017620422003',
       'user-123',
-      providerId,
-      'user-123'
+      providerId
     );
     expect(res.body.source).toBe('usda');
   });

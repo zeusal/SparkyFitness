@@ -32,7 +32,7 @@ router.use('/fatsecret', authenticate, async (req, res, next) => {
   try {
     // This call will eventually go through the generic dataIntegrationService
     const providerDetails = await foodService.getFoodDataProviderDetails(
-      req.authenticatedUserId,
+      req.userId,
       providerId
     );
     if (
@@ -66,7 +66,7 @@ router.use('/mealie', authenticate, async (req, res, next) => {
   }
   try {
     const providerDetails = await foodService.getFoodDataProviderDetails(
-      req.authenticatedUserId,
+      req.userId,
       providerId
     );
     if (
@@ -107,7 +107,7 @@ router.use('/tandoor', authenticate, async (req, res, next) => {
   }
   try {
     const providerDetails = await foodService.getFoodDataProviderDetails(
-      req.authenticatedUserId,
+      req.userId,
       // @ts-expect-error TS(2339): Property 'providerId' does not exist on type 'Requ... Remove this comment to see the full error message
       req.providerId
     );
@@ -166,7 +166,7 @@ router.use('/norish', authenticate, async (req, res, next) => {
   }
   try {
     const providerDetails = await foodService.getFoodDataProviderDetails(
-      req.authenticatedUserId,
+      req.userId,
       // @ts-expect-error TS(2339): Property 'providerId' does not exist on type 'Requ... Remove this comment to see the full error message
       req.providerId
     );
@@ -198,7 +198,7 @@ router.use('/usda', authenticate, async (req, res, next) => {
   }
   try {
     const providerDetails = await foodService.getFoodDataProviderDetails(
-      req.authenticatedUserId,
+      req.userId,
       providerId
     );
     if (!providerDetails || !providerDetails.app_key) {
@@ -399,34 +399,30 @@ router.get(
  *         description: Missing search query.
  */
 router.get('/openfoodfacts/search', authenticate, async (req, res, next) => {
-  const query =
-    typeof req.query.query === 'string'
-      ? req.query.query
-      : String(req.query.query || '');
+  const { query } = req.query;
   if (!query) {
     return res.status(400).json({ error: 'Missing search query' });
   }
-  const page = Math.max(
-    1,
-    parseInt(typeof req.query.page === 'string' ? req.query.page : '1', 10) || 1
-  );
+  // @ts-expect-error TS(2345): Argument of type 'string | ParsedQs | (string | Pa... Remove this comment to see the full error message
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
   try {
     const userPrefs = await preferenceService.getUserPreferences(
       req.userId,
+
       req.userId
     );
     const language = userPrefs?.language || 'en';
     const providerId =
       req.headers['x-provider-id'] ||
       (await externalProviderService.getActiveOpenFoodFactsProviderId(
-        req.authenticatedUserId
+        req.userId
       ));
     const data = await searchOpenFoodFacts(
       query,
       page,
       language,
 
-      providerId ? req.authenticatedUserId : undefined,
+      providerId ? req.userId : undefined,
       providerId || undefined
     );
     res.json(data);
@@ -472,14 +468,14 @@ router.get(
       const providerId =
         req.headers['x-provider-id'] ||
         (await externalProviderService.getActiveOpenFoodFactsProviderId(
-          req.authenticatedUserId
+          req.userId
         ));
       const data = await searchOpenFoodFactsByBarcodeFields(
         barcode,
         undefined,
         language,
 
-        providerId ? req.authenticatedUserId : undefined,
+        providerId ? req.userId : undefined,
         providerId || undefined
       );
       res.json(data);
@@ -522,10 +518,7 @@ router.get('/nutritionix/search', authenticate, async (req, res, next) => {
       .json({ error: 'Missing search query or providerId' });
   }
   try {
-    const data = await searchNutritionixFoods(
-      String(query),
-      String(providerId)
-    );
+    const data = await searchNutritionixFoods(query, providerId);
     res.json(data);
   } catch (error) {
     next(error);
@@ -565,10 +558,7 @@ router.get('/nutritionix/nutrients', authenticate, async (req, res, next) => {
       .json({ error: 'Missing search query or providerId' });
   }
   try {
-    const data = await getNutritionixNutrients(
-      String(query),
-      String(providerId)
-    );
+    const data = await getNutritionixNutrients(query, providerId);
     res.json(data);
   } catch (error) {
     next(error);
@@ -606,10 +596,7 @@ router.get('/nutritionix/item', authenticate, async (req, res, next) => {
     return res.status(400).json({ error: 'Missing nix_item_id or providerId' });
   }
   try {
-    const data = await getNutritionixBrandedNutrients(
-      String(nix_item_id),
-      String(providerId)
-    );
+    const data = await getNutritionixBrandedNutrients(nix_item_id, providerId);
     res.json(data);
   } catch (error) {
     next(error);

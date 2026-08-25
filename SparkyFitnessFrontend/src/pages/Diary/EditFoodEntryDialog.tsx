@@ -6,7 +6,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { Check, Sparkles, Clock, CalendarDays, X } from 'lucide-react';
+import { Check, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -42,12 +42,7 @@ import {
   OVERALL_CONFIDENCE_LABELS,
   type AiConfidence,
   type ConfidenceTone,
-  toHourMinute,
-  userHourMinute,
 } from '@workspace/shared';
-import { formatServingLabel } from '@/utils/foodServing';
-import FoodEntryImageOverride from './FoodEntryImageOverride';
-import { useEntryImageDraft } from '@/hooks/Diary/useEntryImageDraft';
 
 const AI_PICKER_ICON_TONE_CLASSES: Record<ConfidenceTone, string> = {
   success: 'text-emerald-600 dark:text-emerald-400',
@@ -73,7 +68,6 @@ const EditFoodEntryDialog = ({
     energyUnit,
     convertEnergy,
     nutrientDisplayPreferences,
-    timezone,
   } = usePreferences();
   const isMobile = useIsMobile();
   const platform = isMobile ? 'mobile' : 'desktop';
@@ -83,9 +77,6 @@ const EditFoodEntryDialog = ({
     entry?.variant_id || null
   );
   const [mealId, setMealId] = useState<string>(entry?.meal_type_id ?? '');
-  const [entryTime, setEntryTime] = useState<string>(
-    toHourMinute(entry?.entry_time) || ''
-  );
 
   const { data: customNutrients } = useCustomNutrients();
   const { data: foodData, isLoading: isLoadingFood } = useFoodView(
@@ -95,9 +86,6 @@ const EditFoodEntryDialog = ({
     entry?.food_id || ''
   );
   const { mutateAsync: updateFoodEntry } = useUpdateFoodEntryMutation();
-  // Photos are staged here and applied by handleSubmit, so closing the dialog
-  // without saving discards them.
-  const imageDraft = useEntryImageDraft(entry?.id ?? '', entry?.images, 'food');
   const createFoodVariantMutation = useCreateFoodVariantMutation();
 
   const loading = isLoadingFood || isLoadingVariants;
@@ -234,15 +222,11 @@ const EditFoodEntryDialog = ({
           unit: variantWithId.serving_unit,
           variant_id: variantWithId.id || null,
           meal_type_id: mealId,
-          entry_time: entryTime || null,
         };
         await updateFoodEntry({
           id: entry.id,
           data,
         });
-        // This branch returns early, so it needs the same photo save as the
-        // normal path below; otherwise staged photos are silently dropped.
-        await imageDraft.save();
         info(
           loggingLevel,
           'Food entry updated with converted variant:',
@@ -268,13 +252,9 @@ const EditFoodEntryDialog = ({
         meal_type_id: mealId,
         variant_id:
           selectedVariant.id === 'default-variant' ? null : selectedVariant.id,
-        entry_time: entryTime || null,
       };
 
       await updateFoodEntry({ id: entry.id, data: updateData });
-      // Photos are staged rather than saved on pick, so they are applied here
-      // as part of the same submit. No-ops when nothing changed.
-      await imageDraft.save();
 
       info(loggingLevel, 'Food entry updated successfully:', entry.id);
       onOpenChange(false);
@@ -324,21 +304,14 @@ const EditFoodEntryDialog = ({
                 )}
               </div>
 
-              <FoodEntryImageOverride
-                entry={entry}
-                items={imageDraft.items}
-                onItemsChange={imageDraft.setItems}
-                isSaving={imageDraft.isSaving}
-              />
-
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <Label htmlFor="quantity">Quantity</Label>
                   <Input
                     id="quantity"
                     type="number"
-                    step="any"
-                    min="0.01"
+                    step="0.1"
+                    min="0.1"
                     value={quantity}
                     ref={inputRef}
                     onChange={(e) => setQuantity(Number(e.target.value))}
@@ -361,7 +334,7 @@ const EditFoodEntryDialog = ({
                             variant.id && (
                               <SelectItem key={variant.id} value={variant.id}>
                                 <span className="flex items-center gap-1.5">
-                                  {formatServingLabel(variant)}
+                                  {variant.serving_unit}
                                   {variant.source === 'ai_estimate' &&
                                     variant.ai_confidence && (
                                       <Sparkles
@@ -424,63 +397,6 @@ const EditFoodEntryDialog = ({
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
-
-                <div className="col-span-4 space-y-1 max-w-[280px]">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="entryTime">Time (optional)</Label>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setEntryTime('')}
-                        disabled={!entryTime}
-                        className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-3 py-1 text-sm font-medium text-muted-foreground shadow-sm hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-40 disabled:pointer-events-none"
-                        title="Clear time"
-                      >
-                        <X className="h-4 w-4" />
-                        Clear
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const { hour, minute } = userHourMinute(timezone);
-                          setEntryTime(
-                            `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
-                          );
-                        }}
-                        className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-3 py-1 text-sm font-medium text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors"
-                        title="Set to current local time"
-                      >
-                        <Clock className="h-4 w-4" />
-                        Now
-                      </button>
-                      {(() => {
-                        const selectedMeal = availableMealTypes.find(
-                          (m) => m.id === mealId
-                        );
-                        const defaultTime = selectedMeal?.default_time;
-                        return defaultTime ? (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setEntryTime(toHourMinute(defaultTime) || '')
-                            }
-                            className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-3 py-1 text-sm font-medium text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors"
-                            title={`Set to meal default (${toHourMinute(defaultTime)})`}
-                          >
-                            <CalendarDays className="h-4 w-4" />
-                            Default
-                          </button>
-                        ) : null;
-                      })()}
-                    </div>
-                  </div>
-                  <Input
-                    id="entryTime"
-                    type="time"
-                    value={entryTime}
-                    onChange={(e) => setEntryTime(e.target.value)}
-                  />
                 </div>
               </div>
 

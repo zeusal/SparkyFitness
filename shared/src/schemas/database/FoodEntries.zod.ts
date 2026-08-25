@@ -20,7 +20,6 @@ export const foodEntriesSchema = z.object({
   quantity: z.number(),
   unit: z.string().nullable(),
   entry_date: z.date(),
-  entry_time: z.string().nullable(),
   created_at: z.date().nullable(),
   variant_id: z.string().nullable(),
   meal_plan_template_id: mealPlanTemplatesIdSchema.nullable(),
@@ -54,9 +53,6 @@ export const foodEntriesSchema = z.object({
   allergens: z.array(z.string()).nullable(),
   traces: z.array(z.string()).nullable(),
   meal_type_id: mealTypesIdSchema,
-  source: z.string().nullable(),
-  source_id: z.string().nullable(),
-  images: z.array(z.string()),
 });
 
 export const foodEntriesInitializerSchema = z.object({
@@ -66,7 +62,6 @@ export const foodEntriesInitializerSchema = z.object({
   quantity: z.number().optional(),
   unit: z.string().optional().nullable(),
   entry_date: z.date().optional(),
-  entry_time: z.string().optional().nullable(),
   created_at: z.date().optional().nullable(),
   variant_id: z.string().optional().nullable(),
   meal_plan_template_id: mealPlanTemplatesIdSchema.optional().nullable(),
@@ -100,9 +95,6 @@ export const foodEntriesInitializerSchema = z.object({
   allergens: z.array(z.string()).optional().nullable(),
   traces: z.array(z.string()).optional().nullable(),
   meal_type_id: mealTypesIdSchema,
-  source: z.string().optional().nullable(),
-  source_id: z.string().optional().nullable(),
-  images: z.array(z.string()).optional(),
 });
 
 export const foodEntriesMutatorSchema = z.object({
@@ -112,7 +104,6 @@ export const foodEntriesMutatorSchema = z.object({
   quantity: z.number().optional(),
   unit: z.string().optional().nullable(),
   entry_date: z.date().optional(),
-  entry_time: z.string().optional().nullable(),
   created_at: z.date().optional().nullable(),
   variant_id: z.string().optional().nullable(),
   meal_plan_template_id: mealPlanTemplatesIdSchema.optional().nullable(),
@@ -146,9 +137,6 @@ export const foodEntriesMutatorSchema = z.object({
   allergens: z.array(z.string()).optional().nullable(),
   traces: z.array(z.string()).optional().nullable(),
   meal_type_id: mealTypesIdSchema.optional(),
-  source: z.string().optional().nullable(),
-  source_id: z.string().optional().nullable(),
-  images: z.array(z.string()).optional(),
 });
 
 export type FoodEntries = z.infer<typeof foodEntriesSchema>;

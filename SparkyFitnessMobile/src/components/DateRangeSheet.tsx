@@ -1,14 +1,23 @@
 import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Platform, View, Text } from 'react-native';
-import { BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet';
-import { useCSSVariable } from 'uniwind';
+import {
+  BottomSheetModal,
+  BottomSheetView,
+  BottomSheetBackdrop,
+  type BottomSheetBackdropProps,
+} from '@gorhom/bottom-sheet';
+import { FullWindowOverlay } from 'react-native-screens';
+import { useUniwind, useCSSVariable } from 'uniwind';
 import DateTimePicker, { type DateType } from 'react-native-ui-datepicker';
 import { toLocalDateString } from '../utils/dateUtils';
 import Icon from './Icon';
 import Button from './ui/Button';
-import { sheetContainer, useSheetBackdrop } from './ui/sheetChrome';
-import { useCalendarPresentation } from '../utils/calendarLocalization';
+
+// Render inside an iOS UIWindow so the sheet sits above any native modal. No-op on Android.
+const sheetContainer =
+  Platform.OS === 'ios'
+    ? ({ children }: React.PropsWithChildren) => <FullWindowOverlay>{children}</FullWindowOverlay>
+    : undefined;
 
 export interface DateRangeSheetRef {
   present: () => void;
@@ -27,9 +36,9 @@ interface DateRangeSheetProps {
  */
 const DateRangeSheet = React.forwardRef<DateRangeSheetRef, DateRangeSheetProps>(
   ({ onConfirm }, ref) => {
-    const { t } = useTranslation();
     const bottomSheetRef = useRef<BottomSheetModal>(null);
-    const { presentation } = useCalendarPresentation();
+    const { theme } = useUniwind();
+    const isDarkMode = theme === 'dark' || theme === 'amoled';
     const [start, setStart] = useState<DateType>(undefined);
     const [end, setEnd] = useState<DateType>(undefined);
 
@@ -57,7 +66,17 @@ const DateRangeSheet = React.forwardRef<DateRangeSheetRef, DateRangeSheetProps>(
       };
     }, []);
 
-    const renderBackdrop = useSheetBackdrop();
+    const renderBackdrop = useCallback(
+      (props: BottomSheetBackdropProps) => (
+        <BottomSheetBackdrop
+          {...props}
+          opacity={isDarkMode ? 0.7 : 0.5}
+          disappearsOnIndex={-1}
+          appearsOnIndex={0}
+        />
+      ),
+      [isDarkMode]
+    );
 
     const handleChange = useCallback(
       ({ startDate, endDate }: { startDate: DateType; endDate: DateType }) => {
@@ -80,7 +99,6 @@ const DateRangeSheet = React.forwardRef<DateRangeSheetRef, DateRangeSheetProps>(
       <BottomSheetModal
         ref={bottomSheetRef}
         enableDynamicSizing
-        enableContentPanningGesture={Platform.OS !== 'android'}
         backdropComponent={renderBackdrop}
         containerComponent={sheetContainer}
         backgroundStyle={{ backgroundColor: surfaceBg }}
@@ -88,7 +106,7 @@ const DateRangeSheet = React.forwardRef<DateRangeSheetRef, DateRangeSheetProps>(
       >
         <BottomSheetView className="pb-safe-or-5 px-2">
           <Text className="text-base font-semibold text-text-primary text-center mt-2 mb-1">
-            {t('dateRange.removeTitle', { defaultValue: 'Select a date range to remove' })}
+            Select a date range to remove
           </Text>
           <DateTimePicker
             mode="range"
@@ -96,8 +114,6 @@ const DateRangeSheet = React.forwardRef<DateRangeSheetRef, DateRangeSheetProps>(
             endDate={end}
             maxDate={new Date()}
             onChange={handleChange}
-            locale={presentation.locale}
-            firstDayOfWeek={presentation.firstDayOfWeek}
             components={{
               IconPrev: <Icon name="chevron-back" size={18} color={textPrimary} />,
               IconNext: <Icon name="chevron-forward" size={18} color={textPrimary} />,
@@ -126,7 +142,7 @@ const DateRangeSheet = React.forwardRef<DateRangeSheetRef, DateRangeSheetProps>(
           />
           <View className="px-2 mt-1">
             <Button variant="primary" onPress={confirm} disabled={!start || !end}>
-              <Text className="text-base font-semibold text-white">{t('dateRange.removeAction', { defaultValue: 'Remove selected range' })}</Text>
+              <Text className="text-base font-semibold text-white">Remove selected range</Text>
             </Button>
           </View>
         </BottomSheetView>

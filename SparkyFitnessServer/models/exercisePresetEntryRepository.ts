@@ -1,4 +1,3 @@
-import type { PoolClient } from 'pg';
 import { getClient } from '../db/poolManager.js';
 import { log } from '../config/logging.js';
 const PRESET_ENTRY_SELECT = `
@@ -217,71 +216,59 @@ async function deleteExercisePresetEntry(id: any, userId: any) {
     client.release();
   }
 }
-async function deleteExercisePresetEntriesByEntrySourceAndDateWithClient(
-  client: PoolClient,
-  userId: string,
-  startDate: string,
-  endDate: string,
-  entrySource: string
-) {
-  // Get IDs of exercise preset entries to be deleted
-  const presetEntryIdsResult = await client.query(
-    `SELECT id FROM exercise_preset_entries
-     WHERE user_id = $1
-       AND entry_date BETWEEN $2 AND $3
-       AND source = $4`,
-    [userId, startDate, endDate, entrySource]
-  );
-  const presetEntryIds = presetEntryIdsResult.rows.map(
-    (row: { id: string }) => row.id
-  );
-  if (presetEntryIds.length > 0) {
-    // Delete associated activity details (if any, though currently full_activity_data is linked to exercise_entry)
-    // This assumes exercise_entry_activity_details might eventually link to exercise_preset_entries directly.
-    // For now, we'll just delete the preset entries.
-    // If activity details are linked to preset entries, a similar deletion logic would be needed here.
-    // Delete the exercise preset entries themselves
-    const result = await client.query(
-      'DELETE FROM exercise_preset_entries WHERE id = ANY($1::uuid[])',
-      [presetEntryIds]
-    );
-    log(
-      'info',
-      `[exercisePresetEntryRepository] Deleted ${result.rowCount} exercise preset entries with source '${entrySource}' for user ${userId} from ${startDate} to ${endDate}.`
-    );
-    return result.rowCount;
-  }
-  log(
-    'info',
-    `[exercisePresetEntryRepository] No exercise preset entries with source '${entrySource}' found for user ${userId} from ${startDate} to ${endDate}.`
-  );
-  return 0;
-}
-
 async function deleteExercisePresetEntriesByEntrySourceAndDate(
-  userId: string,
-  startDate: string,
-  endDate: string,
-  entrySource: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  userId: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  startDate: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  endDate: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  entrySource: any
 ) {
   const client = await getClient(userId);
   try {
     await client.query('BEGIN');
-    const deletedCount =
-      await deleteExercisePresetEntriesByEntrySourceAndDateWithClient(
-        client,
-        userId,
-        startDate,
-        endDate,
-        entrySource
+    // Get IDs of exercise preset entries to be deleted
+    const presetEntryIdsResult = await client.query(
+      `SELECT id FROM exercise_preset_entries
+       WHERE user_id = $1
+         AND entry_date BETWEEN $2 AND $3
+         AND source = $4`,
+      [userId, startDate, endDate, entrySource]
+    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const presetEntryIds = presetEntryIdsResult.rows.map((row: any) => row.id);
+    if (presetEntryIds.length > 0) {
+      // Delete associated activity details (if any, though currently full_activity_data is linked to exercise_entry)
+      // This assumes exercise_entry_activity_details might eventually link to exercise_preset_entries directly.
+      // For now, we'll just delete the preset entries.
+      // If activity details are linked to preset entries, a similar deletion logic would be needed here.
+      // Delete the exercise preset entries themselves
+      const result = await client.query(
+        'DELETE FROM exercise_preset_entries WHERE id = ANY($1::uuid[])',
+        [presetEntryIds]
       );
-    await client.query('COMMIT');
-    return deletedCount;
+      log(
+        'info',
+        `[exercisePresetEntryRepository] Deleted ${result.rowCount} exercise preset entries with source '${entrySource}' for user ${userId} from ${startDate} to ${endDate}.`
+      );
+      await client.query('COMMIT');
+      return result.rowCount;
+    } else {
+      log(
+        'info',
+        `[exercisePresetEntryRepository] No exercise preset entries with source '${entrySource}' found for user ${userId} from ${startDate} to ${endDate}.`
+      );
+      await client.query('COMMIT');
+      return 0;
+    }
   } catch (error) {
     await client.query('ROLLBACK');
     log(
       'error',
-      `Error deleting exercise preset entries by source and date: ${error instanceof Error ? error.message : String(error)}`,
+      // @ts-expect-error TS(2571): Object is of type 'unknown'.
+      `Error deleting exercise preset entries by source and date: ${error.message}`,
       { userId, startDate, endDate, entrySource, error }
     );
     throw error;
@@ -298,7 +285,6 @@ export { updateExercisePresetEntry };
 export { updateExercisePresetEntryWithClient };
 export { deleteExercisePresetEntry };
 export { deleteExercisePresetEntriesByEntrySourceAndDate };
-export { deleteExercisePresetEntriesByEntrySourceAndDateWithClient };
 export default {
   createExercisePresetEntry,
   createExercisePresetEntryWithClient,
@@ -309,5 +295,4 @@ export default {
   updateExercisePresetEntryWithClient,
   deleteExercisePresetEntry,
   deleteExercisePresetEntriesByEntrySourceAndDate,
-  deleteExercisePresetEntriesByEntrySourceAndDateWithClient,
 };

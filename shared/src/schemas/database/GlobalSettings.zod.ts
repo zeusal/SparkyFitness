@@ -14,7 +14,6 @@ export const globalSettingsSchema = z.object({
   updated_at: z.date().nullable(),
   mfa_mandatory: z.boolean().nullable(),
   allow_user_ai_config: z.boolean(),
-  default_vision_ai_service_id: z.string().uuid().nullable().optional(),
 });
 
 export const globalSettingsInitializerSchema = z.object({
@@ -24,7 +23,6 @@ export const globalSettingsInitializerSchema = z.object({
   updated_at: z.date().optional().nullable(),
   mfa_mandatory: z.boolean().optional().nullable(),
   allow_user_ai_config: z.boolean().optional(),
-  default_vision_ai_service_id: z.string().uuid().nullable().optional(),
 });
 
 export const globalSettingsMutatorSchema = z.object({
@@ -34,7 +32,6 @@ export const globalSettingsMutatorSchema = z.object({
   updated_at: z.date().optional().nullable(),
   mfa_mandatory: z.boolean().optional().nullable(),
   allow_user_ai_config: z.boolean().optional(),
-  default_vision_ai_service_id: z.string().uuid().nullable().optional(),
 });
 
 export type GlobalSettings = z.infer<typeof globalSettingsSchema>;

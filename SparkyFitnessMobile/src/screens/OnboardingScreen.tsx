@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -10,17 +9,15 @@ import {
   Keyboard,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-  KeyboardAwareScrollView,
-  type KeyboardAwareScrollViewRef,
-} from 'react-native-keyboard-controller';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useCSSVariable } from 'uniwind';
+import Clipboard from '@react-native-clipboard/clipboard';
 
 import Button from '../components/ui/Button';
 import Icon from '../components/Icon';
-import FormInput, { UnfocusedInputEcho } from '../components/FormInput';
+import FormInput from '../components/FormInput';
 import SegmentedControl from '../components/SegmentedControl';
-import MfaForm, { ErrorBanner, OidcProviderLogo, PrimaryButton } from '../components/MfaForm';
+import MfaForm, { ErrorBanner, PrimaryButton } from '../components/auth/MfaForm';
 import {
   login,
   LoginError,
@@ -29,39 +26,34 @@ import {
   verifyTotp,
   sendEmailOtp,
   verifyEmailOtp,
-  fetchAuthSettings,
-  loginWithOidc,
-  loginWithPasskey,
   type MfaFactors,
-  type AuthSettings,
-  type OidcProvider,
 } from '../services/api/authService';
 import { saveServerConfig } from '../services/storage';
 import { addLog } from '../services/LogService';
-import { normalizeUrl, getInsecureUrlError } from '../utils/serverUrl';
-import { pasteFromClipboard } from '../utils/keyboardFocus';
-import {
-  CONNECTION_CHECK_TIMEOUT_MS,
-  TimeoutError,
-  fetchWithTimeout,
-} from '../utils/concurrency';
 import { markCurrentVersionSeen } from '../services/whatsNewBanner';
 import { queryClient, serverConnectionQueryKey } from '../hooks';
 import type { RootStackScreenProps } from '../types/navigation';
 
 type AuthTab = 'signIn' | 'apiKey';
 
+const AUTH_SEGMENTS: { key: AuthTab; label: string }[] = [
+  { key: 'signIn', label: 'Sign In' },
+  { key: 'apiKey', label: 'API Key' },
+];
+
 const LEARN_MORE_SECTION_MIN_HEIGHT = 208;
+
+const normalizeUrl = (url: string) => url.trim().replace(/\/+$/, '');
 
 const checkReachability = async (url: string): Promise<boolean> => {
   try {
-    const response = await fetchWithTimeout(
-      `${normalizeUrl(url)}/api/auth/settings`,
-      {
-        cache: 'no-store', // skip native HTTP cache to avoid 304 empty bodies (#1353)
-      },
-      CONNECTION_CHECK_TIMEOUT_MS,
-    );
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const response = await fetch(`${normalizeUrl(url)}/api/auth/settings`, {
+      signal: controller.signal,
+      cache: 'no-store', // skip native HTTP cache to avoid 304 empty bodies (#1353)
+    });
+    clearTimeout(timeout);
     return response.ok;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -73,7 +65,6 @@ const checkReachability = async (url: string): Promise<boolean> => {
 type Props = RootStackScreenProps<'Onboarding'>;
 
 export default function OnboardingScreen({ navigation }: Props) {
-  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [textMuted, textSecondary, accentPrimary, borderSubtle] = useCSSVariable([
     '--color-text-muted',
@@ -93,7 +84,6 @@ export default function OnboardingScreen({ navigation }: Props) {
 
   // Auth state (page 2)
   const [authTab, setAuthTab] = useState<AuthTab>('signIn');
-  const [authSettings, setAuthSettings] = useState<AuthSettings | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [apiKey, setApiKey] = useState('');
@@ -111,28 +101,6 @@ export default function OnboardingScreen({ navigation }: Props) {
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [isServerUrlFocused, setIsServerUrlFocused] = useState(false);
   const [isApiKeyFocused, setIsApiKeyFocused] = useState(false);
-  const scrollViewRef = useRef<KeyboardAwareScrollViewRef>(null);
-  const serverUrlInputRef = useRef<TextInput>(null);
-  const apiKeyInputRef = useRef<TextInput>(null);
-
-  // Page changes unmount the focused input without firing onBlur, which would
-  // leave a stale focus flag suppressing the URL echo and keeping the focused
-  // border highlight.
-  useEffect(() => {
-    setIsServerUrlFocused(false);
-    setIsApiKeyFocused(false);
-  }, [page]);
-
-  // On small screens the error banner can push the primary action below the
-  // fold; scroll the bottom of the form back into view once the banner has
-  // laid out.
-  useEffect(() => {
-    if (!error) return;
-    const timer = setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({ animated: true });
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [error]);
 
   useEffect(() => {
     const showSubscription = Keyboard.addListener('keyboardDidShow', () => {
@@ -166,52 +134,28 @@ export default function OnboardingScreen({ navigation }: Props) {
   const handleNext = async () => {
     const url = normalizeUrl(serverUrl);
     if (!url) {
-      setError(t('onboarding.errors.validFrontendUrl', { defaultValue: 'Enter a valid Frontend URL' }));
+      setError('Enter a valid SparkyFitness URL');
       return;
     }
-
-    const validationError = getInsecureUrlError(url, t('auth.errors.httpsRequired', { defaultValue: "HTTPS is required for server connections." }));
-    if (validationError) {
-      setError(validationError);
+    if (!__DEV__ && url.toLowerCase().startsWith('http://')) {
+      setError('HTTPS is required for server connections.');
       return;
     }
 
     setCheckingUrl(true);
     setError('');
 
-    try {
-      const settings = await fetchAuthSettings(url);
-      setAuthSettings(settings);
+    const reachable = await checkReachability(url);
 
-      // Passkey sign-in is always offered once settings load, so the Sign In
-      // tab is always the sensible default here.
-      setAuthTab('signIn');
+    setCheckingUrl(false);
 
-      setError('');
-      setPage(2);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      addLog(`[Onboarding] Settings fetch failed for ${url}: ${message}. Trying fallback reachability...`, 'WARNING');
-
-      // A timeout means the host silently drops packets (#1767) — the
-      // fallback would probe the same host and just add 10s of spinner. Fast
-      // HTTP errors (typo'd URL) go through the fallback as before.
-      const reachable = err instanceof TimeoutError ? false : await checkReachability(url);
-      if (reachable) {
-        setAuthSettings({
-          trusted_origin: null,
-          email: { enabled: true },
-          oidc: { enabled: false, providers: [] },
-          signup_disabled: false,
-        });
-        setError('');
-        setPage(2);
-      } else {
-        setError(t('onboarding.errors.serverUnreachable', { defaultValue: 'Could not reach server. Check the URL and try again.' }));
-      }
-    } finally {
-      setCheckingUrl(false);
+    if (!reachable) {
+      setError('Could not reach server. Check the URL and try again.');
+      return;
     }
+
+    setError('');
+    setPage(2);
   };
 
   // --- Page 2: Auth handlers ---
@@ -231,11 +175,11 @@ export default function OnboardingScreen({ navigation }: Props) {
   const handleSignIn = async () => {
     const url = normalizeUrl(serverUrl);
     if (!email.trim()) {
-      setError(t('auth.errors.emailRequired', { defaultValue: 'Please enter your email.' }));
+      setError('Please enter your email.');
       return;
     }
     if (!password) {
-      setError(t('auth.errors.passwordRequired', { defaultValue: 'Please enter your password.' }));
+      setError('Please enter your password.');
       return;
     }
 
@@ -276,63 +220,7 @@ export default function OnboardingScreen({ navigation }: Props) {
       if (err instanceof LoginError) {
         setError(err.message);
       } else {
-        setError(t('auth.errors.connectionFailed', { defaultValue: 'Could not connect to server. Check the URL and try again.' }));
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleOidcLogin = async (providerId: string) => {
-    const url = normalizeUrl(serverUrl);
-    setLoading(true);
-    setError('');
-
-    try {
-      const result = await loginWithOidc(url, providerId);
-
-      if (result.type === 'success') {
-        await saveConfig(url, {
-          authType: 'session',
-          sessionToken: result.sessionToken,
-        });
-
-        addLog(`Connected via OIDC provider ${providerId}.`, 'INFO');
-        await finishWithConnection();
-      }
-    } catch (err) {
-      if (err instanceof Error) {
-        setError(t('auth.errors.generic', { defaultValue: 'Authentication failed. Please try again.' }));
-      } else {
-        setError(t('auth.errors.generic', { defaultValue: 'Authentication failed. Please try again.' }));
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePasskeyLogin = async () => {
-    const url = normalizeUrl(serverUrl);
-    setLoading(true);
-    setError('');
-
-    try {
-      const result = await loginWithPasskey(url);
-
-      if (result.type === 'success') {
-        await saveConfig(url, {
-          authType: 'session',
-          sessionToken: result.sessionToken,
-        });
-
-        addLog('Connected via Passkey.', 'INFO');
-        await finishWithConnection();
-      }
-    } catch (err) {
-      if (err instanceof Error) {
-        setError(t('auth.errors.generic', { defaultValue: 'Authentication failed. Please try again.' }));
-      } else {
-        setError(t('auth.errors.generic', { defaultValue: 'Authentication failed. Please try again.' }));
+        setError('Could not connect to server. Check the URL and try again.');
       }
     } finally {
       setLoading(false);
@@ -342,7 +230,7 @@ export default function OnboardingScreen({ navigation }: Props) {
   const handleConnectApiKey = async () => {
     const url = normalizeUrl(serverUrl);
     if (!apiKey.trim()) {
-      setError(t('auth.errors.apiKeyRequired', { defaultValue: 'Please enter an API key.' }));
+      setError('Please enter an API key.');
       return;
     }
 
@@ -350,21 +238,21 @@ export default function OnboardingScreen({ navigation }: Props) {
     setError('');
 
     try {
-      const response = await fetchWithTimeout(`${url}/api/identity/user`, {
+      const response = await fetch(`${url}/api/identity/user`, {
         method: 'GET',
         cache: 'no-store', // skip native HTTP cache to avoid 304 empty bodies (#1353)
         headers: {
           Authorization: `Bearer ${apiKey.trim()}`,
         },
-      }, CONNECTION_CHECK_TIMEOUT_MS);
+      });
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => '');
         if (response.status === 401) {
-          setError(t('auth.errors.invalidApiKey', { defaultValue: 'Invalid API key. Please check and try again.' }));
+          setError('Invalid API key. Please check and try again.');
         } else {
           setError(
-            t('auth.errors.connectionStatus', { defaultValue: 'Connection failed ({{status}}): {{message}}', status: response.status, message: errorText || t('auth.errors.unknown', { defaultValue: 'Unknown error' }) }),
+            `Connection failed (${response.status}): ${errorText || 'Unknown error'}`,
           );
         }
         return;
@@ -380,7 +268,7 @@ export default function OnboardingScreen({ navigation }: Props) {
       await finishWithConnection();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setError(t('auth.errors.connectionWithMessage', { defaultValue: 'Could not connect to server: {{message}}', message }));
+      setError(`Could not connect to server: ${message}`);
     } finally {
       setLoading(false);
     }
@@ -399,7 +287,7 @@ export default function OnboardingScreen({ navigation }: Props) {
   const handleVerifyMfa = async () => {
     const code = mfaCode.trim();
     if (!code) {
-      setError(t('auth.errors.verificationCodeRequired', { defaultValue: 'Please enter the verification code.' }));
+      setError('Please enter the verification code.');
       return;
     }
 
@@ -423,22 +311,22 @@ export default function OnboardingScreen({ navigation }: Props) {
     } catch (err) {
       if (err instanceof LoginError) {
         if (err.statusCode === 429) {
-          setError(t('auth.errors.tooManyAttempts', { defaultValue: 'Too many attempts. Please wait a moment and try again.' }));
+          setError('Too many attempts. Please wait a moment and try again.');
         } else if (err.message.toLowerCase().includes('invalid code')) {
-          setError(t('auth.errors.invalidVerificationCode', { defaultValue: 'Invalid verification code. Please try again.' }));
+          setError('Invalid verification code. Please try again.');
         } else if (
           err.message.includes('INVALID_TWO_FACTOR_COOKIE') ||
           err.message.toLowerCase().includes('invalid two factor cookie') ||
           err.message.includes('expired')
         ) {
           await clearAuthCookies();
-          setError(t('auth.errors.sessionExpired', { defaultValue: 'Your session has expired. Please sign in again.' }));
+          setError('Your session has expired. Please sign in again.');
           setStep('auth');
         } else {
-          setError(t('auth.errors.generic', { defaultValue: 'Authentication failed. Please try again.' }));
+          setError(err.message);
         }
       } else {
-        setError(t('auth.errors.verificationFailed', { defaultValue: 'Verification failed. Please try again.' }));
+        setError('Verification failed. Please try again.');
       }
     } finally {
       setLoading(false);
@@ -457,7 +345,7 @@ export default function OnboardingScreen({ navigation }: Props) {
       if (err instanceof LoginError) {
         setError(err.message);
       } else {
-        setError(t('auth.errors.sendEmailCodeFailed', { defaultValue: 'Failed to send email code. Please try again.' }));
+        setError('Failed to send email code. Please try again.');
       }
     } finally {
       setLoading(false);
@@ -500,27 +388,21 @@ export default function OnboardingScreen({ navigation }: Props) {
           SparkyFitness
         </Text>
         <Text className="text-base text-text-secondary mt-1">
-          {t('onboarding.subtitle', { defaultValue: 'Your self-hosted fitness tracker' })}
+          Your self-hosted fitness tracker
         </Text>
       </View>
 
       {/* Server URL input */}
       <View className="mb-6">
-        <Text className="text-sm mb-2 text-text-secondary">{t('auth.frontendUrl', { defaultValue: 'Frontend URL' })}</Text>
+        <Text className="text-sm mb-2 text-text-secondary">SparkyFitness URL</Text>
         <View
           className="flex-row items-center rounded-lg pr-2.5 bg-raised"
           style={{ borderWidth: 1, borderColor: isServerUrlFocused ? accentPrimary : borderSubtle }}
         >
           <View className="flex-1">
-            {/* While unfocused, the input's own text is transparent and
-                UnfocusedInputEcho renders the value on top; see FormInput.tsx. */}
             <TextInput
-              ref={serverUrlInputRef}
               className="p-2.5 text-base text-text-primary"
-              style={[
-                { lineHeight: 20 },
-                !isServerUrlFocused && !!serverUrl && { color: 'transparent' },
-              ]}
+              style={{ lineHeight: 20 }}
               placeholder="https://your-sparky-app.com"
               placeholderTextColor={textMuted}
               value={serverUrl}
@@ -534,16 +416,11 @@ export default function OnboardingScreen({ navigation }: Props) {
               keyboardType="url"
               autoCorrect={false}
             />
-            <UnfocusedInputEcho
-              focused={isServerUrlFocused}
-              value={serverUrl}
-              style={{ padding: 10 }}
-            />
           </View>
           <Button
             variant="ghost"
-            onPress={() => pasteFromClipboard(serverUrlInputRef, setServerUrl)}
-            accessibilityLabel={t('auth.pasteUrl', { defaultValue: 'Paste URL from clipboard' })}
+            onPress={async () => setServerUrl(await Clipboard.getString())}
+            accessibilityLabel="Paste URL from clipboard"
             className="p-2 py-2 px-2 rounded-lg"
           >
             <Icon name="paste" size={20} color={textSecondary} />
@@ -554,12 +431,19 @@ export default function OnboardingScreen({ navigation }: Props) {
       <ErrorBanner message={error} />
 
       {/* Actions */}
-      <View className="mt-2">
+      <View className="gap-3 mt-2">
         <PrimaryButton
-          label={t('common.next', { defaultValue: 'Next' })}
+          label="Next"
           onPress={handleNext}
           loading={checkingUrl}
         />
+        <Button
+          variant="ghost"
+          onPress={finishOnboarding}
+          className="py-2.5"
+        >
+          Later
+        </Button>
       </View>
 
       {/* Learn more */}
@@ -582,17 +466,17 @@ export default function OnboardingScreen({ navigation }: Props) {
             className="text-sm ml-1"
             style={{ color: accentPrimary }}
           >
-            {t('onboarding.learnMoreTitle', { defaultValue: 'Learn more about SparkyFitness' })}
+            Learn more about SparkyFitness
           </Text>
         </Pressable>
         {learnMoreExpanded && (
           <View className="mt-4 rounded-2xl bg-raised p-4 shadow-sm">
             <Text className="text-sm text-text-secondary leading-relaxed">
-              {t('onboarding.learnMoreBody', { defaultValue: 'SparkyFitness helps you track your food, workouts, and health data in one place.' })}
+              SparkyFitness helps you track your food, workouts, and health data in one place.
               
             </Text>
             <Text className="mt-2 text-sm text-text-secondary leading-relaxed">
-              {t('onboarding.learnMorePrivacy', { defaultValue: 'It runs on your own server so your data stays private.' })}
+              It runs on your own server so your data stays private.
             </Text>
           </View>
         )}
@@ -600,210 +484,114 @@ export default function OnboardingScreen({ navigation }: Props) {
     </>
   );
 
-  const getSegments = () => {
-    const segments = [];
-    const hasEmail = !authSettings || authSettings.email.enabled;
-    const hasOidc = authSettings?.oidc.enabled && authSettings.oidc.providers.length > 0;
-    
-    if (hasEmail) {
-      segments.push({ key: 'signIn' as const, label: t('auth.signIn', { defaultValue: 'Sign In' }) });
-    } else if (hasOidc) {
-      segments.push({ key: 'signIn' as const, label: t('auth.sso', { defaultValue: 'SSO' }) });
-    } else if (authSettings) {
-      segments.push({ key: 'signIn' as const, label: t('auth.passkey', { defaultValue: 'Passkey' }) });
-    }
-    
-    segments.push({ key: 'apiKey' as const, label: t('auth.apiKey', { defaultValue: 'API Key' }) });
-    return segments;
-  };
+  const renderPage2Auth = () => (
+    <>
+      {/* Header with server URL */}
+      <View className="items-center mb-5">
+        <Text className="text-2xl font-bold text-text-primary">
+          Connect to SparkyFitness
+        </Text>
+        <Text
+          className="text-base text-text-secondary mt-1"
+          numberOfLines={1}
+        >
+          {normalizeUrl(serverUrl)}
+        </Text>
+      </View>
 
-  const renderPage2Auth = () => {
-    const hasEmail = !authSettings || authSettings.email.enabled;
-    const hasOidc = authSettings?.oidc.enabled && authSettings.oidc.providers.length > 0;
+      {/* Auth type toggle */}
+      <View className="mb-3">
+        <SegmentedControl
+          segments={AUTH_SEGMENTS}
+          activeKey={authTab}
+          onSelect={setAuthTab}
+        />
+      </View>
 
-    return (
-      <>
-        {/* Header with server URL */}
-        <View className="items-center mb-5">
-          <Text className="text-2xl font-bold text-text-primary">
-            {t('auth.connectTitle', { defaultValue: 'Connect to SparkyFitness' })}
-          </Text>
-          <Text
-            className="text-base text-text-secondary mt-1"
-            numberOfLines={1}
-          >
-            {normalizeUrl(serverUrl)}
-          </Text>
-        </View>
-
-        {/* Auth type toggle */}
-        {getSegments().length > 1 && (
+      {/* Sign In fields */}
+      {authTab === 'signIn' && (
+        <>
           <View className="mb-3">
-            <SegmentedControl
-              segments={getSegments()}
-              activeKey={authTab}
-              onSelect={setAuthTab}
+            <Text className="text-sm mb-2 text-text-secondary">Email</Text>
+            <FormInput
+              placeholder="email@example.com"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              autoComplete="email"
             />
           </View>
-        )}
-
-        {/* Sign In fields */}
-        {authTab === 'signIn' && (
-          <>
-            {hasEmail && (
-              <>
-                <View className="mb-3">
-                  <Text className="text-sm mb-2 text-text-secondary">{t('auth.email', { defaultValue: 'Email' })}</Text>
-                  <FormInput
-                    // i18n-audit-ignore-next-line hardcoded-ui-text -- email format example is language-neutral technical input guidance.
-                    placeholder="email@example.com"
-                    value={email}
-                    onChangeText={setEmail}
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                    autoComplete="email"
-                  />
-                </View>
-                <View className="mb-4">
-                  <Text className="text-sm mb-2 text-text-secondary">{t('auth.password', { defaultValue: 'Password' })}</Text>
-                  <FormInput
-                    placeholder={t('auth.passwordPlaceholder', { defaultValue: 'Password' })}
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry
-                    autoComplete="password"
-                  />
-                </View>
-              </>
-            )}
-
-            {hasOidc && hasEmail && (
-              <View className="flex-row items-center mb-4">
-                <View className="flex-1" style={{ height: 1, backgroundColor: borderSubtle }} />
-                <Text className="mx-3 text-xs text-text-muted uppercase" style={{ marginHorizontal: 12 }}>{t('auth.orSignInWith', { defaultValue: 'Or sign in with' })}</Text>
-                <View className="flex-1" style={{ height: 1, backgroundColor: borderSubtle }} />
-              </View>
-            )}
-
-            {authSettings && (
-              <View className="gap-4">
-                {hasOidc &&
-                  authSettings.oidc.providers.map((provider: OidcProvider) => (
-                    <Button
-                      key={provider.id}
-                      variant="outline"
-                      onPress={() => handleOidcLogin(provider.id)}
-                      disabled={loading}
-                      className="w-full flex-row items-center justify-center p-2.5 rounded-lg border bg-raised"
-                      style={{
-                        borderWidth: 1,
-                        borderColor: borderSubtle,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <OidcProviderLogo logoUrl={provider.logo_url} serverUrl={serverUrl} />
-                        <Text className="text-base font-semibold text-text-primary">
-                          {provider.display_name || t('auth.signInWithProvider', { defaultValue: 'Sign in with {{provider}}', provider: provider.id })}
-                        </Text>
-                      </View>
-                    </Button>
-                  ))}
-                <Button
-                  variant="outline"
-                  onPress={handlePasskeyLogin}
-                  disabled={loading}
-                  className="w-full flex-row items-center justify-center p-2.5 rounded-lg border bg-raised"
-                  style={{
-                    borderWidth: 1,
-                    borderColor: borderSubtle,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <View style={{ marginRight: 8 }}>
-                      <Icon name="fingerprint" size={20} color={accentPrimary} />
-                    </View>
-                    <Text className="text-base font-semibold text-text-primary">
-                      {t('auth.signInWithPasskey', { defaultValue: 'Sign in with Passkey' })}
-                    </Text>
-                  </View>
-                </Button>
-              </View>
-            )}
-
-            {authSettings && !hasEmail && !hasOidc && (
-              <View className="py-6 px-4 items-center bg-raised rounded-lg border" style={{ borderWidth: 1, borderColor: borderSubtle }}>
-                <Text className="text-center text-sm text-text-secondary">
-                  {t('auth.noMethods', { defaultValue: 'No standard sign-in methods are currently enabled on this server. Please use an API Key or contact an administrator.' })}
-                </Text>
-              </View>
-            )}
-          </>
-        )}
-
-        {/* API Key field */}
-        {authTab === 'apiKey' && (
           <View className="mb-4">
-            <Text className="text-sm mb-2 text-text-secondary">{t('auth.apiKey', { defaultValue: 'API Key' })}</Text>
-            <View
-              className="flex-row items-center rounded-lg pr-2.5 bg-raised"
-              style={{ borderWidth: 1, borderColor: isApiKeyFocused ? accentPrimary : borderSubtle }}
-            >
-              <View className="flex-1">
-                <TextInput
-                  ref={apiKeyInputRef}
-                  className="p-2.5 text-base text-text-primary"
-                  style={{ lineHeight: 20 }}
-                  // i18n-audit-ignore-next-line hardcoded-ui-text -- API key example is an opaque technical format, not translatable UI.
-                  placeholder="Uds3d8i..."
-                  placeholderTextColor={textMuted}
-                  value={apiKey}
-                  onChangeText={setApiKey}
-                  onFocus={() => setIsApiKeyFocused(true)}
-                  onBlur={() => setIsApiKeyFocused(false)}
-                  secureTextEntry
-                />
-              </View>
-              <Button
-                variant="ghost"
-                onPress={() => pasteFromClipboard(apiKeyInputRef, setApiKey)}
-                accessibilityLabel={t('auth.pasteApiKey', { defaultValue: 'Paste API key from clipboard' })}
-                className="p-2 py-2 px-2 rounded-lg"
-              >
-                <Icon name="paste" size={20} color={textSecondary} />
-              </Button>
-            </View>
+            <Text className="text-sm mb-2 text-text-secondary">Password</Text>
+            <FormInput
+              placeholder="Password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoComplete="password"
+            />
           </View>
-        )}
+        </>
+      )}
 
-        {/* Actions */}
-        {(authTab === 'apiKey' || hasEmail || !!error) && (
-          <View className="mt-4">
-            {/* ErrorBanner's own mb-4 is the banner→button gap. */}
-            <ErrorBanner message={error} />
-            {(authTab === 'apiKey' || hasEmail) && (
-              <PrimaryButton
-                label={t('auth.connect', { defaultValue: 'Connect' })}
-                onPress={handleConnect}
-                loading={loading}
+      {/* API Key field */}
+      {authTab === 'apiKey' && (
+        <View className="mb-4">
+          <Text className="text-sm mb-2 text-text-secondary">API Key</Text>
+          <View
+            className="flex-row items-center rounded-lg pr-2.5 bg-raised"
+            style={{ borderWidth: 1, borderColor: isApiKeyFocused ? accentPrimary : borderSubtle }}
+          >
+            <View className="flex-1">
+              <TextInput
+                className="p-2.5 text-base text-text-primary"
+                style={{ lineHeight: 20 }}
+                placeholder="Uds3d8i..."
+                placeholderTextColor={textMuted}
+                value={apiKey}
+                onChangeText={setApiKey}
+                onFocus={() => setIsApiKeyFocused(true)}
+                onBlur={() => setIsApiKeyFocused(false)}
+                secureTextEntry
               />
-            )}
+            </View>
+            <Button
+              variant="ghost"
+              onPress={async () => setApiKey(await Clipboard.getString())}
+              accessibilityLabel="Paste API key from clipboard"
+              className="p-2 py-2 px-2 rounded-lg"
+            >
+              <Icon name="paste" size={20} color={textSecondary} />
+            </Button>
           </View>
-        )}
-      </>
-    );
-  };
+        </View>
+      )}
+
+      <ErrorBanner message={error} />
+
+      {/* Actions */}
+      <View className="gap-3 mt-4">
+        <PrimaryButton
+          label="Connect"
+          onPress={handleConnect}
+          loading={loading}
+        />
+        <Button
+          variant="ghost"
+          onPress={finishOnboarding}
+        >
+          Later
+        </Button>
+      </View>
+    </>
+  );
 
   const renderPage2Mfa = () => (
     <>
       <View className="items-center mb-5">
         <Text className="text-2xl font-bold text-text-primary">
-          {t('auth.twoFactorTitle', { defaultValue: 'Two-Factor Authentication' })}
+          Two-Factor Authentication
         </Text>
       </View>
 
@@ -834,37 +622,7 @@ export default function OnboardingScreen({ navigation }: Props) {
       className="flex-1 bg-background"
       style={{ paddingTop: insets.top }}
     >
-      <View className="h-11 flex-row items-center justify-between px-4">
-        {page === 2 ? (
-          <Pressable
-            onPress={() => {
-              if (step === 'mfa') {
-                void handleBackToAuth();
-              } else {
-                setError('');
-                setPage(1);
-              }
-            }}
-            className="flex-row items-center gap-1 py-2 px-2"
-          >
-            <Icon name="chevron-back" size={18} color={accentPrimary} />
-            <Text className="text-base text-accent-primary font-semibold">{t('common.back', { defaultValue: 'Back' })}</Text>
-          </Pressable>
-        ) : (
-          <View />
-        )}
-        {step === 'auth' && (
-          <Button
-            variant="header"
-            onPress={finishOnboarding}
-            className="py-2 px-2"
-          >
-            {t('common.later', { defaultValue: 'Later' })}
-          </Button>
-        )}
-      </View>
       <KeyboardAwareScrollView
-        ref={scrollViewRef}
         className="flex-1"
         contentContainerStyle={{
           flexGrow: 1,
@@ -879,10 +637,23 @@ export default function OnboardingScreen({ navigation }: Props) {
         <View
           style={{
             flexGrow: 1,
-            justifyContent:
-              page === 1 && !isKeyboardVisible ? 'center' : 'flex-start',
+            justifyContent: isKeyboardVisible ? 'flex-start' : 'center',
           }}
         >
+          {page === 2 && step === 'auth' && (
+            <View className="mb-3">
+              <Pressable
+                onPress={() => {
+                  setError('');
+                  setPage(1);
+                }}
+                className="self-start flex-row items-center gap-1 py-2 px-2"
+              >
+                <Icon name="chevron-back" size={18} color={accentPrimary} />
+                <Text className="text-base text-accent-primary font-semibold">Back</Text>
+              </Pressable>
+            </View>
+          )}
           <View className="w-full max-w-sm self-center">
             {page === 1 ? renderPage1() : renderPage2()}
           </View>

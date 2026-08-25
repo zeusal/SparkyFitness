@@ -28,10 +28,6 @@ import { Label } from '@/components/ui/label';
 import { usePreferences } from '@/contexts/PreferencesContext';
 import { debug, info, warn } from '@/utils/logging';
 import { Exercise } from '@/types/exercises';
-import {
-  resolveExerciseImageSrc,
-  filterValidExerciseImages,
-} from '@/utils/exercises';
 
 interface ExercisePlaybackModalProps {
   isOpen: boolean;
@@ -61,13 +57,7 @@ const ExercisePlaybackModal: React.FC<ExercisePlaybackModalProps> = ({
     () => exercise?.instructions || [],
     [exercise?.instructions]
   );
-  // Filtered at the source so length, indexing and the resolved src all agree:
-  // a legacy '[]' sentinel entry would otherwise count toward the slideshow and
-  // resolve to /uploads/exercises/[].
-  const images = useMemo(
-    () => filterValidExerciseImages(exercise?.images),
-    [exercise?.images]
-  );
+  const images = useMemo(() => exercise?.images || [], [exercise?.images]);
 
   // Adjust state when props change (Render-adjust pattern)
   // This avoids the "Calling setState synchronously within an effect" lint error.
@@ -382,11 +372,7 @@ const ExercisePlaybackModal: React.FC<ExercisePlaybackModalProps> = ({
     const nextIndex = currentInstructionIndex + 1;
     if (nextIndex < instructions.length) {
       setCurrentInstructionIndex(nextIndex);
-      // Guarded: filtering can leave zero valid images while instructions
-      // remain, and `% 0` stores NaN in the index.
-      setCurrentImageIndex((prev) =>
-        images.length > 0 ? (prev + 1) % images.length : 0
-      );
+      setCurrentImageIndex((prev) => (prev + 1) % images.length);
     } else {
       info(
         loggingLevel,
@@ -415,8 +401,8 @@ const ExercisePlaybackModal: React.FC<ExercisePlaybackModalProps> = ({
     const prevIndex = currentInstructionIndex - 1;
     if (prevIndex >= 0) {
       setCurrentInstructionIndex(prevIndex);
-      setCurrentImageIndex((prev) =>
-        images.length > 0 ? (prev - 1 + images.length) % images.length : 0
+      setCurrentImageIndex(
+        (prev) => (prev - 1 + images.length) % images.length
       );
     } else {
       info(loggingLevel, '[handlePrevious] Already at the first instruction.');
@@ -429,7 +415,11 @@ const ExercisePlaybackModal: React.FC<ExercisePlaybackModalProps> = ({
     const img = images[currentImageIndex];
     if (!img) return null;
 
-    return resolveExerciseImageSrc(img);
+    // If it's already a full URL (starts with http), use it as is
+    if (img.startsWith('http')) return img;
+
+    // Otherwise, it's a local upload, so we MUST prefix it
+    return `/uploads/exercises/${img}`;
   }, [images, currentImageIndex]);
 
   useEffect(() => {

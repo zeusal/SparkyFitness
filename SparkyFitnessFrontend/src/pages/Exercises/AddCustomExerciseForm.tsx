@@ -13,11 +13,7 @@ import {
 } from '@/components/ui/select';
 import { XCircle } from 'lucide-react';
 import type { useAddCustomExerciseForm } from '@/hooks/Exercises/useAddCustomExerciseForm';
-import {
-  EXERCISE_CATEGORIES,
-  EXERCISE_MODALITY_OPTIONS,
-} from '@/constants/exercises';
-import { isExerciseModality } from '@workspace/shared';
+import { EXERCISE_CATEGORIES } from '@/constants/exercises';
 
 interface AddCustomExerciseFormProps {
   form: ReturnType<typeof useAddCustomExerciseForm>;
@@ -32,8 +28,6 @@ export default function AddCustomExerciseForm({
     setNewExerciseName,
     newExerciseCategory,
     setNewExerciseCategory,
-    newExerciseModality,
-    setNewExerciseModality,
     newExerciseCalories,
     manualCaloriesPerHour,
     setManualCaloriesPerHour,
@@ -102,32 +96,6 @@ export default function AddCustomExerciseForm({
                 {t(labelKey, defaultLabel)}
               </SelectItem>
             ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Tracking type */}
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor="modality" className="text-right">
-          {t('exercise.addExerciseDialog.modalityLabel', 'Tracking type')}
-        </Label>
-        <Select
-          value={newExerciseModality}
-          onValueChange={(v) => {
-            if (isExerciseModality(v)) setNewExerciseModality(v);
-          }}
-        >
-          <SelectTrigger id="modality" className="col-span-3">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {EXERCISE_MODALITY_OPTIONS.map(
-              ({ value, labelKey, defaultLabel }) => (
-                <SelectItem key={value} value={value}>
-                  {t(labelKey, defaultLabel)}
-                </SelectItem>
-              )
-            )}
           </SelectContent>
         </Select>
       </div>

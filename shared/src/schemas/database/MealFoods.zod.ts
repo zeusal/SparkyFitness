@@ -42,18 +42,10 @@ const mealFoodsNutritionSnapshotSchema = {
   custom_nutrients:     z.record(z.string(), z.union([z.string(), z.number()])).nullable().optional(),
 };
 
-// Polymorphic component discriminator: a meal_foods row references either a
-// food (item_type='food', food_id set) or another meal (item_type='meal',
-// child_meal_id set). Added manually for the meal-to-meal composition migration
-// (20260701000000_add_child_meal_to_meal_foods) — re-add if ts-to-zod is rerun.
-export const mealFoodsItemTypeSchema = z.enum(["food", "meal"]);
-
 export const mealFoodsSchema = z.object({
   id: mealFoodsIdSchema,
   meal_id: mealsIdSchema,
-  food_id: foodsIdSchema.nullable(),
-  child_meal_id: mealsIdSchema.nullable(),
-  item_type: mealFoodsItemTypeSchema,
+  food_id: foodsIdSchema,
   variant_id: foodVariantsIdSchema.nullable(),
   quantity: z.number(),
   unit: z.string(),
@@ -65,9 +57,7 @@ export const mealFoodsSchema = z.object({
 export const mealFoodsInitializerSchema = z.object({
   id: mealFoodsIdSchema.optional(),
   meal_id: mealsIdSchema,
-  food_id: foodsIdSchema.optional().nullable(),
-  child_meal_id: mealsIdSchema.optional().nullable(),
-  item_type: mealFoodsItemTypeSchema.optional(),
+  food_id: foodsIdSchema,
   variant_id: foodVariantsIdSchema.optional().nullable(),
   quantity: z.number(),
   unit: z.string(),
@@ -79,9 +69,7 @@ export const mealFoodsInitializerSchema = z.object({
 export const mealFoodsMutatorSchema = z.object({
   id: mealFoodsIdSchema.optional(),
   meal_id: mealsIdSchema.optional(),
-  food_id: foodsIdSchema.optional().nullable(),
-  child_meal_id: mealsIdSchema.optional().nullable(),
-  item_type: mealFoodsItemTypeSchema.optional(),
+  food_id: foodsIdSchema.optional(),
   variant_id: foodVariantsIdSchema.optional().nullable(),
   quantity: z.number().optional(),
   unit: z.string().optional(),

@@ -1,6 +1,8 @@
 import { addLog } from '../LogService';
-import { attachWorkoutTelemetry } from '../shared/workoutTelemetryPayload';
 import {
+  MetricConfig,
+  TransformOutput,
+  TransformedRecord,
   TransformedExerciseSession,
   TransformedNutritionEntry,
   SparkyMealType,
@@ -10,23 +12,6 @@ import {
   HEALTH_CONNECT_SOURCE,
 } from '../../types/healthRecords';
 import { toLocalDateString } from '../../utils/dateUtils';
-import {
-  BLOOD_GLUCOSE_MG_DL_PER_MMOL_L,
-  createBloodPressureTransformer,
-  createGetDateString,
-  createHydrationTransformer,
-  createTransformHealthRecords,
-  extractDirectValue,
-  extractNestedValue,
-  HC_NUTRIENT_COLUMNS,
-  tidyNumber,
-  type DirectTransformer,
-  type ValueTransformer,
-} from '../shared/dataTransformation';
-
-// Moved to the shared transformer module; re-exported for existing importers
-// (the writeback mappers on both platforms).
-export { G_TO_MG, G_TO_MCG, tidyNumber, HC_NUTRIENT_COLUMNS } from '../shared/dataTransformation';
 
 // ============================================================================
 // Own-app exclusion (read/write feedback-loop guard)
@@ -53,7 +38,57 @@ const isOwnRecord = (rec: Record<string, unknown>): boolean => {
 // ============================================================================
 
 // Wrapper for toLocalDateString that handles unknown input and errors
-const getDateString = createGetDateString('[HealthConnectService]');
+const getDateString = (date: unknown): string | null => {
+  if (!date) return null;
+  try {
+    return toLocalDateString(new Date(date as string | number | Date));
+  } catch (e) {
+    addLog(`[HealthConnectService] Could not convert date: ${date}. ${e}`, 'WARNING');
+    return null;
+  }
+};
+
+// Result from a value transformer - either value/date pair or null to skip
+interface ValueTransformResult {
+  value: number;
+  date: string;
+  type?: string; // Optional override for output type
+}
+
+// Transformer that extracts value and date for standard record output
+type ValueTransformer = (
+  rec: Record<string, unknown>,
+  metricConfig: MetricConfig,
+  index: number
+) => ValueTransformResult | null;
+
+// Transformer that directly pushes to output array (for complex records)
+type DirectTransformer = (
+  rec: Record<string, unknown>,
+  record: unknown,
+  metricConfig: MetricConfig,
+  output: TransformOutput[]
+) => void;
+
+// ============================================================================
+// Value Extractors - reusable functions for nested property extraction
+// ============================================================================
+
+const extractNestedValue = (rec: Record<string, unknown>, key: string, nestedKey: string): number | null => {
+  const nested = rec[key] as Record<string, number> | undefined;
+  return nested?.[nestedKey] ?? null;
+};
+
+const extractDirectValue = (rec: Record<string, unknown>, key: string): number | null => {
+  const val = rec[key];
+  if (typeof val === 'number') return val;
+  if (typeof val === 'string') {
+    // Handle comma decimal separator (European locales e.g. "49,51")
+    const parsed = parseFloat(val.replace(',', '.'));
+    return isNaN(parsed) ? null : parsed;
+  }
+  return null;
+};
 
 // Try multiple date fields in order of preference
 const extractDate = (rec: Record<string, unknown>, ...fields: string[]): string | null => {
@@ -171,7 +206,12 @@ const VALUE_TRANSFORMERS: Record<string, ValueTransformer> = {
     return value !== null && date ? { value, date } : null;
   },
 
-  Hydration: createHydrationTransformer(isOwnRecord, getDateString),
+  Hydration: (rec) => {
+    if (isOwnRecord(rec)) return null; // don't re-import water Sparky wrote
+    const value = extractNestedValue(rec, 'volume', 'inLiters');
+    const date = getDateString(rec.startTime);
+    return value !== null && date ? { value, date } : null;
+  },
 
   BodyTemperature: (rec) => {
     const value = extractNestedValue(rec, 'temperature', 'inCelsius');
@@ -234,12 +274,6 @@ const VALUE_TRANSFORMERS: Record<string, ValueTransformer> = {
     return value !== null && date ? { value, date } : null;
   },
 
-  HeartRateVariabilityRmssd: (rec) => {
-    const value = extractDirectValue(rec, 'heartRateVariabilityMillis');
-    const date = getDateString(rec.time);
-    return value !== null && date ? { value, date } : null;
-  },
-
   WheelchairPushes: (rec) => {
     const value = extractDirectValue(rec, 'count');
     const date = getDateString(rec.startTime);
@@ -295,11 +329,11 @@ VALUE_TRANSFORMERS['BloodGlucose'] = createRobustTransformer({
     (rec) => extractNestedValue(rec, 'bloodGlucose', 'inMillimolesPerLiter'),
     (rec) => {
       const mgDl = extractNestedValue(rec, 'level', 'inMilligramsPerDeciliter');
-      return mgDl !== null ? mgDl / BLOOD_GLUCOSE_MG_DL_PER_MMOL_L : null;
+      return mgDl !== null ? mgDl / 18.018 : null;
     },
     (rec) => {
       const mgDl = extractNestedValue(rec, 'bloodGlucose', 'inMilligramsPerDeciliter');
-      return mgDl !== null ? mgDl / BLOOD_GLUCOSE_MG_DL_PER_MMOL_L : null;
+      return mgDl !== null ? mgDl / 18.018 : null;
     },
     (rec) => {
       const level = rec.level;
@@ -475,11 +509,46 @@ const mapHealthConnectMealType = (mealType: unknown): SparkyMealType => {
   }
 };
 
+// HC stores every nutrient as Mass (grams), but Sparky's food columns expect a
+// specific unit per nutrient — matching how OpenFoodFacts/Garmin populate them:
+// macros in grams, most minerals/vitamins in mg, a few trace nutrients in mcg.
+// We convert from grams accordingly; otherwise e.g. sodium lands 1000x too low.
+export const G_TO_MG = 1_000;
+export const G_TO_MCG = 1_000_000;
+
+// HC NutritionRecord Mass field → { Sparky column, grams→column-unit factor }.
+// Exported so the writeback mapper reuses the exact same field/unit mapping
+// (read multiplies grams→column-unit; writeback writes the column value back in
+// that same unit via factor→HC-unit, so the two directions never drift).
+export const HC_NUTRIENT_COLUMNS: { hcField: string; column: string; factor: number }[] = [
+  { hcField: 'protein', column: 'protein', factor: 1 },
+  { hcField: 'totalCarbohydrate', column: 'carbs', factor: 1 },
+  { hcField: 'totalFat', column: 'fat', factor: 1 },
+  { hcField: 'saturatedFat', column: 'saturated_fat', factor: 1 },
+  { hcField: 'polyunsaturatedFat', column: 'polyunsaturated_fat', factor: 1 },
+  { hcField: 'monounsaturatedFat', column: 'monounsaturated_fat', factor: 1 },
+  { hcField: 'transFat', column: 'trans_fat', factor: 1 },
+  { hcField: 'dietaryFiber', column: 'dietary_fiber', factor: 1 },
+  { hcField: 'sugar', column: 'sugars', factor: 1 },
+  { hcField: 'cholesterol', column: 'cholesterol', factor: G_TO_MG },
+  { hcField: 'sodium', column: 'sodium', factor: G_TO_MG },
+  { hcField: 'potassium', column: 'potassium', factor: G_TO_MG },
+  { hcField: 'calcium', column: 'calcium', factor: G_TO_MG },
+  { hcField: 'iron', column: 'iron', factor: G_TO_MG },
+  { hcField: 'vitaminC', column: 'vitamin_c', factor: G_TO_MG },
+  { hcField: 'vitaminA', column: 'vitamin_a', factor: G_TO_MCG },
+];
+
 // HC's other Mass nutrients (biotin, magnesium, vitaminB12, …) are intentionally
 // dropped: Sparky has no column for them, and its custom_nutrients are matched by
 // name to *user-defined* nutrients with *user-chosen* units — so there's no unit
 // we could store them in that would display correctly. Forwarding them would be
 // fabricating both the value's unit and a name that nothing renders.
+
+// Strip float noise (4.949999999999999 -> 4.95). Significant figures (not fixed
+// decimals) so small post-conversion values aren't truncated. Shared with the
+// writeback mappers so read and write rounding can never drift.
+export const tidyNumber = (value: number): number => Number(value.toPrecision(6));
 
 // HC's native bridge emits `{ inGrams: 0 }` / `{ inKilocalories: 0 }` for every
 // nutrient a source did NOT set — it cannot distinguish "0" from "absent". So we
@@ -548,23 +617,49 @@ const DIRECT_TRANSFORMERS: Record<string, DirectTransformer> = {
   },
 
   HeartRate: (rec, _record, metricConfig, output) => {
-    const samples = rec.samples as { time?: string; beatsPerMinute: number }[] | undefined;
+    const samples = rec.samples as { beatsPerMinute: number }[] | undefined;
     if (!rec.startTime || !samples) return;
 
     const { unit, type } = metricConfig;
+    const date = getDateString(rec.startTime);
+    if (!date) return;
 
     for (const sample of samples) {
       if (sample.beatsPerMinute != null && !isNaN(sample.beatsPerMinute)) {
-        // Series records can span local midnight, so each sample buckets to
-        // its own day rather than the record's start day.
-        const date = getDateString(sample.time ?? rec.startTime);
-        if (!date) continue;
         output.push({ value: sample.beatsPerMinute, type, date, unit, source: HEALTH_CONNECT_SOURCE });
       }
     }
   },
 
-  BloodPressure: createBloodPressureTransformer(HEALTH_CONNECT_SOURCE, getDateString),
+  BloodPressure: (rec, _record, metricConfig, output) => {
+    const { unit, type } = metricConfig;
+    if (!rec.time) return;
+
+    const date = getDateString(rec.time);
+    if (!date) return;
+
+    const systolic = rec.systolic as Record<string, number> | undefined;
+    const diastolic = rec.diastolic as Record<string, number> | undefined;
+
+    if (systolic?.inMillimetersOfMercury) {
+      output.push({
+        value: parseFloat(systolic.inMillimetersOfMercury.toFixed(2)),
+        unit,
+        date,
+        type: `${type}_systolic`,
+        source: HEALTH_CONNECT_SOURCE,
+      });
+    }
+    if (diastolic?.inMillimetersOfMercury) {
+      output.push({
+        value: parseFloat(diastolic.inMillimetersOfMercury.toFixed(2)),
+        unit,
+        date,
+        type: `${type}_diastolic`,
+        source: HEALTH_CONNECT_SOURCE,
+      });
+    }
+  },
 
   SleepSession: (rec, _record, _metricConfig, output) => {
     if (!rec.startTime || !rec.endTime) return;
@@ -689,13 +784,11 @@ const DIRECT_TRANSFORMERS: Record<string, DirectTransformer> = {
       distance: parseFloat(distanceKm.toFixed(2)),
       notes: rec.notes as string | undefined,
       raw_data: record,
-      // duration_seconds instead of duration: servers without the seconds-based
-      // set model drop the unknown field rather than misreading it as minutes.
-      sets: [{ set_number: 1, set_type: 'Working Set', duration_seconds: Math.round(durationInSeconds) }],
+      sets: [{ set_number: 1, set_type: 'Working Set', duration: Math.round(durationInSeconds / 60) }],
       source_id: metadata?.id,
       ...extractTimezoneMetadata(rec),
     };
-    output.push(attachWorkoutTelemetry(exerciseSession, rec));
+    output.push(exerciseSession);
   },
 
   MenstruationPeriod: (rec, _record, metricConfig, output) => {
@@ -722,14 +815,13 @@ const DIRECT_TRANSFORMERS: Record<string, DirectTransformer> = {
   },
 
   CyclingPedalingCadence: (rec, _record, metricConfig, output) => {
-    const samples = rec.samples as { time?: string; revolutionsPerMinute: number }[] | undefined;
+    const samples = rec.samples as { revolutionsPerMinute: number }[] | undefined;
     if (!rec.startTime || !samples) return;
 
     const { unit, type } = metricConfig;
+    const date = toLocalDateString(rec.startTime as string);
 
     samples.forEach(sample => {
-      const date = getDateString(sample.time ?? rec.startTime);
-      if (!date) return;
       output.push({
         value: sample.revolutionsPerMinute,
         type,
@@ -741,14 +833,13 @@ const DIRECT_TRANSFORMERS: Record<string, DirectTransformer> = {
   },
 
   StepsCadence: (rec, _record, metricConfig, output) => {
-    const samples = rec.samples as { time?: string; rate: number }[] | undefined;
+    const samples = rec.samples as { rate: number }[] | undefined;
     if (!rec.startTime || !samples) return;
 
     const { unit, type } = metricConfig;
+    const date = toLocalDateString(rec.startTime as string);
 
     samples.forEach(sample => {
-      const date = getDateString(sample.time ?? rec.startTime);
-      if (!date) return;
       output.push({
         value: sample.rate,
         type,
@@ -820,11 +911,133 @@ const SKIP_TYPES = new Set(['CervicalMucus', 'MenstruationFlow', 'OvulationTest'
 // Main Transform Function
 // ============================================================================
 
-export const transformHealthRecords = createTransformHealthRecords({
-  source: HEALTH_CONNECT_SOURCE,
-  logTag: '[HealthConnectService]',
-  skipTypes: SKIP_TYPES,
-  valueTransformers: VALUE_TRANSFORMERS,
-  directTransformers: DIRECT_TRANSFORMERS,
-  extractTimezoneMetadata,
-});
+export const transformHealthRecords = (records: unknown[], metricConfig: MetricConfig): TransformOutput[] => {
+  if (!Array.isArray(records)) {
+    addLog(`[HealthConnectService] transformHealthRecords received non-array records for ${metricConfig.recordType}`, 'WARNING');
+    return [];
+  }
+
+  if (records.length === 0) {
+    return [];
+  }
+
+  const transformedData: TransformOutput[] = [];
+  const { recordType, unit, type } = metricConfig;
+  let successCount = 0;
+  let skipCount = 0;
+
+  // Check if this is a skip type
+  if (SKIP_TYPES.has(recordType)) {
+    addLog(`[HealthConnectService] Skipping qualitative ${recordType} records`);
+    return [];
+  }
+
+  // Check if this record type has a direct transformer
+  const directTransformer = DIRECT_TRANSFORMERS[recordType];
+
+  // Check if this record type has a value transformer
+  const valueTransformer = VALUE_TRANSFORMERS[recordType];
+
+  records.forEach((record: unknown, index: number) => {
+    try {
+      const rec = record as Record<string, unknown>;
+
+      // Handle pre-aggregated records (from deduplicating aggregation functions)
+      // These have value and date at top level — raw Health Connect records never do
+      if (rec.value !== undefined && rec.date) {
+        const value = rec.value as number;
+        const recordDate = rec.date as string;
+        const outputType = (rec.type as string) || type;
+
+        if (value !== null && !isNaN(value)) {
+          const transformed: TransformedRecord = {
+            value: parseFloat(value.toFixed(2)),
+            type: outputType,
+            date: recordDate,
+            unit,
+            source: HEALTH_CONNECT_SOURCE,
+          };
+          // Forward timezone metadata from aggregation layer
+          if (rec.record_timezone != null) {
+            transformed.record_timezone = rec.record_timezone as string;
+          }
+          if (rec.record_utc_offset_minutes != null) {
+            transformed.record_utc_offset_minutes = rec.record_utc_offset_minutes as number;
+          }
+          transformedData.push(transformed);
+          successCount++;
+        } else {
+          skipCount++;
+        }
+        return;
+      }
+
+      // Use direct transformer if available (handles complex records)
+      if (directTransformer) {
+        const beforeLength = transformedData.length;
+        directTransformer(rec, record, metricConfig, transformedData);
+        if (transformedData.length > beforeLength) {
+          successCount += transformedData.length - beforeLength;
+        }
+        return;
+      }
+
+      // Use value transformer if available
+      if (valueTransformer) {
+        const result = valueTransformer(rec, metricConfig, index);
+        if (result && !isNaN(result.value)) {
+          const transformedRecord: TransformedRecord = {
+            value: parseFloat(result.value.toFixed(2)),
+            type: result.type || type,
+            date: result.date,
+            unit,
+            source: HEALTH_CONNECT_SOURCE,
+            ...extractTimezoneMetadata(rec),
+          };
+          transformedData.push(transformedRecord);
+          successCount++;
+        } else {
+          skipCount++;
+        }
+        return;
+      }
+
+      // Fallback: try to handle as simple record with value/date at top level
+      if (rec.value !== undefined && rec.date) {
+        const value = rec.value as number;
+        const recordDate = rec.date as string;
+        const outputType = (rec.type as string) || type;
+
+        if (!isNaN(value)) {
+          transformedData.push({
+            value: parseFloat(value.toFixed(2)),
+            type: outputType,
+            date: recordDate,
+            unit,
+            source: HEALTH_CONNECT_SOURCE,
+          });
+          successCount++;
+        } else {
+          skipCount++;
+        }
+        return;
+      }
+
+      // Unhandled record type
+      if (index === 0) {
+        addLog(`[HealthConnectService] No transformer found for record type: ${recordType}`, 'WARNING');
+      }
+      skipCount++;
+    } catch (error) {
+      skipCount++;
+      addLog(`[HealthConnectService] Error transforming ${recordType} record at index ${index}: ${(error as Error).message}`, 'WARNING');
+    }
+  });
+
+  // Log transformation summary for debugging
+  if (skipCount > 0) {
+    addLog(`[HealthConnectService] ${recordType} transformation: ${successCount} succeeded, ${skipCount} skipped (of ${records.length} total)`, 'DEBUG');
+  }
+
+  return transformedData;
+};

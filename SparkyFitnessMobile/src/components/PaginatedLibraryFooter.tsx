@@ -1,5 +1,4 @@
 import React from 'react';
-import { useTranslation } from 'react-i18next';
 import { View, Text, ActivityIndicator } from 'react-native';
 import { useCSSVariable } from 'uniwind';
 import Button from './ui/Button';
@@ -18,7 +17,6 @@ const PaginatedLibraryFooter: React.FC<PaginatedLibraryFooterProps> = ({
   onRetry,
 }) => {
   const accentColor = useCSSVariable('--color-accent-primary') as string;
-  const { t } = useTranslation();
 
   if (isFetchingNextPage) {
     return (
@@ -33,7 +31,7 @@ const PaginatedLibraryFooter: React.FC<PaginatedLibraryFooterProps> = ({
       <View className="px-4 py-4 items-center">
         <Text className="text-text-secondary text-sm text-center mb-3">{errorMessage}</Text>
         <Button variant="secondary" className="px-6" onPress={onRetry}>
-          {t('common.retry', { defaultValue: 'Retry' })}
+          Retry
         </Button>
       </View>
     );

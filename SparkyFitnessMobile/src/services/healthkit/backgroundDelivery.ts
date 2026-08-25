@@ -11,7 +11,6 @@ import { HEALTHKIT_TYPE_MAP } from './index';
 import { HEALTH_METRICS } from '../../HealthMetrics';
 import type { BackgroundDeliveryFrequency, HealthMetric } from '../../HealthMetrics';
 import { loadHealthPreference } from './preferences';
-import { getErrorMessage } from '../../utils/errors';
 
 function getBackgroundDeliveryFrequency(recordType: string): BackgroundDeliveryFrequency {
   const metric = HEALTH_METRICS.find(m => m.recordType === recordType);
@@ -131,7 +130,7 @@ export async function enableBackgroundDeliveryForMetric(recordType: string): Pro
     try {
       await enableBackgroundDelivery(id as ObjectTypeIdentifier, desiredFrequency);
     } catch (error) {
-      const message = getErrorMessage(error);
+      const message = error instanceof Error ? error.message : String(error);
       addLog(`[BackgroundDelivery] Failed to enable for ${id}: ${message}`, 'ERROR');
     }
   }
@@ -150,7 +149,7 @@ export async function disableBackgroundDeliveryForMetric(recordType: string): Pr
       try {
         await enableBackgroundDelivery(id as ObjectTypeIdentifier, desiredFrequency);
       } catch (error) {
-        const message = getErrorMessage(error);
+        const message = error instanceof Error ? error.message : String(error);
         addLog(`[BackgroundDelivery] Failed to update frequency for ${id}: ${message}`, 'ERROR');
       }
       continue;
@@ -158,7 +157,7 @@ export async function disableBackgroundDeliveryForMetric(recordType: string): Pr
     try {
       await disableBackgroundDelivery(id as ObjectTypeIdentifier);
     } catch (error) {
-      const message = getErrorMessage(error);
+      const message = error instanceof Error ? error.message : String(error);
       addLog(`[BackgroundDelivery] Failed to disable for ${id}: ${message}`, 'ERROR');
     }
   }
@@ -183,7 +182,7 @@ export async function setupBackgroundDeliveryForEnabledMetrics(generation?: numb
     try {
       await enableBackgroundDelivery(id as ObjectTypeIdentifier, freq);
     } catch (error) {
-      const message = getErrorMessage(error);
+      const message = error instanceof Error ? error.message : String(error);
       addLog(`[BackgroundDelivery] Failed to enable for ${id}: ${message}`, 'ERROR');
     }
   }
@@ -243,13 +242,13 @@ function rebuildSubscriptions(): void {
           });
           subscriptions.set(id, sub);
         } catch (error) {
-          const message = getErrorMessage(error);
+          const message = error instanceof Error ? error.message : String(error);
           addLog(`[BackgroundDelivery] Failed to subscribe to ${id}: ${message}`, 'ERROR');
         }
       }
     })
     .catch((error) => {
-      const message = getErrorMessage(error);
+      const message = error instanceof Error ? error.message : String(error);
       addLog(`[BackgroundDelivery] Failed to set up subscriptions: ${message}`, 'ERROR');
     });
 }
@@ -294,7 +293,7 @@ export function refreshSubscriptions(): void {
 export function startObservers(onDataAvailable: () => void): void {
   const generation = ++deliveryGeneration;
   setupBackgroundDeliveryForEnabledMetrics(generation).catch(error => {
-    const message = getErrorMessage(error);
+    const message = error instanceof Error ? error.message : String(error);
     addLog(`[BackgroundDelivery] Failed to setup background delivery: ${message}`, 'ERROR');
   });
 
@@ -313,7 +312,7 @@ export function stopObservers(): void {
   storedCallback = null;
 
   disableAllBackgroundDelivery().catch(error => {
-    const message = getErrorMessage(error);
+    const message = error instanceof Error ? error.message : String(error);
     addLog(`[BackgroundDelivery] Failed to disable all background delivery: ${message}`, 'ERROR');
   });
 }
@@ -323,7 +322,7 @@ export function cleanupAllSubscriptions(): void {
     try {
       sub.remove();
     } catch (error) {
-      const message = getErrorMessage(error);
+      const message = error instanceof Error ? error.message : String(error);
       addLog(`[BackgroundDelivery] Failed to remove subscription for ${id}: ${message}`, 'ERROR');
     }
   }

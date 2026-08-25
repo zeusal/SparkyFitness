@@ -11,15 +11,11 @@ interface NumericInputProps extends Omit<
 }
 
 function formatValue(
-  value: number | string | undefined | null,
+  value: number | undefined | null,
   decimals: number
 ): string {
-  if (value === undefined || value === null || value === '') return '';
-  // Callers may pass a stringified number (or an empty-ish value) even though
-  // the prop type says number, so coerce and guard against NaN before toFixed.
-  const num = typeof value === 'number' ? value : Number(value);
-  if (Number.isNaN(num)) return '';
-  return Number(num.toFixed(decimals)).toString();
+  if (value === undefined || value === null) return '';
+  return Number(value.toFixed(decimals)).toString();
 }
 
 export const NumericInput = ({

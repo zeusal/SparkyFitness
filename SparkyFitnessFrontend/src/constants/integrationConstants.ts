@@ -1,7 +1,6 @@
 export const MANUAL_SYNC_PROVIDERS = [
   'strava',
   'fitbit',
-  'oura',
   'polar',
   'withings',
   'garmin',

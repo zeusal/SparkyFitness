@@ -12,11 +12,8 @@ const router = express.Router();
  *   name: Wellness & Metrics
  *   description: Health metrics, weight tracking, measurements, sleep, mood, and fasting.
  */
+// Apply reports permission check to most fasting routes by default, or specialize
 router.use(authenticate);
-// Fasting logs are check-in data (RLS uses the check-in policy). Guard every
-// endpoint with the matching permission: GET maps to checkin_read (also allows
-// can_view_reports), writes require can_manage_checkin.
-router.use(checkPermissionMiddleware('checkin'));
 // Get current active fast
 /**
  * @swagger
@@ -39,20 +36,24 @@ router.use(checkPermissionMiddleware('checkin'));
  *       500:
  *         description: Internal server error.
  */
-router.get('/current', async (req, res) => {
-  const { userId } = req.query;
+router.get(
+  '/current',
+  checkPermissionMiddleware('reports'),
+  async (req, res) => {
+    const { userId } = req.query;
 
-  const targetUserId = userId || req.userId;
-  log('debug', `GET /current: Fetching fast for userId: ${targetUserId}`);
-  try {
-    const currentFast = await fastingRepository.getCurrentFast(targetUserId);
-    res.json(currentFast || null);
-  } catch (error) {
-    // @ts-expect-error TS(2571): Object is of type 'unknown'.
-    log('error', `Error fetching current fast: ${error.message}`, error);
-    res.status(500).json({ error: 'Failed to fetch current fast' });
+    const targetUserId = userId || req.userId;
+    log('debug', `GET /current: Fetching fast for userId: ${targetUserId}`);
+    try {
+      const currentFast = await fastingRepository.getCurrentFast(targetUserId);
+      res.json(currentFast || null);
+    } catch (error) {
+      // @ts-expect-error TS(2571): Object is of type 'unknown'.
+      log('error', `Error fetching current fast: ${error.message}`, error);
+      res.status(500).json({ error: 'Failed to fetch current fast' });
+    }
   }
-});
+);
 // Start a new fast
 /**
  * @swagger
@@ -271,30 +272,10 @@ router.put('/:id', async (req, res) => {
   const { id } = req.params;
   const updates = req.body;
   try {
-    const fast = await fastingRepository.getFastingById(id, userId);
-    if (!fast) {
+    const updatedFast = await fastingRepository.updateFast(id, userId, updates);
+    if (!updatedFast) {
       return res.status(404).json({ error: 'Fast not found' });
     }
-
-    const startUsed =
-      updates.start_time !== undefined ? updates.start_time : fast.start_time;
-    const endUsed =
-      updates.end_time !== undefined ? updates.end_time : fast.end_time;
-
-    if (startUsed && endUsed) {
-      if (new Date(startUsed) > new Date(endUsed)) {
-        return res
-          .status(400)
-          .json({ error: 'start_time must be before end_time' });
-      }
-      updates.duration_minutes = Math.round(
-        (new Date(endUsed).getTime() - new Date(startUsed).getTime()) / 60000
-      );
-    } else if (updates.end_time === null) {
-      updates.duration_minutes = null;
-    }
-
-    const updatedFast = await fastingRepository.updateFast(id, userId, updates);
     res.json(updatedFast);
   } catch (error) {
     // @ts-expect-error TS(2571): Object is of type 'unknown'.
@@ -302,51 +283,6 @@ router.put('/:id', async (req, res) => {
     res.status(500).json({ error: 'Failed to update fast' });
   }
 });
-
-// Delete a fast
-/**
- * @swagger
- * /fasting/{id}:
- *   delete:
- *     summary: Delete a fasting log
- *     tags: [Wellness & Metrics]
- *     description: Deletes an existing fasting log.
- *     security:
- *       - cookieAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *         description: The ID of the fast to delete.
- *     responses:
- *       200:
- *         description: Success deleting fast.
- *       401:
- *         description: Unauthorized.
- *       404:
- *         description: Fast not found.
- *       500:
- *         description: Internal server error.
- */
-router.delete('/:id', async (req, res) => {
-  const userId = req.userId;
-  const { id } = req.params;
-  try {
-    const deletedFast = await fastingRepository.deleteFastingLog(id, userId);
-    if (!deletedFast) {
-      return res.status(404).json({ error: 'Fast not found' });
-    }
-    res.json({ message: 'Fast deleted successfully', deletedFast });
-  } catch (error) {
-    // @ts-expect-error TS(2571): Object is of type 'unknown'.
-    log('error', `Error deleting fast: ${error.message}`);
-    res.status(500).json({ error: 'Failed to delete fast' });
-  }
-});
-
 // Get Fasting History
 /**
  * @swagger

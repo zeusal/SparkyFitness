@@ -70,7 +70,7 @@ function renderDraftPersistence({
 }
 
 describe('useDraftPersistence', () => {
-  let appStateCallbacks: ((state: string) => void)[];
+  let appStateCallbacks: Array<(state: string) => void>;
 
   beforeEach(() => {
     jest.clearAllMocks();

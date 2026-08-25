@@ -11,11 +11,21 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import ExerciseSearch from './ExerciseSearch';
 import WorkoutPresetSelector from './WorkoutPresetSelector';
+import ExerciseImportCSV, { type ExerciseCSVData } from './ExerciseImportCSV';
+import ExerciseEntryHistoryImportCSV from './ExerciseEntryHistoryImportCSV';
 import type { WorkoutPreset } from '@/types/workout';
 import { toast } from '@/hooks/use-toast';
+import { useImportExercisesJsonMutation } from '@/hooks/Exercises/useExercises';
 import { Exercise } from '@/types/exercises';
 import { useAddCustomExerciseForm } from '@/hooks/Exercises/useAddCustomExerciseForm';
 import AddCustomExerciseForm from './AddCustomExerciseForm';
+
+interface ImportConflictError {
+  status?: number;
+  data?: {
+    duplicates?: Array<{ name: string }>;
+  };
+}
 
 interface AddExerciseDialogProps {
   open: boolean;
@@ -26,7 +36,13 @@ interface AddExerciseDialogProps {
   ) => void;
   onWorkoutPresetSelected?: (preset: WorkoutPreset) => void; // New prop for selecting a workout preset
   mode: 'preset' | 'workout-plan' | 'diary' | 'database-manager';
-  initialTab?: 'my-exercises' | 'workout-preset' | 'online' | 'custom';
+  initialTab?:
+    | 'my-exercises'
+    | 'workout-preset'
+    | 'online'
+    | 'custom'
+    | 'import-csv'
+    | 'import-history-csv';
 }
 
 type AddExerciseDialogTab = NonNullable<AddExerciseDialogProps['initialTab']>;
@@ -44,8 +60,8 @@ const AddExerciseDialog = ({
   const [activeTab, setActiveTab] = useState(
     initialTab ?? (mode === 'database-manager' ? 'online' : 'my-exercises')
   );
-
-  const tabsListClass = 'h-10 flex w-full justify-center flex-wrap';
+  const { mutateAsync: importExerciseFromJson } =
+    useImportExercisesJsonMutation();
 
   const handleExerciseSelect = (
     exercise: Exercise,
@@ -62,11 +78,45 @@ const AddExerciseDialog = ({
     onOpenChange(false);
   };
 
+  const handleImportFromCSV = async (
+    exerciseDataArray: Omit<ExerciseCSVData, 'id'>[]
+  ) => {
+    try {
+      await importExerciseFromJson(exerciseDataArray);
+      onOpenChange(false);
+    } catch (err: unknown) {
+      const error = err as ImportConflictError;
+      if (error?.status === 409 && error.data?.duplicates) {
+        const duplicateList = error.data.duplicates
+          .map((d: { name: string }) => `"${d.name}"`)
+          .join(', ');
+
+        toast({
+          title: t(
+            'exercise.addExerciseDialog.importDuplicateTitle',
+            'Import Failed: Duplicate Items Found'
+          ),
+          description: t(
+            'exercise.addExerciseDialog.importDuplicateDescription',
+            'The following items already exist: {{duplicateList}}. Please remove them from your file and try again.',
+            { duplicateList }
+          ),
+          variant: 'destructive',
+          duration: 10000,
+        });
+      }
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         requireConfirmation
-        className="sm:max-w-[800px] overflow-y-auto max-h-[90vh]"
+        className={
+          activeTab === 'import-csv' || activeTab === 'import-history-csv'
+            ? 'sm:max-w-[95vw] sm:max-h-[95vh] w-[95vw] h-[95vh] overflow-y-auto'
+            : 'sm:max-w-[800px] overflow-y-auto max-h-[90vh]'
+        }
       >
         <DialogHeader>
           <DialogTitle className="text-center">
@@ -83,7 +133,7 @@ const AddExerciseDialog = ({
           defaultValue={activeTab}
           onValueChange={(value) => setActiveTab(value as AddExerciseDialogTab)}
         >
-          <TabsList className={tabsListClass}>
+          <TabsList className="h-10 flex w-full justify-center flex-wrap">
             {mode !== 'database-manager' && (
               <TabsTrigger value="my-exercises">
                 {t('exercise.addExerciseDialog.myExercisesTab', 'My Exercises')}
@@ -103,6 +153,17 @@ const AddExerciseDialog = ({
             <TabsTrigger value="custom">
               {t('exercise.addExerciseDialog.addCustomTab', 'Add Custom')}
             </TabsTrigger>
+            <TabsTrigger value="import-csv">
+              {t('exercise.addExerciseDialog.importCSVTab', 'Import Exercises')}
+            </TabsTrigger>
+            {mode === 'diary' && (
+              <TabsTrigger value="import-history-csv">
+                {t(
+                  'exercise.addExerciseDialog.importHistoryCSVTab',
+                  'Import History'
+                )}
+              </TabsTrigger>
+            )}
           </TabsList>
           {mode !== 'database-manager' && (
             <TabsContent value="my-exercises">
@@ -131,7 +192,25 @@ const AddExerciseDialog = ({
           <TabsContent value="custom" className="overflow-y-auto max-h-full">
             <AddCustomExerciseForm form={customForm} />
           </TabsContent>
-
+          <TabsContent value="import-csv">
+            <div className="pt-4">
+              <ExerciseImportCSV
+                onSave={handleImportFromCSV} // Use the new onSave prop
+              />
+            </div>
+          </TabsContent>
+          {mode === 'diary' && (
+            <TabsContent value="import-history-csv">
+              <div className="pt-4">
+                <ExerciseEntryHistoryImportCSV
+                  onImportComplete={() => {
+                    onOpenChange(false);
+                    onExerciseAdded(); // Trigger refresh in parent without passing a full exercise object
+                  }}
+                />
+              </div>
+            </TabsContent>
+          )}
           {(mode === 'diary' || mode === 'workout-plan') && (
             <TabsContent value="workout-preset">
               <div className="pt-4">

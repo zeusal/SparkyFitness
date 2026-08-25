@@ -297,9 +297,7 @@ const DraggableChatbotButton: React.FC = () => {
     handleTouchEnd,
   ]);
 
-  // While the chat panel is open it provides its own header controls (minimize
-  // / close), so hide the floating launcher to avoid overlapping the panel.
-  if (!hasAiProvider || isChatOpen) {
+  if (!hasAiProvider) {
     return null;
   }
 

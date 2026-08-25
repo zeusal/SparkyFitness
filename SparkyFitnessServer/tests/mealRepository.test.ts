@@ -79,8 +79,6 @@ describe('mealRepository', () => {
           undefined,
           undefined,
           undefined,
-          // images: absent from the payload serializes to an empty array
-          '[]',
         ]
       );
       // pg-format creates a single formatted string, not array parameters
@@ -137,8 +135,12 @@ describe('mealRepository', () => {
         []
       );
       expect(mockClient.query).toHaveBeenCalledWith(
-        expect.stringContaining('WHERE mf.meal_id = ANY($1::uuid[])'),
-        [[mealId1, mealId2]]
+        expect.stringContaining('WHERE mf.meal_id = $1'),
+        [mealId1]
+      );
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('WHERE mf.meal_id = $1'),
+        [mealId2]
       );
       expect(result).toEqual([
         { ...mockMeals[0], foods: [] },
@@ -168,8 +170,12 @@ describe('mealRepository', () => {
         []
       );
       expect(mockClient.query).toHaveBeenCalledWith(
-        expect.stringContaining('WHERE mf.meal_id = ANY($1::uuid[])'),
-        [[mealId1, mealId2]]
+        expect.stringContaining('WHERE mf.meal_id = $1'),
+        [mealId1]
+      );
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('WHERE mf.meal_id = $1'),
+        [mealId2]
       );
       expect(result).toEqual([
         { ...mockMeals[0], foods: [] },
@@ -255,8 +261,8 @@ describe('mealRepository', () => {
         [mealId]
       );
       expect(mockClient.query).toHaveBeenCalledWith(
-        expect.stringContaining('WHERE mf.meal_id = ANY($1::uuid[])'),
-        [[mealId]]
+        expect.stringContaining('FROM meal_foods mf'),
+        [mealId]
       );
       expect(result).toEqual({ ...mockMeal, foods: mockMealFoods });
     });
@@ -378,8 +384,6 @@ describe('mealRepository', () => {
           undefined,
           undefined,
           undefined,
-          // images: omitted from the payload leaves the column untouched
-          null,
           mealId,
         ]
       );
@@ -440,8 +444,6 @@ describe('mealRepository', () => {
           undefined,
           undefined,
           undefined,
-          // images: omitted from the payload leaves the column untouched
-          null,
           mealId,
         ]
       );

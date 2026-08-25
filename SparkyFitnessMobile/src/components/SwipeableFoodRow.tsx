@@ -1,22 +1,18 @@
-import React, { useEffect, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
+import React, { useRef } from 'react';
 import { Alert, View, Text, TouchableOpacity } from 'react-native';
 import Button from './ui/Button';
 import { useNavigation } from '@react-navigation/native';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
-import Animated from 'react-native-reanimated';
-import { DeleteRowAction } from './SwipeableDeleteRow';
-import { useRowCollapse } from '../hooks/useRowCollapse';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  runOnJS,
+} from 'react-native-reanimated';
 import { useDeleteFoodEntry } from '../hooks/useDeleteFoodEntry';
 import { useDeleteFoodEntryMeal } from '../hooks/useDeleteFoodEntryMeal';
-import { usePreferences } from '../hooks/usePreferences';
 import type { FoodEntry } from '../types/foodEntries';
 import type { EntryNutrition } from '../utils/mealNutrition';
-import { formatTimeLabel } from '../utils/entryTimeDisplay';
-import FoodThumbnail from './FoodThumbnail';
-import { useFoodImageSourceContext } from './FoodImageSourceProvider';
-import { diaryEntryImage, diaryEntryImages } from '../utils/foodImages';
-import { useOpenLightbox } from './LightboxProvider';
 
 interface SwipeableFoodRowProps {
   entry: FoodEntry;
@@ -24,24 +20,30 @@ interface SwipeableFoodRowProps {
   onAdjustServing?: (entry: FoodEntry) => void;
 }
 
+const ROW_COLLAPSE_DURATION = 300;
+const DELETE_ACTION_WIDTH = 80;
+
 const SwipeableFoodRow: React.FC<SwipeableFoodRowProps> = ({ entry, nutrition, onAdjustServing }) => {
-  const { t } = useTranslation();
-  const { preferences } = usePreferences();
   const navigation = useNavigation();
   const swipeableRef = useRef<any>(null);
+  const rowHeight = useSharedValue<number | null>(null);
+  const isRemoving = useSharedValue(false);
   const invalidateCacheRef = useRef<() => void>(() => {});
-  const { collapse, handleLayout, animatedStyle } = useRowCollapse(() =>
-    invalidateCacheRef.current(),
-  );
 
   const isMealComponent = !!entry.food_entry_meal_id;
-  const getImageSource = useFoodImageSourceContext();
-  const entryImage = diaryEntryImage(entry);
-  const openLightbox = useOpenLightbox();
+
+  const handleAnimationEnd = () => {
+    invalidateCacheRef.current();
+  };
 
   const onDeleteSuccess = () => {
     swipeableRef.current?.close();
-    collapse();
+    isRemoving.value = true;
+    rowHeight.value = withTiming(0, { duration: ROW_COLLAPSE_DURATION }, (finished) => {
+      if (finished) {
+        runOnJS(handleAnimationEnd)();
+      }
+    });
   };
 
   const foodEntryDelete = useDeleteFoodEntry({
@@ -58,26 +60,37 @@ const SwipeableFoodRow: React.FC<SwipeableFoodRowProps> = ({ entry, nutrition, o
 
   const confirmAndDelete = isMealComponent ? mealDelete.confirmAndDelete : foodEntryDelete.confirmAndDelete;
   const deleteEntry = isMealComponent ? mealDelete.deleteEntry : foodEntryDelete.deleteEntry;
+  invalidateCacheRef.current = isMealComponent ? mealDelete.invalidateCache : foodEntryDelete.invalidateCache;
 
-  // Keep the latest invalidateCache in a ref so the post-collapse callback
-  // (run via runOnJS after the delete) always invokes the current one. Written
-  // in an effect rather than during render so the value stays mutable to
-  // React's compiler.
-  useEffect(() => {
-    invalidateCacheRef.current = isMealComponent ? mealDelete.invalidateCache : foodEntryDelete.invalidateCache;
-  }, [isMealComponent, mealDelete.invalidateCache, foodEntryDelete.invalidateCache]);
+  const animatedStyle = useAnimatedStyle(() => {
+    if (!isRemoving.value || rowHeight.value === null) {
+      return {};
+    }
+    return {
+      height: rowHeight.value,
+      overflow: 'hidden' as const,
+    };
+  });
+
+  const handleLayout = (event: { nativeEvent: { layout: { height: number } } }) => {
+    if (rowHeight.value === null) {
+      rowHeight.value = event.nativeEvent.layout.height;
+    }
+  };
 
   const renderRightActions = () => (
-    <DeleteRowAction
+    <TouchableOpacity
+      className="bg-bg-danger justify-center items-center ml-4"
+      style={{ width: DELETE_ACTION_WIDTH }}
       onPress={confirmAndDelete}
-      className="ml-4"
-      accessibilityLabel={t('foodRow.deleteFood', { defaultValue: 'Delete food' })}
-    />
+      activeOpacity={0.7}
+    >
+      <Text className="text-text-danger font-semibold text-sm">Delete</Text>
+    </TouchableOpacity>
   );
 
   const canQuickAdjust = !isMealComponent && !!onAdjustServing && Number(entry.serving_size) > 0;
-  const name = entry.food_name || t('foodRow.unknownFood', { defaultValue: 'Unknown food' });
-  const timeLabel = formatTimeLabel(entry.entry_time, preferences?.time_format);
+  const name = entry.food_name || 'Unknown food';
 
   const handlePress = () => {
     if (isMealComponent && entry.food_entry_meal_id) {
@@ -94,10 +107,10 @@ const SwipeableFoodRow: React.FC<SwipeableFoodRowProps> = ({ entry, nutrition, o
       onPress?: () => void;
     }[] = [];
     if (canQuickAdjust) {
-      buttons.push({ text: t('foodRow.adjustServing', { defaultValue: 'Adjust serving' }), onPress: () => onAdjustServing!(entry) });
+      buttons.push({ text: 'Adjust serving', onPress: () => onAdjustServing!(entry) });
     }
-    buttons.push({ text: t('common.delete', { defaultValue: 'Delete' }), style: 'destructive', onPress: deleteEntry });
-    buttons.push({ text: t('common.cancel', { defaultValue: 'Cancel' }), style: 'cancel' });
+    buttons.push({ text: 'Delete', style: 'destructive', onPress: deleteEntry });
+    buttons.push({ text: 'Cancel', style: 'cancel' });
     Alert.alert(name, undefined, buttons);
   };
 
@@ -110,19 +123,6 @@ const SwipeableFoodRow: React.FC<SwipeableFoodRowProps> = ({ entry, nutrition, o
         rightThreshold={40}
       >
         <View className="py-1.5 flex-row items-center bg-surface">
-          {/* Diary rows are deliberately dense, so this slot collapses to
-              nothing when an entry has no photo — a photo-free day keeps the
-              exact layout it had before images existed. */}
-          {entryImage ? (
-            <FoodThumbnail
-              image={entryImage}
-              getImageSource={getImageSource}
-              size={56}
-              showFallback={false}
-              style={{ marginRight: 8 }}
-              onPress={() => openLightbox(diaryEntryImages(entry), 0, name)}
-            />
-          ) : null}
           <TouchableOpacity
             className="flex-1 mr-2"
             activeOpacity={0.7}
@@ -131,16 +131,11 @@ const SwipeableFoodRow: React.FC<SwipeableFoodRowProps> = ({ entry, nutrition, o
           >
             <View className="flex-row flex-wrap items-baseline">
               <Text className="text-md text-text-primary" numberOfLines={1}>
-                {name}
+                {name}{' · '}
               </Text>
               <Text className="text-sm text-text-secondary" numberOfLines={1}>
-                {' · '}{entry.quantity} {entry.unit}
+                {entry.quantity} {entry.unit}
               </Text>
-              {timeLabel && (
-                <Text className="text-xs text-text-link ml-1.5" numberOfLines={1}>
-                  {timeLabel}
-                </Text>
-              )}
             </View>
           </TouchableOpacity>
           {canQuickAdjust ? (
@@ -151,11 +146,11 @@ const SwipeableFoodRow: React.FC<SwipeableFoodRowProps> = ({ entry, nutrition, o
               className="py-0 px-0"
               textClassName="text-sm text-text-secondary font-medium"
             >
-              {`${nutrition.calories} ${t('foodRow.caloriesUnit', { defaultValue: 'Cal' })} ▾`}
+              {`${nutrition.calories} Cal ▾`}
             </Button>
           ) : (
             <Text className="text-sm text-text-secondary font-medium mr-2">
-              {nutrition.calories} {t('foodRow.caloriesUnit', { defaultValue: 'Cal' })}
+              {nutrition.calories} Cal
             </Text>
           )}
         </View>

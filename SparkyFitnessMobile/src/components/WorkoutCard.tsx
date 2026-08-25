@@ -1,9 +1,7 @@
 import React from 'react';
-import { useTranslation } from 'react-i18next';
 import { View, Text } from 'react-native';
 import { useCSSVariable } from 'uniwind';
 import type { ExerciseSessionResponse } from '@workspace/shared';
-import { canEditGroupedWorkout } from '@workspace/shared';
 import Icon from './Icon';
 import SafeImage from './SafeImage';
 import { getWorkoutIcon, getSourceLabel, getWorkoutSummary, getFirstImage, buildSessionSubtitle } from '../utils/workoutSession';
@@ -19,18 +17,16 @@ interface WorkoutCardProps {
 export { getSourceLabel, getWorkoutSummary } from '../utils/workoutSession';
 
 const WorkoutCard = React.memo<WorkoutCardProps>(({ session, getImageSource, weightUnit = 'kg', distanceUnit = 'km' }) => {
-  const { t } = useTranslation();
   const accentPrimary = useCSSVariable('--color-accent-primary') as string;
   const textMuted = useCSSVariable('--color-text-muted') as string;
   const textSecondary = useCSSVariable('--color-text-secondary') as string;
   const iconName = getWorkoutIcon(session);
-  const { name, duration, calories } = getWorkoutSummary(session, t);
+  const { name, duration, calories } = getWorkoutSummary(session);
   const source = session.source;
 
-  const subtitle = buildSessionSubtitle(session, duration, calories, t, weightUnit, distanceUnit);
+  const subtitle = buildSessionSubtitle(session, duration, calories, weightUnit, distanceUnit);
 
-  const sourceLabel = getSourceLabel(source);
-  const canEdit = canEditGroupedWorkout(source);
+  const { label: sourceLabel, isSparky } = getSourceLabel(source);
 
   const firstImage = getFirstImage(session);
   const imageSource = firstImage && getImageSource ? getImageSource(firstImage) : null;
@@ -52,11 +48,11 @@ const WorkoutCard = React.memo<WorkoutCardProps>(({ session, getImageSource, wei
             </Text>
             <View
               className="rounded-full px-2 py-0.5"
-              style={{ backgroundColor: canEdit ? `${accentPrimary}20` : `${textMuted}20` }}
+              style={{ backgroundColor: isSparky ? `${accentPrimary}20` : `${textMuted}20` }}
             >
               <Text
                 className="text-xs font-medium"
-                style={{ color: canEdit ? accentPrimary : textSecondary }}
+                style={{ color: isSparky ? accentPrimary : textSecondary }}
               >
                 {sourceLabel}
               </Text>

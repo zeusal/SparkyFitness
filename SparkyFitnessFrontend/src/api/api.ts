@@ -18,72 +18,11 @@ class HttpApiError extends Error {}
 export const API_BASE_URL = '/api';
 //export const API_BASE_URL = 'http://192.168.1.111:3010';
 
-// A single-use guard so a reload triggered by gateway interception (see
-// isGatewayInterceptedResponse) can't loop if the gateway keeps intercepting.
-const GATEWAY_RELOAD_GUARD_KEY = 'sparky_gateway_reload_guard';
-const GATEWAY_RELOAD_GUARD_TTL_MS = 10000;
-
-// Indirection so tests can observe the reload without jsdom's unimplemented
-// window.location.reload (same seam pattern as chunkRecoveryRuntime).
-export const gatewayReloadRuntime = {
-  reloadWindowLocation: () => window.location.reload(),
-};
-
-// Detects when a reverse-proxy auth gateway (e.g. Cloudflare Access) has
-// intercepted an internal API call and returned its own login/redirect page
-// instead of letting the request reach the backend. Such responses are not a
-// real "logged out" signal from SparkyFitness and must not be treated as one.
-function isGatewayInterceptedResponse(response: Response): boolean {
-  if (response.type === 'opaqueredirect') {
-    return true;
-  }
-  if (response.redirected) {
-    try {
-      if (new URL(response.url).origin !== window.location.origin) {
-        return true;
-      }
-    } catch {
-      // Ignore malformed URLs; fall through to content-type check.
-    }
-  }
-  // Only sniff HTML on success responses. On an error status, an HTML body is
-  // a proxy error page (nginx 502/504, a rate-limit page, Express's default
-  // 404), not a gateway login page; reloading on those drops in-progress UI
-  // state (issue #2051), so they take the normal error-toast path instead.
-  if (!response.ok) {
-    return false;
-  }
-  const contentType = response.headers.get('content-type') || '';
-  return contentType.includes('text/html');
-}
-
-function reloadOnceForGatewayInterception(): void {
-  const lastReload = Number(
-    sessionStorage.getItem(GATEWAY_RELOAD_GUARD_KEY) || 0
-  );
-  if (Date.now() - lastReload < GATEWAY_RELOAD_GUARD_TTL_MS) {
-    return;
-  }
-  sessionStorage.setItem(GATEWAY_RELOAD_GUARD_KEY, String(Date.now()));
-  gatewayReloadRuntime.reloadWindowLocation();
-}
-
-// A blob response is always a Blob, never the caller's generic T — the overload
-// keeps `responseType: 'blob'` callers from having to assert.
-export function apiCall(
-  endpoint: string,
-  options: ApiCallOptions & { responseType: 'blob' }
-): Promise<Blob>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function apiCall<T = any>(
+export async function apiCall(
   endpoint: string,
   options?: ApiCallOptions
-): Promise<T>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function apiCall<T = any>(
-  endpoint: string,
-  options?: ApiCallOptions
-): Promise<T> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<any> {
   const userLoggingLevel = getUserLoggingLevel();
   const isAbsoluteUrl = /^https?:\/\//.test(endpoint);
   const isExternal = options?.externalApi || isAbsoluteUrl;
@@ -160,16 +99,6 @@ export async function apiCall<T = any>(
       response.status
     );
 
-    if (!isExternal && isGatewayInterceptedResponse(response)) {
-      logging.error(
-        userLoggingLevel,
-        `API Call: Response for ${url} looks like it was intercepted by an upstream auth gateway (e.g. Cloudflare Access) rather than answered by the backend. Reloading to re-authenticate.`
-      );
-      reloadOnceForGatewayInterception();
-      // Reload is async; avoid processing this response as a real API result/error.
-      return new Promise(() => {});
-    }
-
     if (!response.ok) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let errorData: any;
@@ -201,7 +130,7 @@ export async function apiCall<T = any>(
           userLoggingLevel,
           `Frontend workaround triggered for ${endpoint}: Backend returned 400. Returning empty array.`
         );
-        return [] as unknown as T; // Return empty array to gracefully handle 400 errors on these endpoints
+        return []; // Return empty array to gracefully handle 400 errors on these endpoints
       }
 
       // Special handling for 404 errors on exercise search endpoints
@@ -213,7 +142,7 @@ export async function apiCall<T = any>(
           userLoggingLevel,
           `Frontend workaround triggered for ${endpoint}: Backend returned 404. Returning empty array.`
         );
-        return [] as unknown as T; // Return empty array to gracefully handle 404 errors on exercise search
+        return []; // Return empty array to gracefully handle 404 errors on exercise search
       }
 
       // Suppress toast for 404 errors if suppress404Toast is true
@@ -222,7 +151,7 @@ export async function apiCall<T = any>(
           userLoggingLevel,
           `API call returned 404 for ${endpoint}, toast suppressed. Returning null.`
         );
-        return null as unknown as T; // Return null for 404 with suppression
+        return null; // Return null for 404 with suppression
       } else {
         toast({
           title: 'API Error',
@@ -246,7 +175,7 @@ export async function apiCall<T = any>(
         userLoggingLevel,
         `API Call: Received blob response from ${url}.`
       );
-      return blobResponse as unknown as T;
+      return blobResponse;
     }
     // Handle cases where the response might be empty (e.g., DELETE requests)
     const text = await response.text();
@@ -274,23 +203,9 @@ export async function apiCall<T = any>(
   }
 }
 
-interface ApiGet {
-  (
-    endpoint: string,
-    options: ApiCallOptions & { responseType: 'blob' }
-  ): Promise<Blob>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (endpoint: string, options?: ApiCallOptions): Promise<any>;
-}
-
-const get: ApiGet = (
-  endpoint: string,
-  options?: ApiCallOptions
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Promise<any> => apiCall(endpoint, { ...options, method: 'GET' });
-
 export const api = {
-  get,
+  get: (endpoint: string, options?: ApiCallOptions) =>
+    apiCall(endpoint, { ...options, method: 'GET' }),
   post: (endpoint: string, options?: ApiCallOptions) =>
     apiCall(endpoint, { ...options, method: 'POST' }),
   put: (endpoint: string, options?: ApiCallOptions) =>

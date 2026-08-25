@@ -38,7 +38,6 @@ export type ManageHabitsInput = z.infer<typeof manageHabitsSchema>;
 export const manageHabitsInput = z.object({
   action: z
     .enum(['list_habits', 'log_habit', 'get_habit_history'])
-    .optional()
     .describe(
       'Action to perform; see the tool description for the fields each action needs.'
     ),

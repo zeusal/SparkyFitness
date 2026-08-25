@@ -18,22 +18,22 @@ export const FoodSourcesStep = ({ onContinue }: FoodSourcesStepProps) => {
     useCreateExternalProviderMutation();
 
   const [usdaKey, setUsdaKey] = useState('');
-  const [fatsecretClientId, setFatsecretClientId] = useState('');
-  const [fatsecretClientSecret, setFatsecretClientSecret] = useState('');
+  const [fatsecretAppId, setFatsecretAppId] = useState('');
+  const [fatsecretAppKey, setFatsecretAppKey] = useState('');
   // Track providers already persisted this session so a partial failure
   // (e.g. USDA saved, FatSecret rejected) doesn't re-POST the saved one on retry.
   const savedProviderTypesRef = useRef(new Set<string>());
 
   const handleContinue = async () => {
     const trimmedUsda = usdaKey.trim();
-    const trimmedFsId = fatsecretClientId.trim();
-    const trimmedFsKey = fatsecretClientSecret.trim();
+    const trimmedFsId = fatsecretAppId.trim();
+    const trimmedFsKey = fatsecretAppKey.trim();
 
     if ((trimmedFsId && !trimmedFsKey) || (!trimmedFsId && trimmedFsKey)) {
       toast({
         title: 'Missing FatSecret field',
         description:
-          'Enter both the FatSecret Client ID and Client Secret, or leave both blank to skip.',
+          'Enter both the FatSecret App ID and App Key, or leave both blank to skip.',
         variant: 'destructive',
       });
       return;
@@ -142,26 +142,24 @@ export const FoodSourcesStep = ({ onContinue }: FoodSourcesStepProps) => {
             </a>
           </div>
           <Input
-            id="onboarding-fatsecret-client-id"
+            id="onboarding-fatsecret-app-id"
             type="text"
-            value={fatsecretClientId}
-            onChange={(e) => setFatsecretClientId(e.target.value)}
-            placeholder="FatSecret Client ID"
+            value={fatsecretAppId}
+            onChange={(e) => setFatsecretAppId(e.target.value)}
+            placeholder="FatSecret App ID"
             autoComplete="off"
           />
           <Input
-            id="onboarding-fatsecret-client-secret"
+            id="onboarding-fatsecret-app-key"
             type="password"
-            value={fatsecretClientSecret}
-            onChange={(e) => setFatsecretClientSecret(e.target.value)}
-            placeholder="FatSecret Client Secret"
+            value={fatsecretAppKey}
+            onChange={(e) => setFatsecretAppKey(e.target.value)}
+            placeholder="FatSecret App Key"
             autoComplete="off"
           />
           <p className="text-xs text-muted-foreground">
-            Use the <strong>REST API OAuth 2.0</strong> credentials from the
-            dashboard, not the OAuth 1.0 Consumer Key/Secret. FatSecret also
-            requires you to whitelist your public IP in its developer dashboard.
-            This can take up to 24 hours to take effect.
+            FatSecret also requires you to whitelist your public IP in its
+            developer dashboard. This can take up to 24 hours to take effect.
           </p>
         </div>
       </div>

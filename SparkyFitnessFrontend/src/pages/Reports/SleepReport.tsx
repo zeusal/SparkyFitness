@@ -13,11 +13,7 @@ import type {
 import { useTranslation } from 'react-i18next';
 import { toast as sonnerToast } from 'sonner';
 import { formatDateToYYYYMMDD } from '@/lib/utils';
-import {
-  formatSecondsToHHMM,
-  formatTimeInZone,
-  sleepEntryZone,
-} from '@/utils/timeFormatters';
+import { formatSecondsToHHMM } from '@/utils/timeFormatters';
 import {
   HIGH_DEBT_THRESHOLD_HOURS,
   GOOD_SLEEP_SCORE_THRESHOLD,
@@ -32,8 +28,7 @@ interface SleepReportProps {
 
 const SleepReport = ({ startDate, endDate }: SleepReportProps) => {
   const { t } = useTranslation();
-  const { formatDateInUserTimezone, dateFormat, timeFormat, timezone } =
-    usePreferences();
+  const { formatDateInUserTimezone, dateFormat } = usePreferences();
   const { data: sleepEntries = [], isLoading: loadingEntries } =
     useSleepEntriesQuery(startDate, endDate);
   const { data: sleepDebtData, isLoading: loadingDebt } = useSleepDebtQuery();
@@ -74,11 +69,10 @@ const SleepReport = ({ startDate, endDate }: SleepReportProps) => {
         insight = t('sleepReport.goodSleep', 'Good Sleep');
       }
 
-      const zone = sleepEntryZone(sleepEntry, timezone);
       return [
         formatDateInUserTimezone(sleepEntry.entry_date, dateFormat),
-        formatTimeInZone(sleepEntry.bedtime, zone, timeFormat),
-        formatTimeInZone(sleepEntry.wake_time, zone, timeFormat),
+        formatDateInUserTimezone(sleepEntry.bedtime, 'HH:mm'),
+        formatDateInUserTimezone(sleepEntry.wake_time, 'HH:mm'),
         formatSecondsToHHMM(sleepEntry.duration_in_seconds),
         sleepEntry.time_asleep_in_seconds
           ? formatSecondsToHHMM(sleepEntry.time_asleep_in_seconds)
@@ -222,12 +216,6 @@ const SleepReport = ({ startDate, endDate }: SleepReportProps) => {
             entries.reduce((acc, e) => acc + (e.awake_count || 0), 0) ||
             allStageEvents.filter((e) => e.stage_type === 'awake').length,
           totalAwakeDuration: aggregatedStages.awake,
-          // Day zone rule: the earliest-bedtime session's recording zone
-          // labels the whole day (all stage labels included); a zone-less
-          // day falls back to the profile timezone, never a sibling
-          // session's zone.
-          record_timezone: mainEntry.record_timezone,
-          record_utc_offset_minutes: mainEntry.record_utc_offset_minutes,
         };
 
         const combinedEntry: SleepEntry & { is_aggregated?: boolean } = {
@@ -260,31 +248,20 @@ const SleepReport = ({ startDate, endDate }: SleepReportProps) => {
   };
 
   const processSleepChartData = (): SleepChartData[] => {
-    const grouped: Record<string, typeof sleepEntries> = {};
+    const grouped: Record<string, SleepStageEvent[]> = {};
     sleepEntries.forEach((entry) => {
       const dateKey = entry.entry_date.split('T')[0] as string;
       if (!dateKey) return;
       if (!grouped[dateKey]) grouped[dateKey] = [];
-      grouped[dateKey].push(entry);
+      if (entry.stage_events) {
+        grouped[dateKey].push(...entry.stage_events.filter((ev) => ev != null));
+      }
     });
     return Object.entries(grouped)
-      .map(([date, entries]) => {
-        // Same day-zone rule as processSleepData: the earliest-bedtime
-        // session's recording zone labels the whole day's hypnogram.
-        const mainEntry = [...entries].sort(
-          (a, b) =>
-            new Date(a.bedtime).getTime() - new Date(b.bedtime).getTime()
-        )[0];
-        const segments: SleepStageEvent[] = entries.flatMap((entry) =>
-          (entry.stage_events ?? []).filter((ev) => ev != null)
-        );
-        return {
-          date,
-          segments,
-          record_timezone: mainEntry?.record_timezone,
-          record_utc_offset_minutes: mainEntry?.record_utc_offset_minutes,
-        };
-      })
+      .map(([date, segments]) => ({
+        date,
+        segments,
+      }))
       .sort((a, b) => b.date.localeCompare(a.date));
   };
 

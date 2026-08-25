@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
+import React, { useState, useCallback } from 'react';
 import { View, Text } from 'react-native';
 import Animated, { useSharedValue, useDerivedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
-import { useIsFocused } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useCSSVariable } from 'uniwind';
 
 interface ProgressBarProps {
@@ -24,19 +23,15 @@ const ProgressBar: React.FC<ProgressBarProps> = ({ label, current, goal, unit, c
 
   const animatedProgress = useSharedValue(0);
 
-  // Replay the 0 -> progress entrance animation while the screen is focused.
-  // Driven by useIsFocused()+useEffect (rather than useFocusEffect) so the
-  // shared-value write lives in a real effect that React's compiler can
-  // optimize around.
-  const isFocused = useIsFocused();
-  useEffect(() => {
-    if (!isFocused) return;
-    animatedProgress.value = 0;
-    animatedProgress.value = withTiming(progress, {
-      duration: 500,
-      easing: Easing.out(Easing.cubic),
-    });
-  }, [isFocused, progress, animatedProgress]);
+  useFocusEffect(
+    useCallback(() => {
+      animatedProgress.value = 0;
+      animatedProgress.value = withTiming(progress, {
+        duration: 500,
+        easing: Easing.out(Easing.cubic),
+      });
+    }, [progress, animatedProgress])
+  );
 
   const fillWidth = useDerivedValue(() => {
     const p = animatedProgress.value;
@@ -121,7 +116,6 @@ const ExerciseProgressCard: React.FC<ExerciseProgressCardProps> = ({
   exerciseCalories,
   exerciseCaloriesGoal,
 }) => {
-  const { t } = useTranslation();
   const [exerciseColor, trackColor] = useCSSVariable([
     '--color-calories',
     '--color-progress-track',
@@ -130,12 +124,12 @@ const ExerciseProgressCard: React.FC<ExerciseProgressCardProps> = ({
   const hasEntries = exerciseMinutes > 0 || exerciseCalories > 0;
 
   return (
-    <View className="bg-surface rounded-xl p-4 mb-3 shadow-sm">
-      <Text className="text-md font-bold text-text-secondary mb-4">{t('dashboard.exercise', { defaultValue: 'Exercise' })}</Text>
+    <View className="bg-surface rounded-xl p-4 mb-2 shadow-sm">
+      <Text className="text-md font-bold text-text-secondary mb-4">Exercise</Text>
       {hasEntries ? (
         <>
           <ProgressBar
-            label={t('dashboard.minutes', { defaultValue: 'Minutes' })}
+            label="Minutes"
             current={exerciseMinutes}
             goal={exerciseMinutesGoal}
             unit="min"
@@ -145,17 +139,17 @@ const ExerciseProgressCard: React.FC<ExerciseProgressCardProps> = ({
           />
           <View className="h-3" />
           <ProgressBar
-            label={t('dashboard.calories', { defaultValue: 'Calories' })}
+            label="Calories"
             current={exerciseCalories}
             goal={exerciseCaloriesGoal}
-            unit={t('nutrition.caloriesUnit', { defaultValue: "Cal" })}
+            unit="Cal"
             color={exerciseColor}
             trackColor={trackColor}
             opacity={0.5}
           />
         </>
       ) : (
-        <Text className="text-sm text-text-secondary text-center py-2">{t('dashboard.noExerciseEntries', { defaultValue: 'No exercise entries yet' })}</Text>
+        <Text className="text-sm text-text-secondary text-center py-2">No exercise entries yet</Text>
       )}
     </View>
   );

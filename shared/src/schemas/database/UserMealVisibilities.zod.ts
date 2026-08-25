@@ -11,7 +11,6 @@ export const userMealVisibilitiesSchema = z.object({
   is_visible: z.boolean().nullable(),
   created_at: z.date().nullable(),
   show_in_quick_log: z.boolean().nullable(),
-  default_time: z.string().nullable(),
 });
 
 export const userMealVisibilitiesInitializerSchema = z.object({
@@ -20,7 +19,6 @@ export const userMealVisibilitiesInitializerSchema = z.object({
   is_visible: z.boolean().optional().nullable(),
   created_at: z.date().optional().nullable(),
   show_in_quick_log: z.boolean().optional().nullable(),
-  default_time: z.string().optional().nullable(),
 });
 
 export const userMealVisibilitiesMutatorSchema = z.object({
@@ -29,7 +27,6 @@ export const userMealVisibilitiesMutatorSchema = z.object({
   is_visible: z.boolean().optional().nullable(),
   created_at: z.date().optional().nullable(),
   show_in_quick_log: z.boolean().optional().nullable(),
-  default_time: z.string().optional().nullable(),
 });
 
 export type UserMealVisibilities = z.infer<typeof userMealVisibilitiesSchema>;

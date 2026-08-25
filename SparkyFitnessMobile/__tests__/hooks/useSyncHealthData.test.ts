@@ -2,7 +2,6 @@ import { renderHook, waitFor, act } from '@testing-library/react-native';
 import Toast from 'react-native-toast-message';
 import { useSyncHealthData } from '../../src/hooks/useSyncHealthData';
 import { syncHealthData as healthConnectSyncData } from '../../src/services/healthConnectService';
-import { isSyncInFlight } from '../../src/services/autoSyncCoordinator';
 import { saveLastSyncedTime } from '../../src/services/storage';
 import { addLog } from '../../src/services/LogService';
 import { serverConnectionQueryKey } from '../../src/hooks/queryKeys';
@@ -236,7 +235,7 @@ describe('useSyncHealthData', () => {
           expect.objectContaining({
             type: 'error',
             text1: 'Sync Error',
-            text2: 'The health data sync failed: Server unavailable',
+            text2: 'Server unavailable',
           })
         );
       });
@@ -328,7 +327,7 @@ describe('useSyncHealthData', () => {
           expect.objectContaining({
             type: 'error',
             text1: 'Sync Error',
-            text2: 'The health data sync failed: Unknown sync error',
+            text2: 'Unknown sync error',
           })
         );
       });
@@ -387,58 +386,6 @@ describe('useSyncHealthData', () => {
       await waitFor(() => {
         expect(result.current.isSuccess).toBe(true);
       });
-    });
-  });
-
-  describe('sync in-flight marker', () => {
-    type SyncResult = Awaited<ReturnType<typeof healthConnectSyncData>>;
-
-    test('marks the sync in flight while it runs and clears on success', async () => {
-      let resolveSync!: (value: SyncResult) => void;
-      mockHealthConnectSyncData.mockImplementation(
-        () => new Promise<SyncResult>((resolve) => { resolveSync = resolve; }),
-      );
-      mockSaveLastSyncedTime.mockResolvedValue('2024-01-15T10:00:00Z');
-
-      const { result } = renderHook(() => useSyncHealthData(), {
-        wrapper: createQueryWrapper(queryClient),
-      });
-
-      act(() => {
-        result.current.mutate(testParams);
-      });
-      await waitFor(() => {
-        expect(isSyncInFlight()).toBe(true);
-      });
-
-      await act(async () => {
-        resolveSync({ success: true, syncErrors: [] });
-      });
-      await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
-      });
-      expect(isSyncInFlight()).toBe(false);
-    });
-
-    test('clears the marker when the sync fails', async () => {
-      mockHealthConnectSyncData.mockResolvedValue({
-        success: false,
-        error: 'boom',
-        syncErrors: [],
-      });
-
-      const { result } = renderHook(() => useSyncHealthData(), {
-        wrapper: createQueryWrapper(queryClient),
-      });
-
-      await act(async () => {
-        result.current.mutate(testParams);
-      });
-      await waitFor(() => {
-        expect(result.current.isError).toBe(true);
-      });
-
-      expect(isSyncInFlight()).toBe(false);
     });
   });
 });

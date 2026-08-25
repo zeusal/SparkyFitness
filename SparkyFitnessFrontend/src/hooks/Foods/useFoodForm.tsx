@@ -1,22 +1,10 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePreferences } from '@/contexts/PreferencesContext';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { toast } from '@/hooks/use-toast';
 import { useUpdateFoodEntriesSnapshotMutation } from '@/hooks/Foods/useFoods';
-
-/** The three outcomes of the "Sync Past Entries?" prompt. */
-export type SyncPastEntriesChoice =
-  | 'none'
-  | 'nutrition'
-  | 'nutrition-and-photos';
 import { useCustomNutrients } from '@/hooks/Foods/useCustomNutrients';
-import {
-  pickerImagesDiffer,
-  splitPickerImages,
-  toSavedImages,
-  type PickerImage,
-} from '@/utils/imagePickerItems';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   foodVariantsOptions,
@@ -36,7 +24,6 @@ import { nutrientFields } from '@/constants/foodForm';
 import {
   getConversionFactor,
   shouldOfferAiConversion,
-  convertNutrientAmount,
 } from '@workspace/shared';
 import type { AiEstimateData } from '@/hooks/Foods/useUnitConversion';
 import type {
@@ -366,15 +353,8 @@ export function useCustomFoodForm({
   const [variantMeta, setVariantMeta] = useState<VariantMeta[]>([]);
   const [showSyncConfirmation, setShowSyncConfirmation] = useState(false);
   const [savedFoodResult, setSavedFoodResult] = useState<Food | null>(null);
-  // Whether the save that triggered the sync prompt also replaced the food's
-  // photos. Captured at save time rather than derived at render: `food` is a
-  // prop and the sync dialog outlives the save that opened it.
-  const [syncTouchesPhotos, setSyncTouchesPhotos] = useState(false);
   const [showBarcodeConflictConfirmation, setShowBarcodeConflictConfirmation] =
     useState(false);
-  // One ordered list of saved images and staged files, so the user can drag a
-  // new photo ahead of an existing one before saving.
-  const [imageItems, setImageItems] = useState<PickerImage[]>([]);
   const [barcodeConflictFoodName, setBarcodeConflictFoodName] = useState('');
   const [formData, setFormData] = useState({
     name: '',
@@ -383,70 +363,19 @@ export function useCustomFoodForm({
     barcode: '',
   });
 
-  // Provider nutrient values the user mapped onto this food (custom nutrient
-  // name -> { provider field label, the nutrient's chosen unit }). Re-applied
-  // whenever variants are rebuilt so the imported value survives — notably the
-  // rebuild the effect below runs when creating a custom nutrient refetches the
-  // list. Kept in a ref so recording a match doesn't retrigger that effect.
-  const pendingProviderMatchesRef = useRef<
-    Map<string, { label: string; unit?: string }>
-  >(new Map());
-
-  const applyProviderMatchesToVariants = useCallback(
-    <T extends FormFoodVariant>(list: T[]): T[] => {
-      if (pendingProviderMatchesRef.current.size === 0) return list;
-      return list.map((variant) => {
-        let next = variant;
-        for (const [
-          name,
-          { label, unit },
-        ] of pendingProviderMatchesRef.current) {
-          const providerValue = Number(next.provider_nutrients?.[label]);
-          if (!Number.isFinite(providerValue) || providerValue <= 0) continue;
-          // Convert the provider amount into the nutrient's unit when both are
-          // known and compatible; otherwise keep the provider's raw value.
-          const providerUnit = next.provider_nutrient_units?.[label];
-          const converted = convertNutrientAmount(
-            providerValue,
-            providerUnit,
-            unit
-          );
-          const value =
-            converted === null
-              ? providerValue
-              : Math.round(converted * 1e6) / 1e6;
-          next = {
-            ...next,
-            custom_nutrients: {
-              ...next.custom_nutrients,
-              [name]: value,
-            },
-            // A concrete provider value counts as a manual edit for AI rows.
-            ...(next.source === 'ai_estimate'
-              ? { source: 'manual' as const, ai_confidence: null }
-              : {}),
-          };
-        }
-        return next;
-      });
-    },
-    []
-  );
-
   const initializeVariantState = useCallback(
     (
       grouped: GroupedFormFoodVariant[],
       options: { autoScaleIntent: boolean; hasTrustedBase: boolean }
     ) => {
-      const withMatches = applyProviderMatchesToVariants(grouped);
-      const trustedSnapshot = deepClone(withMatches);
-      const scalingSnapshot = deepClone(withMatches);
-      setVariants(withMatches);
+      const trustedSnapshot = deepClone(grouped);
+      const scalingSnapshot = deepClone(grouped);
+      setVariants(grouped);
       setOriginalVariants(trustedSnapshot);
       setServingSizeScalingBaseVariants(scalingSnapshot);
-      setLoadedVariants(deepClone(withMatches));
+      setLoadedVariants(deepClone(grouped));
       setVariantMeta(
-        withMatches.map((v) => ({
+        grouped.map((v) => ({
           ...DEFAULT_VARIANT_META,
           aiEstimatedUnit: v.source === 'ai_estimate' ? v.serving_unit : null,
           autoScaleIntent: options.autoScaleIntent,
@@ -454,12 +383,11 @@ export function useCustomFoodForm({
         }))
       );
     },
-    [applyProviderMatchesToVariants]
+    []
   );
 
   const resetForm = useCallback(() => {
     setFormData({ name: '', brand: '', is_quick_food: false, barcode: '' });
-    setImageItems([]);
     const defaultVariant = createDefaultFormVariant(customNutrients);
     const grouped = groupEquivalentVariants([defaultVariant]);
     initializeVariantState(grouped, {
@@ -548,19 +476,6 @@ export function useCustomFoodForm({
         is_quick_food: food.is_quick_food || false,
         barcode: food.barcode || '',
       });
-      // A provider search result has no `images` array yet — its photo is the
-      // single upstream `image_url`. Seed the picker with it so importing
-      // keeps the image the user saw on the search card; the server downloads
-      // remote URLs into /uploads on save (see utils/imageLocalizer.ts).
-      // Precedence mirrors the server's resolveImageInput: stored array first,
-      // then the full-size URL, then the thumbnail.
-      const providerImage = food.image_source_url || food.image_url;
-      const existingImages = toSavedImages(food.images);
-      setImageItems(
-        existingImages.length > 0
-          ? existingImages
-          : toSavedImages(providerImage ? [providerImage] : [])
-      );
 
       if (food.variants && food.variants.length > 0) {
         const mapped = food.variants.map((v) =>
@@ -982,29 +897,6 @@ export function useCustomFoodForm({
     }
   };
 
-  // Fill a custom nutrient's value across every variant from the matching
-  // provider field (kept per-variant on provider_nutrients, already scaled).
-  // Called when a user adds an alias / creates a nutrient from the provider
-  // nutrient viewer, so the food being imported reflects it immediately.
-  // Records the match so it survives the variant rebuild the create/update
-  // triggers (custom nutrient list refetch), and applies it now in single
-  // setState passes to avoid stale-state overwrites across variants.
-  const applyProviderNutrientMatch = (
-    nutrientName: string,
-    providerLabel: string,
-    nutrientUnit?: string
-  ) => {
-    pendingProviderMatchesRef.current.set(nutrientName, {
-      label: providerLabel,
-      unit: nutrientUnit,
-    });
-    setVariants((prev) => applyProviderMatchesToVariants(prev));
-    setOriginalVariants((prev) => applyProviderMatchesToVariants(prev));
-    setServingSizeScalingBaseVariants((prev) =>
-      applyProviderMatchesToVariants(prev)
-    );
-  };
-
   // Apply an AI-estimated conversion to a row. Anchor is always the food's
   // default variant (so AI estimates don't compound on prior AI values); when
   // the row IS the default, fall back to originalVariants[default] (the
@@ -1158,11 +1050,6 @@ export function useCustomFoodForm({
 
     setLoading(true);
     try {
-      // Split the ordered picker list into the wire format: an order array
-      // with __new__<n> placeholders, plus the files in matching index order.
-      const { order: imageOrder, files: imageFiles } =
-        splitPickerImages(imageItems);
-
       const foodData: Food = {
         id: food?.id || '',
         name: formData.name,
@@ -1172,9 +1059,6 @@ export function useCustomFoodForm({
         barcode: formData.barcode.trim() || null,
         provider_external_id: food?.provider_external_id,
         provider_type: food?.provider_type,
-        provider_verified: food?.provider_verified,
-        // Placeholders mark where each staged file belongs in the final order.
-        images: imageOrder,
       };
 
       const expandedVariants: FormFoodVariant[] = [];
@@ -1201,18 +1085,10 @@ export function useCustomFoodForm({
         variants: expandedVariants.map(formVariantToFoodVariant),
         userId: user.id,
         foodId: food?.id,
-        imageFiles,
       });
-
-      const photosChanged = pickerImagesDiffer(imageItems, food?.images);
-
-      // The save consumed the staged files; the server echoes back the final
-      // list including their new upload paths.
-      setImageItems(toSavedImages(savedFood.images));
 
       if (food?.id && user?.id === food.user_id) {
         setSavedFoodResult(savedFood);
-        setSyncTouchesPhotos(photosChanged);
         setShowSyncConfirmation(true);
       } else {
         if (!food?.id) resetForm();
@@ -1223,7 +1099,7 @@ export function useCustomFoodForm({
     } finally {
       setLoading(false);
     }
-  }, [food, formData, imageItems, onSave, resetForm, saveFood, user, variants]);
+  }, [food, formData, onSave, resetForm, saveFood, user, variants]);
 
   const handleBarcodeConflictConfirm = async () => {
     setShowBarcodeConflictConfirmation(false);
@@ -1260,21 +1136,12 @@ export function useCustomFoodForm({
     await persistFood();
   };
 
-  /**
-   * 'none' leaves history alone. 'nutrition' rewrites nutrition and leaves
-   * every entry's photo as it is. 'nutrition-and-photos' additionally forces
-   * the food's photos onto every entry, replacing photos the user set on
-   * individual diary entries — the replaced files are unlinked server-side.
-   */
-  const handleSyncConfirmation = async (choice: SyncPastEntriesChoice) => {
+  const handleSyncConfirmation = async (sync: boolean) => {
     if (!savedFoodResult) return;
 
-    if (choice !== 'none') {
+    if (sync) {
       try {
-        await updateFoodEntriesSnapshot({
-          foodId: savedFoodResult.id,
-          syncImages: choice === 'nutrition-and-photos',
-        });
+        await updateFoodEntriesSnapshot(savedFoodResult.id);
       } catch {
         /* toast handled by QueryClient */
       }
@@ -1308,7 +1175,6 @@ export function useCustomFoodForm({
     loading,
     showSyncConfirmation,
     setShowSyncConfirmation,
-    syncTouchesPhotos,
     loadedVariants,
     conversionBaseVariants: originalVariants,
     hasTrustedCompatibilityBase,
@@ -1320,12 +1186,9 @@ export function useCustomFoodForm({
     duplicateVariant,
     removeVariant,
     updateVariant,
-    applyProviderNutrientMatch,
     applyAiEstimate,
     handleSubmit,
     handleSyncConfirmation,
-    imageItems,
-    setImageItems,
     showBarcodeConflictConfirmation,
     setShowBarcodeConflictConfirmation,
     barcodeConflictFoodName,

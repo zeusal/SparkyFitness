@@ -47,14 +47,12 @@ async function updateExerciseEntriesSnapshot(
       `UPDATE exercise_entries
        SET
           exercise_name = $1,
-          calories_per_hour = $2,
-          modality = $3
-       WHERE user_id = $4 AND exercise_id = $5
+          calories_per_hour = $2
+       WHERE user_id = $3 AND exercise_id = $4
        RETURNING id`,
       [
         newSnapshotData.exercise_name,
         newSnapshotData.calories_per_hour,
-        newSnapshotData.modality,
         userId,
         exerciseId,
       ]

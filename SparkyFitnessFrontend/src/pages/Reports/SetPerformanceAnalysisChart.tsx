@@ -13,6 +13,7 @@ import {
 } from 'recharts';
 import ZoomableChart from '@/components/ZoomableChart';
 import { usePreferences } from '@/contexts/PreferencesContext';
+import { formatWeight } from '@/utils/numberFormatting';
 
 interface SetPerformanceAnalysisChartProps {
   setPerformanceData: {
@@ -28,20 +29,8 @@ const SetPerformanceAnalysisChart = ({
   exerciseName,
 }: SetPerformanceAnalysisChartProps) => {
   const { t } = useTranslation();
-  const { weightUnit, convertWeight } = usePreferences();
+  const { weightUnit } = usePreferences();
   const [isMounted, setIsMounted] = React.useState(false);
-
-  // avgWeight arrives in kg. Convert once here so the bars, the Y-axis ticks
-  // and the tooltip all read in the selected unit — previously only the
-  // tooltip converted, so the axis showed kg numbers under a "(lbs)" label.
-  const chartData = React.useMemo(
-    () =>
-      (setPerformanceData ?? []).map((d) => ({
-        ...d,
-        avgWeight: convertWeight(d.avgWeight, 'kg', weightUnit),
-      })),
-    [setPerformanceData, convertWeight, weightUnit]
-  );
 
   React.useEffect(() => {
     setIsMounted(true);
@@ -105,12 +94,14 @@ const SetPerformanceAnalysisChart = ({
                 minHeight={0}
                 debounce={100}
               >
-                <BarChart data={chartData}>
+                <BarChart data={setPerformanceData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
                     dataKey="setName"
                     tickCount={
-                      isMaximized ? Math.max(chartData.length, 10) : undefined
+                      isMaximized
+                        ? Math.max(setPerformanceData.length, 10)
+                        : undefined
                     }
                   />
                   <YAxis
@@ -156,9 +147,8 @@ const SetPerformanceAnalysisChart = ({
                     ) => {
                       const val = Array.isArray(value) ? value[0] : value;
                       if (String(name) === 'avgWeight') {
-                        // Already converted in chartData — format only.
                         return [
-                          `${Number(val ?? 0).toFixed(1)} ${weightUnit}`,
+                          formatWeight(Number(val ?? 0), weightUnit),
                           t(
                             'reports.setPerformanceAnalysis.avgWeight',
                             'Avg. Weight'

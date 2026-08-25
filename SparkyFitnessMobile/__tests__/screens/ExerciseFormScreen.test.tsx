@@ -1,6 +1,6 @@
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
-import { pressAction } from './helpers/nativeHeaderTestUtils';
+import { pressAction, expectActionPresent } from './helpers/nativeHeaderTestUtils';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { CommonActions } from '@react-navigation/native';
@@ -54,18 +54,6 @@ jest.mock('../../src/components/BottomSheetPicker', () => {
   };
 });
 
-const mockNavigation = {
-  setOptions: jest.fn(),
-  goBack: jest.fn(),
-  replace: jest.fn(),
-  dispatch: jest.fn(),
-  navigate: jest.fn(),
-} as any;
-jest.mock('@react-navigation/native', () => ({
-  ...jest.requireActual('@react-navigation/native'),
-  useNavigation: () => mockNavigation,
-}));
-
 const mockUseCreateExercise = useCreateExercise as jest.MockedFunction<typeof useCreateExercise>;
 const mockUseUpdateExercise = useUpdateExercise as jest.MockedFunction<typeof useUpdateExercise>;
 
@@ -114,8 +102,6 @@ describe('ExerciseFormScreen — buildCreatePayload', () => {
   const blankState = {
     name: '',
     category: 'strength',
-    modality: 'weight_reps',
-    modalityManuallySet: false,
     caloriesPerHourText: '',
     description: '',
     equipment: '',
@@ -131,15 +117,8 @@ describe('ExerciseFormScreen — buildCreatePayload', () => {
     expect(buildCreatePayload('Lunges', blankState, undefined)).toEqual({
       name: 'Lunges',
       category: 'strength',
-      modality: 'weight_reps',
       description: null,
     });
-  });
-
-  it('always carries the effective modality', () => {
-    expect(
-      buildCreatePayload('Plank', { ...blankState, modality: 'duration' }, undefined),
-    ).toMatchObject({ modality: 'duration' });
   });
 
   it('includes equipment, muscles, instructions, level, force, and mechanic when set', () => {
@@ -159,7 +138,6 @@ describe('ExerciseFormScreen — buildCreatePayload', () => {
     expect(buildCreatePayload('Bench Press', state, 350)).toEqual({
       name: 'Bench Press',
       category: 'strength',
-      modality: 'weight_reps',
       description: 'Notes',
       calories_per_hour: 350,
       equipment: ['barbell', 'bench'],
@@ -184,8 +162,6 @@ describe('ExerciseFormScreen — buildEditPayload', () => {
     const state = {
       name: baseExercise.name,
       category: baseExercise.category,
-      modality: 'weight_reps',
-      modalityManuallySet: true,
       caloriesPerHourText: String(baseExercise.calories_per_hour),
       description: baseExercise.description ?? '',
       equipment: joinCsvList(baseExercise.equipment),
@@ -204,8 +180,6 @@ describe('ExerciseFormScreen — buildEditPayload', () => {
     const state = {
       name: 'Bench Press Variation',
       category: baseExercise.category,
-      modality: 'weight_reps',
-      modalityManuallySet: true,
       caloriesPerHourText: '400',
       description: baseExercise.description ?? '',
       equipment: joinCsvList(baseExercise.equipment),
@@ -230,8 +204,6 @@ describe('ExerciseFormScreen — buildEditPayload', () => {
     const state = {
       name: baseExercise.name,
       category: baseExercise.category,
-      modality: 'weight_reps',
-      modalityManuallySet: true,
       caloriesPerHourText: String(baseExercise.calories_per_hour),
       description: '   ',
       equipment: joinCsvList(baseExercise.equipment),
@@ -246,52 +218,16 @@ describe('ExerciseFormScreen — buildEditPayload', () => {
     const payload = buildEditPayload(baseExercise, state, baseExercise.calories_per_hour);
     expect(payload).toEqual({ description: '' });
   });
-
-  it('sends modality only when it differs from the stored-or-derived value', () => {
-    const state = {
-      name: baseExercise.name,
-      category: baseExercise.category,
-      modality: 'weight_reps',
-      modalityManuallySet: true,
-      caloriesPerHourText: String(baseExercise.calories_per_hour),
-      description: baseExercise.description ?? '',
-      equipment: joinCsvList(baseExercise.equipment),
-      primaryMuscles: joinCsvList(baseExercise.primary_muscles),
-      secondaryMuscles: joinCsvList(baseExercise.secondary_muscles),
-      instructions: joinLines(baseExercise.instructions),
-      level: baseExercise.level ?? null,
-      force: baseExercise.force ?? null,
-      mechanic: baseExercise.mechanic ?? null,
-    };
-
-    // Matches the category-derived value → not sent (unrelated edits never
-    // imply a modality choice).
-    expect(
-      buildEditPayload(baseExercise, state, baseExercise.calories_per_hour),
-    ).toEqual({});
-
-    // A real change is sent alone.
-    expect(
-      buildEditPayload(
-        baseExercise,
-        { ...state, modality: 'duration' },
-        baseExercise.calories_per_hour,
-      ),
-    ).toEqual({ modality: 'duration' });
-
-    // Diff is against the STORED modality when the exercise has one.
-    expect(
-      buildEditPayload(
-        { ...baseExercise, modality: 'duration' },
-        { ...state, modality: 'duration' },
-        baseExercise.calories_per_hour,
-      ),
-    ).toEqual({});
-  });
 });
 
 describe('ExerciseFormScreen — create mode', () => {
-  const navigation = mockNavigation;
+  const navigation = {
+    setOptions: jest.fn(),
+    goBack: jest.fn(),
+    replace: jest.fn(),
+    dispatch: jest.fn(),
+    navigate: jest.fn(),
+  } as any;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -325,68 +261,16 @@ describe('ExerciseFormScreen — create mode', () => {
       );
     });
   });
-
-  it('follows the category-derived modality until the picker is touched', async () => {
-    const createExerciseAsync = jest.fn().mockResolvedValue(baseExercise);
-    mockUseCreateExercise.mockReturnValue({ createExerciseAsync, isPending: false } as any);
-    const route = {
-      key: 'ExerciseForm-key',
-      name: 'ExerciseForm' as const,
-      params: { mode: 'create-exercise' as const },
-    };
-    const screen = render(
-      <SafeAreaProvider initialMetrics={{ insets, frame }}>
-        <ExerciseFormScreen navigation={navigation} route={route as any} />
-      </SafeAreaProvider>,
-    );
-
-    expect(screen.getByText('Tracking Type')).toBeTruthy();
-
-    // Untouched: picking a cardio category re-derives the modality.
-    fireEvent.press(screen.getByText('opt-cardio'));
-    fireEvent.changeText(
-      screen.getByPlaceholderText('e.g. Bulgarian Split Squat'),
-      'Rowing',
-    );
-    pressAction(screen, navigation, 'Save');
-    await waitFor(() => {
-      expect(createExerciseAsync).toHaveBeenCalledWith(
-        expect.objectContaining({ category: 'cardio', modality: 'duration_distance' }),
-      );
-    });
-  });
-
-  it('pins a manual modality pick across later category changes', async () => {
-    const createExerciseAsync = jest.fn().mockResolvedValue(baseExercise);
-    mockUseCreateExercise.mockReturnValue({ createExerciseAsync, isPending: false } as any);
-    const route = {
-      key: 'ExerciseForm-key',
-      name: 'ExerciseForm' as const,
-      params: { mode: 'create-exercise' as const },
-    };
-    const screen = render(
-      <SafeAreaProvider initialMetrics={{ insets, frame }}>
-        <ExerciseFormScreen navigation={navigation} route={route as any} />
-      </SafeAreaProvider>,
-    );
-
-    fireEvent.press(screen.getByText('opt-duration'));
-    fireEvent.press(screen.getByText('opt-cardio'));
-    fireEvent.changeText(
-      screen.getByPlaceholderText('e.g. Bulgarian Split Squat'),
-      'Plank Intervals',
-    );
-    pressAction(screen, navigation, 'Save');
-    await waitFor(() => {
-      expect(createExerciseAsync).toHaveBeenCalledWith(
-        expect.objectContaining({ category: 'cardio', modality: 'duration' }),
-      );
-    });
-  });
 });
 
 describe('ExerciseFormScreen — edit mode', () => {
-  const navigation = mockNavigation;
+  const navigation = {
+    setOptions: jest.fn(),
+    goBack: jest.fn(),
+    replace: jest.fn(),
+    dispatch: jest.fn(),
+    navigate: jest.fn(),
+  } as any;
 
   const updateExerciseAsync = jest.fn();
 
@@ -419,7 +303,7 @@ describe('ExerciseFormScreen — edit mode', () => {
       </SafeAreaProvider>,
     );
 
-    pressAction(screen, navigation, 'Save');
+    pressAction(screen, navigation, 'Save Changes');
 
     await waitFor(() => {
       expect(navigation.goBack).toHaveBeenCalled();
@@ -448,7 +332,7 @@ describe('ExerciseFormScreen — edit mode', () => {
     const nameInput = screen.getByPlaceholderText('e.g. Bulgarian Split Squat');
     fireEvent.changeText(nameInput, 'Bench Press 2');
 
-    pressAction(screen, navigation, 'Save');
+    pressAction(screen, navigation, 'Save Changes');
 
     await waitFor(() => {
       expect(updateExerciseAsync).toHaveBeenCalledWith({

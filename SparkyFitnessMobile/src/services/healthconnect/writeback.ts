@@ -114,7 +114,7 @@ const writableMetrics = async (metrics: WritebackMetric[]): Promise<WritebackMet
   }
   return metrics.filter((m) => {
     const ok = granted.some((p) => p.recordType === m.recordType && p.accessType === 'write');
-    if (!ok) addLog(`[Writeback] Skipping ${m.defaultLabel}: write permission not granted`, 'WARNING');
+    if (!ok) addLog(`[Writeback] Skipping ${m.label}: write permission not granted`, 'WARNING');
     return ok;
   });
 };
@@ -154,15 +154,6 @@ const writeHydrationForDate = async (
   const ml = summary.waterIntake ?? 0;
   const record = waterMlToHydrationRecord(date, ml, version);
   const records = record ? [record] : [];
-
-  // A null record with water logged means the noon anchor is still in the
-  // future — the day's record can't be written yet. Bail before the signature
-  // check: storing the empty signature here would make every later pre-noon
-  // run report "unchanged" no matter how much the total moves.
-  if (ml > 0 && !record) {
-    addLog(`[Writeback] Hydration ${date}: deferred — noon anchor still in the future`, 'DEBUG');
-    return;
-  }
 
   const signature = recordsSignature(records);
   if (signature === (await loadWrittenSignature('Hydration', date))) {
@@ -218,7 +209,7 @@ export const writebackPhase = async (dates: string[]): Promise<boolean> => {
           addLog('[Writeback] Health Connect quota exceeded — stopping; resumes next sync', 'WARNING');
           return false;
         }
-        addLog(`[Writeback] Failed ${metric.defaultLabel} for ${date}: ${message(error)}`, 'ERROR');
+        addLog(`[Writeback] Failed ${metric.label} for ${date}: ${message(error)}`, 'ERROR');
       }
     }
   }

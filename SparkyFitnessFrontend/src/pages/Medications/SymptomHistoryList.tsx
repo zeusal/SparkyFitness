@@ -20,11 +20,26 @@ export default function SymptomHistoryList({
   isPending,
 }: SymptomHistoryListProps) {
   const { t } = useTranslation();
-  const { formatTime } = usePreferences();
+  const { timezone } = usePreferences();
 
   const formatEntryTime = (timestamp: string) => {
     try {
-      return formatTime(timestamp);
+      const parts = Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      }).formatToParts(new Date(timestamp));
+
+      let hour = '';
+      let minute = '';
+      let dayPeriod = '';
+      for (const p of parts) {
+        if (p.type === 'hour') hour = p.value;
+        if (p.type === 'minute') minute = p.value;
+        if (p.type === 'dayPeriod') dayPeriod = p.value;
+      }
+      return `${hour}:${minute} ${dayPeriod}`;
     } catch (e) {
       return '--:--';
     }

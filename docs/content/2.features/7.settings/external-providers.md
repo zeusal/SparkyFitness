@@ -12,16 +12,15 @@ SparkyFitness supports integration with the following health and fitness data pr
 - Google Health Connect (Android)
 - Fitbit
 - Garmin Connect
-- Oura Ring
 - Withings
 - Polar Flow (partially tested)
 - Hevy (not tested)
 - OpenFoodFacts
 - USDA
 - Fatsecret
-- Nutritionix
+- Nutritioninx
 - Mealie
-- Tandoor
+- Tandori
 - Strava (partially tested)
 
 

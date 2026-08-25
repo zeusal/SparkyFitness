@@ -10,18 +10,6 @@ import {
 
 vi.mock('../config/logging.js', () => ({ log: vi.fn() }));
 
-// provider_nutrients is the provider's full field dump surfaced for the alias
-// viewer (covered by customNutrientMatching.test.ts). Drop it here so this
-// exact-shape mapping assertion stays focused on the standard fields.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function stripProviderNutrients<T>(food: any): T {
-  if (food?.default_variant) delete food.default_variant.provider_nutrients;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if (Array.isArray(food?.variants))
-    food.variants.forEach((v: any) => delete v?.provider_nutrients);
-  return food;
-}
-
 const originalFetch = global.fetch;
 const yazioClientCredentials = {
   clientId: 'test-client-id',
@@ -62,32 +50,30 @@ describe('yazioService', () => {
   });
 
   it('maps YAZIO product nutrition into Sparky food shape', () => {
-    const result = stripProviderNutrients(
-      mapYazioProduct({
-        id: '7c91b431-a2b5-4f11-8f52-f346dc941f2a',
-        name: 'Protein Joghurt',
-        producer: 'Test Brand',
-        serving_quantity: 1,
-        amount: 20,
-        base_unit: 'GRAM',
-        eans: ['4001234567890'],
-        nutrients: {
-          'energy.energy': 0.64,
-          'nutrient.protein': 0.152,
-          'nutrient.carb': 0.084,
-          'nutrient.fat': 0.021,
-          'nutrient.dietaryfiber': 0.004,
-          'nutrient.sugar': 0.079,
-          'nutrient.saturated': 0.01,
-          'nutrient.sodium': 0.0004,
-          'mineral.potassium': 0.0018,
-          'mineral.calcium': 0.0012,
-          'mineral.iron': 0.000002,
-          'vitamin.a': 0.0000002,
-          'vitamin.c': 0.000001,
-        },
-      })
-    );
+    const result = mapYazioProduct({
+      id: '7c91b431-a2b5-4f11-8f52-f346dc941f2a',
+      name: 'Protein Joghurt',
+      producer: 'Test Brand',
+      serving_quantity: 1,
+      amount: 20,
+      base_unit: 'GRAM',
+      eans: ['4001234567890'],
+      nutrients: {
+        'energy.energy': 0.64,
+        'nutrient.protein': 0.152,
+        'nutrient.carb': 0.084,
+        'nutrient.fat': 0.021,
+        'nutrient.dietaryfiber': 0.004,
+        'nutrient.sugar': 0.079,
+        'nutrient.saturated': 0.01,
+        'nutrient.sodium': 0.0004,
+        'mineral.potassium': 0.0018,
+        'mineral.calcium': 0.0012,
+        'mineral.iron': 0.000002,
+        'vitamin.a': 0.0000002,
+        'vitamin.c': 0.000001,
+      },
+    });
 
     expect(result).toEqual({
       name: 'Protein Joghurt',
@@ -97,12 +83,12 @@ describe('yazioService', () => {
       provider_type: 'yazio',
       provider_verified: false,
       is_custom: false,
-      // YAZIO's fixture carries no image field; mapping is defensive.
-      image_url: null,
       default_variant: {
         serving_size: 100,
         serving_unit: 'g',
         serving_description: '100 g',
+        serving_weight: 100,
+        serving_weight_unit: 'g',
         calories: 64,
         protein: 15.2,
         carbs: 8.4,
@@ -127,6 +113,8 @@ describe('yazioService', () => {
           serving_size: 100,
           serving_unit: 'g',
           serving_description: '100 g',
+          serving_weight: 100,
+          serving_weight_unit: 'g',
           calories: 64,
           protein: 15.2,
           carbs: 8.4,
@@ -204,6 +192,8 @@ describe('yazioService', () => {
       serving_size: 100,
       serving_unit: 'g',
       serving_description: '100 g',
+      serving_weight: 100,
+      serving_weight_unit: 'g',
       calories: 62,
       carbs: 9.1,
       protein: 1,
@@ -217,21 +207,9 @@ describe('yazioService', () => {
     expect(smallKiwi).toMatchObject({
       serving_size: 1,
       serving_unit: 'Frucht, klein',
-      serving_description: '1 Frucht, klein (70 g)',
-      calories: 43,
-      carbs: 6.4,
-      protein: 0.7,
-      fat: 0.4,
-      is_default: false,
-    });
-
-    const smallKiwiMetric = result?.variants?.find(
-      (variant) => variant.serving_size === 70 && variant.serving_unit === 'g'
-    );
-    expect(smallKiwiMetric).toMatchObject({
-      serving_size: 70,
-      serving_unit: 'g',
-      serving_description: '70 g',
+      serving_description: 'Frucht, klein (70 g)',
+      serving_weight: 70,
+      serving_weight_unit: 'g',
       calories: 43,
       carbs: 6.4,
       protein: 0.7,
@@ -243,14 +221,10 @@ describe('yazioService', () => {
       result?.variants?.map((variant) => variant.serving_description)
     ).toEqual([
       '100 g',
-      '1 Frucht, halb (45 g)',
-      '45 g',
-      '1 Frucht, klein (70 g)',
-      '70 g',
-      '1 Frucht, mittel (90 g)',
-      '90 g',
-      '1 Frucht, groß (115 g)',
-      '115 g',
+      'Frucht, halb (45 g)',
+      'Frucht, klein (70 g)',
+      'Frucht, mittel (90 g)',
+      'Frucht, groß (115 g)',
       '1 g',
     ]);
   });
@@ -275,11 +249,7 @@ describe('yazioService', () => {
       },
     });
 
-    const pieceVariant = result?.variants.find(
-      (variant) =>
-        variant.serving_size === 1 && variant.serving_unit === 'piece'
-    );
-    expect(pieceVariant).toMatchObject({
+    expect(result?.variants[1]).toMatchObject({
       serving_size: 1,
       serving_unit: 'piece',
       calories: 250,
@@ -287,102 +257,9 @@ describe('yazioService', () => {
       protein: 10,
       fat: 5,
     });
-    expect(Number.isFinite(pieceVariant?.calories ?? Number.NaN)).toBe(true);
-  });
-
-  it('maps a search candidate top-level portion with its metric equivalent', () => {
-    const result = mapYazioProduct({
-      product_id: 'package-search-result',
-      name: 'Protein Dessert',
-      serving: 'package',
-      serving_quantity: 1,
-      amount: 200,
-      base_unit: 'g',
-      nutrients: {
-        'energy.energy': 0.81,
-        'nutrient.protein': 0.05,
-        'nutrient.carb': 0.1,
-        'nutrient.fat': 0.02,
-      },
-    });
-
-    expect(
-      result?.variants.map((variant) => variant.serving_description)
-    ).toEqual(['100 g', '1 package (200 g)', '200 g']);
-    expect(result?.variants[1]).toMatchObject({
-      serving_size: 1,
-      serving_unit: 'package',
-      calories: 162,
-    });
-  });
-
-  it('keeps a non-unit serving quantity in the structured variant and description', () => {
-    const result = mapYazioProduct({
-      product_id: 'multi-package-search-result',
-      name: 'Protein Dessert Multipack',
-      serving: 'package',
-      serving_quantity: 2,
-      amount: 200,
-      base_unit: 'g',
-      nutrients: {
-        'energy.energy': 0.81,
-        'nutrient.protein': 0.05,
-        'nutrient.carb': 0.1,
-        'nutrient.fat': 0.02,
-      },
-    });
-
-    expect(result?.variants[1]).toMatchObject({
-      serving_size: 2,
-      serving_unit: 'package',
-      serving_description: '2 package (200 g)',
-      calories: 162,
-    });
-    expect(result?.variants[2]).toMatchObject({
-      serving_size: 200,
-      serving_unit: 'g',
-      serving_description: '200 g',
-      calories: 162,
-    });
-  });
-
-  it('keeps every metric equivalent when YAZIO repeats a serving name at different weights', () => {
-    const result = mapYazioProduct({
-      id: 'repeated-package-weights',
-      name: 'Twin Pack Product',
-      producer: 'YAZIO',
-      base_unit: 'g',
-      nutrients: {
-        'energy.energy': 1,
-        'nutrient.protein': 0.05,
-        'nutrient.carb': 0.1,
-        'nutrient.fat': 0.02,
-      },
-      servings: [
-        {
-          serving: 'package',
-          serving_quantity: 1,
-          amount: 200,
-          base_unit: 'g',
-        },
-        {
-          serving: 'package',
-          serving_quantity: 1,
-          amount: 400,
-          base_unit: 'g',
-        },
-      ],
-    });
-
-    expect(
-      result?.variants.map((variant) => variant.serving_description)
-    ).toEqual([
-      '100 g',
-      '1 package (200 g)',
-      '200 g',
-      '1 package (400 g)',
-      '400 g',
-    ]);
+    expect(Number.isFinite(result?.variants[1]?.calories ?? Number.NaN)).toBe(
+      true
+    );
   });
 
   it('authenticates and searches products with pagination', async () => {
@@ -392,7 +269,6 @@ describe('yazioService', () => {
       producer: 'Molkerei',
       serving_quantity: 100,
       base_unit: 'g',
-      is_verified: true,
       nutrients: {
         'energy.energy': 0.64,
         'nutrient.protein': 0.11,
@@ -405,31 +281,10 @@ describe('yazioService', () => {
       .mockResolvedValueOnce(
         makeFetchResponse({ access_token: 'token-1', expires_in: 3600 })
       )
-      .mockResolvedValueOnce(
-        makeFetchResponse([
-          product,
-          {
-            ...product,
-            serving: 'package',
-            serving_quantity: 1,
-            amount: 200,
-          },
-          {
-            name: 'Unmappable result without product id',
-            serving: 'package',
-            serving_quantity: 1,
-            amount: 500,
-            base_unit: 'g',
-          },
-        ])
-      )
+      .mockResolvedValueOnce(makeFetchResponse([product, product]))
       .mockResolvedValueOnce(
         makeFetchResponse({
           ...product,
-          // YAZIO search can mark a candidate verified even when the detail
-          // endpoint omits that field; search results must preserve it for the
-          // Add Food/Search screen.
-          is_verified: undefined,
           nutrients: { ...product.nutrients, 'nutrient.dietaryfiber': 0.004 },
         })
       );
@@ -460,88 +315,12 @@ describe('yazioService', () => {
       })
     );
     expect(result.foods).toHaveLength(1);
-    expect(result.foods[0]?.provider_verified).toBe(true);
-    expect(
-      result.foods[0]?.variants.map((variant) => variant.serving_description)
-    ).toEqual(['100 g', '1 package (200 g)', '200 g']);
     expect(result.pagination).toEqual({
       page: 1,
       pageSize: 1,
-      totalCount: 1,
-      hasMore: false,
+      totalCount: 2,
+      hasMore: true,
     });
-  });
-
-  it('passes Russian locale parameters (countries=RU and locales=ru_RU) when language is ru', async () => {
-    vi.mocked(global.fetch)
-      .mockResolvedValueOnce(
-        makeFetchResponse({ access_token: 'token-ru', expires_in: 3600 })
-      )
-      .mockResolvedValueOnce(makeFetchResponse([]));
-
-    await searchYazioFoods('борщ', {
-      username: 'ru-user@example.com',
-      password: 'secret',
-      ...yazioClientCredentials,
-      language: 'ru',
-    });
-
-    const searchCall = vi
-      .mocked(global.fetch)
-      .mock.calls.find(([url]) => String(url).includes('/products/search?'));
-
-    expect(searchCall).toBeDefined();
-    const searchUrl = new URL(String(searchCall?.[0]));
-    expect(searchUrl.searchParams.get('countries')).toBe('RU');
-    expect(searchUrl.searchParams.get('locales')).toBe('ru_RU');
-    expect(searchUrl.searchParams.get('query')).toBe('борщ');
-  });
-
-  it('passes Spanish locale parameters when language is es', async () => {
-    vi.mocked(global.fetch)
-      .mockResolvedValueOnce(
-        makeFetchResponse({ access_token: 'token-es', expires_in: 3600 })
-      )
-      .mockResolvedValueOnce(makeFetchResponse([]));
-
-    await searchYazioFoods('paella', {
-      username: 'es-user@example.com',
-      password: 'secret',
-      ...yazioClientCredentials,
-      language: 'es',
-    });
-
-    const searchCall = vi
-      .mocked(global.fetch)
-      .mock.calls.find(([url]) => String(url).includes('/products/search?'));
-
-    expect(searchCall).toBeDefined();
-    const searchUrl = new URL(String(searchCall?.[0]));
-    expect(searchUrl.searchParams.get('countries')).toBe('ES,MX,AR');
-    expect(searchUrl.searchParams.get('locales')).toBe('es_ES');
-  });
-  it('falls back to default locales when language is unsupported', async () => {
-    vi.mocked(global.fetch)
-      .mockResolvedValueOnce(
-        makeFetchResponse({ access_token: 'token-fallback', expires_in: 3600 })
-      )
-      .mockResolvedValueOnce(makeFetchResponse([]));
-
-    await searchYazioFoods('food', {
-      username: 'unsupported-lang@example.com',
-      password: 'secret',
-      ...yazioClientCredentials,
-      language: 'unsupported_lang',
-    });
-
-    const searchCall = vi
-      .mocked(global.fetch)
-      .mock.calls.find(([url]) => String(url).includes('/products/search?'));
-
-    expect(searchCall).toBeDefined();
-    const searchUrl = new URL(String(searchCall?.[0]));
-    expect(searchUrl.searchParams.get('countries')).toBe('DE,AT,CH,US,FR');
-    expect(searchUrl.searchParams.get('locales')).toBe('de_DE,en_US,fr_FR');
   });
 
   it('deduplicates concurrent token requests for the same YAZIO account', async () => {
@@ -668,7 +447,6 @@ describe('yazioService', () => {
             producer: 'Brand',
             serving_quantity: 100,
             base_unit: 'g',
-            is_verified: true,
           },
         ])
       )
@@ -707,69 +485,7 @@ describe('yazioService', () => {
     expect(result?.provider_external_id).toBe(
       '7c91b431-a2b5-4f11-8f52-f346dc941f2a'
     );
-    expect(result?.provider_verified).toBe(true);
     expect(result?.barcode).toBe('0094395000172');
-  });
-
-  it('merges every barcode candidate portion for the matching YAZIO product', async () => {
-    const productId = 'multi-serving-barcode-product';
-    vi.mocked(global.fetch)
-      .mockResolvedValueOnce(
-        makeFetchResponse({ access_token: 'token-multi', expires_in: 3600 })
-      )
-      .mockResolvedValueOnce(
-        makeFetchResponse([
-          {
-            product_id: productId,
-            name: 'Multi Portion Pudding',
-            serving: 'serving',
-            serving_quantity: 1,
-            amount: 200,
-            base_unit: 'g',
-            is_verified: true,
-          },
-          {
-            product_id: productId,
-            name: 'Multi Portion Pudding',
-            serving: 'package',
-            serving_quantity: 1,
-            amount: 400,
-            base_unit: 'g',
-            is_verified: true,
-          },
-        ])
-      )
-      .mockResolvedValueOnce(
-        makeFetchResponse({
-          id: productId,
-          name: 'Multi Portion Pudding',
-          base_unit: 'g',
-          servings: [],
-          eans: ['4008400401621'],
-          nutrients: {
-            'energy.energy': 0.81,
-            'nutrient.protein': 0.05,
-            'nutrient.carb': 0.1,
-            'nutrient.fat': 0.02,
-          },
-        })
-      );
-
-    const result = await searchYazioByBarcode('4008400401621', {
-      username: 'barcode-portions@example.com',
-      password: 'secret',
-      ...yazioClientCredentials,
-    });
-
-    expect(
-      result?.variants.map((variant) => variant.serving_description)
-    ).toEqual([
-      '100 g',
-      '1 serving (200 g)',
-      '200 g',
-      '1 package (400 g)',
-      '400 g',
-    ]);
   });
 
   it('skips non-matching detail EANs and returns null when no candidate matches', async () => {
@@ -929,63 +645,5 @@ describe('yazioService', () => {
     });
 
     expect(global.fetch).not.toHaveBeenCalled();
-  });
-
-  describe('localization', () => {
-    beforeEach(() => {
-      vi.mocked(global.fetch)
-        .mockResolvedValueOnce(
-          makeFetchResponse({ access_token: 'local-token', expires_in: 3600 })
-        )
-        .mockResolvedValue(makeFetchResponse([]));
-    });
-
-    it('defaults to multi-country list when no language is specified', async () => {
-      await searchYazioFoods('test', { ...yazioClientCredentials });
-      expect(global.fetch).toHaveBeenLastCalledWith(
-        expect.stringContaining(
-          'countries=DE%2CAT%2CCH%2CUS%2CFR&locales=de_DE%2Cen_US%2Cfr_FR'
-        ),
-        expect.any(Object)
-      );
-    });
-
-    it('resolves supported languages to specific countries and locales', async () => {
-      await searchYazioFoods('test', {
-        ...yazioClientCredentials,
-        language: 'de',
-      });
-      expect(global.fetch).toHaveBeenLastCalledWith(
-        expect.stringContaining('countries=DE%2CAT%2CCH&locales=de_DE'),
-        expect.any(Object)
-      );
-    });
-
-    it('falls back to default country list when language is unsupported', async () => {
-      await searchYazioFoods('test', {
-        ...yazioClientCredentials,
-        language: 'unsupported_lang',
-      });
-      expect(global.fetch).toHaveBeenLastCalledWith(
-        expect.stringContaining(
-          'countries=DE%2CAT%2CCH%2CUS%2CFR&locales=de_DE%2Cen_US%2Cfr_FR'
-        ),
-        expect.any(Object)
-      );
-    });
-
-    it('allows overriding countries and locales', async () => {
-      await searchYazioFoods('test', {
-        ...yazioClientCredentials,
-        language: 'fr',
-        countries: ['JP'],
-        locales: ['ja_JP'],
-      });
-
-      expect(global.fetch).toHaveBeenLastCalledWith(
-        expect.stringContaining('countries=JP&locales=ja_JP'),
-        expect.any(Object)
-      );
-    });
   });
 });

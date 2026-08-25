@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,20 +12,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
-import { Plus, X, Edit, Link2, Clock } from 'lucide-react';
+import { Plus, X, Edit } from 'lucide-react';
 import { useActiveUser } from '@/contexts/ActiveUserContext';
 import { usePreferences } from '@/contexts/PreferencesContext';
 import { toast } from '@/hooks/use-toast';
 import { warn, error } from '@/utils/logging';
 import type { Food, FoodVariant, GlycemicIndex } from '@/types/food';
-import type { Meal, MealFood, MealPayload } from '@/types/meal';
+import type { MealFood, MealPayload } from '@/types/meal';
 import FoodUnitSelector from '@/components/FoodUnitSelector';
 import FoodSearchDialog from './FoodSearch/FoodSearchDialog';
-import MealUnitSelector from '@/pages/Foods/MealUnitSelector';
-import LinkedMealPreviewDialog from './LinkedMealPreviewDialog';
 import { useQueryClient } from '@tanstack/react-query';
-import { toHourMinute, userHourMinute } from '@workspace/shared';
 import {
   mealViewOptions,
   useCreateMealMutation,
@@ -41,17 +37,10 @@ import {
   useUpdateFoodEntryMealMutation,
 } from '@/hooks/Diary/useFoodEntries';
 import { Textarea } from '@/components/ui/textarea';
-import { FoodImagePicker } from './FoodSearch/FoodImagePicker';
-import {
-  splitPickerImages,
-  toSavedImages,
-  type PickerImage,
-} from '@/utils/imagePickerItems';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface MealBuilderProps {
   mealId?: string; // Optional: if editing an existing meal template
-  duplicateFromMealId?: string; // Optional: seed a NEW meal from an existing one (Duplicate action)
   onCancel?: () => void;
   initialFoods?: MealFood[]; // New prop for food diary entries
   source?: 'meal-management' | 'food-diary'; // New prop to differentiate context
@@ -60,40 +49,13 @@ interface MealBuilderProps {
   foodEntryMealType?: string; // New prop for food diary editing
   initialServingSize?: number;
   initialServingUnit?: string;
-  // May be async: the diary edit dialog persists staged entry photos here, so
-  // callers must await it rather than floating the promise.
-  onSave?: () => void | Promise<void>;
-  initialEntryTime?: string | null;
+  onSave?: () => void;
 }
 
 const MEAL_SERVING_PRECISION = 6;
 
-// Full nutrient snapshot key set (mirrors meal_foods columns), independent of
-// the user's visible-nutrient display preferences — used when aggregating a
-// linked sub-meal's full-recipe totals so the stored snapshot is complete.
-const ALL_NUTRIENT_KEYS = [
-  'calories',
-  'protein',
-  'carbs',
-  'fat',
-  'saturated_fat',
-  'polyunsaturated_fat',
-  'monounsaturated_fat',
-  'trans_fat',
-  'cholesterol',
-  'sodium',
-  'potassium',
-  'dietary_fiber',
-  'sugars',
-  'vitamin_a',
-  'vitamin_c',
-  'calcium',
-  'iron',
-] as const;
-
 const MealBuilder: React.FC<MealBuilderProps> = ({
   mealId,
-  duplicateFromMealId,
   onCancel,
   initialFoods,
   source = 'meal-management', // Default to meal-management
@@ -103,7 +65,6 @@ const MealBuilder: React.FC<MealBuilderProps> = ({
   initialServingSize,
   initialServingUnit,
   onSave,
-  initialEntryTime,
 }) => {
   const { activeUserId } = useActiveUser();
   const {
@@ -111,7 +72,6 @@ const MealBuilder: React.FC<MealBuilderProps> = ({
     nutrientDisplayPreferences,
     energyUnit,
     convertEnergy,
-    timezone,
   } = usePreferences();
   const { t } = useTranslation();
 
@@ -134,13 +94,7 @@ const MealBuilder: React.FC<MealBuilderProps> = ({
     [quickInfoPreferences]
   );
   const [mealName, setMealName] = useState('');
-  // One ordered list of saved images and staged files, so the user can drag a
-  // new photo ahead of an existing one before saving.
-  const [mealImageItems, setMealImageItems] = useState<PickerImage[]>([]);
   const [mealDescription, setMealDescription] = useState('');
-  const [entryTime, setEntryTime] = useState<string>(
-    toHourMinute(initialEntryTime) || ''
-  );
   const [isPublic, setIsPublic] = useState(false);
   const [servingSize, setServingSize] = useState<string>(
     initialServingSize?.toString() || '1'
@@ -170,21 +124,6 @@ const MealBuilder: React.FC<MealBuilderProps> = ({
     mealFood: MealFood;
     index: number;
   } | null>(null);
-  // Linked-sub-meal ingredient flow. A meal ingredient reuses MealUnitSelector
-  // (quantity/unit picker) instead of FoodUnitSelector, and edits/preview need
-  // the full child Meal (not just the row's cached snapshot).
-  const [isMealUnitSelectorOpen, setIsMealUnitSelectorOpen] = useState(false);
-  const [
-    selectedMealForQuantitySelection,
-    setSelectedMealForQuantitySelection,
-  ] = useState<Meal | null>(null);
-  const [editingMealComponent, setEditingMealComponent] = useState<{
-    mealFood: MealFood;
-    index: number;
-  } | null>(null);
-  const [viewingLinkedMealId, setViewingLinkedMealId] = useState<string | null>(
-    null
-  );
   // State to hold template info for scaling logic in food diary context
   const [templateInfo, setTemplateInfo] = useState<{
     id: string | null;
@@ -205,40 +144,17 @@ const MealBuilder: React.FC<MealBuilderProps> = ({
   const { mutateAsync: createMeal } = useCreateMealMutation();
   const { mutateAsync: createFoodEntryMeal } = useCreateFoodEntryMealMutation();
   const { mutateAsync: updateFoodEntryMeal } = useUpdateFoodEntryMealMutation();
-  // Tracks which source (meal/entry) has already seeded the form, so the load
-  // effect seeds once per source and does NOT re-run when an unrelated
-  // dependency changes (language, logging level, a new initialFoods array
-  // reference, etc.), which would otherwise wipe the user's in-progress edits.
-  // A ref (not state) so updating it neither triggers a render nor needs to be
-  // an effect dependency.
-  const loadedIdRef = useRef<string | null>(null);
-  // String value (not the `t` function) so it is referentially stable across
-  // renders. It only changes when the active language changes, and even then
-  // the loadedId guard below prevents a re-seed.
-  const copySuffix = t('mealManagement.copySuffix', '(copy)');
   useEffect(() => {
     const fetchMealData = async () => {
       if (!activeUserId) return;
 
-      // Duplicate reuses the edit fetch/seed path: read the source meal, then
-      // override name + privacy. mealId stays undefined, so the save routes
-      // through createMeal and assigns fresh meal/meal_food ids, leaving the
-      // original untouched (no server change needed). createMeal has no name
-      // dedup, so there is no barcode-style trap to avoid here.
-      const sourceMealId = mealId ?? duplicateFromMealId;
-      const isDuplicate = !mealId && !!duplicateFromMealId;
-      if (source === 'meal-management' && sourceMealId) {
+      if (source === 'meal-management' && mealId) {
         try {
-          const meal = await queryClient.fetchQuery(
-            mealViewOptions(sourceMealId)
-          );
+          const meal = await queryClient.fetchQuery(mealViewOptions(mealId));
           if (meal) {
-            setMealName(isDuplicate ? `${meal.name} ${copySuffix}` : meal.name);
-            setMealImageItems(toSavedImages(meal.images));
+            setMealName(meal.name);
             setMealDescription(meal.description || '');
-            // A duplicate is always a fresh private meal owned by the current
-            // user, even when cloning a Public, Family, or System meal.
-            setIsPublic(isDuplicate ? false : meal.is_public || false);
+            setIsPublic(meal.is_public || false);
             const loadedServingSize = meal.serving_size ?? 1;
             const loadedTotalServings = meal.total_servings ?? 1;
             setServingSize(loadedServingSize.toString());
@@ -344,7 +260,6 @@ const MealBuilder: React.FC<MealBuilderProps> = ({
           const meal = await queryClient.fetchQuery(mealViewOptions(mealId));
           if (meal) {
             setMealName(meal.name);
-            setMealImageItems(toSavedImages(meal.images));
             setMealDescription(meal.description || '');
             setIsPublic(false); // Logged meals are personal copies
             // Prefill Quantity Consumed with one serving's worth (meal.serving_size).
@@ -391,23 +306,12 @@ const MealBuilder: React.FC<MealBuilderProps> = ({
         if (initialServingUnit) setServingUnit(initialServingUnit);
       }
     };
-    // Stable identity of the source to seed from. UUIDs never collide with the
-    // 'initial' sentinel used for the prop-seeded (food-diary quick-add) path.
-    const currentId =
-      mealId ??
-      duplicateFromMealId ??
-      foodEntryId ??
-      (initialFoods ? 'initial' : null);
-    if (activeUserId && currentId && loadedIdRef.current !== currentId) {
-      // Mark as seeded before the async fetch so a re-render mid-fetch does not
-      // kick off a second seed for the same source.
-      loadedIdRef.current = currentId;
+    if (activeUserId && (mealId || initialFoods || foodEntryId)) {
+      // Check for foodEntryId
       fetchMealData();
     }
   }, [
     mealId,
-    duplicateFromMealId,
-    copySuffix,
     activeUserId,
     loggingLevel,
     source,
@@ -425,131 +329,13 @@ const MealBuilder: React.FC<MealBuilderProps> = ({
     setIsFoodUnitSelectorOpen(true);
   };
 
-  // Aggregates a meal's FULL recipe nutrition from its (already server-resolved,
-  // including any nested linked meals) foods list, using the same
-  // quantity/serving_size scaling as calculateMealNutrition below. Shaped so
-  // storing it on the parent's linked-meal row lets the existing per-row
-  // nutrition math (value * quantity / serving_size) work unchanged.
-  const computeMealFullRecipeTotals = (meal: Meal) => {
-    const totals: Record<string, number> = {};
-    const customTotals: Record<string, number> = {};
-    (meal.foods || []).forEach((component) => {
-      const scale = component.quantity / (component.serving_size || 1);
-      ALL_NUTRIENT_KEYS.forEach((key) => {
-        const val = component[key as keyof MealFood];
-        if (typeof val === 'number') {
-          totals[key] = (totals[key] || 0) + val * scale;
-        }
-      });
-      if (component.custom_nutrients) {
-        Object.entries(component.custom_nutrients).forEach(([name, value]) => {
-          customTotals[name] =
-            (customTotals[name] || 0) +
-            (typeof value === 'number' ? value : Number(value) || 0) * scale;
-        });
-      }
-    });
-    return { ...totals, custom_nutrients: customTotals };
-  };
-
-  const handleAddMealToMeal = (meal: Meal) => {
-    if (mealId && meal.id === mealId) {
-      toast({
-        title: t('mealBuilder.errorTitle', 'Error'),
-        description: t(
-          'mealBuilder.cannotAddSelfAsIngredient',
-          'A meal cannot contain itself.'
-        ),
-        variant: 'destructive',
-      });
-      return;
-    }
-    setSelectedMealForQuantitySelection(meal);
-    setEditingMealComponent(null);
-    setIsMealUnitSelectorOpen(true);
-  };
-
-  const handleEditMealComponentInMeal = async (index: number) => {
-    const component = mealFoods[index];
-    if (!component?.child_meal_id) return;
-    try {
-      const fullMeal = await queryClient.fetchQuery(
-        mealViewOptions(component.child_meal_id)
-      );
-      if (!fullMeal) return;
-      setSelectedMealForQuantitySelection(fullMeal);
-      setEditingMealComponent({ mealFood: component, index });
-      setIsMealUnitSelectorOpen(true);
-    } catch (err) {
-      error(loggingLevel, 'Failed to fetch linked meal for editing:', err);
-    }
-  };
-
-  const handleMealQuantitySelected = (
-    meal: Meal,
-    quantity: number,
-    unit: string
-  ) => {
-    const totals = computeMealFullRecipeTotals(meal);
-    const isServingUnitMismatch =
-      unit === 'serving' &&
-      meal.serving_unit &&
-      meal.serving_unit !== 'serving';
-    const resolvedQuantity = isServingUnitMismatch
-      ? quantity * (meal.serving_size || 1)
-      : quantity;
-    const resolvedUnit = isServingUnitMismatch
-      ? meal.serving_unit || 'serving'
-      : unit;
-
-    const updatedComponent: MealFood = {
-      item_type: 'meal',
-      child_meal_id: meal.id,
-      child_meal_name: meal.name,
-      child_meal_serving_size: meal.serving_size,
-      child_meal_serving_unit: meal.serving_unit,
-      child_meal_total_servings: meal.total_servings,
-      food_name: meal.name,
-      quantity: resolvedQuantity,
-      unit: resolvedUnit,
-      serving_size: (meal.serving_size || 1) * (meal.total_servings || 1),
-      serving_unit: meal.serving_unit,
-      ...totals,
-    };
-
-    if (editingMealComponent) {
-      setMealFoods((prev) => {
-        const next = [...prev];
-        next[editingMealComponent.index] = updatedComponent;
-        return next;
-      });
-    } else {
-      setMealFoods((prev) => [...prev, updatedComponent]);
-    }
-    toast({
-      title: t('mealBuilder.successTitle', 'Success'),
-      description: t('mealBuilder.mealAddedToMeal', {
-        mealName: meal.name,
-        defaultValue: `${meal.name} added to meal.`,
-      }),
-    });
-
-    setIsMealUnitSelectorOpen(false);
-    setSelectedMealForQuantitySelection(null);
-    setEditingMealComponent(null);
-  };
-
   const handleEditFoodInMeal = (index: number) => {
     const mealFoodToEdit = mealFoods[index];
-    if (mealFoodToEdit?.item_type === 'meal') {
-      handleEditMealComponentInMeal(index);
-      return;
-    }
     if (mealFoodToEdit) {
       // Create a dummy Food object for FoodUnitSelector
       // This is a workaround as FoodUnitSelector expects a Food object
       const dummyFood: Food = {
-        id: mealFoodToEdit.food_id || '',
+        id: mealFoodToEdit.food_id,
         name: mealFoodToEdit.food_name || '',
         is_custom: false, // Assuming foods added to meals are not always custom, or this property is not relevant for editing quantity/unit
         default_variant: {
@@ -744,11 +530,6 @@ const MealBuilder: React.FC<MealBuilderProps> = ({
           )
         );
       }
-      // Split the ordered picker list into the wire format: an order array
-      // with __new__<n> placeholders, plus the files in matching index order.
-      const { order: mealImageOrder, files: mealImageFiles } =
-        splitPickerImages(mealImageItems);
-
       const mealData: MealPayload = {
         name: mealName,
         description: mealDescription,
@@ -756,11 +537,8 @@ const MealBuilder: React.FC<MealBuilderProps> = ({
         serving_size: persistedServingSize,
         serving_unit: servingUnit,
         total_servings: persistedTotalServings,
-        images: mealImageOrder,
         foods: mealFoods.map((mf) => ({
-          item_type: mf.item_type || 'food',
           food_id: mf.food_id,
-          child_meal_id: mf.child_meal_id,
           food_name: mf.food_name,
           variant_id: mf.variant_id,
           quantity: mf.quantity,
@@ -791,18 +569,11 @@ const MealBuilder: React.FC<MealBuilderProps> = ({
 
       try {
         if (mealId) {
-          await updateMeal({
-            mealId,
-            mealPayload: mealData,
-            imageFiles: mealImageFiles,
-          });
+          await updateMeal({ mealId, mealPayload: mealData });
         } else {
-          await createMeal({
-            mealPayload: mealData,
-            imageFiles: mealImageFiles,
-          });
+          await createMeal({ mealPayload: mealData });
         }
-        await onSave?.();
+        onSave?.();
       } catch (err) {
         error(loggingLevel, 'Error saving meal:', err);
       }
@@ -829,7 +600,6 @@ const MealBuilder: React.FC<MealBuilderProps> = ({
         quantity: parseFloat(servingSize) || 1,
         unit: servingUnit,
         foods: mealFoods,
-        entry_time: entryTime || null,
       };
 
       console.log('[MealBuilder] Saving food diary meal:', {
@@ -849,7 +619,7 @@ const MealBuilder: React.FC<MealBuilderProps> = ({
         } else {
           await createFoodEntryMeal(foodEntryMealData);
         }
-        await onSave?.();
+        onSave?.();
       } catch (err) {
         error(loggingLevel, 'Error updating food diary meal entry:', err);
       }
@@ -949,14 +719,6 @@ const MealBuilder: React.FC<MealBuilderProps> = ({
           disabled={source === 'food-diary'} // Disable description editing for food diary entries
         />
       </div>
-      {source !== 'food-diary' && (
-        <FoodImagePicker
-          idPrefix="meal"
-          items={mealImageItems}
-          onItemsChange={setMealImageItems}
-          labelText={t('mealBuilder.mealImages', 'Images')}
-        />
-      )}
       <div className="flex items-center space-x-2">
         <Checkbox
           id="isPublic"
@@ -996,31 +758,7 @@ const MealBuilder: React.FC<MealBuilderProps> = ({
                   className="flex flex-col p-3 border rounded-md space-y-2"
                 >
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      {mf.item_type === 'meal' ? (
-                        <button
-                          type="button"
-                          className="font-medium underline decoration-dotted underline-offset-2 text-left"
-                          onClick={() =>
-                            mf.child_meal_id &&
-                            setViewingLinkedMealId(mf.child_meal_id)
-                          }
-                        >
-                          {mf.child_meal_name || mf.food_name}
-                        </button>
-                      ) : (
-                        <span className="font-medium">{mf.food_name}</span>
-                      )}
-                      {mf.item_type === 'meal' && (
-                        <Badge
-                          variant="secondary"
-                          className="flex items-center gap-1"
-                        >
-                          <Link2 className="h-3 w-3" />
-                          {t('mealBuilder.linkedMealBadge', 'Linked meal')}
-                        </Badge>
-                      )}
-                    </div>
+                    <span className="font-medium">{mf.food_name}</span>
                     <div className="flex items-center space-x-1">
                       <Button
                         variant="ghost"
@@ -1095,8 +833,8 @@ const MealBuilder: React.FC<MealBuilderProps> = ({
         )}
 
         {source === 'food-diary' ? (
-          // Diary mode: keep the existing "Quantity Consumed" + locked unit pair + time.
-          <div className="grid grid-cols-3 gap-4">
+          // Diary mode: keep the existing "Quantity Consumed" + locked unit pair.
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="servingSize">
                 {t('mealBuilder.consumedQuantity', 'Quantity Consumed')}
@@ -1133,43 +871,6 @@ const MealBuilder: React.FC<MealBuilderProps> = ({
                   <SelectItem value="piece">piece</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="entryTime">Time (optional)</Label>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setEntryTime('')}
-                    disabled={!entryTime}
-                    className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-3 py-1 text-sm font-medium text-muted-foreground shadow-sm hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-40 disabled:pointer-events-none"
-                    title="Clear time"
-                  >
-                    <X className="h-4 w-4" />
-                    Clear
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const { hour, minute } = userHourMinute(timezone);
-                      setEntryTime(
-                        `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
-                      );
-                    }}
-                    className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-3 py-1 text-sm font-medium text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors"
-                    title="Set to current local time"
-                  >
-                    <Clock className="h-4 w-4" />
-                    Now
-                  </button>
-                </div>
-              </div>
-              <Input
-                id="entryTime"
-                type="time"
-                value={entryTime}
-                onChange={(e) => setEntryTime(e.target.value)}
-              />
             </div>
           </div>
         ) : (
@@ -1359,12 +1060,7 @@ const MealBuilder: React.FC<MealBuilderProps> = ({
 
       <div className="space-y-4">
         <h3 className="text-lg font-semibold">
-          {source === 'meal-management'
-            ? t(
-                'mealBuilder.addFoodOrMealToMealTitle',
-                'Add Food or Meal to Meal'
-              )
-            : t('mealBuilder.addFoodToMealTitle', 'Add Food to Meal')}
+          {t('mealBuilder.addFoodToMealTitle', 'Add Food to Meal')}
         </h3>
         <Button onClick={() => setShowFoodSearchDialog(true)}>
           <Plus className="h-4 w-4 mr-2" />{' '}
@@ -1387,67 +1083,24 @@ const MealBuilder: React.FC<MealBuilderProps> = ({
       <FoodSearchDialog
         open={showFoodSearchDialog}
         onOpenChange={setShowFoodSearchDialog}
-        // Linked sub-meals are a meal-template (recipe) concept: once a meal is
-        // logged to the diary it is already flattened to leaf foods, so linking
-        // another meal from the food-diary editor doesn't fit that model.
-        hideMealTab={source === 'food-diary'}
         onFoodSelect={(item, type) => {
           setShowFoodSearchDialog(false);
           if (type === 'food') {
             handleAddFoodToMeal(item as Food);
-          } else if (source === 'meal-management') {
-            handleAddMealToMeal(item as Meal);
           } else {
+            // Handle meal selection if needed, though current task is about foods
+            // For now, we'll just log a warning or ignore
             warn(
               loggingLevel,
-              'Meal selected in FoodSearchDialog outside meal-management context; ignoring.'
+              'Meal selected in FoodSearchDialog, but MealBuilder expects Food.'
             );
           }
         }}
         title={t('mealBuilder.addFoodToMealDialogTitle', 'Add Food to Meal')}
         description={t(
           'mealBuilder.addFoodToMealDialogDescription',
-          'Search for a food or a saved meal to add as an ingredient.'
+          'Search for a food to add to this meal.'
         )}
-      />
-
-      {selectedMealForQuantitySelection && (
-        <MealUnitSelector
-          meal={selectedMealForQuantitySelection}
-          open={isMealUnitSelectorOpen}
-          onOpenChange={setIsMealUnitSelectorOpen}
-          onSelect={handleMealQuantitySelected}
-          initialQuantity={editingMealComponent?.mealFood.quantity}
-          initialUnit={editingMealComponent?.mealFood.unit}
-          title={
-            editingMealComponent
-              ? t('mealBuilder.editLinkedMealTitle', {
-                  mealName: selectedMealForQuantitySelection.name,
-                  defaultValue: `Edit ${selectedMealForQuantitySelection.name}`,
-                })
-              : t('mealBuilder.addLinkedMealTitle', {
-                  mealName: selectedMealForQuantitySelection.name,
-                  defaultValue: `Add ${selectedMealForQuantitySelection.name} to meal`,
-                })
-          }
-          description={t(
-            'mealBuilder.addLinkedMealDescription',
-            'Select how much of this sub-meal to include as an ingredient.'
-          )}
-          confirmLabel={
-            editingMealComponent
-              ? t('mealBuilder.updateLinkedMeal', 'Update')
-              : t('mealBuilder.addLinkedMeal', 'Add to Meal')
-          }
-        />
-      )}
-
-      <LinkedMealPreviewDialog
-        mealId={viewingLinkedMealId}
-        open={!!viewingLinkedMealId}
-        onOpenChange={(open) => {
-          if (!open) setViewingLinkedMealId(null);
-        }}
       />
 
       <div className="flex justify-end space-x-2">

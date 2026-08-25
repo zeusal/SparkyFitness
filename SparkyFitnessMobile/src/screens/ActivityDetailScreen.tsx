@@ -1,6 +1,5 @@
-import React, { useCallback, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { View, Text, TouchableOpacity } from 'react-native';
+import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { Platform, View, Text, ActivityIndicator, TouchableOpacity } from 'react-native';
 import FadeView from '../components/FadeView';
 import EditableSetList from '../components/EditableSetList';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
@@ -12,17 +11,9 @@ import FormInput from '../components/FormInput';
 import Button from '../components/ui/Button';
 import SafeImage from '../components/SafeImage';
 import { useActiveWorkoutBarPadding } from '../components/ActiveWorkoutBar';
-import { useNativeIOSHeadersActive } from '../services/nativeTabBarPreference';
-import { useScreenHeader, SAVE_LABEL, SAVING_LABEL } from '../hooks/useScreenHeader';
-import {
-  buildActivitySetsPayload,
-  effectiveSetDurationSec,
-  getSourceLabel,
-  getWorkoutSummary,
-  isCardioModality,
-  isDurationModality,
-  resolveSnapshotModality,
-} from '../utils/workoutSession';
+import { createNativeHeaderTextButtonItem } from '../utils/nativeHeaderItems';
+import { useHeaderActionColors } from '../hooks/useHeaderActionColors';
+import { getSourceLabel, getWorkoutSummary } from '../utils/workoutSession';
 import {
   useDeleteExerciseEntry,
   useUpdateExerciseEntry,
@@ -33,22 +24,19 @@ import { syncExerciseSessionInCache } from '../hooks/syncExerciseSessionInCache'
 import { useActivityForm, getActivityDraftSubmission } from '../hooks/useActivityForm';
 import CalendarSheet, { type CalendarSheetRef } from '../components/CalendarSheet';
 import { normalizeDate, formatDate, formatDateLabel } from '../utils/dateUtils';
-import { distanceFromKm, weightFromKg } from '../utils/unitConversions';
-import { formatLocalizedNumber } from '../localization';
+import { distanceFromKm, weightFromKg, weightToKg } from '../utils/unitConversions';
+import { parseDecimalInput } from '../utils/numericInput';
 import Toast from 'react-native-toast-message';
 import { addLog } from '../services/LogService';
 import type { RootStackScreenProps } from '../types/navigation';
 import type { WorkoutDraftSet } from '../types/drafts';
 import type { ExerciseEntrySetResponse } from '@workspace/shared';
-import { canEditGroupedWorkout } from '@workspace/shared';
 
 type Props = RootStackScreenProps<'ActivityDetail'>;
 
 type EditableField = 'name' | 'duration' | 'calories' | 'distance' | 'avgHeartRate' | 'notes';
 
 const ActivityDetailScreen: React.FC<Props> = ({ navigation, route }) => {
-  const { t , i18n: translationI18n } = useTranslation();
-  const dateLocale = translationI18n.language.startsWith('pl') ? 'pl-PL' : 'en-US';
   const [session, setSession] = useState(route.params.session);
   const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
@@ -59,19 +47,19 @@ const ActivityDetailScreen: React.FC<Props> = ({ navigation, route }) => {
 
   const calendarSheetRef = useRef<CalendarSheetRef>(null);
 
-  const [accentPrimary, borderSubtle] = useCSSVariable([
+  const [accentPrimary, textPrimary, borderSubtle] = useCSSVariable([
     '--color-accent-primary',
+    '--color-text-primary',
     '--color-border-subtle',
-  ]) as [string, string];
-  const usesNativeHeader = useNativeIOSHeadersActive();
+  ]) as [string, string, string];
+  const { defaultColor: headerActionColor, saveColor: headerSaveColor, headerTintColor } = useHeaderActionColors();
 
   const { getImageSource } = useExerciseImageSource();
 
-  const sourceLabel = getSourceLabel(session.source);
-  const canEditSource = canEditGroupedWorkout(session.source);
+  const { label: sourceLabel, isSparky } = getSourceLabel(session.source);
   const entryDate = session.entry_date ?? '';
   const normalizedDate = normalizeDate(entryDate);
-  const { name, duration, calories } = getWorkoutSummary(session, t);
+  const { name, duration, calories } = getWorkoutSummary(session);
 
   const firstImage = session.exercise_snapshot?.images?.[0];
   const firstImageSource = firstImage ? getImageSource(firstImage) : null;
@@ -101,17 +89,9 @@ const ActivityDetailScreen: React.FC<Props> = ({ navigation, route }) => {
   const originalSetsRef = useRef<Map<string, ExerciseEntrySetResponse>>(new Map());
   const [draftSets, setDraftSets] = useState<WorkoutDraftSet[]>([]);
   const [activeSetKey, setActiveSetKey] = useState<string | null>(null);
-  const [activeSetField, setActiveSetField] = useState<'weight' | 'reps' | 'duration'>('weight');
-  const modality = resolveSnapshotModality(session.exercise_snapshot);
-  const durationLike = isDurationModality(modality);
-  const setFirstField = durationLike ? ('duration' as const) : ('weight' as const);
-  // A ≤1-set cardio entry is edited through the entry-level Duration/Distance
-  // form; its single backing set is written from those values at save. Only
-  // multi-set cardio (imports, future intervals) surfaces a set table.
-  const cardioEffort = isCardioModality(modality) && session.sets.length <= 1;
+  const [activeSetField, setActiveSetField] = useState<'weight' | 'reps'>('weight');
   const hasSets = session.sets.length > 1
-    || (!cardioEffort
-      && session.sets.some(s => s.weight != null || s.reps != null || s.duration != null));
+    || session.sets.some(s => s.weight != null || s.reps != null);
 
   const {
     state: formState,
@@ -139,10 +119,6 @@ const ActivityDetailScreen: React.FC<Props> = ({ navigation, route }) => {
           ? String(parseFloat(weightFromKg(set.weight, weightUnit).toFixed(1)))
           : '',
         reps: set.reps != null ? String(set.reps) : '',
-        duration: set.duration,
-        distance: set.distance != null
-          ? String(parseFloat(distanceFromKm(set.distance, distanceUnit).toFixed(2)))
-          : '',
       };
     });
     originalSetsRef.current = originals;
@@ -160,49 +136,26 @@ const ActivityDetailScreen: React.FC<Props> = ({ navigation, route }) => {
   };
 
   // --- Set editing callbacks ---
-  // The React Compiler can't preserve this manual memoization because the
-  // callback mutates nextSetIdRef to generate unique client ids. The useCallback
-  // is still honored at runtime; the compiler just skips optimizing this
-  // component. Suppress the bailout rather than rewrite the working id counter.
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const addDraftSet = useCallback((_exerciseId?: string) => {
     const id = `set-${nextSetIdRef.current++}`;
     setDraftSets(prev => {
       const lastSet = prev[prev.length - 1];
-      return [
-        ...prev,
-        {
-          clientId: id,
-          weight: lastSet?.weight ?? '',
-          reps: lastSet?.reps ?? '',
-          duration: lastSet?.duration ?? null,
-          // A distance is a recorded result, never structure to clone.
-          distance: '',
-        },
-      ];
+      return [...prev, { clientId: id, weight: lastSet?.weight ?? '', reps: lastSet?.reps ?? '' }];
     });
     setActiveSetKey(`${SET_CLIENT_ID_PREFIX}:${id}`);
-    setActiveSetField(setFirstField);
-  }, [setFirstField]);
+    setActiveSetField('weight');
+  }, []);
 
   const removeDraftSet = useCallback((_exerciseId: string, setClientId: string) => {
     setDraftSets(prev => prev.filter(s => s.clientId !== setClientId));
     setActiveSetKey(null);
   }, []);
 
-  const updateDraftSetField = useCallback((_exerciseId: string, setClientId: string, field: 'weight' | 'reps' | 'duration', value: string) => {
-    setDraftSets(prev => prev.map(s => {
-      if (s.clientId !== setClientId) return s;
-      // Drafts hold duration as `number | null`, mirroring the workout slice.
-      if (field === 'duration') {
-        const parsed = parseInt(value, 10);
-        return { ...s, duration: Number.isNaN(parsed) ? null : parsed };
-      }
-      return { ...s, [field]: value };
-    }));
+  const updateDraftSetField = useCallback((_exerciseId: string, setClientId: string, field: 'weight' | 'reps', value: string) => {
+    setDraftSets(prev => prev.map(s => s.clientId === setClientId ? { ...s, [field]: value } : s));
   }, []);
 
-  const activateSet = useCallback((key: string, field: 'weight' | 'reps' | 'duration') => {
+  const activateSet = useCallback((key: string, field: 'weight' | 'reps') => {
     setActiveSetKey(key);
     setActiveSetField(field);
   }, []);
@@ -216,20 +169,25 @@ const ActivityDetailScreen: React.FC<Props> = ({ navigation, route }) => {
 
     const dateChanged = submission.entryDate !== normalizedDate;
 
-    const setsPayload = buildActivitySetsPayload(
-      draftSets,
-      originalSetsRef.current,
-      weightUnit,
-      modality,
-      cardioEffort
-        ? {
-            durationSec: submission.hasDuration
-              ? Math.round(submission.durationMinutes * 60)
-              : null,
-            distanceKm: submission.distanceKm,
-          }
-        : undefined,
-    );
+    const setsPayload = draftSets.map((set, index) => {
+      const w = parseDecimalInput(set.weight);
+      const r = parseInt(set.reps, 10);
+      const original = originalSetsRef.current.get(set.clientId);
+      return {
+        ...(original && {
+          id: original.id,
+          set_type: original.set_type,
+          duration: original.duration,
+          rest_time: original.rest_time,
+          notes: original.notes,
+          rpe: original.rpe,
+        }),
+        set_type: original?.set_type ?? 'Working Set',
+        set_number: index + 1,
+        weight: isNaN(w) ? null : weightToKg(w, weightUnit),
+        reps: isNaN(r) ? null : r,
+      };
+    });
 
     const payload = {
       exercise_id: submission.exerciseId,
@@ -267,7 +225,7 @@ const ActivityDetailScreen: React.FC<Props> = ({ navigation, route }) => {
       originalSetsRef.current.clear();
     } catch (error) {
       addLog(`Failed to save activity: ${error}`, 'ERROR');
-      Toast.show({ type: 'error', text1: t('activityDetail.errors.saveFailed', { defaultValue: 'Failed to save activity' }), text2: t('common.tryAgain', { defaultValue: 'Please try again.' }) });
+      Toast.show({ type: 'error', text1: 'Failed to save activity', text2: 'Please try again.' });
     }
   };
 
@@ -302,24 +260,22 @@ const ActivityDetailScreen: React.FC<Props> = ({ navigation, route }) => {
     if (isEditing || duration > 0) {
       stats.push({
         value: isEditing
-          ? (formState.duration || '-')
-          : (duration > 0
-              ? formatLocalizedNumber(duration, { maximumFractionDigits: 2 })
-              : '-'),
-        label: t('activityDetail.stats.duration', { defaultValue: 'Duration' }),
+          ? (formState.duration || '—')
+          : (duration > 0 ? String(Math.round(duration)) : '—'),
+        label: 'Duration',
         editKey: 'duration',
         editSuffix: 'min',
-        keyboardType: 'decimal-pad',
+        keyboardType: 'numeric',
       });
     }
     if (isEditing || calories > 0) {
       stats.push({
         value: isEditing
-          ? (formState.calories || '-')
+          ? (formState.calories || '—')
           : (calories > 0
-              ? formatLocalizedNumber(calories, { maximumFractionDigits: 1 })
-              : '-'),
-        label: t('activityDetail.stats.calories', { defaultValue: 'Calories' }),
+              ? (calories % 1 === 0 ? String(calories) : calories.toFixed(1))
+              : '—'),
+        label: 'Calories',
         editKey: 'calories',
         editSuffix: 'cal',
         keyboardType: 'decimal-pad',
@@ -328,11 +284,11 @@ const ActivityDetailScreen: React.FC<Props> = ({ navigation, route }) => {
     if (isEditing || (session.distance != null && session.distance > 0)) {
       stats.push({
         value: isEditing
-          ? (formState.distance || '-')
+          ? (formState.distance || '—')
           : (session.distance != null && session.distance > 0
-              ? formatLocalizedNumber(distanceFromKm(session.distance, distanceUnit), { minimumFractionDigits: 1, maximumFractionDigits: 1 })
-              : '-'),
-        label: t('activityDetail.stats.distance', { defaultValue: 'Distance' }),
+              ? String(distanceFromKm(session.distance, distanceUnit).toFixed(1))
+              : '—'),
+        label: 'Distance',
         editKey: 'distance',
         editSuffix: distLabel,
         keyboardType: 'decimal-pad',
@@ -341,20 +297,20 @@ const ActivityDetailScreen: React.FC<Props> = ({ navigation, route }) => {
     if (isEditing || session.avg_heart_rate != null) {
       stats.push({
         value: isEditing
-          ? (formState.avgHeartRate || '-')
-          : (session.avg_heart_rate != null ? formatLocalizedNumber(session.avg_heart_rate) : '-'),
-        label: t('activityDetail.stats.avgHeartRate', { defaultValue: 'Avg Heart Rate' }),
+          ? (formState.avgHeartRate || '—')
+          : (session.avg_heart_rate != null ? String(session.avg_heart_rate) : '—'),
+        label: 'Avg Heart Rate',
         editKey: 'avgHeartRate',
         editSuffix: 'bpm',
         keyboardType: 'numeric',
       });
     }
     if (session.steps != null && session.steps > 0) {
-      stats.push({ value: formatLocalizedNumber(session.steps), label: t('activityDetail.stats.steps', { defaultValue: 'Steps' }) });
+      stats.push({ value: session.steps.toLocaleString(), label: 'Steps' });
     }
     if (paceDistanceKm != null && paceDistanceKm > 0 && paceDuration > 0) {
       const pace = formatPace(paceDuration, paceDistanceKm);
-      if (pace) stats.push({ value: pace, label: t('activityDetail.stats.pace', { defaultValue: 'Pace' }) });
+      if (pace) stats.push({ value: pace, label: 'Pace' });
     }
     return stats;
   };
@@ -481,48 +437,137 @@ const ActivityDetailScreen: React.FC<Props> = ({ navigation, route }) => {
     );
   };
 
-  // View mode: name title + owner-only Edit. Edit mode: "Edit Activity" title,
-  // X-dismiss owning the left slot with swipe-back disabled, Save on the right.
-  const header = useScreenHeader({
-    nativeTitle: isEditing ? 'Edit Activity' : name,
-    animateKey: isEditing ? 'edit' : 'view',
-    borderless: true,
-    nativeOptions: { gestureEnabled: !isEditing, headerBackVisible: !isEditing },
-    left: isEditing
-      ? {
-          kind: 'dismiss',
-          onPress: cancelEditing,
-          disabled: isSaving,
-          accessibilityLabel: t('common.cancel', { defaultValue: 'Cancel' }),
-          identifier: 'activity-detail-cancel',
-        }
-      : { kind: 'back' },
-    right: isEditing
-      ? {
-          kind: 'primary',
-          label: SAVE_LABEL,
-          busyLabel: SAVING_LABEL,
-          busy: isSaving,
-          disabled: isSaving,
-          onPress: handleSave,
-          accessibilityLabel: t('activityDetail.accessibility.save', { defaultValue: 'Save' }),
-          identifier: 'activity-detail-save',
-        }
-      : canEditSource
-        ? {
-            kind: 'text',
-            label: t('common.edit', { defaultValue: 'Edit' }),
-            role: 'secondary',
-            onPress: startEditing,
-            accessibilityLabel: t('activityDetail.accessibility.edit', { defaultValue: 'Edit activity' }),
-            identifier: 'activity-detail-edit',
-          }
-        : null,
-  });
+  const startEditingRef = useRef(startEditing);
+  const cancelEditingRef = useRef(cancelEditing);
+  const handleSaveRef = useRef(handleSave);
+  startEditingRef.current = startEditing;
+  cancelEditingRef.current = cancelEditing;
+  handleSaveRef.current = handleSave;
+
+  useLayoutEffect(() => {
+    navigation.setOptions({ headerTintColor });
+
+    if (Platform.OS !== 'ios') return;
+
+    if (isEditing) {
+      navigation.setOptions({
+        title: 'Edit Activity',
+        headerBackVisible: false,
+        gestureEnabled: false,
+        unstable_headerLeftItems: () => [
+          createNativeHeaderTextButtonItem({
+            label: 'Cancel',
+            identifier: 'activity-detail-cancel',
+            tintColor: headerActionColor,
+            accessibilityLabel: 'Cancel',
+            disabled: isSaving,
+            onPress: () => cancelEditingRef.current(),
+          }),
+        ],
+        unstable_headerRightItems: () => [
+          createNativeHeaderTextButtonItem({
+            label: 'Save',
+            identifier: 'activity-detail-save',
+            tintColor: headerSaveColor,
+            accessibilityLabel: 'Save',
+            fontWeight: '600',
+            disabled: isSaving,
+            onPress: () => handleSaveRef.current(),
+          }),
+        ],
+      });
+    } else {
+      navigation.setOptions({
+        title: name,
+        headerBackVisible: true,
+        gestureEnabled: true,
+        unstable_headerLeftItems: undefined,
+        unstable_headerRightItems: isSparky
+          ? () => [
+              createNativeHeaderTextButtonItem({
+                label: 'Edit',
+                identifier: 'activity-detail-edit',
+                tintColor: headerActionColor,
+                accessibilityLabel: 'Edit activity',
+                onPress: () => startEditingRef.current(),
+              }),
+            ]
+          : undefined,
+      });
+    }
+  }, [
+    navigation,
+    isEditing,
+    isSaving,
+    name,
+    isSparky,
+    headerActionColor,
+    headerSaveColor,
+    headerTintColor,
+  ]);
 
   return (
-    <View className="flex-1 bg-background" style={usesNativeHeader ? undefined : { paddingTop: insets.top }}>
-      {header}
+    <View className="flex-1 bg-background" style={Platform.OS === 'ios' ? undefined : { paddingTop: insets.top }}>
+      {/* Header */}
+      {Platform.OS !== 'ios' && (
+      <View className="flex-row items-center px-4 py-3 ">
+        {isEditing ? (
+          <FadeView
+            key="header-edit"
+            style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}
+          >
+            <Button
+              variant="ghost"
+              onPress={cancelEditing}
+              disabled={isSaving}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              className="py-0 px-0"
+            >
+              <Text className="text-text-primary text-base font-medium">Cancel</Text>
+            </Button>
+            <View className="flex-1" />
+            <Button
+              variant="ghost"
+              onPress={handleSave}
+              disabled={isSaving}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              className="py-0 px-0"
+            >
+              {isSaving ? (
+                <ActivityIndicator size="small" color={accentPrimary} />
+              ) : (
+                <Text className="text-accent-primary text-base font-semibold">Save</Text>
+              )}
+            </Button>
+          </FadeView>
+        ) : (
+          <FadeView
+            key="header-view"
+            style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}
+          >
+            <Button
+              variant="ghost"
+              onPress={() => navigation.goBack()}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              className="py-0 px-0"
+            >
+              <Icon name="chevron-back" size={22} color={textPrimary} />
+            </Button>
+            <View className="flex-1" />
+            {isSparky && (
+              <Button
+                variant="ghost"
+                onPress={startEditing}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                className="py-0 px-0"
+              >
+                <Text className="text-text-primary text-base font-medium">Edit</Text>
+              </Button>
+            )}
+          </FadeView>
+        )}
+      </View>
+      )}
 
       <KeyboardAwareScrollView
         contentContainerClassName="px-4"
@@ -547,7 +592,7 @@ const ActivityDetailScreen: React.FC<Props> = ({ navigation, route }) => {
                       value={formState.name}
                       onChangeText={setName}
                       onBlur={() => setActiveField(null)}
-                      placeholder={t('activityDetail.placeholders.activityName', { defaultValue: 'Activity Name' })}
+                      placeholder="Activity Name"
                       autoFocus
                       style={{ borderWidth: 0, backgroundColor: 'transparent', paddingLeft: 0, paddingTop: 8, paddingBottom: 8, fontSize: 20, fontWeight: '700' }}
                     />
@@ -573,12 +618,12 @@ const ActivityDetailScreen: React.FC<Props> = ({ navigation, route }) => {
                   activeOpacity={0.7}
                 >
                   <Text className="text-sm" style={{ color: accentPrimary }}>
-                    {formatDateLabel(formState.entryDate, t, dateLocale)}
+                    {formatDateLabel(formState.entryDate)}
                   </Text>
                   <Icon name="chevron-down" size={14} color={accentPrimary} style={{ marginLeft: 2 }} />
                 </TouchableOpacity>
               ) : entryDate ? (
-                <Text className="text-sm text-text-muted">{formatDate(entryDate, dateLocale)}</Text>
+                <Text className="text-sm text-text-muted">{formatDate(entryDate)}</Text>
               ) : null}
             </View>
           </View>
@@ -590,15 +635,14 @@ const ActivityDetailScreen: React.FC<Props> = ({ navigation, route }) => {
 
         {/* Sets section */}
         {isEditing ? (
-          !cardioEffort && (draftSets.length > 0 || hasSets) ? (
+          draftSets.length > 0 || hasSets ? (
             <View className="py-4">
-              <Text className="text-sm font-medium text-text-secondary mb-2">{t('activityDetail.labels.sets', { defaultValue: 'Sets' })}</Text>
+              <Text className="text-sm font-medium text-text-secondary mb-2">Sets</Text>
               <EditableSetList
                 exerciseClientId={SET_CLIENT_ID_PREFIX}
                 sets={draftSets}
                 activeSetKey={activeSetKey}
                 activeSetField={activeSetField}
-                modality={modality}
                 weightUnit={weightUnit}
                 onActivateSet={activateSet}
                 onDeactivateSet={deactivateSet}
@@ -611,40 +655,22 @@ const ActivityDetailScreen: React.FC<Props> = ({ navigation, route }) => {
         ) : hasSets ? (
           <>
             <View className="py-4">
-              <Text className="text-sm font-medium text-text-secondary mb-2">{t('activityDetail.labels.sets', { defaultValue: 'Sets' })}</Text>
+              <Text className="text-sm font-medium text-text-secondary mb-2">Sets</Text>
               <View className="flex-row py-1 mb-1">
-                <Text className="text-xs font-semibold text-text-muted w-10 text-center">{t('activityDetail.labels.set', { defaultValue: 'Set' })}</Text>
-                {durationLike ? (
-                  <Text className="text-xs font-semibold text-text-muted flex-1 text-center">{t('activityDetail.labels.secondsShort', { defaultValue: 'Sec' })}</Text>
-                ) : (
-                  <>
-                    {modality !== 'reps_only' && (
-                      <Text className="text-xs font-semibold text-text-muted flex-1 text-center">{t('activityDetail.labels.weight', { defaultValue: 'Weight' })}</Text>
-                    )}
-                    <Text className="text-xs font-semibold text-text-muted flex-1 text-center">{t('activityDetail.labels.reps', { defaultValue: 'Reps' })}</Text>
-                  </>
-                )}
+                <Text className="text-xs font-semibold text-text-muted w-10 text-center">Set</Text>
+                <Text className="text-xs font-semibold text-text-muted flex-1 text-center">Weight</Text>
+                <Text className="text-xs font-semibold text-text-muted flex-1 text-center">Reps</Text>
               </View>
               {session.sets.map(set => {
                 const displayWeight = set.weight != null
                   ? `${parseFloat(weightFromKg(set.weight, weightUnit).toFixed(1))} ${weightUnit}`
-                  : '-';
-                const displayReps = set.reps != null ? String(set.reps) : '-';
-                const seconds = effectiveSetDurationSec(set, modality);
-                const displayDuration = seconds != null ? String(seconds) : '-';
+                  : '\u2014';
+                const displayReps = set.reps != null ? String(set.reps) : '\u2014';
                 return (
                   <View key={set.id} className="flex-row py-1.5">
                     <Text className="text-sm text-text-muted w-10 text-center">{set.set_number}</Text>
-                    {durationLike ? (
-                      <Text className="text-sm text-text-primary flex-1 text-center">{displayDuration}</Text>
-                    ) : (
-                      <>
-                        {modality !== 'reps_only' && (
-                          <Text className="text-sm text-text-primary flex-1 text-center">{displayWeight}</Text>
-                        )}
-                        <Text className="text-sm text-text-primary flex-1 text-center">{displayReps}</Text>
-                      </>
-                    )}
+                    <Text className="text-sm text-text-primary flex-1 text-center">{displayWeight}</Text>
+                    <Text className="text-sm text-text-primary flex-1 text-center">{displayReps}</Text>
                   </View>
                 );
               })}
@@ -656,14 +682,14 @@ const ActivityDetailScreen: React.FC<Props> = ({ navigation, route }) => {
         {(isEditing || session.notes) && (
           <>
             <View className="py-4">
-              <Text className="text-sm font-medium text-text-secondary mb-2">{t('activityDetail.labels.notes', { defaultValue: 'Notes' })}</Text>
+              <Text className="text-sm font-medium text-text-secondary mb-2">Notes</Text>
               {isEditing ? (
                 activeField === 'notes' ? (
                   <FormInput
                     value={formState.notes}
                     onChangeText={setNotes}
                     onBlur={() => setActiveField(null)}
-                    placeholder={t('activityDetail.placeholders.notes', { defaultValue: 'Add notes...' })}
+                    placeholder="Add notes..."
                     multiline
                     autoFocus
                     style={{ minHeight: 60 }}
@@ -671,7 +697,7 @@ const ActivityDetailScreen: React.FC<Props> = ({ navigation, route }) => {
                 ) : (
                   <TouchableOpacity onPress={() => setActiveField('notes')} activeOpacity={0.6}>
                     <Text className="text-sm text-text-primary">
-                      {formState.notes || t('activityDetail.placeholders.notes', { defaultValue: 'Add notes...' })}
+                      {formState.notes || 'Add notes...'}
                     </Text>
                   </TouchableOpacity>
                 )
@@ -686,12 +712,14 @@ const ActivityDetailScreen: React.FC<Props> = ({ navigation, route }) => {
         {isEditing && (
           <FadeView>
             <Button
-              variant="destructive"
+              variant="ghost"
               onPress={() => deleteActivity.confirmAndDelete()}
               disabled={isDeleting}
               className="mt-4"
             >
-              {isDeleting ? t('common.deleting', { defaultValue: 'Deleting...' }) : t('workout.deleteActivity', { defaultValue: 'Delete Activity' })}
+              <Text className="text-bg-danger text-base font-medium">
+                {isDeleting ? 'Deleting...' : 'Delete Activity'}
+              </Text>
             </Button>
           </FadeView>
         )}

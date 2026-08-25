@@ -16,6 +16,7 @@ on:
           - frontend
           - server
           - garmin
+          - mcp
 
 jobs:
   push_to_registries:

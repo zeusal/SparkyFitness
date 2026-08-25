@@ -5,43 +5,18 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import ExercisesLibraryScreen from '../../src/screens/ExercisesLibraryScreen';
 import { useExercisesLibrary, useServerConnection } from '../../src/hooks';
 import type { Exercise } from '../../src/types/exercise';
-import {
-  useAppPreferencesStore,
-  __resetAppPreferencesStoreForTests,
-} from '../../src/stores/appPreferencesStore';
-import { pressHeaderMenuAction } from './helpers/nativeHeaderTestUtils';
 
 jest.mock('../../src/hooks', () => ({
   useExercisesLibrary: jest.fn(),
   useServerConnection: jest.fn(),
-  useProfile: jest.fn(() => ({ profile: undefined, isLoading: false })),
 }));
 
 jest.mock('../../src/components/ActiveWorkoutBar', () => ({
   useActiveWorkoutBarPadding: jest.fn(() => 0),
 }));
 
-// The row thumbnail's hook calls useFocusEffect, which needs a navigation
-// context this screen's tests don't mount. Mocked the same way
-// ExerciseSearchScreen's tests do.
-jest.mock('../../src/hooks/useExerciseImageSource', () => ({
-  useExerciseImageSource: jest.fn(() => ({
-    getImageSource: jest.fn((path: string) => ({ uri: path, headers: {} })),
-  })),
-}));
-
 const mockUseExercisesLibrary = useExercisesLibrary as jest.MockedFunction<typeof useExercisesLibrary>;
 const mockUseServerConnection = useServerConnection as jest.MockedFunction<typeof useServerConnection>;
-
-const mockNavigation = {
-  navigate: jest.fn(),
-  goBack: jest.fn(),
-  setOptions: jest.fn(),
-} as any;
-jest.mock('@react-navigation/native', () => ({
-  ...jest.requireActual('@react-navigation/native'),
-  useNavigation: () => mockNavigation,
-}));
 
 const insets = { top: 0, bottom: 0, left: 0, right: 0 };
 const frame = { x: 0, y: 0, width: 390, height: 844 };
@@ -77,7 +52,10 @@ const buildHookReturn = (overrides: Partial<LibraryHookReturn> = {}): LibraryHoo
 });
 
 describe('ExercisesLibraryScreen', () => {
-  const navigation = mockNavigation;
+  const navigation = {
+    navigate: jest.fn(),
+    goBack: jest.fn(),
+  } as any;
 
   const route = {
     key: 'ExercisesLibrary-key',
@@ -100,7 +78,6 @@ describe('ExercisesLibraryScreen', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    __resetAppPreferencesStoreForTests();
     mockUseServerConnection.mockReturnValue({
       isConnected: true,
       isLoading: false,
@@ -143,26 +120,6 @@ describe('ExercisesLibraryScreen', () => {
     });
 
     expect(mockUseExercisesLibrary).toHaveBeenLastCalledWith('sq', { enabled: true });
-  });
-
-  it('persists an ownership filter chosen from the header menu and filters the list', async () => {
-    mockUseExercisesLibrary.mockReturnValue(
-      buildHookReturn({
-        exercises: [
-          createExercise('ex-1', 'Bench Press'),
-          { ...createExercise('ex-2', 'Community Squat'), sharedWithPublic: true } as Exercise,
-        ],
-      }),
-    );
-
-    const screen = renderScreen();
-    await waitFor(() => expect(screen.getByText('Bench Press')).toBeTruthy());
-
-    pressHeaderMenuAction(navigation, 'Public');
-
-    expect(useAppPreferencesStore.getState().exercisesLibraryOwnershipFilter).toBe('public');
-    expect(screen.getByText('Community Squat')).toBeTruthy();
-    expect(screen.queryByText('Bench Press')).toBeNull();
   });
 
   it('renders the no-server state when disconnected', () => {

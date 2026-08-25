@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { NumericInput } from '@/components/NumericInput';
 import {
   Select,
   SelectTrigger,
@@ -17,11 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { excerciseWorkoutSetTypes } from '@/constants/excerciseWorkoutSetTypes';
 import { SetFieldKey, SortableSetData } from '@/types/workout';
-import {
-  SET_TABLE_LAYOUT,
-  SET_TYPE_STYLES,
-  type SetTableModality,
-} from '@/constants/exercises';
+import { SET_TYPE_STYLES } from '@/constants/exercises';
 
 interface SortableSetItemProps {
   id: string;
@@ -37,7 +32,6 @@ interface SortableSetItemProps {
   onDuplicateSet: (exerciseIndex: number, setIndex: number) => void;
   onRemoveSet: (exerciseIndex: number, setIndex: number) => void;
   weightUnit: string;
-  modality: SetTableModality;
 }
 
 export const SortableSetItem = React.memo(
@@ -50,7 +44,6 @@ export const SortableSetItem = React.memo(
     onDuplicateSet,
     onRemoveSet,
     weightUnit,
-    modality,
   }: SortableSetItemProps) => {
     const { t } = useTranslation();
     const [showNotes, setShowNotes] = useState(!!set.notes);
@@ -67,10 +60,6 @@ export const SortableSetItem = React.memo(
     const hasNotes = !!set.notes;
     const typeBadgeClass =
       SET_TYPE_STYLES[set.set_type ?? ''] ?? 'bg-muted text-muted-foreground';
-    const { gridClass, showReps, showWeight } = SET_TABLE_LAYOUT[modality];
-    // Isometric sets predating the duration column stored their hold in `reps`.
-    const durationValue =
-      set.duration ?? (modality === 'duration' ? (set.reps ?? null) : null);
 
     return (
       <div
@@ -85,7 +74,7 @@ export const SortableSetItem = React.memo(
             <GripVertical className="h-4 w-4 text-muted-foreground/50" />
           </div>
 
-          <div className={gridClass}>
+          <div className="grid grid-cols-[20px_140px_1fr_1fr_1fr_1fr_1fr_72px] gap-1.5 grow">
             {/* Set number badge */}
             <div className="h-8 flex items-center justify-center rounded-md border border-border/50 bg-muted text-xs font-semibold text-muted-foreground">
               {set.set_number}
@@ -125,37 +114,33 @@ export const SortableSetItem = React.memo(
               </SelectContent>
             </Select>
 
-            {/* Reps */}
-            {showReps && (
-              <Input
-                className="h-8 text-sm"
-                type="number"
-                placeholder="—"
-                value={set.reps ?? ''}
-                onChange={(e) =>
-                  onSetChange(
-                    exerciseIndex,
-                    setIndex,
-                    'reps',
-                    e.target.value === '' ? undefined : Number(e.target.value)
-                  )
-                }
-              />
-            )}
+            {/* Reps / Hold */}
+            <Input
+              className="h-8 text-sm"
+              type="number"
+              placeholder="—"
+              value={set.reps ?? ''}
+              onChange={(e) =>
+                onSetChange(
+                  exerciseIndex,
+                  setIndex,
+                  'reps',
+                  e.target.value === '' ? undefined : Number(e.target.value)
+                )
+              }
+            />
 
             {/* Weight */}
-            {showWeight && (
-              <UnitInput
-                value={set.weight ?? ''}
-                inputClassName="h-8"
-                unit={weightUnit}
-                type="weight"
-                placeholder="—"
-                onChange={(v) =>
-                  onSetChange(exerciseIndex, setIndex, 'weight', v)
-                }
-              />
-            )}
+            <UnitInput
+              value={set.weight ?? ''}
+              inputClassName="h-8"
+              unit={weightUnit}
+              type="weight"
+              placeholder="—"
+              onChange={(v) =>
+                onSetChange(exerciseIndex, setIndex, 'weight', v)
+              }
+            />
 
             {/* RPE */}
             <Input
@@ -177,14 +162,18 @@ export const SortableSetItem = React.memo(
             />
 
             {/* Duration */}
-            <NumericInput
+            <Input
               className="h-8 text-sm"
+              type="number"
               placeholder="—"
-              decimals={0}
-              step={1}
-              value={durationValue}
-              onValueChange={(v) =>
-                onSetChange(exerciseIndex, setIndex, 'duration', v ?? undefined)
+              value={set.duration ?? ''}
+              onChange={(e) =>
+                onSetChange(
+                  exerciseIndex,
+                  setIndex,
+                  'duration',
+                  e.target.value === '' ? undefined : Number(e.target.value)
+                )
               }
             />
 

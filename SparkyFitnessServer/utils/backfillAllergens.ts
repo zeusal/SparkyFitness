@@ -23,8 +23,8 @@ async function fetchWithRetry(
       barcode,
       ['allergens_tags', 'traces_tags'],
       'en',
-      undefined,
-      undefined
+      null,
+      null
     );
 
     if (!data?.product) return null;

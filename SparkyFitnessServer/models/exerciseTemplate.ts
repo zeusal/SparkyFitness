@@ -6,7 +6,6 @@ import {
   compareDays,
   dayOfWeek,
   localDateToDay,
-  setsDurationMinutes,
 } from '@workspace/shared';
 
 async function createExerciseEntriesFromTemplate(
@@ -107,9 +106,13 @@ async function createExerciseEntriesFromTemplate(
               `createExerciseEntriesFromTemplate - Fetched exerciseDetails for ${exerciseId}:`,
               exerciseDetails
             );
-            const durationMinutes = setsDurationMinutes(sets, {
-              fallbackMinutes: 30,
-            });
+            const durationMinutes =
+              sets?.reduce(
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (acc: any, set: any) =>
+                  acc + (set.duration || 0) + (set.rest_time || 0) / 60,
+                0
+              ) || 30;
             const caloriesPerHour = exerciseDetails.calories_per_hour || 0;
             const caloriesBurned = (caloriesPerHour / 60) * durationMinutes;
             log(

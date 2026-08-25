@@ -1,6 +1,4 @@
 import {
-  compareByEntryTime,
-  earliestEntryTime,
   localDateToDay,
   presetSessionResponseSchema,
   type PresetSessionResponse,
@@ -8,13 +6,11 @@ import {
   type ExerciseEntryResponse,
   type ExerciseEntrySetResponse,
   type ExerciseHistoryResponse,
-  type ExerciseModality,
   type ExerciseSessionResponse,
 } from '@workspace/shared';
 
 import { getClient } from '../db/poolManager.js';
 import { log } from '../config/logging.js';
-import { EXERCISE_ENTRY_TELEMETRY_COLUMNS } from '../models/exerciseEntry.js';
 
 /** Convert a pg date value to a YYYY-MM-DD string, or return null. */
 function _dateToString(value: unknown): string | null {
@@ -63,34 +59,11 @@ interface ActivityDetailRow {
   detail_data: unknown;
 }
 
-// Raw provider sync dumps (Garmin's full_activity_data/full_workout_data) are large
-// (can include thousands of GPS points) and are meant to be fetched on demand for a
-// single entry, never inlined into a list/history response — see
-// activityDetailsRepository.getActivityDetailsSummaryForEntriesAndPresets, which this
-// mirrors for the hand-written queries in this file.
-const RAW_PROVIDER_DUMP_DETAIL_TYPES = [
-  'full_activity_data',
-  'full_workout_data',
-];
-
-/** Telemetry columns that hold free text rather than a measurement. */
-const TELEMETRY_TEXT_COLUMNS: ReadonlySet<string> = new Set([
-  'weather_condition',
-  'gear_name',
-  'gear_external_id',
-]);
-
-const ACTIVITY_DETAIL_COLUMNS_MASKED = `id, exercise_entry_id, exercise_preset_entry_id, provider_name, detail_type,
-       created_by_user_id, created_at,
-       CASE WHEN detail_type = ANY($2::text[]) THEN NULL ELSE detail_data END AS detail_data`;
-
 const SETS_SUBQUERY = `COALESCE(
   (SELECT json_agg(set_data ORDER BY set_data.set_number)
    FROM (
      SELECT ees.id, ees.set_number, ees.set_type, ees.reps, ees.weight,
-            ees.duration, ees.rest_time, ees.notes, ees.rpe,
-            to_char(ees.completed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS completed_at,
-            ees.is_pr, ees.distance
+            ees.duration, ees.rest_time, ees.notes, ees.rpe
      FROM exercise_entry_sets ees
      WHERE ees.exercise_entry_id = ee.id
    ) AS set_data
@@ -107,7 +80,6 @@ function _buildExerciseEntryWithSnapshot(
   const {
     exercise_name,
     category,
-    modality,
     source,
     images,
     primary_muscles,
@@ -127,43 +99,23 @@ function _buildExerciseEntryWithSnapshot(
     ...entryData
   } = row;
 
-  const telemetryNumbers: Record<string, number | null> = {};
-  const telemetryText: Record<string, string | null> = {};
-  for (const column of EXERCISE_ENTRY_TELEMETRY_COLUMNS) {
-    const value = entryData[column];
-    if (TELEMETRY_TEXT_COLUMNS.has(column)) {
-      telemetryText[column] = (value as string | null | undefined) ?? null;
-    } else {
-      telemetryNumbers[column] = (value as number | null | undefined) ?? null;
-    }
-  }
-
   return {
     id: entryData.id as string,
     exercise_id: entryData.exercise_id as string,
     duration_minutes: (entryData.duration_minutes as number) ?? 0,
     calories_burned: (entryData.calories_burned as number) ?? 0,
     entry_date: _dateToString(entryData.entry_date),
-    entry_time: (entryData.entry_time as string) ?? null,
     notes: (entryData.notes as string) ?? null,
     distance: (entryData.distance as number) ?? null,
     avg_heart_rate: (entryData.avg_heart_rate as number) ?? null,
     steps: (entryData.steps as number) ?? null,
-    superset_group: (entryData.superset_group as number) ?? null,
     source: (source as string) ?? null,
     image_url: (entryData.image_url as string) ?? null,
     sets: ((entryData.sets as unknown[]) ?? []) as ExerciseEntrySetResponse[],
-    // Wearable telemetry: entryData carries every exercise_entries column (the
-    // query behind this builder is SELECT ee.*), but nothing above copies these
-    // ~40 columns onto the response, so they were silently dropped even though
-    // the DB and the response schema both have them.
-    ...telemetryNumbers,
-    ...telemetryText,
     exercise_snapshot: {
       id: entryData.exercise_id as string,
       name: exercise_name as string,
       category: (category as string) ?? null,
-      modality: (modality as ExerciseModality) ?? null,
       images: _parseJsonArray(images),
       primary_muscles: _parseJsonArray(primary_muscles),
       secondary_muscles: _parseJsonArray(secondary_muscles),
@@ -181,24 +133,16 @@ function _buildExerciseEntryWithSnapshot(
 async function countExerciseEntrySessions(
   // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
   client: { query: Function },
-  userId: string,
-  exerciseId: string | null
+  userId: string
 ): Promise<number> {
   const result = await client.query(
     `WITH sessions AS (
-       SELECT epe.id FROM exercise_preset_entries epe
-       WHERE epe.user_id = $1
-         AND ($2::uuid IS NULL OR EXISTS (
-           SELECT 1 FROM exercise_entries ce
-           WHERE ce.exercise_preset_entry_id = epe.id AND ce.exercise_id = $2
-         ))
+       SELECT id FROM exercise_preset_entries WHERE user_id = $1
        UNION ALL
-       SELECT id FROM exercise_entries
-       WHERE user_id = $1 AND exercise_preset_entry_id IS NULL
-         AND ($2::uuid IS NULL OR exercise_id = $2)
+       SELECT id FROM exercise_entries WHERE user_id = $1 AND exercise_preset_entry_id IS NULL
      )
      SELECT COUNT(*)::int AS count FROM sessions`,
-    [userId, exerciseId]
+    [userId]
   );
   return result.rows[0].count;
 }
@@ -209,29 +153,21 @@ async function getExerciseEntryHistorySessions(
   client: { query: Function },
   userId: string,
   limit: number,
-  offset: number,
-  exerciseId: string | null
+  offset: number
 ): Promise<ExerciseSessionResponse[]> {
   // Phase 1: Get paginated session stubs
   const stubsResult = await client.query(
     `WITH sessions AS (
-       SELECT epe.id, epe.entry_date, epe.created_at, 'preset' AS session_type
-       FROM exercise_preset_entries epe
-       WHERE epe.user_id = $1
-         AND ($4::uuid IS NULL OR EXISTS (
-           SELECT 1 FROM exercise_entries ce
-           WHERE ce.exercise_preset_entry_id = epe.id AND ce.exercise_id = $4
-         ))
+       SELECT id, entry_date, created_at, 'preset' AS session_type
+       FROM exercise_preset_entries WHERE user_id = $1
        UNION ALL
        SELECT id, entry_date, created_at, 'individual' AS session_type
-       FROM exercise_entries
-       WHERE user_id = $1 AND exercise_preset_entry_id IS NULL
-         AND ($4::uuid IS NULL OR exercise_id = $4)
+       FROM exercise_entries WHERE user_id = $1 AND exercise_preset_entry_id IS NULL
      )
      SELECT id, entry_date, created_at, session_type
      FROM sessions ORDER BY entry_date DESC, created_at DESC
      LIMIT $2 OFFSET $3`,
-    [userId, limit, offset, exerciseId]
+    [userId, limit, offset]
   );
   const stubs = stubsResult.rows as Array<{
     id: string;
@@ -294,7 +230,7 @@ async function getExerciseEntryHistorySessions(
           `SELECT ee.*, ${SETS_SUBQUERY}
            FROM exercise_entries ee
            WHERE ee.exercise_preset_entry_id = ANY($1::uuid[])
-           ORDER BY ee.entry_time ASC NULLS LAST, ee.sort_order ASC, ee.created_at ASC`,
+           ORDER BY ee.sort_order ASC, ee.created_at ASC`,
           [presetIds]
         )
         .then((r: { rows: Record<string, unknown>[] }) => {
@@ -310,15 +246,13 @@ async function getExerciseEntryHistorySessions(
         })
     );
 
-    // Preset-level activity details (raw provider dumps stripped of payload — see
-    // RAW_PROVIDER_DUMP_DETAIL_TYPES)
+    // Preset-level activity details
     batchQueries.push(
       client
         .query(
-          `SELECT ${ACTIVITY_DETAIL_COLUMNS_MASKED}
-           FROM exercise_entry_activity_details
+          `SELECT * FROM exercise_entry_activity_details
            WHERE exercise_preset_entry_id = ANY($1::uuid[])`,
-          [presetIds, RAW_PROVIDER_DUMP_DETAIL_TYPES]
+          [presetIds]
         )
         .then((r: { rows: ActivityDetailRow[] }) => {
           for (const row of r.rows) {
@@ -357,14 +291,12 @@ async function getExerciseEntryHistorySessions(
 
   await Promise.all(batchQueries);
 
-  // Entry-level activity details (for both preset children and individuals; raw
-  // provider dumps stripped of payload — see RAW_PROVIDER_DUMP_DETAIL_TYPES)
+  // Entry-level activity details (for both preset children and individuals)
   if (allExerciseEntryIds.length > 0) {
     const adResult = await client.query(
-      `SELECT ${ACTIVITY_DETAIL_COLUMNS_MASKED}
-       FROM exercise_entry_activity_details
+      `SELECT * FROM exercise_entry_activity_details
        WHERE exercise_entry_id = ANY($1::uuid[])`,
-      [allExerciseEntryIds, RAW_PROVIDER_DUMP_DETAIL_TYPES]
+      [allExerciseEntryIds]
     );
     const entryActivityMap = new Map<string, ActivityDetailRow[]>();
     for (const row of adResult.rows as ActivityDetailRow[]) {
@@ -446,27 +378,18 @@ async function getExerciseEntryHistorySessions(
 /**
  * Get paginated exercise entry history for a user.
  * Returns sessions (preset groups and standalone entries) sorted by date DESC.
- * With `exerciseId`, only sessions containing that exercise are returned;
- * preset sessions still include all of their child exercises.
  */
 export async function getExerciseEntryHistory(
   targetUserId: string,
   page: number,
-  pageSize: number,
-  exerciseId: string | null = null
+  pageSize: number
 ): Promise<ExerciseHistoryResponse> {
   const offset = (page - 1) * pageSize;
   const client = await getClient(targetUserId);
   try {
     const [sessions, totalCount] = await Promise.all([
-      getExerciseEntryHistorySessions(
-        client,
-        targetUserId,
-        pageSize,
-        offset,
-        exerciseId
-      ),
-      countExerciseEntrySessions(client, targetUserId, exerciseId),
+      getExerciseEntryHistorySessions(client, targetUserId, pageSize, offset),
+      countExerciseEntrySessions(client, targetUserId),
     ]);
 
     return {
@@ -528,7 +451,7 @@ async function _getExerciseEntriesByDateWithClient(
       `SELECT ee.*, ${SETS_SUBQUERY}
        FROM exercise_entries ee
        WHERE ee.user_id = $1 AND ee.entry_date = $2
-       ORDER BY ee.entry_time ASC NULLS LAST, ee.sort_order ASC, ee.created_at ASC`,
+       ORDER BY ee.sort_order ASC, ee.created_at ASC`,
       [userId, selectedDate]
     ),
   ]);
@@ -546,7 +469,6 @@ async function _getExerciseEntriesByDateWithClient(
 
   // Track created_at for chronological ordering of standalone entries
   const individualCreatedAt = new Map<string, Date>();
-  const individualEntryTime = new Map<string, string | null>();
 
   for (const id of presetRows.map((r) => r.id as string)) {
     presetChildrenMap.set(id, []);
@@ -565,7 +487,6 @@ async function _getExerciseEntriesByDateWithClient(
         name: (row.exercise_name as string) ?? null,
       });
       individualCreatedAt.set(entry.id, new Date(row.created_at as string));
-      individualEntryTime.set(entry.id, row.entry_time as string | null);
     }
   }
 
@@ -576,15 +497,13 @@ async function _getExerciseEntriesByDateWithClient(
 
   const activityQueries: Promise<void>[] = [];
 
-  // Raw provider dumps stripped of payload — see RAW_PROVIDER_DUMP_DETAIL_TYPES.
   if (allEntryIds.length > 0) {
     activityQueries.push(
       client
         .query(
-          `SELECT ${ACTIVITY_DETAIL_COLUMNS_MASKED}
-           FROM exercise_entry_activity_details
+          `SELECT * FROM exercise_entry_activity_details
            WHERE exercise_entry_id = ANY($1::uuid[])`,
-          [allEntryIds, RAW_PROVIDER_DUMP_DETAIL_TYPES]
+          [allEntryIds]
         )
         .then((r: { rows: ActivityDetailRow[] }) => {
           for (const row of r.rows) {
@@ -602,10 +521,9 @@ async function _getExerciseEntriesByDateWithClient(
     activityQueries.push(
       client
         .query(
-          `SELECT ${ACTIVITY_DETAIL_COLUMNS_MASKED}
-           FROM exercise_entry_activity_details
+          `SELECT * FROM exercise_entry_activity_details
            WHERE exercise_preset_entry_id = ANY($1::uuid[])`,
-          [presetIds, RAW_PROVIDER_DUMP_DETAIL_TYPES]
+          [presetIds]
         )
         .then((r: { rows: ActivityDetailRow[] }) => {
           for (const row of r.rows) {
@@ -646,41 +564,26 @@ async function _getExerciseEntriesByDateWithClient(
     );
   }
 
-  const getPresetEarliestTime = (presetId: string) =>
-    earliestEntryTime(presetChildrenMap.get(presetId) || []);
-
   // Build a unified stub list for chronological ordering
   const stubs: Array<{
     sessionType: 'preset' | 'individual';
     id: string;
     createdAt: Date;
-    entryTime: string | null;
   }> = [];
 
   for (const presetRow of presetRows) {
-    const pid = presetRow.id as string;
     stubs.push({
       sessionType: 'preset',
-      id: pid,
+      id: presetRow.id as string,
       createdAt: new Date(presetRow.created_at as string),
-      entryTime: getPresetEarliestTime(pid),
     });
   }
 
   for (const [id, createdAt] of individualCreatedAt) {
-    stubs.push({
-      sessionType: 'individual',
-      id,
-      createdAt,
-      entryTime: individualEntryTime.get(id) || null,
-    });
+    stubs.push({ sessionType: 'individual', id, createdAt });
   }
 
-  stubs.sort(
-    (a, b) =>
-      compareByEntryTime(a.entryTime, b.entryTime) ||
-      a.createdAt.getTime() - b.createdAt.getTime()
-  );
+  stubs.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
   // Assemble sessions in chronological order
   const sessions: ExerciseSessionResponse[] = [];
@@ -765,7 +668,7 @@ export async function getGroupedExerciseSessionByIdWithClient(
       `SELECT ee.*, ${SETS_SUBQUERY}
        FROM exercise_entries ee
        WHERE ee.user_id = $1 AND ee.exercise_preset_entry_id = $2
-       ORDER BY ee.entry_time ASC NULLS LAST, ee.sort_order ASC, ee.created_at ASC`,
+       ORDER BY ee.sort_order ASC, ee.created_at ASC`,
       [targetUserId, presetEntryId]
     ),
     client.query(

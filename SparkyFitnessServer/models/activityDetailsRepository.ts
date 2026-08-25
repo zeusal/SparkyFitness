@@ -1,7 +1,8 @@
 import { getClient } from '../db/poolManager.js';
 import { log } from '../config/logging.js';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function _createActivityDetailWithClient(client: any, detail: any) {
+async function createActivityDetail(userId: any, detail: any) {
+  const client = await getClient(userId);
   const {
     exercise_entry_id,
     exercise_preset_entry_id, // New parameter
@@ -61,13 +62,6 @@ async function _createActivityDetailWithClient(client: any, detail: any) {
     throw new Error(`Failed to create activity detail: ${error.message}`, {
       cause: error,
     });
-  }
-}
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function createActivityDetail(userId: any, detail: any) {
-  const client = await getClient(userId);
-  try {
-    return await _createActivityDetailWithClient(client, detail);
   } finally {
     client.release();
   }
@@ -137,75 +131,6 @@ async function getActivityDetailsByEntryOrPresetId(
     client.release();
   }
 }
-// Raw provider sync dumps (the JSON "backup" of everything Garmin returned for an
-// activity). These are large (can include thousands of GPS points) and are meant to be
-// fetched on demand via getActivityDetailsByEntryOrPresetId/the activity-details route,
-// never inlined into a list response like the diary.
-const RAW_PROVIDER_DUMP_DETAIL_TYPES = [
-  'full_activity_data',
-  'full_workout_data',
-];
-
-/**
- * Batched lookup of activity details for many exercise entries/preset entries at once
- * (e.g. one diary day), instead of one query per entry. Small user-authored detail rows
- * (added via ExerciseActivityDetailsEditor) come back with their data intact; rows
- * holding a raw provider sync dump come back with `detail_data: null` — the caller gets
- * enough to know a raw dump exists (to show a "view raw synced data" reference) without
- * the diary response ever carrying the full payload.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function getActivityDetailsSummaryForEntriesAndPresets(
-  userId: any,
-  entryIds: string[],
-  presetEntryIds: string[]
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Promise<{
-  byEntryId: Map<string, any[]>;
-  byPresetEntryId: Map<string, any[]>;
-}> {
-  const byEntryId = new Map<string, any[]>();
-  const byPresetEntryId = new Map<string, any[]>();
-  if (entryIds.length === 0 && presetEntryIds.length === 0) {
-    return { byEntryId, byPresetEntryId };
-  }
-  const client = await getClient(userId);
-  try {
-    const result = await client.query(
-      `SELECT id, exercise_entry_id, exercise_preset_entry_id, provider_name, detail_type,
-              created_by_user_id, created_at,
-              CASE WHEN detail_type = ANY($3::text[]) THEN NULL ELSE detail_data END AS detail_data
-       FROM exercise_entry_activity_details
-       WHERE created_by_user_id = $4
-         AND (exercise_entry_id = ANY($1::uuid[]) OR exercise_preset_entry_id = ANY($2::uuid[]))`,
-      [entryIds, presetEntryIds, RAW_PROVIDER_DUMP_DETAIL_TYPES, userId]
-    );
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    for (const row of result.rows as any[]) {
-      while (typeof row.detail_data === 'string') {
-        try {
-          row.detail_data = JSON.parse(row.detail_data);
-        } catch {
-          break;
-        }
-      }
-      if (row.exercise_entry_id) {
-        const list = byEntryId.get(row.exercise_entry_id) || [];
-        list.push(row);
-        byEntryId.set(row.exercise_entry_id, list);
-      }
-      if (row.exercise_preset_entry_id) {
-        const list = byPresetEntryId.get(row.exercise_preset_entry_id) || [];
-        list.push(row);
-        byPresetEntryId.set(row.exercise_preset_entry_id, list);
-      }
-    }
-    return { byEntryId, byPresetEntryId };
-  } finally {
-    client.release();
-  }
-}
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function updateActivityDetail(userId: any, id: any, detail: any) {
   const client = await getClient(userId);
@@ -296,9 +221,7 @@ async function deleteActivityDetail(userId: any, id: any) {
     client.release();
   }
 }
-async function _deleteActivityDetailsByEntryIdAndProviderWithClient(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  client: any,
+async function deleteActivityDetailsByEntryIdAndProvider(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   userId: any,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -306,6 +229,7 @@ async function _deleteActivityDetailsByEntryIdAndProviderWithClient(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   providerName: any
 ) {
+  const client = await getClient(userId);
   const query = `
         DELETE FROM exercise_entry_activity_details
         WHERE (exercise_entry_id = $1 OR exercise_preset_entry_id = $1)
@@ -333,43 +257,19 @@ async function _deleteActivityDetailsByEntryIdAndProviderWithClient(
     throw new Error(`Failed to delete activity details: ${error.message}`, {
       cause: error,
     });
-  }
-}
-async function deleteActivityDetailsByEntryIdAndProvider(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  userId: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  entryId: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  providerName: any
-) {
-  const client = await getClient(userId);
-  try {
-    return await _deleteActivityDetailsByEntryIdAndProviderWithClient(
-      client,
-      userId,
-      entryId,
-      providerName
-    );
   } finally {
     client.release();
   }
 }
 export { createActivityDetail };
-export { _createActivityDetailWithClient };
 export { getActivityDetailsByEntryOrPresetId };
-export { getActivityDetailsSummaryForEntriesAndPresets };
 export { updateActivityDetail };
 export { deleteActivityDetail };
 export { deleteActivityDetailsByEntryIdAndProvider };
-export { _deleteActivityDetailsByEntryIdAndProviderWithClient };
 export default {
   createActivityDetail,
-  _createActivityDetailWithClient,
   getActivityDetailsByEntryOrPresetId,
-  getActivityDetailsSummaryForEntriesAndPresets,
   updateActivityDetail,
   deleteActivityDetail,
   deleteActivityDetailsByEntryIdAndProvider,
-  _deleteActivityDetailsByEntryIdAndProviderWithClient,
 };

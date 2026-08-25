@@ -1,5 +1,4 @@
 import { apiFetch, normalizeUrl } from './apiClient';
-import { AI_TIMEOUT_MS } from '../../utils/concurrency';
 import type {
   FoodPhotoEstimateErrorCode,
   FoodPhotoEstimateResponse,
@@ -9,7 +8,6 @@ import { getActiveServerConfig, proxyHeadersToRecord } from '../storage';
 import { getAuthHeaders, notifySessionExpired } from './authService';
 import type { ExternalFoodItem, ExternalFoodVariant, ExternalFoodSearchPagination, PaginatedExternalFoodSearchResult } from '../../types/externalFoods';
 import { selectDisplayVariant } from '../../utils/foodDetails';
-import type { ServingIdentity } from '../../utils/foodDetails';
 
 interface OpenFoodFactsProduct {
   product_name: string;
@@ -442,12 +440,6 @@ interface NormalizedFood {
   provider_type?: string;
   is_custom: boolean;
   provider_verified?: boolean;
-  // Provider photo. The server's NormalizedFoodSchema declares these, so they
-  // arrive on the wire; they only reach the UI if this interface declares them
-  // AND transformNormalizedFood copies them across.
-  image_url?: string | null;
-  image_source_url?: string | null;
-  images?: string[];
   default_variant: NormalizedFoodVariant;
   variants?: NormalizedFoodVariant[];
 }
@@ -461,13 +453,6 @@ export interface BarcodeFood {
   provider_type?: string;
   is_custom: boolean;
   provider_verified?: boolean;
-  // Provider photo. The server's NormalizedFoodSchema declares these, so they
-  // arrive on the wire; they only reach the UI if this interface declares them
-  // AND transformNormalizedFood copies them across.
-  image_url?: string | null;
-  image_source_url?: string | null;
-  images?: string[];
-
   default_variant: NormalizedFoodVariant;
   variants?: NormalizedFoodVariant[];
 }
@@ -477,11 +462,7 @@ export type BarcodeLookupResult =
   | { source: string; food: BarcodeFood }
   | { source: 'not_found'; food: null };
 
-export function transformNormalizedFood(
-  food: NormalizedFood,
-  providerType: string,
-  preferredServing?: ServingIdentity,
-): ExternalFoodItem {
+export function transformNormalizedFood(food: NormalizedFood, providerType: string): ExternalFoodItem {
   const dv = food.default_variant;
 
   const mapVariant = (v: NormalizedFoodVariant): ExternalFoodVariant => ({
@@ -505,35 +486,23 @@ export function transformNormalizedFood(
     vitamin_c: v.vitamin_c,
   });
 
-  // FoodEntryAddScreen selects ext-0 (first variant) by default. Prefer the
-  // serving the caller already showed the user, then the provider's named
-  // serving, but keep the 100g/100ml reference in the ordered list so it
-  // still imports and remains selectable.
-  const { displayVariant, orderedVariants } = selectDisplayVariant(
-    dv,
-    food.variants,
-    preferredServing,
-  );
+  // FoodEntryAddScreen selects ext-0 (first variant) by default, so the
+  // default variant must come first to keep search/add calories consistent.
+  // If the default is a reference serving (100g/100ml) and a more descriptive
+  // variant exists (e.g. "1 Stück (30 g)"), prefer that one as the display
+  // variant instead.
+  const { displayVariant, orderedVariants } = selectDisplayVariant(dv, food.variants);
   const variants = orderedVariants?.map(mapVariant);
 
   return {
     id: food.provider_external_id ?? food.id ?? '',
     name: food.name,
     brand: food.brand,
-    barcode: food.barcode,
-    provider_type: food.provider_type ?? providerType,
-    provider_external_id: food.provider_external_id,
-    is_custom: food.is_custom,
     ...mapVariant(displayVariant),
     serving_description: displayVariant.serving_description ?? `${displayVariant.serving_size} ${displayVariant.serving_unit}`,
     source: food.provider_type ?? providerType,
     variants: variants && variants.length > 0 ? variants : undefined,
     provider_verified: food.provider_verified === true,
-    // Carry the provider photo through. Every field this mapper omits is
-    // invisible to the UI no matter what the server sent.
-    image_url: food.image_url ?? null,
-    image_source_url: food.image_source_url ?? null,
-    images: food.images,
   };
 }
 
@@ -569,7 +538,6 @@ export async function fetchExternalFoodDetails(
   providerType: string,
   externalId: string,
   providerId?: string,
-  preferredServing?: ServingIdentity,
 ): Promise<ExternalFoodItem> {
   const params = new URLSearchParams();
   if (providerId) params.set('providerId', providerId);
@@ -581,7 +549,7 @@ export async function fetchExternalFoodDetails(
     operation: `fetch ${providerType} details (v2)`,
   });
 
-  return transformNormalizedFood(response, providerType, preferredServing);
+  return transformNormalizedFood(response, providerType);
 }
 
 interface V2BarcodeResponse {
@@ -617,11 +585,6 @@ export async function lookupBarcodeV2(barcode: string, providerId?: string): Pro
     provider_type: food.provider_type,
     is_custom: food.is_custom,
     provider_verified: food.provider_verified,
-    // Same omission trap as the search mapper: a scanned barcode's photo is
-    // lost unless it is copied here.
-    image_url: food.image_url ?? null,
-    image_source_url: food.image_source_url ?? null,
-    images: food.images,
     default_variant: food.default_variant,
     variants: resolvedVariants,
   };
@@ -663,7 +626,6 @@ export async function scanNutritionLabel(base64Image: string, mimeType: string):
     operation: 'scan nutrition label',
     method: 'POST',
     body: { image: base64Image, mime_type: mimeType },
-    timeoutMs: AI_TIMEOUT_MS,
   });
 }
 

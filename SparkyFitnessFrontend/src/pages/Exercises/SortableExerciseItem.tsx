@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import {
   GripVertical,
@@ -8,8 +7,6 @@ import {
   ChevronDown,
   ChevronUp,
   Copy,
-  CopyPlus,
-  Repeat,
   Book,
   Dumbbell,
   HeartPulse,
@@ -38,12 +35,8 @@ import type {
   SortableSetData,
   SortableExerciseItemData,
 } from '@/types/workout';
-import {
-  PresetSessionResponse,
-  resolveExerciseModality,
-} from '@workspace/shared';
+import { PresetSessionResponse } from '@workspace/shared';
 import { SetColumnHeaders } from './SetHeader';
-import { toSetTableModality } from '@/constants/exercises';
 import { usePreferences } from '@/contexts/PreferencesContext';
 
 type PresetMetadata = WorkoutPreset | PresetSessionResponse;
@@ -62,10 +55,6 @@ interface SortableExerciseItemProps {
   onRemoveSet: (exerciseIndex: number, setIndex: number) => void;
   onAddSet?: (exerciseIndex: number) => void;
   onCopyExercise?: (ex: SortableExerciseItemData) => void;
-  /** Swap which exercise this entry points to, keeping its configured sets. */
-  onReplaceExercise?: (exerciseIndex: number) => void;
-  /** Add an independent copy of this entry (same sets) right after it. */
-  onDuplicateExercise?: (exerciseIndex: number) => void;
   onReorderSets?: (
     exerciseIndex: number,
     oldIndex: number,
@@ -85,14 +74,11 @@ export const SortableExerciseItem = ({
   onRemoveSet,
   onAddSet,
   onCopyExercise,
-  onReplaceExercise,
-  onDuplicateExercise,
   onReorderSets,
   weightUnit,
   workoutPresets,
   simplified = false,
 }: SortableExerciseItemProps) => {
-  const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(true);
   const { distanceUnit } = usePreferences();
 
@@ -106,12 +92,7 @@ export const SortableExerciseItem = ({
     transition,
   };
 
-  const modality = resolveExerciseModality(
-    'exercise_snapshot' in ex ? ex.exercise_snapshot?.modality : ex.modality,
-    ex.category
-  );
-  const isCardio = modality === 'duration_distance';
-  const setTableModality = toSetTableModality(modality);
+  const isCardio = ex.category === 'cardio';
   const hasSets = Array.isArray(ex.sets) && ex.sets.length > 0;
 
   const displayName =
@@ -139,7 +120,7 @@ export const SortableExerciseItem = ({
   const cardioSet = ex.sets?.[0];
   const cardioDuration =
     ('duration_minutes' in ex ? ex.duration_minutes : undefined) ??
-    (cardioSet?.duration != null ? cardioSet.duration / 60 : undefined) ??
+    cardioSet?.duration ??
     '';
   const cardioDistance = ('distance' in ex ? ex.distance : undefined) ?? '';
   const cardioCalories =
@@ -239,42 +220,6 @@ export const SortableExerciseItem = ({
               )}
             </Button>
           )}
-          {onReplaceExercise && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              title={t(
-                'workoutPresetForm.replaceExerciseButton',
-                'Replace exercise'
-              )}
-              aria-label={t(
-                'workoutPresetForm.replaceExerciseButton',
-                'Replace exercise'
-              )}
-              onClick={() => onReplaceExercise(exerciseIndex)}
-            >
-              <Repeat className="h-4 w-4" />
-            </Button>
-          )}
-          {onDuplicateExercise && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              title={t(
-                'workoutPresetForm.duplicateExerciseButton',
-                'Duplicate exercise'
-              )}
-              aria-label={t(
-                'workoutPresetForm.duplicateExerciseButton',
-                'Duplicate exercise'
-              )}
-              onClick={() => onDuplicateExercise(exerciseIndex)}
-            >
-              <CopyPlus className="h-4 w-4" />
-            </Button>
-          )}
           {onCopyExercise && (
             <Button
               variant="ghost"
@@ -306,10 +251,7 @@ export const SortableExerciseItem = ({
           rpe={cardioRpe as number | ''}
           distanceUnit={distanceUnit}
           onDurationChange={(v) =>
-            handleCardioSetChange(
-              'duration',
-              v === '' ? undefined : Math.round(Number(v) * 60)
-            )
+            handleCardioSetChange('duration', v === '' ? undefined : Number(v))
           }
           onDistanceChange={(v) =>
             handleCardioSetChange(
@@ -337,7 +279,7 @@ export const SortableExerciseItem = ({
 
       {isExpanded && !isCardio && hasSets && (
         <div className="space-y-3">
-          <SetColumnHeaders modality={setTableModality} />
+          <SetColumnHeaders category={ex?.category} />
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -377,7 +319,6 @@ export const SortableExerciseItem = ({
                       onDuplicateSet={onDuplicateSet}
                       onRemoveSet={onRemoveSet}
                       weightUnit={weightUnit}
-                      modality={setTableModality}
                     />
                   );
                 })}

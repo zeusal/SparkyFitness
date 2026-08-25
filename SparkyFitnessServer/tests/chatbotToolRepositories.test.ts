@@ -308,17 +308,12 @@ describe('reportRepository.getDailyNutritionTotalsRange', () => {
 
     expect(result).toBe(rows);
     const [sql, params] = mockClient.query.mock.calls[0];
-    // Food SUMs are COALESCE-wrapped and carry a dose-scaled supplement contribution.
-    // They are `fe.`-qualified because the query now LEFT JOINs food_entries onto a
-    // date set unioned with supplement-only days, which makes bare columns ambiguous.
     expect(sql).toContain(
-      'COALESCE(SUM(fe.dietary_fiber * fe.quantity / NULLIF(fe.serving_size, 0)), 0)'
+      'SUM(dietary_fiber * quantity / NULLIF(serving_size, 0)) as fiber'
     );
-    expect(sql).toContain(' as fiber');
     expect(sql).toContain(
-      'COALESCE(SUM(fe.sugars * fe.quantity / NULLIF(fe.serving_size, 0)), 0)'
+      'SUM(sugars * quantity / NULLIF(serving_size, 0)) as sugar'
     );
-    expect(sql).toContain(' as sugar');
     expect(params).toEqual(['user-1', '2026-06-01', '2026-06-11']);
   });
 });
@@ -458,7 +453,6 @@ describe('exerciseEntry range/usage queries', () => {
   });
 
   it('updateExerciseEntry persists steps', async () => {
-    mockClient.query.mockResolvedValue({ rows: [{ id: 'ee-1' }] });
     await exerciseEntryRepository.updateExerciseEntry(
       'ee-1',
       'user-1',
@@ -470,8 +464,8 @@ describe('exerciseEntry range/usage queries', () => {
     );
     expect(updateCall).toBeDefined();
     const [sql, params] = updateCall!;
-    expect(sql).toContain('steps = $25');
-    expect(params[24]).toBe(1234);
+    expect(sql).toContain('steps = $10');
+    expect(params[9]).toBe(1234);
   });
 });
 

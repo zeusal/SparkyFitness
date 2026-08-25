@@ -11,7 +11,6 @@ export interface SharedSymptomEntry {
   body_location?: string | null;
   context_text?: string | null;
   bristol_type?: number | null;
-  source?: string | null; // 'manual' | 'cycle' | ... (matches symptom_entries.source)
 }
 
 export interface SharedUserCustomSymptom {

@@ -35,7 +35,7 @@ async function syncGoogleHealthData(
     startDate = addDays(today, -7);
   } else if (syncType === 'scheduled') {
     endDate = today;
-    startDate = addDays(today, -1);
+    startDate = today;
   } else {
     throw new Error("Invalid syncType. Must be 'manual' or 'scheduled'.");
   }

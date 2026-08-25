@@ -18,9 +18,6 @@ import { useCustomNutrients } from '@/hooks/Foods/useCustomNutrients';
 import { useMealTypes } from '@/hooks/Diary/useMealTypes';
 import { buildGoalsPayload, getMealPercentage } from '@/utils/goals';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { useNutrientAutoCalculate } from '@/hooks/Goals/useNutrientAutoCalculate';
-import { NutrientAutoCalculate } from './NutrientAutoCalculate';
-import { AutoCalculateToolbar } from './AutoCalculateToolbar';
 
 const calculateGrams = (
   calories: number,
@@ -52,30 +49,6 @@ export const DailyGoals = ({
   const { data: customNutrients } = useCustomNutrients();
   const { data: mealTypes = [] } = useMealTypes();
 
-  const autoCalcCandidateKeys = useMemo(
-    () =>
-      visibleNutrients.filter(
-        (key) => !['calories', 'protein', 'carbs', 'fat'].includes(key)
-      ),
-    [visibleNutrients]
-  );
-  const {
-    algorithms,
-    autoCalculateUserData,
-    goalTypePreferences,
-    eligibleIds: eligibleAutoCalcIds,
-    selected: selectedForAutoCalc,
-    toggleSelected,
-    selectAll: selectAllForAutoCalc,
-    selectNone: selectNoneForAutoCalc,
-    applySelected,
-  } = useNutrientAutoCalculate({
-    calories: goals.calories,
-    totalFatGrams: goals.fat,
-    customNutrients,
-    candidateKeys: autoCalcCandidateKeys,
-  });
-
   const [macroInputType, setMacroInputType] = useState<'grams' | 'percentages'>(
     goals.protein_percentage !== null ? 'percentages' : 'grams'
   );
@@ -106,10 +79,6 @@ export const DailyGoals = ({
   }, [goals, macroInputType]);
 
   const isMacroValid = Math.round(currentMacroTotal) === 100;
-
-  const handleApplySelected = () => {
-    applySelected((updates) => setGoals((prev) => ({ ...prev, ...updates })));
-  };
 
   const { mutateAsync: saveGoalsService, isPending: saving } =
     useSaveGoalsMutation();
@@ -297,15 +266,6 @@ export const DailyGoals = ({
 
           <Separator className="my-5" />
 
-          <AutoCalculateToolbar
-            eligibleCount={eligibleAutoCalcIds.length}
-            selectedCount={selectedForAutoCalc.size}
-            onSelectAll={selectAllForAutoCalc}
-            onSelectNone={selectNoneForAutoCalc}
-            onApplySelected={handleApplySelected}
-            disabled={!autoCalculateUserData}
-          />
-
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* Loop directly over the ordered array from settings, excluding calories and macros */}
             {visibleNutrients
@@ -320,36 +280,15 @@ export const DailyGoals = ({
                 if (!isStandard && !isCustom) return null;
 
                 // Render nutrient input
-                const goalType = isCustom
-                  ? (goalTypePreferences[key]?.goalType ?? 'minimum')
-                  : undefined;
-                const customAliases = isCustom
-                  ? customNutrients?.find((cn) => cn.name === key)?.aliases
-                  : undefined;
                 return (
-                  <div key={key}>
-                    <NutrientInput
-                      nutrientId={key}
-                      state={goals}
-                      setState={setGoals}
-                      visibleNutrients={visibleNutrients}
-                      customNutrients={customNutrients}
-                    />
-                    <NutrientAutoCalculate
-                      nutrientId={key}
-                      customNutrientAliases={customAliases}
-                      userData={autoCalculateUserData}
-                      goalType={goalType}
-                      algorithms={algorithms}
-                      selected={selectedForAutoCalc.has(key)}
-                      onToggleSelected={(checked) =>
-                        toggleSelected(key, checked)
-                      }
-                      onApply={(value) =>
-                        setGoals((prev) => ({ ...prev, [key]: value }))
-                      }
-                    />
-                  </div>
+                  <NutrientInput
+                    key={key}
+                    nutrientId={key}
+                    state={goals}
+                    setState={setGoals}
+                    visibleNutrients={visibleNutrients}
+                    customNutrients={customNutrients}
+                  />
                 );
               })}
           </div>

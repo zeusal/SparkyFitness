@@ -5,16 +5,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import WorkoutPresetsLibraryScreen from '../../src/screens/WorkoutPresetsLibraryScreen';
 import { useServerConnection, useWorkoutPresetsLibrary } from '../../src/hooks';
 import type { WorkoutPreset } from '../../src/types/workoutPresets';
-import {
-  useAppPreferencesStore,
-  __resetAppPreferencesStoreForTests,
-} from '../../src/stores/appPreferencesStore';
-import { pressHeaderMenuAction } from './helpers/nativeHeaderTestUtils';
 
 jest.mock('../../src/hooks', () => ({
   useServerConnection: jest.fn(),
   useWorkoutPresetsLibrary: jest.fn(),
-  useProfile: jest.fn(() => ({ profile: undefined, isLoading: false })),
 }));
 
 jest.mock('../../src/components/ActiveWorkoutBar', () => ({
@@ -23,16 +17,6 @@ jest.mock('../../src/components/ActiveWorkoutBar', () => ({
 
 const mockUseServerConnection = useServerConnection as jest.MockedFunction<typeof useServerConnection>;
 const mockUseWorkoutPresetsLibrary = useWorkoutPresetsLibrary as jest.MockedFunction<typeof useWorkoutPresetsLibrary>;
-
-const mockNavigation = {
-  navigate: jest.fn(),
-  goBack: jest.fn(),
-  setOptions: jest.fn(),
-} as any;
-jest.mock('@react-navigation/native', () => ({
-  ...jest.requireActual('@react-navigation/native'),
-  useNavigation: () => mockNavigation,
-}));
 
 const insets = { top: 0, bottom: 0, left: 0, right: 0 };
 const frame = { x: 0, y: 0, width: 390, height: 844 };
@@ -72,7 +56,10 @@ const buildHookReturn = (overrides: Partial<LibraryHookReturn> = {}): LibraryHoo
 });
 
 describe('WorkoutPresetsLibraryScreen', () => {
-  const navigation = mockNavigation;
+  const navigation = {
+    navigate: jest.fn(),
+    goBack: jest.fn(),
+  } as any;
 
   const route = {
     key: 'WorkoutPresetsLibrary-key',
@@ -95,7 +82,6 @@ describe('WorkoutPresetsLibraryScreen', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    __resetAppPreferencesStoreForTests();
     mockUseServerConnection.mockReturnValue({
       isConnected: true,
       isLoading: false,
@@ -157,26 +143,6 @@ describe('WorkoutPresetsLibraryScreen', () => {
 
     await waitFor(() => expect(screen.getByText('Push Day Search Result')).toBeTruthy());
     expect(screen.getByText('2 exercises')).toBeTruthy();
-  });
-
-  it('persists an ownership filter chosen from the header menu and filters the list', async () => {
-    mockUseWorkoutPresetsLibrary.mockReturnValue(
-      buildHookReturn({
-        presets: [
-          createPreset('p-1', 'Push Day', 3),
-          { ...createPreset('p-2', 'Community Pull', 2), is_public: true },
-        ],
-      }),
-    );
-
-    const screen = renderScreen();
-    await waitFor(() => expect(screen.getByText('Push Day')).toBeTruthy());
-
-    pressHeaderMenuAction(navigation, 'Public');
-
-    expect(useAppPreferencesStore.getState().workoutPresetsLibraryOwnershipFilter).toBe('public');
-    expect(screen.getByText('Community Pull')).toBeTruthy();
-    expect(screen.queryByText('Push Day')).toBeNull();
   });
 
   it('renders the no-server state when disconnected', () => {

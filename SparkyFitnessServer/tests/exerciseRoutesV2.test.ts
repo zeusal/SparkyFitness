@@ -78,7 +78,6 @@ const SAMPLE_EXERCISE = {
   is_custom: true,
   shared_with_public: false,
   tags: ['private'],
-  modality: 'weight_reps',
 };
 
 describe('GET /v2/exercises/search', () => {
@@ -155,22 +154,6 @@ describe('GET /v2/exercises/search', () => {
       0
     );
     expect(res.body.exercises).toHaveLength(1);
-  });
-
-  // modality is `.optional()` in the shared schema so pre-modality servers
-  // still typecheck, which means only this assertion catches the projection
-  // being dropped from the search SELECT.
-  it('serves modality on search results', async () => {
-    // @ts-expect-error TS(2339): mockResolvedValue not on typ...
-    exerciseService.searchExercisesPaginated.mockResolvedValue({
-      exercises: [{ ...SAMPLE_EXERCISE, modality: 'duration_distance' }],
-      totalCount: 1,
-    });
-
-    const res = await request(app).get('/v2/exercises/search');
-
-    expect(res.statusCode).toBe(200);
-    expect(res.body.exercises[0].modality).toBe('duration_distance');
   });
 
   it('computes offset for page=2 and reports hasMore correctly', async () => {
@@ -336,7 +319,6 @@ describe('GET /v2/exercises/:exerciseId/stats', () => {
         reps: 8,
         setNumber: 1,
       },
-      recentSessions: [],
     });
 
     const res = await request(app).get(`/v2/exercises/${EXERCISE_UUID}/stats`);
@@ -355,127 +337,11 @@ describe('GET /v2/exercises/:exerciseId/stats', () => {
         reps: 8,
         setNumber: 1,
       },
-      recentSessions: [],
     });
     expect(exerciseService.getExerciseStats).toHaveBeenCalledWith(
       'user-123',
-      EXERCISE_UUID,
-      null,
-      null
+      EXERCISE_UUID
     );
-  });
-
-  it('returns 200 echoing populated recentSessions', async () => {
-    const recentSessions = [
-      {
-        entryDate: '2026-05-19',
-        sets: [
-          { setNumber: 1, setType: 'warmup', weight: 60, reps: 8 },
-          { setNumber: 2, setType: null, weight: 100, reps: 5 },
-        ],
-      },
-      {
-        entryDate: '2026-05-16',
-        sets: [{ setNumber: 1, setType: null, weight: null, reps: 12 }],
-      },
-      {
-        entryDate: '2026-05-14',
-        sets: [{ setNumber: 1, setType: null, weight: 95, reps: 5 }],
-      },
-    ];
-    // @ts-expect-error TS(2339): mockResolvedValue not on typed function.
-    exerciseService.getExerciseStats.mockResolvedValue({
-      bestSet: null,
-      lastSet: null,
-      recentSessions,
-    });
-
-    const res = await request(app).get(`/v2/exercises/${EXERCISE_UUID}/stats`);
-
-    expect(res.statusCode).toBe(200);
-    expect(res.body).toEqual({
-      bestSet: null,
-      lastSet: null,
-      recentSessions,
-    });
-  });
-
-  it('returns 500 when the service payload fails response validation', async () => {
-    // @ts-expect-error TS(2339): mockResolvedValue not on typed function.
-    exerciseService.getExerciseStats.mockResolvedValue({
-      bestSet: null,
-      lastSet: null,
-      // Empty set list violates the schema's .min(1).
-      recentSessions: [{ entryDate: '2026-05-19', sets: [] }],
-    });
-
-    const res = await request(app).get(`/v2/exercises/${EXERCISE_UUID}/stats`);
-
-    expect(res.statusCode).toBe(500);
-    expect(res.body.error).toBe('Internal response validation failed');
-  });
-
-  it('forwards a valid excludePresetEntryId query param to the service', async () => {
-    const excludeId = '22222222-2222-4222-8222-222222222222';
-    // @ts-expect-error TS(2339): mockResolvedValue not on typed function.
-    exerciseService.getExerciseStats.mockResolvedValue({
-      bestSet: null,
-      lastSet: null,
-      recentSessions: [],
-    });
-
-    const res = await request(app).get(
-      `/v2/exercises/${EXERCISE_UUID}/stats?excludePresetEntryId=${excludeId}`
-    );
-
-    expect(res.statusCode).toBe(200);
-    expect(exerciseService.getExerciseStats).toHaveBeenCalledWith(
-      'user-123',
-      EXERCISE_UUID,
-      excludeId,
-      null
-    );
-  });
-
-  it('returns 400 when excludePresetEntryId is not a UUID', async () => {
-    const res = await request(app).get(
-      `/v2/exercises/${EXERCISE_UUID}/stats?excludePresetEntryId=not-a-uuid`
-    );
-
-    expect(res.statusCode).toBe(400);
-    expect(res.body.error).toBe('Invalid excludePresetEntryId or presetId');
-    expect(exerciseService.getExerciseStats).not.toHaveBeenCalled();
-  });
-
-  it('forwards a valid presetId query param to the service', async () => {
-    // @ts-expect-error TS(2339): mockResolvedValue not on typed function.
-    exerciseService.getExerciseStats.mockResolvedValue({
-      bestSet: null,
-      lastSet: null,
-      recentSessions: [],
-    });
-
-    const res = await request(app).get(
-      `/v2/exercises/${EXERCISE_UUID}/stats?presetId=42`
-    );
-
-    expect(res.statusCode).toBe(200);
-    expect(exerciseService.getExerciseStats).toHaveBeenCalledWith(
-      'user-123',
-      EXERCISE_UUID,
-      null,
-      42
-    );
-  });
-
-  it('returns 400 when presetId is not a positive integer', async () => {
-    const res = await request(app).get(
-      `/v2/exercises/${EXERCISE_UUID}/stats?presetId=not-a-number`
-    );
-
-    expect(res.statusCode).toBe(400);
-    expect(res.body.error).toBe('Invalid excludePresetEntryId or presetId');
-    expect(exerciseService.getExerciseStats).not.toHaveBeenCalled();
   });
 
   it('returns 200 with both nulls when the user has no history', async () => {
@@ -483,17 +349,12 @@ describe('GET /v2/exercises/:exerciseId/stats', () => {
     exerciseService.getExerciseStats.mockResolvedValue({
       bestSet: null,
       lastSet: null,
-      recentSessions: [],
     });
 
     const res = await request(app).get(`/v2/exercises/${EXERCISE_UUID}/stats`);
 
     expect(res.statusCode).toBe(200);
-    expect(res.body).toEqual({
-      bestSet: null,
-      lastSet: null,
-      recentSessions: [],
-    });
+    expect(res.body).toEqual({ bestSet: null, lastSet: null });
   });
 
   it('returns 400 when exerciseId is not a UUID', async () => {

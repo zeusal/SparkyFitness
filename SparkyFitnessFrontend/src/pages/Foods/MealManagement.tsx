@@ -13,7 +13,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Plus,
   Edit,
-  Copy,
   Trash2,
   Eye,
   Filter,
@@ -22,7 +21,6 @@ import {
   CheckSquare,
   X,
   MoreHorizontal,
-  Star,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -60,18 +58,12 @@ import {
 } from '@/utils/nutrientUtils';
 import { useMealInvalidation } from '@/hooks/useInvalidateKeys';
 import { useCustomNutrients } from '@/hooks/Foods/useCustomNutrients';
-import { filterAndSortByTerms } from '@workspace/shared';
 
 import { useBulkSelection } from '@/hooks/useBulkSelection';
 import BulkActionToolbar from '@/components/BulkActionToolbar';
 import BulkDeleteDialog from '@/components/BulkDeleteDialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  useFavoritesQuery,
-  useToggleFavoriteMutation,
-} from '@/hooks/Foods/useFavorites';
 import { DataTable } from '@/components/ui/DataTable';
-import { primaryImageOf } from '@/utils/foodImages';
 import {
   ColumnDef,
   RowSelectionState,
@@ -89,10 +81,6 @@ const MealManagement: React.FC = () => {
     undefined
   );
   const [showMealBuilderDialog, setShowMealBuilderDialog] = useState(false);
-  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
-  const [duplicatingMealId, setDuplicatingMealId] = useState<string | null>(
-    null
-  );
   const [viewingMeal, setViewingMeal] = useState<
     (Meal & { foods?: MealFood[] }) | null
   >(null);
@@ -105,22 +93,17 @@ const MealManagement: React.FC = () => {
     usePreferences();
   const { data: customNutrients = [] } = useCustomNutrients();
 
-  // Favorites: a star INDICATOR on favorited rows (a dedicated column on desktop,
-  // a leading star by the name on mobile); the toggle itself lives in the ⋮ menu.
-  const { data: favorites } = useFavoritesQuery();
-  const { mutate: toggleFavorite } = useToggleFavoriteMutation();
-  const favoriteMealIds = React.useMemo(
-    () => new Set((favorites?.favoriteMeals ?? []).map((m) => m.id)),
-    [favorites]
-  );
-
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
   const { data: meals } = useMeals(filter);
 
   const filteredMeals = React.useMemo(
     () =>
-      meals ? filterAndSortByTerms(meals, (meal) => meal.name, searchTerm) : [],
+      meals
+        ? meals.filter((meal) =>
+            meal.name.toLowerCase().includes(searchTerm.toLowerCase())
+          )
+        : [],
     [meals, searchTerm]
   );
 
@@ -205,14 +188,6 @@ const MealManagement: React.FC = () => {
     setShowMealBuilderDialog(true);
   }, []);
 
-  // Open the builder in create mode seeded from the source meal. MealBuilder
-  // fetches and clones it (name + "(copy)", private), and an undefined mealId
-  // routes the save through createMeal, so the original is left untouched.
-  const handleDuplicateMeal = React.useCallback((mealId: string) => {
-    setDuplicatingMealId(mealId);
-    setShowDuplicateDialog(true);
-  }, []);
-
   const handleDeleteMeal = async (mealId: string, force: boolean = false) => {
     try {
       await deleteMeal({ mealId, force });
@@ -246,16 +221,6 @@ const MealManagement: React.FC = () => {
 
   const handleMealCancel = () => {
     setShowMealBuilderDialog(false);
-  };
-
-  const handleDuplicateClose = () => {
-    setShowDuplicateDialog(false);
-    setDuplicatingMealId(null);
-  };
-
-  const handleDuplicateSave = () => {
-    handleDuplicateClose();
-    invalidateMeals();
   };
 
   const handleViewDetails = React.useCallback(
@@ -371,56 +336,23 @@ const MealManagement: React.FC = () => {
         header: t('mealManagement.name', 'Name'),
         cell: ({ row }) => {
           const meal = row.original;
-          const imageSrc = primaryImageOf(meal);
           return (
-            <div className="flex items-start gap-2">
-              {imageSrc && (
-                <img
-                  src={imageSrc}
-                  alt=""
-                  aria-hidden="true"
-                  loading="lazy"
-                  className="w-10 h-10 flex-shrink-0 object-cover rounded-md"
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                  }}
-                />
-              )}
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold">{meal.name}</span>
-                  {meal.is_public && (
-                    <Badge variant="secondary" className="h-4 px-1 text-[10px]">
-                      <Share2 className="h-2.5 w-2.5 mr-1" />
-                      {t('mealManagement.public', 'Public')}
-                    </Badge>
-                  )}
-                </div>
-                <span className="text-xs text-muted-foreground truncate max-w-[200px]">
-                  {meal.description || t('mealManagement.noDescription')}
-                </span>
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold">{meal.name}</span>
+                {meal.is_public && (
+                  <Badge variant="secondary" className="h-4 px-1 text-[10px]">
+                    <Share2 className="h-2.5 w-2.5 mr-1" />
+                    {t('mealManagement.public', 'Public')}
+                  </Badge>
+                )}
               </div>
+              <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+                {meal.description || t('mealManagement.noDescription')}
+              </span>
             </div>
           );
         },
-      },
-      {
-        // Indicator-only column (left of the nutrient columns on desktop). The
-        // favorite TOGGLE lives in the ⋮ menu; this just shows a gold star.
-        id: 'favorite',
-        header: () => (
-          <span className="sr-only">{t('common.favorite', 'Favorite')}</span>
-        ),
-        enableSorting: false,
-        enableHiding: false,
-        meta: { hideOnMobile: true },
-        cell: ({ row }) =>
-          row.original.id && favoriteMealIds.has(row.original.id) ? (
-            <Star
-              className="h-4 w-4 fill-current text-yellow-500"
-              aria-label={t('common.favorited', 'Favorited')}
-            />
-          ) : null,
       },
       ...visibleNutrients.map((nutrient) => ({
         id: nutrient,
@@ -502,35 +434,6 @@ const MealManagement: React.FC = () => {
                   <Edit className="mr-2 h-4 w-4" />
                   {t('mealManagement.editMeal', 'Edit Meal')}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleDuplicateMeal(meal.id!)}>
-                  <Copy className="mr-2 h-4 w-4" />
-                  {t('mealManagement.duplicateMeal', 'Duplicate Meal')}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  disabled={!meal.id}
-                  onClick={() =>
-                    meal.id &&
-                    toggleFavorite({
-                      type: 'meal',
-                      id: meal.id,
-                      isFavorite: favoriteMealIds.has(meal.id),
-                    })
-                  }
-                >
-                  <Star
-                    className={`mr-2 h-4 w-4 ${
-                      meal.id && favoriteMealIds.has(meal.id)
-                        ? 'fill-current text-yellow-500'
-                        : ''
-                    }`}
-                  />
-                  {meal.id && favoriteMealIds.has(meal.id)
-                    ? t(
-                        'mealManagement.removeFromFavorites',
-                        'Remove from favorites'
-                      )
-                    : t('mealManagement.addToFavorites', 'Add to favorites')}
-                </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() =>
                     meal.is_public
@@ -570,15 +473,12 @@ const MealManagement: React.FC = () => {
       energyUnit,
       convertEnergy,
       handleEditMeal,
-      handleDuplicateMeal,
       openDeleteConfirmation,
       handleViewDetails,
       handleUnshareMeal,
       handleShareMeal,
       getEnergyUnitString,
       customNutrients,
-      favoriteMealIds,
-      toggleFavorite,
     ]
   );
 
@@ -765,39 +665,6 @@ const MealManagement: React.FC = () => {
             onSave={handleMealSave}
             onCancel={handleMealCancel}
           />
-        </DialogContent>
-      </Dialog>
-
-      {/* Duplicate Meal Dialog */}
-      <Dialog
-        open={showDuplicateDialog}
-        onOpenChange={(open) => {
-          if (!open) handleDuplicateClose();
-        }}
-      >
-        <DialogContent
-          requireConfirmation
-          className="max-w-4xl max-h-[90vh] overflow-y-auto"
-        >
-          <DialogHeader>
-            <DialogTitle>
-              {t('mealManagement.duplicateMealDialogTitle', 'Duplicate Meal')}
-            </DialogTitle>
-            <DialogDescription>
-              {t(
-                'mealManagement.duplicateMealDialogDescription',
-                'Adjust the details and save this as a new meal. The original is not changed.'
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          {duplicatingMealId && (
-            <MealBuilder
-              key={duplicatingMealId}
-              duplicateFromMealId={duplicatingMealId}
-              onSave={handleDuplicateSave}
-              onCancel={handleDuplicateClose}
-            />
-          )}
         </DialogContent>
       </Dialog>
 

@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
@@ -17,6 +16,7 @@ import { parseDecimalInput } from '../utils/numericInput';
 import { useHeaderActionColors } from '../hooks/useHeaderActionColors';
 import {
   confidenceTones,
+  itemConfidenceLabels,
   overallConfidenceLabels,
   type ConfidenceTone,
 } from '../utils/foodPhotoEstimate';
@@ -60,27 +60,7 @@ const parsedOptional = (raw: string): number | null | undefined => {
 const positiveOrUndefined = (v: number | undefined | null) =>
   v !== undefined && v !== null && v > 0 ? v : undefined;
 
-function confidenceLabel(
-  t: (key: string, options?: Record<string, unknown>) => string,
-  confidence: keyof typeof overallConfidenceLabels,
-  scope: 'overall' | 'item',
-): string {
-  if (scope === 'overall') {
-    switch (confidence) {
-      case 'high': return t('foodPhotoEstimate.confidence.good', { defaultValue: 'Good' });
-      case 'medium': return t('foodPhotoEstimate.confidence.fair', { defaultValue: 'Fair' });
-      case 'low': return t('foodPhotoEstimate.confidence.rough', { defaultValue: 'Rough' });
-    }
-  }
-  switch (confidence) {
-    case 'high': return t('foodPhotoEstimate.confidence.likely', { defaultValue: 'Likely' });
-    case 'medium': return t('foodPhotoEstimate.confidence.possible', { defaultValue: 'Possible' });
-    case 'low': return t('foodPhotoEstimate.confidence.uncertain', { defaultValue: 'Uncertain' });
-  }
-}
-
 const FoodPhotoEstimateReviewScreen: React.FC<Props> = ({ navigation, route }) => {
-  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [accentPrimary, textPrimary] = useCSSVariable([
     '--color-accent-primary',
@@ -117,7 +97,7 @@ const FoodPhotoEstimateReviewScreen: React.FC<Props> = ({ navigation, route }) =
   const [showIngredients, setShowIngredients] = useState(false);
 
   const overallTone = confidenceTones[estimate.overall_confidence];
-  const overallLabel = confidenceLabel(t, estimate.overall_confidence, 'overall');
+  const overallLabel = overallConfidenceLabels[estimate.overall_confidence];
 
   const totalWeightLabel = useMemo(
     () => `${Math.round(estimate.totals.total_grams)} g`,
@@ -126,7 +106,7 @@ const FoodPhotoEstimateReviewScreen: React.FC<Props> = ({ navigation, route }) =
 
   const handleSubmit = (data: FoodFormData) => {
     if (!data.name.trim()) {
-      Toast.show({ type: 'error', text1: t('foodPhotoEstimate.errors.nameRequired', { defaultValue: 'Name required' }), text2: t('foodPhotoEstimate.errors.nameRequiredMessage', { defaultValue: 'Give this food a name.' }) });
+      Toast.show({ type: 'error', text1: 'Name required', text2: 'Give this food a name.' });
       return;
     }
 
@@ -142,8 +122,8 @@ const FoodPhotoEstimateReviewScreen: React.FC<Props> = ({ navigation, route }) =
     ) {
       Toast.show({
         type: 'error',
-        text1: t('foodPhotoEstimate.errors.invalidNutrition', { defaultValue: 'Invalid nutrition' }),
-        text2: t('foodPhotoEstimate.errors.invalidRequiredNutrition', { defaultValue: 'Calories, protein, carbs, and fat must be non-negative numbers.' }),
+        text1: 'Invalid nutrition',
+        text2: 'Calories, protein, carbs, and fat must be non-negative numbers.',
       });
       return;
     }
@@ -164,8 +144,8 @@ const FoodPhotoEstimateReviewScreen: React.FC<Props> = ({ navigation, route }) =
     if (Object.values(optionalNutrients).some((v) => v === null)) {
       Toast.show({
         type: 'error',
-        text1: t('foodPhotoEstimate.errors.invalidNutrition', { defaultValue: 'Invalid nutrition' }),
-        text2: t('foodPhotoEstimate.errors.invalidOptionalNutrition', { defaultValue: 'All nutrition values must be non-negative numbers.' }),
+        text1: 'Invalid nutrition',
+        text2: 'All nutrition values must be non-negative numbers.',
       });
       return;
     }
@@ -174,15 +154,14 @@ const FoodPhotoEstimateReviewScreen: React.FC<Props> = ({ navigation, route }) =
     if (!Number.isFinite(servingSizeValue) || servingSizeValue <= 0) {
       Toast.show({
         type: 'error',
-        text1: t('foodPhotoEstimate.errors.invalidServingSize', { defaultValue: 'Invalid serving size' }),
-        text2: t('foodPhotoEstimate.errors.invalidServingSizeMessage', { defaultValue: 'Serving size must be a positive number.' }),
+        text1: 'Invalid serving size',
+        text2: 'Serving size must be a positive number.',
       });
       return;
     }
 
     navigation.navigate('LogEntry', {
       date,
-      mealTypeId: route.params.mealTypeId ?? undefined,
       saveFoodPayload: {
         name: data.name.trim(),
         brand: data.brand.trim() ? data.brand.trim() : null,
@@ -209,7 +188,7 @@ const FoodPhotoEstimateReviewScreen: React.FC<Props> = ({ navigation, route }) =
   };
 
   const renderItem = (item: FoodPhotoEstimateItem, idx: number) => {
-    const itemLabel = confidenceLabel(t, item.item_confidence, 'item');
+    const itemLabel = itemConfidenceLabels[item.item_confidence];
     const itemTone = confidenceTones[item.item_confidence];
     const grams = Math.round(item.estimated_grams);
     const prepLabel = item.preparation?.trim() ?? '';
@@ -251,7 +230,7 @@ const FoodPhotoEstimateReviewScreen: React.FC<Props> = ({ navigation, route }) =
         className={`flex-row items-center justify-between rounded-lg p-3 ${TONE_BG_CLASS[overallTone]}`}
       >
         <Text className={`text-sm font-semibold ${TONE_TEXT_CLASS[overallTone]}`}>
-          {t('foodPhotoEstimate.labels.overallEstimate', { defaultValue: '{{confidence}} estimate', confidence: overallLabel })}
+          {overallLabel} estimate
         </Text>
         <Icon
           name={showConfidenceReason ? 'chevron-down' : 'chevron-forward'}
@@ -276,7 +255,7 @@ const FoodPhotoEstimateReviewScreen: React.FC<Props> = ({ navigation, route }) =
     estimate.items.length > 0 ? (
       <View>
         <Text className="text-text-secondary text-xs mb-3">
-          {t('foodPhotoEstimate.labels.totalEstimatedWeight', { defaultValue: 'Total estimated weight: {{weight}}', weight: totalWeightLabel })}
+          Total estimated weight: {totalWeightLabel}
         </Text>
         <Button
           variant="ghost"
@@ -287,15 +266,15 @@ const FoodPhotoEstimateReviewScreen: React.FC<Props> = ({ navigation, route }) =
         >
           <Text style={{ color: accentPrimary }} className="text-sm font-medium">
             {showIngredients
-              ? t('foodPhotoEstimate.actions.hideIngredients', { defaultValue: 'Hide detected ingredients ▴' })
-              : t('foodPhotoEstimate.actions.showIngredients', { defaultValue: 'Show detected ingredients ▾' })}
+              ? 'Hide detected ingredients ▴'
+              : 'Show detected ingredients ▾'}
           </Text>
         </Button>
         {showIngredients ? estimate.items.map(renderItem) : null}
       </View>
     ) : (
       <Text className="text-text-secondary text-xs">
-        {t('foodPhotoEstimate.labels.totalEstimatedWeight', { defaultValue: 'Total estimated weight: {{weight}}', weight: totalWeightLabel })}
+        Total estimated weight: {totalWeightLabel}
       </Text>
     );
 
@@ -310,19 +289,19 @@ const FoodPhotoEstimateReviewScreen: React.FC<Props> = ({ navigation, route }) =
           onPress={() => dismissFlow()}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           className="z-10 p-0"
-          accessibilityLabel={t('common.cancel', { defaultValue: 'Cancel' })}
+          accessibilityLabel="Cancel"
         >
           <Icon name="close" size={22} color={backColor} />
         </Button>
         <Text className="absolute left-0 right-0 text-center text-text-primary text-lg font-semibold">
-          {t('foodPhotoEstimate.title', { defaultValue: 'Review estimate' })}
+          Review estimate
         </Text>
       </View>
 
       <FoodForm
         initialValues={initialFormValues}
         onSubmit={handleSubmit}
-        submitLabel={t('common.next', { defaultValue: 'Next' })}
+        submitLabel="Next"
         convertServingSizeOnUnitChange
         headerChildren={headerChildren}
       >

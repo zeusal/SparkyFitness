@@ -2,10 +2,6 @@ import { getClient } from '../db/poolManager.js';
 import { log } from '../config/logging.js';
 // @ts-expect-error TS(7016): Could not find a declaration file for module 'pg-f... Remove this comment to see the full error message
 import format from 'pg-format';
-import {
-  buildSqlSearch,
-  buildSqlExactMatchOrder,
-} from '../utils/dbSearchHelper.js';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function createWorkoutPreset(presetData: any) {
   const client = await getClient(presetData.user_id); // User-specific operation
@@ -25,14 +21,13 @@ async function createWorkoutPreset(presetData: any) {
     if (presetData.exercises && presetData.exercises.length > 0) {
       for (const exercise of presetData.exercises) {
         const exerciseResult = await client.query(
-          `INSERT INTO workout_preset_exercises (workout_preset_id, exercise_id, image_url, sort_order, superset_group)
-           VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+          `INSERT INTO workout_preset_exercises (workout_preset_id, exercise_id, image_url, sort_order)
+           VALUES ($1, $2, $3, $4) RETURNING id`,
           [
             newPreset.id,
             exercise.exercise_id,
             exercise.image_url,
             exercise.sort_order || 0,
-            exercise.superset_group ?? null,
           ]
         );
         const newExerciseId = exerciseResult.rows[0].id;
@@ -45,12 +40,11 @@ async function createWorkoutPreset(presetData: any) {
             set.reps,
             set.weight,
             set.duration,
-            set.distance,
             set.rest_time,
             set.notes,
           ]);
           const setsQuery = format(
-            'INSERT INTO workout_preset_exercise_sets (workout_preset_exercise_id, set_number, set_type, reps, weight, duration, distance, rest_time, notes) VALUES %L',
+            'INSERT INTO workout_preset_exercise_sets (workout_preset_exercise_id, set_number, set_type, reps, weight, duration, rest_time, notes) VALUES %L',
             setsValues
           );
           await client.query(setsQuery);
@@ -83,15 +77,13 @@ async function getWorkoutPresetByName(userId: any, name: any) {
                wpe.exercise_id,
                wpe.image_url,
                wpe.sort_order,
-               wpe.superset_group,
                e.name as exercise_name,
                e.category as category,
-               e.modality as modality,
                COALESCE(
                  (SELECT json_agg(set_data ORDER BY set_data.set_number)
                   FROM (
                     SELECT
-                      wpes.id, wpes.set_number, wpes.set_type, wpes.reps, wpes.weight, wpes.duration, wpes.distance, wpes.rest_time, wpes.notes
+                      wpes.id, wpes.set_number, wpes.set_type, wpes.reps, wpes.weight, wpes.duration, wpes.rest_time, wpes.notes
                     FROM workout_preset_exercise_sets wpes
                     WHERE wpes.workout_preset_exercise_id = wpe.id
                   ) AS set_data
@@ -119,11 +111,9 @@ async function getWorkoutPresets(userId: any, page = 1, limit = 10) {
   const client = await getClient(userId); // User-specific operation
   try {
     const offset = (page - 1) * limit;
-    // Ownership/sharing visibility is enforced by RLS (owner, public, or
-    // family-shared via can_view_exercise_library). Do not re-filter here, or
-    // family-shared presets get dropped before they reach the response.
     const totalResult = await client.query(
-      'SELECT COUNT(*) FROM workout_presets'
+      'SELECT COUNT(*) FROM workout_presets WHERE is_public = TRUE OR user_id = $1',
+      [userId]
     );
     const total = parseInt(totalResult.rows[0].count, 10);
     const result = await client.query(
@@ -136,15 +126,13 @@ async function getWorkoutPresets(userId: any, page = 1, limit = 10) {
                 wpe.id,
                 wpe.exercise_id,
                 wpe.image_url,
-                wpe.superset_group,
                 e.name as exercise_name,
                 e.category as category,
-                e.modality as modality,
                 COALESCE(
                   (SELECT json_agg(set_data ORDER BY set_data.set_number)
                    FROM (
                      SELECT
-                       wpes.id, wpes.set_number, wpes.set_type, wpes.reps, wpes.weight, wpes.duration, wpes.distance, wpes.rest_time, wpes.notes
+                       wpes.id, wpes.set_number, wpes.set_type, wpes.reps, wpes.weight, wpes.duration, wpes.rest_time, wpes.notes
                      FROM workout_preset_exercise_sets wpes
                      WHERE wpes.workout_preset_exercise_id = wpe.id
                    ) AS set_data
@@ -158,10 +146,11 @@ async function getWorkoutPresets(userId: any, page = 1, limit = 10) {
            ), '[]'::json
          ) AS exercises
        FROM workout_presets wp
+       WHERE wp.is_public = TRUE OR wp.user_id = $1
        GROUP BY wp.id
        ORDER BY wp.name ASC
-       LIMIT $1 OFFSET $2`,
-      [limit, offset]
+       LIMIT $2 OFFSET $3`,
+      [userId, limit, offset]
     );
     return {
       presets: result.rows,
@@ -187,15 +176,13 @@ async function getWorkoutPresetById(presetId: any, userId: any) {
                 wpe.id,
                 wpe.exercise_id,
                 wpe.image_url,
-                wpe.superset_group,
                 e.name as exercise_name,
                 e.category as category,
-                e.modality as modality,
                 COALESCE(
                   (SELECT json_agg(set_data ORDER BY set_data.set_number)
                    FROM (
                      SELECT
-                       wpes.id, wpes.set_number, wpes.set_type, wpes.reps, wpes.weight, wpes.duration, wpes.distance, wpes.rest_time, wpes.notes
+                       wpes.id, wpes.set_number, wpes.set_type, wpes.reps, wpes.weight, wpes.duration, wpes.rest_time, wpes.notes
                      FROM workout_preset_exercise_sets wpes
                      WHERE wpes.workout_preset_exercise_id = wpe.id
                    ) AS set_data
@@ -250,14 +237,13 @@ async function updateWorkoutPreset(
       if (updateData.exercises.length > 0) {
         for (const exercise of updateData.exercises) {
           const exerciseResult = await client.query(
-            `INSERT INTO workout_preset_exercises (workout_preset_id, exercise_id, image_url, sort_order, superset_group)
-             VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+            `INSERT INTO workout_preset_exercises (workout_preset_id, exercise_id, image_url, sort_order)
+             VALUES ($1, $2, $3, $4) RETURNING id`,
             [
               presetId,
               exercise.exercise_id,
               exercise.image_url,
               exercise.sort_order || 0,
-              exercise.superset_group ?? null,
             ]
           );
           const newExerciseId = exerciseResult.rows[0].id;
@@ -270,12 +256,11 @@ async function updateWorkoutPreset(
               set.reps,
               set.weight,
               set.duration,
-              set.distance,
               set.rest_time,
               set.notes,
             ]);
             const setsQuery = format(
-              'INSERT INTO workout_preset_exercise_sets (workout_preset_exercise_id, set_number, set_type, reps, weight, duration, distance, rest_time, notes) VALUES %L',
+              'INSERT INTO workout_preset_exercise_sets (workout_preset_exercise_id, set_number, set_type, reps, weight, duration, rest_time, notes) VALUES %L',
               setsValues
             );
             await client.query(setsQuery);
@@ -382,12 +367,11 @@ async function addExerciseToWorkoutPreset(
         set.reps,
         set.weight,
         set.duration,
-        set.distance,
         set.rest_time,
         set.notes,
       ]);
       const setsQuery = format(
-        'INSERT INTO workout_preset_exercise_sets (workout_preset_exercise_id, set_number, set_type, reps, weight, duration, distance, rest_time, notes) VALUES %L',
+        'INSERT INTO workout_preset_exercise_sets (workout_preset_exercise_id, set_number, set_type, reps, weight, duration, rest_time, notes) VALUES %L',
         setsValues
       );
       await client.query(setsQuery);
@@ -408,34 +392,14 @@ async function addExerciseToWorkoutPreset(
 }
 
 async function searchWorkoutPresets(
-  searchTerm: string | null | undefined,
-  userId: string | null | undefined,
-  limit: number | null = null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  searchTerm: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  userId: any,
+  limit = null
 ) {
   const client = await getClient(userId); // User-specific operation
   try {
-    const {
-      whereClauses: searchClauses,
-      queryParams: searchParams,
-      nextParamIndex,
-    } = buildSqlSearch('wp.name', searchTerm, 1);
-    const whereClauses: string[] = [...searchClauses];
-    const queryParams: any[] = [...searchParams];
-    const paramIndex = nextParamIndex;
-
-    const whereSql =
-      whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
-
-    let orderClause = 'wp.name ASC';
-    const selectQueryParams = [...queryParams];
-    let selectParamIndex = paramIndex;
-    if (searchTerm) {
-      const exactMatchParamIndex = selectParamIndex;
-      selectQueryParams.push(`%${searchTerm}%`);
-      selectParamIndex++;
-      orderClause = `${buildSqlExactMatchOrder('wp.name', exactMatchParamIndex)}, wp.name ASC`;
-    }
-
     let query = `
       SELECT
         wp.id, wp.user_id, wp.name, wp.description, wp.is_public,
@@ -446,15 +410,13 @@ async function searchWorkoutPresets(
                wpe.id,
                wpe.exercise_id,
                wpe.image_url,
-               wpe.superset_group,
                e.name as exercise_name,
                e.category as category,
-               e.modality as modality,
                COALESCE(
                  (SELECT json_agg(set_data ORDER BY set_data.set_number)
                   FROM (
                     SELECT
-                      wpes.id, wpes.set_number, wpes.set_type, wpes.reps, wpes.weight, wpes.duration, wpes.distance, wpes.rest_time, wpes.notes
+                      wpes.id, wpes.set_number, wpes.set_type, wpes.reps, wpes.weight, wpes.duration, wpes.rest_time, wpes.notes
                     FROM workout_preset_exercise_sets wpes
                     WHERE wpes.workout_preset_exercise_id = wpe.id
                   ) AS set_data
@@ -468,16 +430,16 @@ async function searchWorkoutPresets(
           ), '[]'::json
         ) AS exercises
       FROM workout_presets wp
-      ${whereSql}
+      WHERE (wp.is_public = TRUE OR wp.user_id = $2)
+      AND wp.name ILIKE $1
       GROUP BY wp.id
-      ORDER BY ${orderClause}`;
-
-    // Visibility (owner/public/family-shared) is enforced by RLS
+      ORDER BY wp.name ASC`;
+    const queryParams = [`%${searchTerm}%`, userId];
     if (limit !== null) {
-      query += ` LIMIT $${selectParamIndex}`;
-      selectQueryParams.push(limit);
+      query += ' LIMIT $3';
+      queryParams.push(limit);
     }
-    const result = await client.query(query, selectQueryParams);
+    const result = await client.query(query, queryParams);
     return result.rows;
   } finally {
     client.release();

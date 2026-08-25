@@ -1,12 +1,11 @@
 import type React from 'react';
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, Outlet, useNavigate } from 'react-router-dom';
 import { debug, info, error } from '@/utils/logging';
 import {
   Home,
   Activity, // Used for Check-In
-  CalendarHeart,
   BarChart3,
   Utensils, // Used for Foods
   Settings as SettingsIcon,
@@ -41,7 +40,6 @@ import { usePreferences } from '@/contexts/PreferencesContext';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useMealTypes } from '@/hooks/Diary/useMealTypes';
 import { useCurrentVersionQuery } from '@/hooks/useGeneralQueries';
-import { useCycleSettings } from '@/hooks/useCycle';
 import { cn } from '@/lib/utils';
 import { getGridClassNormal } from '@/utils/layout';
 
@@ -55,13 +53,11 @@ interface AddCompItem {
 interface MainLayoutProps {
   onShowAboutDialog: () => void;
   onShowNewReleaseDialog: () => void;
-  onStartOnboarding?: () => void;
 }
 
 const MainLayout: React.FC<MainLayoutProps> = ({
   onShowAboutDialog,
   onShowNewReleaseDialog,
-  onStartOnboarding,
 }) => {
   const { t } = useTranslation();
   const { user, signOut } = useAuth();
@@ -82,9 +78,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({
 
   // Fetch meal types for quick log menu
   const { data: mealTypes } = useMealTypes();
-
-  // Fetch cycle settings to determine tab visibility
-  const { data: cycleSettings } = useCycleSettings();
 
   const handleSignOut = async () => {
     info(loggingLevel, 'MainLayout: Attempting to sign out.');
@@ -108,26 +101,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({
   const addCompItems: AddCompItem[] = useMemo(() => {
     const items: AddCompItem[] = [];
     if (!isActingOnBehalf) {
-      // Keep this order consistent with the desktop tab order in availableTabs:
-      // Check-In, Cycle, Medications, Foods, Exercises, Goals.
-      items.push({ value: 'checkin', label: 'Check-In', icon: Activity });
-      if (cycleSettings?.enabled) {
-        items.push({
-          value: 'cycle',
-          label: cycleSettings.discreet_mode
-            ? t('nav.wellness', 'Wellness')
-            : cycleSettings.mode === 'pregnant'
-              ? t('nav.pregnancy', 'Pregnancy')
-              : t('nav.cycle', 'Cycle'),
-          icon: cycleSettings.discreet_mode ? Activity : CalendarHeart,
-        });
-      }
       items.push(
-        {
-          value: 'medications',
-          label: t('nav.medications', 'Medications'),
-          icon: Pill,
-        },
+        { value: 'checkin', label: 'Check-In', icon: Activity },
         { value: 'foods', label: 'Foods', icon: Utensils },
         {
           value: 'exercises',
@@ -156,7 +131,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
       }
     }
     return items;
-  }, [isActingOnBehalf, hasWritePermission, cycleSettings, t]);
+  }, [isActingOnBehalf, hasWritePermission, t]);
 
   // Map meal type names to icons
   const getMealTypeIcon = useCallback((name: string): LucideIcon => {
@@ -219,20 +194,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
     if (!isActingOnBehalf) {
       tabs.push(
         { value: '/', label: t('nav.diary'), icon: Home },
-        { value: '/checkin', label: t('nav.checkin'), icon: Activity }
-      );
-      if (cycleSettings?.enabled) {
-        tabs.push({
-          value: '/cycle',
-          label: cycleSettings.discreet_mode
-            ? t('nav.wellness', 'Wellness')
-            : cycleSettings.mode === 'pregnant'
-              ? t('nav.pregnancy', 'Pregnancy')
-              : t('nav.cycle', 'Cycle'),
-          icon: cycleSettings.discreet_mode ? Activity : CalendarHeart,
-        });
-      }
-      tabs.push(
+        { value: '/checkin', label: t('nav.checkin'), icon: Activity },
         {
           value: '/medications',
           label: t('nav.medications', 'Medications'),
@@ -266,13 +228,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({
           icon: BarChart3,
         });
       }
-      if (hasWritePermission('can_manage_medications')) {
-        tabs.push({
-          value: '/medications',
-          label: t('nav.medications', 'Medications'),
-          icon: Pill,
-        });
-      }
     }
     if (user?.role === 'admin' && !isActingOnBehalf) {
       tabs.push({ value: '/admin', label: t('nav.admin'), icon: Shield });
@@ -285,7 +240,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({
     loggingLevel,
     user?.role,
     t,
-    cycleSettings,
   ]);
 
   const availableMobileTabs = useMemo(() => {
@@ -296,8 +250,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({
       isAddCompOpen,
     });
     const mobileTabs = [];
-    // Cycle/Pregnancy and Medications live in the "+" Add menu on mobile
-    // (see addCompItems), not the bottom bar, to keep the bar uncluttered.
     if (!isActingOnBehalf) {
       mobileTabs.push(
         { value: '/', label: t('nav.diary'), icon: Home },
@@ -325,14 +277,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({
           value: '/reports',
           label: t('nav.reports'),
           icon: BarChart3,
-        });
-      }
-      // Delegates have no "+" Add menu on mobile, so medications stays in the bar.
-      if (hasWritePermission('can_manage_medications')) {
-        mobileTabs.push({
-          value: '/medications',
-          label: t('nav.medications', 'Medications'),
-          icon: Pill,
         });
       }
     }
@@ -384,50 +328,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({
   const mobileGridClass = getGridClassNormal(availableMobileTabs.length);
 
   const location = useLocation();
-
-  // Whether the current route is reachable for the active profile. When acting
-  // on behalf, a delegate only has a subset of tabs; landing on a disallowed
-  // route (e.g. staying on Diary after switching to a checkin-only profile)
-  // would otherwise mount that page and fire requests that 403.
-  const isCurrentPathAllowed = useMemo(() => {
-    if (!isActingOnBehalf || availableTabs.length === 0) {
-      return true;
-    }
-    const currentPath = location.pathname;
-    // Match exactly or as prefix (e.g. /medications/log should match /medications)
-    return availableTabs.some((tab) => {
-      if (tab.value === '/') {
-        return (
-          currentPath === '/' ||
-          currentPath === '/workout-playback' ||
-          currentPath.startsWith('/workout-playback/')
-        );
-      }
-      return (
-        currentPath === tab.value || currentPath.startsWith(tab.value + '/')
-      );
-    });
-  }, [isActingOnBehalf, availableTabs, location.pathname]);
-
-  useEffect(() => {
-    if (!isCurrentPathAllowed) {
-      const fallbackTab = availableTabs[0]?.value;
-      if (fallbackTab) {
-        debug(
-          loggingLevel,
-          `MainLayout: Redirecting from unauthorized path ${location.pathname} to ${fallbackTab}`
-        );
-        navigate(fallbackTab, { replace: true });
-      }
-    }
-  }, [
-    isCurrentPathAllowed,
-    availableTabs,
-    location.pathname,
-    navigate,
-    loggingLevel,
-  ]);
-
   const selectedDate = new URLSearchParams(location.search).get('date');
   const selectedDateRelation = selectedDate
     ? getDateRelationToToday(selectedDate)
@@ -457,24 +357,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({
           <div className="flex items-center gap-2">
             <ProfileSwitcher />
             <span className="text-sm text-muted-foreground hidden sm:inline">
-              {t('layout.welcome', 'Welcome {{activeUserName}}', {
-                activeUserName,
-              })}
+              Welcome {activeUserName}
             </span>
-            {onStartOnboarding && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onStartOnboarding}
-                className="flex items-center gap-2"
-                title="Complete your setup"
-              >
-                <span className="hidden sm:inline">
-                  {t('onboarding.completeSetup', 'Complete Setup')}
-                </span>
-                <span className="sm:hidden">Setup</span>
-              </Button>
-            )}
+
             <GlobalNotificationIcon />
             <GlobalSyncButton />
             <ThemeToggle />
@@ -572,9 +457,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
         </nav>
 
         <div className="pb-16 sm:pb-0">
-          {/* Don't mount a disallowed page while the redirect effect runs, or it
-              fires requests the active profile isn't permitted to make. */}
-          {isCurrentPathAllowed ? <Outlet /> : null}
+          <Outlet />
         </div>
 
         <SparkyChat />

@@ -6,7 +6,7 @@ import {
   updateGlobalAIService,
   deleteGlobalAIService,
 } from '@/api/Settings/aiServiceSettingsService';
-import { aiServiceKeys, settingsKeys } from '@/api/keys/admin';
+import { aiServiceKeys } from '@/api/keys/admin';
 import {
   CreateAiServiceSettingsRequest,
   UpdateAiServiceSettingsRequest,
@@ -41,10 +41,6 @@ export const useCreateGlobalAIService = () => {
       // Also invalidate user services since they may see global services
       queryClient.invalidateQueries({ queryKey: aiServiceKeys.user() });
       queryClient.invalidateQueries({ queryKey: aiServiceKeys.active() });
-      // Global settings cache the selected vision default. Deleting a service
-      // that is the default nulls default_vision_ai_service_id server-side
-      // (ON DELETE SET NULL), so refetch settings to drop the stale selection.
-      queryClient.invalidateQueries({ queryKey: settingsKeys.all });
     },
     meta: {
       successMessage: t(
@@ -76,10 +72,6 @@ export const useUpdateGlobalAIService = () => {
       // Also invalidate user services since they may see global services
       queryClient.invalidateQueries({ queryKey: aiServiceKeys.user() });
       queryClient.invalidateQueries({ queryKey: aiServiceKeys.active() });
-      // Global settings cache the selected vision default. Deleting a service
-      // that is the default nulls default_vision_ai_service_id server-side
-      // (ON DELETE SET NULL), so refetch settings to drop the stale selection.
-      queryClient.invalidateQueries({ queryKey: settingsKeys.all });
     },
     meta: {
       successMessage: t(
@@ -105,10 +97,6 @@ export const useDeleteGlobalAIService = () => {
       // Also invalidate user services since they may see global services
       queryClient.invalidateQueries({ queryKey: aiServiceKeys.user() });
       queryClient.invalidateQueries({ queryKey: aiServiceKeys.active() });
-      // Global settings cache the selected vision default. Deleting a service
-      // that is the default nulls default_vision_ai_service_id server-side
-      // (ON DELETE SET NULL), so refetch settings to drop the stale selection.
-      queryClient.invalidateQueries({ queryKey: settingsKeys.all });
     },
     meta: {
       successMessage: t(

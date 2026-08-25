@@ -14,7 +14,6 @@ export const onboardingStatusSchema = z.object({
   user_id: userIdSchema,
   full_name: z.string().nullable(),
   onboarding_complete: z.boolean(),
-  onboarding_skipped: z.boolean(),
   created_at: z.date().nullable(),
   updated_at: z.date().nullable(),
 });
@@ -24,7 +23,6 @@ export const onboardingStatusInitializerSchema = z.object({
   user_id: userIdSchema,
   full_name: z.string().optional().nullable(),
   onboarding_complete: z.boolean().optional(),
-  onboarding_skipped: z.boolean().optional(),
   created_at: z.date().optional().nullable(),
   updated_at: z.date().optional().nullable(),
 });
@@ -34,7 +32,6 @@ export const onboardingStatusMutatorSchema = z.object({
   user_id: userIdSchema.optional(),
   full_name: z.string().optional().nullable(),
   onboarding_complete: z.boolean().optional(),
-  onboarding_skipped: z.boolean().optional(),
   created_at: z.date().optional().nullable(),
   updated_at: z.date().optional().nullable(),
 });

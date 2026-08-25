@@ -1,7 +1,7 @@
 import React from 'react';
 import { Platform } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { pressAction } from './helpers/nativeHeaderTestUtils';
+import { pressAction, expectActionPresent } from './helpers/nativeHeaderTestUtils';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import MealAddScreen from '../../src/screens/MealAddScreen';
@@ -10,19 +10,12 @@ import { consumePendingMealIngredientSelection } from '../../src/services/mealBu
 import type { Meal, MealIngredientDraft } from '../../src/types/meals';
 
 const mockUseFocusEffect = jest.fn();
-const mockNavigation = {
-  setOptions: jest.fn(),
-  goBack: jest.fn(),
-  push: jest.fn(),
-  navigate: jest.fn(),
-} as any;
 
 jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
   return {
     ...actual,
     useFocusEffect: (callback: () => void) => mockUseFocusEffect(callback),
-    useNavigation: () => mockNavigation,
   };
 });
 
@@ -155,14 +148,18 @@ function buildMeal(overrides: Partial<Meal> = {}): Meal {
 }
 
 describe('MealAddScreen', () => {
-  const navigation = mockNavigation;
+  const navigation = {
+    setOptions: jest.fn(),
+    goBack: jest.fn(),
+    push: jest.fn(),
+    navigate: jest.fn(),
+  } as any;
 
   const route = {
     key: 'MealAdd-key',
     name: 'MealAdd' as const,
     params: undefined,
   };
-
 
   let focusCallback: (() => void) | undefined;
   const mockCreateMealAsync = jest.fn();
@@ -205,7 +202,7 @@ describe('MealAddScreen', () => {
   it('shows an error when the meal name is missing and does not submit', () => {
     const screen = renderScreen();
 
-    pressAction(screen, navigation, 'Save');
+    pressAction(screen, navigation, 'Save Meal');
 
     expect(mockToast.show).toHaveBeenCalledWith({
       type: 'error',
@@ -223,7 +220,7 @@ describe('MealAddScreen', () => {
     // single placeholder="1" field on screen is Total Servings. Typing 0 here
     // trips total_servings validation.
     fireEvent.changeText(screen.getByPlaceholderText('1'), '0');
-    pressAction(screen, navigation, 'Save');
+    pressAction(screen, navigation, 'Save Meal');
 
     expect(mockToast.show).toHaveBeenCalledWith({
       type: 'error',
@@ -237,7 +234,7 @@ describe('MealAddScreen', () => {
     const screen = renderScreen();
 
     fireEvent.changeText(screen.getByPlaceholderText('e.g. Chicken Rice Bowl'), 'Lunch');
-    pressAction(screen, navigation, 'Save');
+    pressAction(screen, navigation, 'Save Meal');
 
     expect(mockToast.show).toHaveBeenCalledWith({
       type: 'error',
@@ -258,7 +255,7 @@ describe('MealAddScreen', () => {
     });
 
     fireEvent.changeText(screen.getByPlaceholderText('e.g. Chicken Rice Bowl'), 'Lunch');
-    pressAction(screen, navigation, 'Save');
+    pressAction(screen, navigation, 'Save Meal');
 
     expect(mockToast.show).toHaveBeenCalledWith({
       type: 'error',
@@ -281,7 +278,7 @@ describe('MealAddScreen', () => {
     fireEvent.changeText(screen.getByPlaceholderText('e.g. Chicken Rice Bowl'), '  My Meal  ');
     fireEvent.changeText(screen.getByPlaceholderText('Notes about this meal'), '  Tasty  ');
     fireEvent.changeText(screen.getByPlaceholderText('1'), '2');
-    pressAction(screen, navigation, 'Save');
+    pressAction(screen, navigation, 'Save Meal');
 
     await waitFor(() => {
       expect(mockCreateMealAsync).toHaveBeenCalledTimes(1);
@@ -339,7 +336,7 @@ describe('MealAddScreen', () => {
     const numericInputs = screen.getAllByPlaceholderText('1');
     fireEvent.changeText(numericInputs[0], '1000');
     fireEvent.changeText(numericInputs[1], '333');
-    pressAction(screen, navigation, 'Save');
+    pressAction(screen, navigation, 'Save Meal');
 
     await waitFor(() => {
       expect(mockCreateMealAsync).toHaveBeenCalledTimes(1);
@@ -434,7 +431,7 @@ describe('MealAddScreen', () => {
     });
 
     fireEvent.changeText(screen.getByPlaceholderText('e.g. Chicken Rice Bowl'), '  Edited Meal  ');
-    pressAction(screen, navigation, 'Save');
+    pressAction(screen, navigation, 'Save Changes');
 
     await waitFor(() => {
       expect(mockUpdateMealAsync).toHaveBeenCalledTimes(1);

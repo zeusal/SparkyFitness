@@ -17,8 +17,8 @@ function loadSecrets() {
     if (key.endsWith('_FILE')) {
       const targetVar = key.slice(0, -5); // Remove '_FILE' suffix
       const filePath = process.env[key];
-      // If the target variable is already set with a non-empty value, skip (allow override via explicit env var)
-      if (process.env[targetVar] && process.env[targetVar].trim() !== '') {
+      // If the target variable is already set, skip (allow override via explicit env var)
+      if (process.env[targetVar]) {
         // console.debug(`[Secrets] Ignoring ${key} because ${targetVar} is already set.`);
         return;
       }
@@ -39,9 +39,9 @@ function loadSecrets() {
           );
         }
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : String(err);
         console.error(
-          `[Secrets] ERROR: Error reading file for ${key} (${filePath}): ${errorMsg}`
+          // @ts-expect-error TS(2571): Object is of type 'unknown'.
+          `[Secrets] ERROR: Error reading file for ${key} (${filePath}): ${err.message}`
         );
       }
     }

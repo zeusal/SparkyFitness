@@ -8,11 +8,6 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { ExternalProviderType } from 'types/externalProvider.ts';
-import {
-  exerciseWriteArrayFieldsSchema,
-  type ExerciseWriteArrayFields,
-} from '@workspace/shared';
-import { log } from '../config/logging.js';
 
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
@@ -27,25 +22,9 @@ const baseUploadsDir = process.env.SPARKY_FITNESS_CUSTOM_UPLOADS_DIRECTORY
 const storage = multer.diskStorage({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   destination: (req: any, file: any, cb: any) => {
-    // Runs per-file, before the route handler (and its exerciseData
-    // validation) ever executes — malformed/wrongly-shaped exerciseData must
-    // not throw here, or the request fails uncontrolled instead of getting
-    // the route handler's clean 400. Same 'unknown-exercise' fallback
-    // already used when exerciseData is absent; parseExerciseData in the
-    // route handler is what actually rejects the request, regardless of
-    // which folder this file landed in.
-    let exerciseName = 'unknown-exercise';
-    try {
-      if (req.body.exerciseData) {
-        const name = JSON.parse(req.body.exerciseData).name;
-        if (typeof name === 'string' && name.length > 0) {
-          exerciseName = name;
-        }
-      }
-    } catch {
-      // Malformed JSON, or .name isn't the shape expected, keep the
-      // fallback name.
-    }
+    const exerciseName = req.body.exerciseData
+      ? JSON.parse(req.body.exerciseData).name
+      : 'unknown-exercise';
     const uploadPath = path.join(
       baseUploadsDir,
       'exercises',
@@ -60,64 +39,6 @@ const storage = multer.diskStorage({
   },
 });
 const upload = multer({ storage: storage });
-
-type ParsedExerciseData =
-  | { ok: true; data: ExerciseWriteArrayFields }
-  | { ok: false; body: { error: string; details?: unknown } };
-
-/**
- * Parses the multipart `exerciseData` JSON field and validates it against
- * exerciseWriteArrayFieldsSchema. Returns the standard 400 body instead of
- * writing the response itself, so callers can finish cleaning up rejected
- * uploads before the client is told the request failed. Malformed/missing
- * JSON gets the same clean 400 a shape validation failure does, instead of
- * falling through to the generic error handler.
- */
-function parseExerciseData(raw: unknown): ParsedExerciseData {
-  let parsedJson: unknown;
-  try {
-    parsedJson = JSON.parse(String(raw));
-  } catch {
-    return { ok: false, body: { error: 'Invalid exercise payload.' } };
-  }
-  const result = exerciseWriteArrayFieldsSchema.safeParse(parsedJson);
-  if (!result.success) {
-    return {
-      ok: false,
-      body: {
-        error: 'Invalid exercise payload.',
-        details: result.error.flatten(),
-      },
-    };
-  }
-  return { ok: true, data: result.data };
-}
-
-/**
- * multer has already written any uploaded files to disk by the time
- * parseExerciseData can reject the request (validation runs in the route
- * handler, after the upload middleware). Delete them so a rejected request
- * doesn't leave orphaned files under uploads/exercises/. Awaited by callers
- * before they send the 400, so a client that has seen the response can rely
- * on the orphans already being gone. Best-effort: a failed delete is logged,
- * not surfaced to the client.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function cleanupUploadedFiles(files: any): Promise<void> {
-  if (!Array.isArray(files)) return;
-  await Promise.all(
-    files.map(async (file) => {
-      const filePath = file?.path;
-      if (typeof filePath !== 'string') return;
-      try {
-        await fs.promises.unlink(filePath);
-      } catch (err) {
-        log('warn', `Failed to clean up rejected upload ${filePath}:`, err);
-      }
-    })
-  );
-}
-
 /**
  * @swagger
  * tags:
@@ -504,65 +425,7 @@ router.get('/search', authenticate, async (req, res, next) => {
  *                 items:
  *                   type: array
  *                   items:
- *                     type: object
- *                     description: >-
- *                       External search projection (see
- *                       externalExerciseSearchItemSchema in @workspace/shared).
- *                       wger and free-exercise-db items include the optional
- *                       detail fields; nutritionix items carry only the base
- *                       fields.
- *                     required:
- *                       - id
- *                       - name
- *                       - source
- *                     properties:
- *                       id:
- *                         type: string
- *                       name:
- *                         type: string
- *                       source:
- *                         type: string
- *                       category:
- *                         type: string
- *                         nullable: true
- *                       modality:
- *                         type: string
- *                         enum: [weight_reps, reps_only, duration, duration_distance]
- *                         description: Derived from the provider category so import previews can pick a set editor.
- *                       calories_per_hour:
- *                         type: number
- *                         nullable: true
- *                       description:
- *                         type: string
- *                       force:
- *                         type: string
- *                         nullable: true
- *                       level:
- *                         type: string
- *                         nullable: true
- *                       mechanic:
- *                         type: string
- *                         nullable: true
- *                       equipment:
- *                         type: array
- *                         items:
- *                           type: string
- *                       primary_muscles:
- *                         type: array
- *                         items:
- *                           type: string
- *                       secondary_muscles:
- *                         type: array
- *                         items:
- *                           type: string
- *                       instructions:
- *                         type: array
- *                         items:
- *                           type: string
- *                       images:
- *                         type: array
- *                         items:
- *                           type: string
+ *                     $ref: '#/components/schemas/Exercise'
  *                 pagination:
  *                   type: object
  *                   properties:
@@ -978,8 +841,8 @@ router.get('/:id', authenticate, async (req, res, next) => {
  *             properties:
  *               exerciseData:
  *                 type: string
- *                 description: JSON string of exercise data (name, category, modality, equipment, muscle_groups, description, instructions, is_public). modality is one of weight_reps, reps_only, duration, duration_distance; omitted or unrecognized values are derived from the category.
- *                 example: '{"name": "Push-up", "category": "Strength", "modality": "reps_only", "equipment": ["None"], "muscle_groups": ["Chest", "Triceps"], "description": "A classic bodyweight exercise.", "instructions": ["Start in a plank position.", "Lower your body until your chest nearly touches the floor.", "Push back up to the starting position."], "is_public": true}'
+ *                 description: JSON string of exercise data (name, category, equipment, muscle_groups, description, instructions, is_public).
+ *                 example: '{"name": "Push-up", "category": "Strength", "equipment": ["None"], "muscle_groups": ["Chest", "Triceps"], "description": "A classic bodyweight exercise.", "instructions": ["Start in a plank position.", "Lower your body until your chest nearly touches the floor.", "Push back up to the starting position."], "is_public": true}'
  *               images:
  *                 type: array
  *                 items:
@@ -1004,20 +867,13 @@ router.post(
   upload.array('images', 10),
   async (req, res, next) => {
     try {
-      const parsed = parseExerciseData(req.body?.exerciseData);
-      if (!parsed.ok) {
-        // @ts-expect-error TS(2339): Property 'files' does not exist on type 'Request<{... Remove this comment to see the full error message
-        await cleanupUploadedFiles(req.files);
-        return res.status(400).json(parsed.body);
-      }
-      const exerciseData = parsed.data;
+      const exerciseData = JSON.parse(req.body.exerciseData);
       // @ts-expect-error TS(2339): Property 'files' does not exist on type 'Request<{... Remove this comment to see the full error message
       const imagePaths = req.files
         ? // @ts-expect-error TS(2339): Property 'files' does not exist on type 'Request<{... Remove this comment to see the full error message
           req.files.map(
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (file: any) =>
-              // @ts-expect-error TS(18046): 'exerciseData.name' is of type 'unknown' (passthrough field, not part of exerciseWriteArrayFieldsSchema).
               `${exerciseData.name.replace(/[^a-zA-Z0-9]/g, '_')}/${file.filename}`
           )
         : [];
@@ -1190,8 +1046,8 @@ router.post('/import-json', authenticate, async (req, res, next) => {
  *             properties:
  *               exerciseData:
  *                 type: string
- *                 description: JSON string of exercise data to update (name, category, modality, equipment, muscle_groups, description, instructions, is_public, images - existing image URLs). modality is one of weight_reps, reps_only, duration, duration_distance; omitted or unrecognized values leave the stored modality untouched, and changing the category alone never re-derives it.
- *                 example: '{"name": "Updated Push-up", "category": "Strength", "modality": "reps_only", "equipment": ["None"], "muscle_groups": ["Chest", "Triceps"], "description": "An updated classic bodyweight exercise.", "instructions": ["Start in a plank position.", "Lower your body until your chest nearly touches the floor.", "Push back up to the starting position."], "is_public": true, "images": ["http://example.com/old_image.jpg"]}'
+ *                 description: JSON string of exercise data to update (name, category, equipment, muscle_groups, description, instructions, is_public, images - existing image URLs).
+ *                 example: '{"name": "Updated Push-up", "category": "Strength", "equipment": ["None"], "muscle_groups": ["Chest", "Triceps"], "description": "An updated classic bodyweight exercise.", "instructions": ["Start in a plank position.", "Lower your body until your chest nearly touches the floor.", "Push back up to the starting position."], "is_public": true, "images": ["http://example.com/old_image.jpg"]}'
  *               images:
  *                 type: array
  *                 items:
@@ -1228,30 +1084,18 @@ router.put(
         .json({ error: 'Exercise ID is required and must be a valid UUID.' });
     }
     try {
-      const parsed = parseExerciseData(req.body?.exerciseData);
-      if (!parsed.ok) {
-        // @ts-expect-error TS(2339): Property 'files' does not exist on type 'Request<{... Remove this comment to see the full error message
-        await cleanupUploadedFiles(req.files);
-        return res.status(400).json(parsed.body);
-      }
-      const exerciseData = parsed.data;
+      const exerciseData = JSON.parse(req.body.exerciseData);
       // @ts-expect-error TS(2339): Property 'files' does not exist on type 'Request<{... Remove this comment to see the full error message
       const newImagePaths = req.files
         ? // @ts-expect-error TS(2339): Property 'files' does not exist on type 'Request<{... Remove this comment to see the full error message
           req.files.map(
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (file: any) =>
-              // @ts-expect-error TS(18046): 'exerciseData.name' is of type 'unknown' (passthrough field, not part of exerciseWriteArrayFieldsSchema).
               `${exerciseData.name.replace(/[^a-zA-Z0-9]/g, '_')}/${file.filename}`
           )
         : [];
-      // Combine existing images with new images. exerciseData.images is a
-      // real string[] here (exerciseWriteArrayFieldsSchema normalizes it),
-      // not a cast-away lie — a client-sent bare string is coerced to a
-      // one-item array before this point instead of spreading into one
-      // "image path" per character.
-      const existingImages = exerciseData.images ?? [];
-      const allImages = [...existingImages, ...newImagePaths];
+      // Combine existing images with new images
+      const allImages = [...(exerciseData.images || []), ...newImagePaths];
       const updatedExercise = await exerciseService.updateExercise(
         req.userId,
         id,
@@ -1697,7 +1541,9 @@ router.get(
           providerName
         );
       if (!activityDetails) {
-        return res.status(200).json({ activity: null, workout: null });
+        return res.status(404).json({
+          error: `Activity details not found for this exercise entry and provider: ${providerName}.`,
+        });
       }
       res.status(200).json(activityDetails);
     } catch (error) {

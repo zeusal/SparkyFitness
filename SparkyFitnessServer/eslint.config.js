@@ -15,7 +15,6 @@ export default tseslint.config(
       '**/temp_uploads/**',
       '**/mock_data/**',
       '**/__mocks__/**',
-      '**/*.min.js', // vendored third-party bundles (e.g. self-hosted @simplewebauthn)
     ],
   },
 

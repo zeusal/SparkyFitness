@@ -55,43 +55,6 @@ const nullableOptionalLegacyNumber = z.preprocess((value) => {
   return coerceLegacyNumber(value);
 }, z.number().nullable().optional());
 
-// Same coercion as nullableOptionalLegacyNumber, but whole numbers only.
-// Used for integer columns like record_utc_offset_minutes, where a fractional
-// value must fail validation here instead of erroring at the database layer.
-const nullableOptionalLegacyInteger = z.preprocess((value) => {
-  if (value === '') {
-    return undefined;
-  }
-
-  if (value === null) {
-    return null;
-  }
-
-  return coerceLegacyNumber(value);
-}, z.number().int().nullable().optional());
-
-// Same coercion as nullableOptionalLegacyNumber, plus a domain range. Used for
-// the smart-scale columns so this route enforces the same bounds as the other
-// two write paths (ai/tools/schemas/checkin.ts and the processHealthData
-// ingestion path); without it a direct API call could store a negative mass or
-// a body-water percentage above 100.
-const boundedNullableOptionalLegacyNumber = (min: number, max: number) =>
-  z.preprocess((value) => {
-    if (value === '') {
-      return undefined;
-    }
-
-    if (value === null) {
-      return null;
-    }
-
-    return coerceLegacyNumber(value);
-  }, z.number().min(min).max(max).nullable().optional());
-
-// numeric(5,2) columns, so 999.99 is the largest storable mass.
-const smartScaleMassKg = boundedNullableOptionalLegacyNumber(0, 999.99);
-const percentage = boundedNullableOptionalLegacyNumber(0, 100);
-
 export const UpsertWaterIntakeBodySchema = z
   .object({
     entry_date: requiredLegacyString('entry_date'),
@@ -123,13 +86,6 @@ export const UpsertCheckInBodySchema = z
     steps: nullableOptionalLegacyNumber,
     height: nullableOptionalLegacyNumber,
     body_fat_percentage: nullableOptionalLegacyNumber,
-    // Smart-scale composition. These must be declared even though the schema is
-    // .loose(): without them the values still reach the repository but skip
-    // coercion entirely, so a non-numeric or oversized value surfaced as a 500
-    // from the numeric(5,2) column instead of a 400.
-    muscle_mass_kg: smartScaleMassKg,
-    bone_mass_kg: smartScaleMassKg,
-    body_water_percentage: percentage,
   })
   .loose();
 
@@ -145,9 +101,6 @@ export const UpdateCheckInBodySchema = z
     steps: nullableOptionalLegacyNumber,
     height: nullableOptionalLegacyNumber,
     body_fat_percentage: nullableOptionalLegacyNumber,
-    muscle_mass_kg: smartScaleMassKg,
-    bone_mass_kg: smartScaleMassKg,
-    body_water_percentage: percentage,
   })
   .loose();
 
@@ -247,53 +200,3 @@ export const UpdateWaterIntakeLogTimeBodySchema = z
 export type UpdateWaterIntakeLogTimeBody = z.infer<
   typeof UpdateWaterIntakeLogTimeBodySchema
 >;
-
-// CSV import of health data (measurements, sleep, vitals, activity, hydration).
-// Rows are parsed client-side into flat HealthDataPayloadItem-shaped objects and
-// fed straight into measurementService.processHealthData, which owns the real
-// per-type validation, timezone resolution, and dedup. The schema is therefore
-// deliberately permissive (.loose()) and only enforces the invariants the
-// pipeline itself assumes: a type, and at least one date/timestamp field.
-export const ImportHealthDataItemSchema = z
-  .object({
-    type: requiredLegacyString('type'),
-    value: nullableOptionalLegacyNumber,
-    unit: optionalLegacyString,
-    date: optionalLegacyString,
-    entry_date: optionalLegacyString,
-    timestamp: optionalLegacyString,
-    source: optionalLegacyString,
-    source_id: optionalLegacyString,
-    record_timezone: nullableOptionalLegacyString,
-    record_utc_offset_minutes: nullableOptionalLegacyInteger,
-    // Sleep session fields (only present on SleepSession rows).
-    bedtime: optionalLegacyString,
-    wake_time: optionalLegacyString,
-    duration_in_seconds: nullableOptionalLegacyNumber,
-    time_asleep_in_seconds: nullableOptionalLegacyNumber,
-    deep_sleep_seconds: nullableOptionalLegacyNumber,
-    light_sleep_seconds: nullableOptionalLegacyNumber,
-    rem_sleep_seconds: nullableOptionalLegacyNumber,
-    awake_sleep_seconds: nullableOptionalLegacyNumber,
-    sleep_score: nullableOptionalLegacyNumber,
-    entry_hour: nullableOptionalLegacyNumber,
-    notes: optionalLegacyString,
-  })
-  .loose()
-  .refine((item) => Boolean(item.date || item.entry_date || item.timestamp), {
-    message: 'Each row needs a date, entry_date, or timestamp',
-    path: ['date'],
-  });
-
-export type ImportHealthDataItem = z.infer<typeof ImportHealthDataItemSchema>;
-
-export const ImportHealthDataBodySchema = z
-  .object({
-    items: z
-      .array(ImportHealthDataItemSchema)
-      .min(1, 'items must contain at least one row')
-      .max(5000, 'items cannot exceed 5000 rows per request'),
-  })
-  .loose();
-
-export type ImportHealthDataBody = z.infer<typeof ImportHealthDataBodySchema>;

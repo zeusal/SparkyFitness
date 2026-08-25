@@ -25,18 +25,11 @@ const Index: React.FC<IndexProps> = ({
   const { data, isLoading: queryLoading } = useOnboardingStatus(
     !authLoading && !!user
   );
-  // Allows the user to manually re-open the wizard from the main layout
-  const [showOnboardingManually, setShowOnboardingManually] = useState(false);
+  const [hasSkipped, setHasSkipped] = useState(false);
 
   const isLoading = authLoading || (!!user && queryLoading);
-
-  // Show wizard automatically when onboarding is not complete and the user hasn't skipped it
-  const autoShowWizard =
-    !!user && data?.onboardingComplete === false && !data?.onboardingSkipped;
-
-  // Also show if the user explicitly re-opened it via "Complete Setup"
-  const showWizard = autoShowWizard || showOnboardingManually;
-
+  const needsOnboarding =
+    !hasSkipped && user && data?.onboardingComplete === false;
   if (isLoading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
@@ -45,24 +38,15 @@ const Index: React.FC<IndexProps> = ({
     );
   }
 
-  if (showWizard) {
-    return (
-      <OnBoarding
-        onOnboardingComplete={() => setShowOnboardingManually(false)}
-      />
-    );
+  if (needsOnboarding) {
+    return <OnBoarding onOnboardingComplete={() => setHasSkipped(true)} />;
   }
 
-  // Render MainLayout; pass a callback to re-open onboarding when not yet complete
-  const onboardingIncomplete = !!user && data?.onboardingComplete === false;
-
+  // Render MainLayout if onboarding is complete
   return (
     <MainLayout
       onShowAboutDialog={onShowAboutDialog}
       onShowNewReleaseDialog={onShowNewReleaseDialog}
-      onStartOnboarding={
-        onboardingIncomplete ? () => setShowOnboardingManually(true) : undefined
-      }
     />
   );
 };

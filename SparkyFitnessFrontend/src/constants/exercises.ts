@@ -11,8 +11,6 @@ import {
   Expand,
   Pause,
 } from 'lucide-react';
-import type { ExerciseModality } from '@workspace/shared';
-import type { WorkoutPresetSet } from '@/types/workout';
 export const EXERCISE_CATEGORIES = [
   {
     value: 'general',
@@ -123,51 +121,6 @@ export const EXERCISE_CATEGORY_META: Record<
     bg: 'bg-indigo-100 dark:bg-indigo-900/40',
   },
 };
-export const EXERCISE_MODALITY_OPTIONS = [
-  {
-    value: 'weight_reps',
-    labelKey: 'exercise.modality.weightReps',
-    defaultLabel: 'Weight & Reps',
-  },
-  {
-    value: 'reps_only',
-    labelKey: 'exercise.modality.repsOnly',
-    defaultLabel: 'Reps',
-  },
-  {
-    value: 'duration',
-    labelKey: 'exercise.modality.duration',
-    defaultLabel: 'Duration',
-  },
-  {
-    value: 'duration_distance',
-    labelKey: 'exercise.modality.durationDistance',
-    defaultLabel: 'Duration & Distance',
-  },
-] as const satisfies readonly {
-  value: ExerciseModality;
-  labelKey: string;
-  defaultLabel: string;
-}[];
-
-/**
- * Seed set for a newly added exercise. Timed modalities start blank so a
- * cardio or hold exercise is not saved with a placeholder rep count.
- * Callers attach their own `id` / `_dndId`, which differ per host.
- */
-export const defaultSetForModality = (
-  modality: ExerciseModality
-): WorkoutPresetSet =>
-  modality === 'duration' || modality === 'duration_distance'
-    ? {
-        set_number: 1,
-        set_type: 'Working Set',
-        reps: null,
-        weight: null,
-        duration: null,
-      }
-    : { set_number: 1, set_type: 'Working Set', reps: 10, weight: null };
-
 export const DAYS_OF_WEEK = [
   { id: 0, name: 'Sunday' },
   { id: 1, name: 'Monday' },
@@ -326,39 +279,6 @@ export const DROPDOWN_GUIDES = [
   },
 ];
 
-/**
- * `duration_distance` exercises use the entry-level cardio editor, so the set
- * table only ever renders these three layouts.
- */
-export type SetTableModality = Exclude<ExerciseModality, 'duration_distance'>;
-
-export const SET_TABLE_LAYOUT: Record<
-  SetTableModality,
-  { gridClass: string; showReps: boolean; showWeight: boolean }
-> = {
-  weight_reps: {
-    gridClass:
-      'grid grid-cols-[20px_140px_1fr_1fr_1fr_1fr_1fr_72px] gap-1.5 grow',
-    showReps: true,
-    showWeight: true,
-  },
-  reps_only: {
-    gridClass: 'grid grid-cols-[20px_140px_1fr_1fr_1fr_1fr_72px] gap-1.5 grow',
-    showReps: true,
-    showWeight: false,
-  },
-  duration: {
-    gridClass: 'grid grid-cols-[20px_140px_1fr_1fr_1fr_72px] gap-1.5 grow',
-    showReps: false,
-    showWeight: false,
-  },
-};
-
-export const toSetTableModality = (
-  modality: ExerciseModality
-): SetTableModality =>
-  modality === 'duration_distance' ? 'duration' : modality;
-
 export const SET_TYPE_STYLES: Record<string, string> = {
   Normal: 'bg-muted text-muted-foreground',
   'Working Set': 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
@@ -374,19 +294,4 @@ export const SET_TYPE_STYLES: Record<string, string> = {
   Technique: 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300',
   Isometric:
     'bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300',
-};
-
-/**
- * Maps the body-map SVG's `path[class]` names to the muscle vocabulary stored in
- * exercises.primary_muscles/secondary_muscles (the free-exercise-db muscle names, e.g.
- * "abdominals", "lower back", "quadriceps"). Shared by BodyMapFilter (exercise search
- * filter) and WorkoutSessionBodyMap (workout session muscle summary) so the SVG-to-schema
- * mapping only exists once.
- */
-export const svgClassToSchemaName: Record<string, string> = {
-  abdominal: 'abdominals',
-  lowerback: 'lower back',
-  quads: 'quadriceps',
-  obliques: 'abdominals', // Map obliques to abdominals
-  // Add other mappings if necessary, e.g. 'lats' if it appears in SVG
 };

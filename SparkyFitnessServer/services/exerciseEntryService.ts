@@ -5,7 +5,6 @@ import workoutPresetRepository from '../models/workoutPresetRepository.js';
 import activityDetailsRepository from '../models/activityDetailsRepository.js';
 import preferenceRepository from '../models/preferenceRepository.js';
 import { parseISO, isValid } from 'date-fns';
-import { setsDurationMinutes } from '@workspace/shared';
 async function importExerciseEntriesFromCsv(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   authenticatedUserId: any,
@@ -108,15 +107,17 @@ async function importExerciseEntriesFromCsv(
         return {
           ...set,
           weight: weightInKg,
-          // CSV duration_min is minutes; stored per-set duration is integer seconds.
-          duration:
-            set.duration_min !== null && set.duration_min !== undefined
-              ? Math.round(Number(set.duration_min) * 60)
-              : null,
+          duration: set.duration_min, // Map frontend duration_min to backend duration
           rest_time: set.rest_time_sec, // Map frontend rest_time_sec to backend rest_time
         };
       });
-      const totalDurationMinutes = setsDurationMinutes(setsWithConvertedWeight);
+      // Calculate total duration from sets
+      const totalDurationMinutes = setsWithConvertedWeight.reduce(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (sum: any, set: any) =>
+          sum + (set.duration || 0) + (set.rest_time || 0) / 60,
+        0
+      );
       // 4. Lookup or Create Workout Preset (if preset_name is provided)
       let workoutPresetId = null; // Initialize workoutPresetId once
       if (entryGroup.preset_name) {

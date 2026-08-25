@@ -1,5 +1,4 @@
-import { useTranslation } from 'react-i18next';
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { View } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -50,14 +49,13 @@ function Dot({ color, delay }: { color: string; delay: number }) {
  * Sparky is responding but hasn't streamed any visible content yet.
  */
 export default function TypingIndicator() {
-  const { t } = useTranslation();
   const muted = useCSSVariable('--color-text-muted') as string;
 
   return (
     <View
       className="flex-row items-center gap-1"
       style={{ height: 20 }}
-      accessibilityLabel={t('chat.typing', { defaultValue: 'Sparky is typing' })}
+      accessibilityLabel="Sparky is typing"
     >
       {Array.from({ length: DOT_COUNT }).map((_, i) => (
         <Dot key={i} color={muted} delay={i * DOT_STAGGER} />

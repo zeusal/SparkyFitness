@@ -63,10 +63,6 @@ async function syncFitbitData(
       // 1. Extract Unit Preferences and Timezone from Profil/Responses if available
       const profileResponse = responses['raw_profile']?.data;
       const timezoneOffset = profileResponse?.user?.offsetFromUTCMillis || 0;
-      const recordUtcOffsetMinutes: number | null =
-        typeof profileResponse?.user?.offsetFromUTCMillis === 'number'
-          ? Math.round(profileResponse.user.offsetFromUTCMillis / 60000)
-          : null;
       // 2. Process all raw items from bundle
       log('debug', `[fitbitService] Processing raw data for ${userId}...`);
       if (responses['raw_profile'])
@@ -155,8 +151,7 @@ async function syncFitbitData(
           userId,
           userId,
           responses['raw_sleep'].data,
-          timezoneOffset,
-          recordUtcOffsetMinutes
+          timezoneOffset
         );
       if (responses['raw_activities_list'])
         await fitbitDataProcessor.processFitbitActivities(
@@ -222,10 +217,6 @@ async function syncFitbitData(
       accessToken
     );
     const timezoneOffset = profileData?.user?.offsetFromUTCMillis || 0;
-    const recordUtcOffsetMinutes: number | null =
-      typeof profileData?.user?.offsetFromUTCMillis === 'number'
-        ? Math.round(profileData.user.offsetFromUTCMillis / 60000)
-        : null;
     // 2. Fetch all other data sequentially to avoid 429 Resource Exhausted errors
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const safeFetch = async (fetchFn: any, name: any) => {
@@ -465,8 +456,7 @@ async function syncFitbitData(
         userId,
         userId,
         sleepData,
-        timezoneOffset,
-        recordUtcOffsetMinutes
+        timezoneOffset
       );
     if (activitiesData)
       await fitbitDataProcessor.processFitbitActivities(

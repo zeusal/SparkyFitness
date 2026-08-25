@@ -1,20 +1,20 @@
-import React, { useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Alert, ScrollView, Text, View } from 'react-native';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Alert, Platform, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { CommonActions } from '@react-navigation/native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import Toast from 'react-native-toast-message';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCSSVariable } from 'uniwind';
 import FormInput from '../components/FormInput';
+import Icon from '../components/Icon';
 import Button from '../components/ui/Button';
+import { createNativeHeaderTextButtonItem } from '../utils/nativeHeaderItems';
 import { addLog } from '../services/LogService';
 import { updateFood } from '../services/api/foodsApi';
 import { lookupBarcodeV2 } from '../services/api/externalFoodSearchApi';
 import { foodsQueryKey } from '../hooks/queryKeys';
 import type { RootStackScreenProps } from '../types/navigation';
-import { useScreenHeader, SAVE_LABEL } from '../hooks/useScreenHeader';
-import { useNativeIOSHeadersActive } from '../services/nativeTabBarPreference';
+import { useHeaderActionColors } from '../hooks/useHeaderActionColors';
 
 type EditBarcodeScreenProps = RootStackScreenProps<'EditBarcode'>;
 
@@ -30,20 +30,19 @@ function normalizeBarcodeClient(value: string): string {
 const EditBarcodeScreen: React.FC<EditBarcodeScreenProps> = ({ navigation, route }) => {
   const { foodId, foodName, currentBarcode, returnKey, pendingScannedBarcode, scannedBarcodeNonce } =
     route.params;
-  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const usesNativeHeader = useNativeIOSHeadersActive();
   const queryClient = useQueryClient();
-  const textSecondary = useCSSVariable('--color-text-secondary') as string;
+  const [textSecondary, textPrimary] = useCSSVariable([
+    '--color-text-secondary',
+    '--color-text-primary',
+  ]) as [string, string];
+  const { saveColor: headerSaveColor, headerTintColor } = useHeaderActionColors();
 
   const [value, setValue] = useState(currentBarcode ?? '');
 
   // Apply a barcode handed back from the FoodScan capture-barcode flow.
   useEffect(() => {
     if (scannedBarcodeNonce == null || pendingScannedBarcode == null) return;
-    // Consume a one-shot navigation param: guarded by the nonce and paired with
-    // clearing the param via setParams, so it can't move to a render-time derive.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setValue(pendingScannedBarcode);
     navigation.setParams({
       pendingScannedBarcode: undefined,
@@ -83,8 +82,8 @@ const EditBarcodeScreen: React.FC<EditBarcodeScreenProps> = ({ navigation, route
     if (!BARCODE_REGEX.test(barcode)) {
       Toast.show({
         type: 'error',
-        text1: t('editBarcode.errors.invalid', { defaultValue: 'Invalid barcode' }),
-        text2: t('editBarcode.errors.invalidFormat', { defaultValue: 'Barcode must be 8-14 digits.' }),
+        text1: 'Invalid barcode',
+        text2: 'Barcode must be 8-14 digits.',
       });
       return;
     }
@@ -100,11 +99,11 @@ const EditBarcodeScreen: React.FC<EditBarcodeScreenProps> = ({ navigation, route
         const otherName = lookup.food.name || 'another food';
         const proceed = await new Promise<boolean>((resolve) => {
           Alert.alert(
-            t('editBarcode.confirm.inUseTitle', { defaultValue: 'Barcode already in use' }),
-            t('editBarcode.confirm.inUseMessage', { defaultValue: 'This barcode is already attached to \"{{otherName}}\". Attach it to \"{{foodName}}\" anyway?', otherName, foodName }),
+            'Barcode already in use',
+            `This barcode is already attached to "${otherName}". Attach it to "${foodName}" anyway?`,
             [
-              { text: t('common.cancel', { defaultValue: 'Cancel' }), style: 'cancel', onPress: () => resolve(false) },
-              { text: t('editBarcode.actions.attach', { defaultValue: 'Attach' }), style: 'default', onPress: () => resolve(true) },
+              { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+              { text: 'Attach', style: 'default', onPress: () => resolve(true) },
             ],
             { cancelable: true, onDismiss: () => resolve(false) },
           );
@@ -124,7 +123,7 @@ const EditBarcodeScreen: React.FC<EditBarcodeScreenProps> = ({ navigation, route
       const stored = updated?.barcode ?? null;
       dispatchUpdate(stored);
       invalidateCaches();
-      Toast.show({ type: 'success', text1: t('editBarcode.success.saved', { defaultValue: 'Barcode saved' }) });
+      Toast.show({ type: 'success', text1: 'Barcode saved' });
       navigation.goBack();
     } catch (error) {
       addLog('[EditBarcode] Failed to save barcode', 'ERROR', [
@@ -133,27 +132,27 @@ const EditBarcodeScreen: React.FC<EditBarcodeScreenProps> = ({ navigation, route
       ]);
       Toast.show({
         type: 'error',
-        text1: t('editBarcode.errors.saveFailed', { defaultValue: 'Could not save barcode' }),
-        text2: t('common.tryAgain', { defaultValue: 'Please try again.' }),
+        text1: 'Could not save barcode',
+        text2: 'Please try again.',
       });
     }
   };
 
   const handleRemove = () => {
     Alert.alert(
-      t('editBarcode.confirm.removeTitle', { defaultValue: 'Remove barcode' }),
-      t('editBarcode.confirm.removeMessage', { defaultValue: 'Remove the barcode from \"{{foodName}}\"?', foodName }),
+      'Remove barcode',
+      `Remove the barcode from "${foodName}"?`,
       [
-        { text: t('common.cancel', { defaultValue: 'Cancel' }), style: 'cancel' },
+        { text: 'Cancel', style: 'cancel' },
         {
-          text: t('editBarcode.actions.remove', { defaultValue: 'Remove' }),
+          text: 'Remove',
           style: 'destructive',
           onPress: async () => {
             try {
               await mutation.mutateAsync(null);
               dispatchUpdate(null);
               invalidateCaches();
-              Toast.show({ type: 'success', text1: t('editBarcode.success.removed', { defaultValue: 'Barcode removed' }) });
+              Toast.show({ type: 'success', text1: 'Barcode removed' });
               navigation.goBack();
             } catch (error) {
               addLog('[EditBarcode] Failed to remove barcode', 'ERROR', [
@@ -162,8 +161,8 @@ const EditBarcodeScreen: React.FC<EditBarcodeScreenProps> = ({ navigation, route
               ]);
               Toast.show({
                 type: 'error',
-                text1: t('editBarcode.errors.removeFailed', { defaultValue: 'Could not remove barcode' }),
-                text2: t('common.tryAgain', { defaultValue: 'Please try again.' }),
+                text1: 'Could not remove barcode',
+                text2: 'Please try again.',
               });
             }
           },
@@ -172,30 +171,67 @@ const EditBarcodeScreen: React.FC<EditBarcodeScreenProps> = ({ navigation, route
     );
   };
 
-  // Diary/Food drill-in, so the left slot stays a back chevron (not a modal X).
-  const header = useScreenHeader({
-    title: t('editBarcode.title', { defaultValue: 'Barcode' }),
-    left: { kind: 'back' },
-    right: {
-      kind: 'primary',
-      label: SAVE_LABEL,
-      disabled: saveDisabled,
-      onPress: () => void handleSave(),
-      accessibilityLabel: t('editBarcode.accessibility.save', { defaultValue: 'Save barcode' }),
-      identifier: 'edit-barcode-save',
-    },
-  });
+  const handleSaveRef = useRef(handleSave);
+  handleSaveRef.current = handleSave;
+
+  useLayoutEffect(() => {
+    navigation.setOptions({ headerTintColor });
+
+    if (Platform.OS !== 'ios') return;
+
+    navigation.setOptions({
+      unstable_headerRightItems: () => [
+        createNativeHeaderTextButtonItem({
+          label: 'Save',
+          identifier: 'edit-barcode-save',
+          tintColor: headerSaveColor,
+          accessibilityLabel: 'Save barcode',
+          fontWeight: '600',
+          disabled: saveDisabled,
+          onPress: () => {
+            void handleSaveRef.current();
+          },
+        }),
+      ],
+    });
+  }, [navigation, headerSaveColor, headerTintColor, saveDisabled]);
 
   return (
-    <View className="flex-1 bg-background" style={usesNativeHeader ? undefined : { paddingTop: insets.top }}>
-      {header}
+    <View className="flex-1 bg-background" style={Platform.OS === 'ios' ? undefined : { paddingTop: insets.top }}>
+      {Platform.OS !== 'ios' && (
+      <View className="flex-row items-center px-4 py-3 border-b border-border-subtle">
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Icon name="chevron-back" size={22} color={textPrimary} />
+        </TouchableOpacity>
+        <Text
+          pointerEvents="none"
+          className="absolute left-0 right-0 text-center text-text-primary text-lg font-semibold"
+        >
+          Barcode
+        </Text>
+        <View className="ml-auto">
+          <Button
+            variant="header"
+            onPress={() => {
+              void handleSave();
+            }}
+            disabled={saveDisabled}
+          >
+            Save
+          </Button>
+        </View>
+      </View>
+      )}
 
       <ScrollView
         contentContainerStyle={{ padding: 16, gap: 16 }}
         keyboardShouldPersistTaps="handled"
       >
         <View className="gap-2">
-          <Text className="text-sm text-text-secondary">{t('editBarcode.labels.forFood', { defaultValue: 'For {{foodName}}', foodName })}</Text>
+          <Text className="text-sm text-text-secondary">For {foodName}</Text>
           <FormInput
             placeholder="012345678905"
             keyboardType="number-pad"
@@ -210,11 +246,11 @@ const EditBarcodeScreen: React.FC<EditBarcodeScreenProps> = ({ navigation, route
           />
           {!isValidFormat ? (
             <Text className="text-sm" style={{ color: '#dc2626' }}>
-              {t('editBarcode.errors.invalidFormat', { defaultValue: 'Barcode must be 8-14 digits.' })}
+              Barcode must be 8-14 digits.
             </Text>
           ) : (
             <Text className="text-xs" style={{ color: textSecondary }}>
-              {t('editBarcode.help.standardFormat', { defaultValue: 'Standard barcodes are 8 to 14 digits.' })}
+              Standard barcodes are 8 to 14 digits.
             </Text>
           )}
         </View>
@@ -228,16 +264,17 @@ const EditBarcodeScreen: React.FC<EditBarcodeScreenProps> = ({ navigation, route
             })
           }
         >
-          {t('editBarcode.actions.scanWithCamera', { defaultValue: 'Scan with camera' })}
+          Scan with camera
         </Button>
 
         {currentBarcode != null ? (
           <Button
-            variant="destructive"
+            variant="ghost"
             onPress={handleRemove}
             disabled={mutation.isPending}
+            textClassName="text-bg-danger font-medium"
           >
-            {t('editBarcode.actions.removeBarcode', { defaultValue: 'Remove barcode' })}
+            Remove barcode
           </Button>
         ) : null}
       </ScrollView>

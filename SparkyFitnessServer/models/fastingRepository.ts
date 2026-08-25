@@ -238,19 +238,6 @@ async function getFastingLogsOverlappingDay(
     client.release();
   }
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function deleteFastingLog(id: any, userId: any) {
-  const client = await getClient(userId);
-  try {
-    const result = await client.query(
-      'DELETE FROM fasting_logs WHERE id = $1 AND user_id = $2 RETURNING *',
-      [id, userId]
-    );
-    return result.rows[0];
-  } finally {
-    client.release();
-  }
-}
 export { createFastingLog };
 export { endFast };
 export { getFastingById };
@@ -260,7 +247,6 @@ export { updateFast };
 export { getFastingStats };
 export { getFastingLogsByDateRange };
 export { getFastingLogsOverlappingDay };
-export { deleteFastingLog };
 export default {
   createFastingLog,
   endFast,
@@ -271,5 +257,4 @@ export default {
   getFastingStats,
   getFastingLogsByDateRange,
   getFastingLogsOverlappingDay,
-  deleteFastingLog,
 };

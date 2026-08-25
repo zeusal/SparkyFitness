@@ -1,14 +1,11 @@
 import express from 'express';
 import authMiddleware from '../middleware/authMiddleware.js';
-import checkPermissionMiddleware from '../middleware/checkPermissionMiddleware.js';
 import stravaIntegrationService from '../integrations/strava/stravaService.js';
 import stravaService from '../services/stravaService.js';
 import { log } from '../config/logging.js';
 const router = express.Router();
-// All Strava routes require authentication, and — when acting in a switched
-// family context — diary access to the active user.
+// All Strava routes require authentication
 router.use(authMiddleware.authenticate);
-router.use(checkPermissionMiddleware('diary'));
 /**
  * GET /authorize
  * Returns the Strava OAuth authorization URL

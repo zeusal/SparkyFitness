@@ -11,18 +11,12 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
-import { Save, X, Plug, Loader2, AlertTriangle } from 'lucide-react';
-import {
-  getServiceTypes,
-  getModelOptions,
-  requiresApiKey,
-} from '@/utils/aiServiceUtils';
-import { useToast } from '@/hooks/use-toast';
+import { Save, X } from 'lucide-react';
+import { getServiceTypes, getModelOptions } from '@/utils/aiServiceUtils';
 import {
   AiServiceSettingsFormInput,
   UpdateAiServiceSettingsFormInput,
 } from '@/schemas/form/AiServiceSettings.form.zod';
-import type { TestConnectionStatus } from '@/hooks/AI/useTestAIServiceConnection';
 
 interface ServiceFormProps {
   formData: AiServiceSettingsFormInput;
@@ -32,12 +26,6 @@ interface ServiceFormProps {
   loading?: boolean;
   isEdit?: boolean;
   translationPrefix?: string; // 'settings.aiService.globalSettings' or 'settings.aiService.userSettings'
-  // When provided, renders a "Test Connection" button that runs a live check
-  // against the current config. Receives the effective model the form resolves.
-  onTestConnection?: (selectedModel: string) => void;
-  testing?: boolean;
-  // Inline result shown next to the button; hidden while a test is in flight.
-  testStatus?: TestConnectionStatus;
 }
 
 export const ServiceForm = ({
@@ -48,21 +36,10 @@ export const ServiceForm = ({
   loading = false,
   isEdit = false,
   translationPrefix = 'settings.aiService.globalSettings',
-  onTestConnection,
-  testing = false,
-  testStatus = null,
 }: ServiceFormProps) => {
   const { t } = useTranslation();
-  const { toast } = useToast();
   const serviceTypes = getServiceTypes(t);
   const modelOptions = getModelOptions(formData.service_type ?? '');
-
-  // The effective model is whichever input is active for this service type.
-  const selectedModel = (
-    formData.showCustomModelInput
-      ? formData.custom_model_name
-      : formData.model_name
-  )?.trim();
 
   const requiresCustomUrl =
     formData.service_type === 'custom' ||
@@ -73,18 +50,6 @@ export const ServiceForm = ({
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        // Providers with preset models (openai, anthropic, ...) have a sensible
-        // server-side default, so a blank model is fine. Types without presets
-        // (openai_compatible/custom/ollama) point at user-hosted servers with no
-        // reliable default, so require an explicit model there.
-        if (modelOptions.length === 0 && !selectedModel) {
-          toast({
-            title: t(`${translationPrefix}.error`),
-            description: t(`${translationPrefix}.fillRequiredFields`),
-            variant: 'destructive',
-          });
-          return;
-        }
         onSubmit();
       }}
       className="space-y-4"
@@ -112,13 +77,6 @@ export const ServiceForm = ({
               onFormDataChange({
                 service_type: value,
                 model_name: '',
-                custom_model_name: '',
-                // Types without preset models (openai_compatible/custom/ollama)
-                // have no dropdown, so reveal the custom-model input directly.
-                showCustomModelInput: getModelOptions(value).length === 0,
-                // Default all services to the 'full' tool profile.
-                // Users can manually select 'core' if they wish to optimize
-                // their local system performance, and are guided by warnings.
                 chat_tool_profile: 'full',
               })
             }
@@ -139,9 +97,9 @@ export const ServiceForm = ({
 
       <div>
         <Label htmlFor="api_key">
-          {requiresApiKey(formData.service_type)
-            ? t(`${translationPrefix}.apiKey`)
-            : t(`${translationPrefix}.apiKeyOptional`)}
+          {formData.service_type === 'ollama'
+            ? t(`${translationPrefix}.apiKeyOptional`)
+            : t(`${translationPrefix}.apiKey`)}
         </Label>
         <Input
           id="api_key"
@@ -182,75 +140,35 @@ export const ServiceForm = ({
         </div>
       )}
 
-      {/* Self-hosted types (ollama/openai_compatible/custom) can point at
-          small local models with no prompt cache, where the full 35-tool
-          block is the dominant per-turn token cost — offer the leaner 'core'
-          profile for all of them. The server only honors 'core' for these
-          types (see chatService.prepareChatContext). */}
-      {requiresCustomUrl && (
-        <>
-          <div>
-            <Label htmlFor="chat_tool_profile">
-              {t(`${translationPrefix}.chatToolProfile`)}
-            </Label>
-            <Select
-              value={formData.chat_tool_profile ?? 'full'}
-              onValueChange={(value) =>
-                onFormDataChange({
-                  chat_tool_profile: value as 'full' | 'core',
-                })
-              }
-            >
-              <SelectTrigger id="chat_tool_profile">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="full">
-                  {t(`${translationPrefix}.chatToolProfileFull`)}
-                </SelectItem>
-                <SelectItem value="core">
-                  {t(`${translationPrefix}.chatToolProfileCore`)}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground mt-1">
-              {t(`${translationPrefix}.chatToolProfileDescription`)}
-            </p>
-          </div>
-
-          {formData.service_type === 'ollama' &&
-            (formData.chat_tool_profile === 'full' ||
-              !formData.chat_tool_profile) && (
-              <div className="flex gap-2 rounded-md border border-amber-500/50 bg-amber-50 p-3 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-                <div className="text-xs">
-                  <p className="font-medium">
-                    {t(`${translationPrefix}.ollamaFullProfileWarningTitle`)}
-                  </p>
-                  <p className="mt-1">
-                    {t(`${translationPrefix}.ollamaFullProfileWarningHint`)}
-                  </p>
-                </div>
-              </div>
-            )}
-
-          {/* Ollama silently truncates prompts past its default 4096-token
-              context, which corrupts tool calls. Surface this prominently so
-              users raise it before blaming the model. */}
-          {formData.service_type === 'ollama' && (
-            <div className="flex gap-2 rounded-md border border-amber-500/50 bg-amber-50 p-3 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-              <div className="text-xs">
-                <p className="font-medium">
-                  {t(`${translationPrefix}.ollamaContextTitle`)}
-                </p>
-                <p className="mt-1">
-                  {t(`${translationPrefix}.ollamaContextHint`)}
-                </p>
-              </div>
-            </div>
-          )}
-        </>
+      {formData.service_type === 'ollama' && (
+        <div>
+          <Label htmlFor="chat_tool_profile">
+            {t(`${translationPrefix}.chatToolProfile`)}
+          </Label>
+          <Select
+            value={formData.chat_tool_profile ?? 'full'}
+            onValueChange={(value) =>
+              onFormDataChange({
+                chat_tool_profile: value as 'full' | 'core',
+              })
+            }
+          >
+            <SelectTrigger id="chat_tool_profile">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="full">
+                {t(`${translationPrefix}.chatToolProfileFull`)}
+              </SelectItem>
+              <SelectItem value="core">
+                {t(`${translationPrefix}.chatToolProfileCore`)}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground mt-1">
+            {t(`${translationPrefix}.chatToolProfileDescription`)}
+          </p>
+        </div>
       )}
 
       <div className="flex items-center space-x-2 mb-4">
@@ -340,7 +258,7 @@ export const ServiceForm = ({
         </Label>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex gap-2">
         <Button type="submit" disabled={loading}>
           <Save className="h-4 w-4 mr-2" />
           {isEdit
@@ -351,45 +269,6 @@ export const ServiceForm = ({
           <X className="h-4 w-4 mr-2" />
           {t(`${translationPrefix}.cancel`)}
         </Button>
-        {onTestConnection && (
-          // type="button" is critical — the test must not submit the form.
-          // Disabled with the same guard as submit so a config the form would
-          // reject can't be tested either.
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onTestConnection(selectedModel ?? '')}
-            disabled={
-              loading ||
-              testing ||
-              (modelOptions.length === 0 && !selectedModel) ||
-              (requiresCustomUrl && !formData.custom_url?.trim())
-            }
-          >
-            {testing ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Plug className="h-4 w-4 mr-2" />
-            )}
-            {testing
-              ? t(`${translationPrefix}.testing`)
-              : t(`${translationPrefix}.testConnection`)}
-          </Button>
-        )}
-        {/* Inline result next to the button; hidden while a test is running. */}
-        {onTestConnection && !testing && testStatus && (
-          <span
-            className={
-              testStatus.state === 'success'
-                ? 'text-sm font-medium text-green-600 dark:text-green-400'
-                : 'text-sm font-medium text-destructive'
-            }
-          >
-            {testStatus.state === 'success'
-              ? t('settings.aiService.test.successTitle')
-              : `${t('settings.aiService.test.failureTitle')}: ${testStatus.message}`}
-          </span>
-        )}
       </div>
     </form>
   );

@@ -6,13 +6,10 @@ import type { ServerResponse } from 'http';
 // merged into whatever Better Auth writes. Attributes must match those used
 // when the cookie was originally set in routes/auth/userProfileRoutes.js
 // /switch-context, otherwise some browsers won't honor the delete.
-export function applySignOutCookieCleanup(
-  res: ServerResponse,
-  isSecure = false
-): void {
+export function applySignOutCookieCleanup(res: ServerResponse): void {
   const clearCookieStr =
     'sparky_active_user_id=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Strict' +
-    (isSecure ? '; Secure' : '');
+    (process.env.NODE_ENV === 'production' ? '; Secure' : '');
 
   const originalSetHeader = res.setHeader.bind(res);
   res.setHeader = function (

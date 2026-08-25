@@ -55,15 +55,12 @@ export const useSaveFoodMutation = () => {
       variants,
       userId,
       foodId,
-      imageFiles,
     }: {
       foodData: Food;
       variants: FoodVariant[];
       userId: string;
       foodId?: string;
-      /** Newly attached image files; sent as multipart when present. */
-      imageFiles?: File[];
-    }) => saveFood(foodData, variants, userId, foodId, imageFiles),
+    }) => saveFood(foodData, variants, userId, foodId),
 
     onSuccess: () => {
       queryClient.invalidateQueries({

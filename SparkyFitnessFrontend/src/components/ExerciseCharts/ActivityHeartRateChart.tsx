@@ -12,8 +12,6 @@ import {
 } from 'recharts';
 import ZoomableChart from '@/components/ZoomableChart';
 import { ChartDataPoint } from '@/types/reports';
-import { usePreferences } from '@/contexts/PreferencesContext';
-import { formatTimeWithPreference } from '@/utils/timeFormatters';
 
 interface ActivityHeartRateChartProps {
   data: ChartDataPoint[];
@@ -31,7 +29,6 @@ export const ActivityHeartRateChart = ({
   distanceUnit,
 }: ActivityHeartRateChartProps) => {
   const { t } = useTranslation();
-  const { timeFormat } = usePreferences();
 
   return (
     <ZoomableChart title={t('reports.activityReport.heartRateBpm')}>
@@ -67,10 +64,7 @@ export const ActivityHeartRateChart = ({
                     if (xAxisMode === 'distance')
                       return `${Number(value).toFixed(2)}`;
                     if (xAxisMode === 'timeOfDay')
-                      return formatTimeWithPreference(
-                        new Date(value),
-                        timeFormat
-                      );
+                      return new Date(value).toLocaleTimeString();
                     return String(value);
                   }}
                   interval="preserveStartEnd"
@@ -83,10 +77,7 @@ export const ActivityHeartRateChart = ({
                   }}
                   labelFormatter={(value) => {
                     if (xAxisMode === 'timeOfDay')
-                      return formatTimeWithPreference(
-                        new Date(value),
-                        timeFormat
-                      );
+                      return new Date(value).toLocaleTimeString();
                     if (xAxisMode === 'activityDuration')
                       return `${Number(value).toFixed(0)} ${t('common.min', 'min')}`;
                     if (xAxisMode === 'distance')

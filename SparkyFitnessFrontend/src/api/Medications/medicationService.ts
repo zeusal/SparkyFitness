@@ -10,11 +10,8 @@ import type {
   SiteSuggestionResponse,
   ListMedicationsOptions,
   LogInjectionInput,
-  UpdateInjectionInput,
-  UpdateTitrationStepInput,
   MedicationEntry,
   CreateMedicationEntryInput,
-  UpdateMedicationEntryInput,
   ListMedicationEntriesOptions,
 } from '@/types/medications';
 
@@ -52,12 +49,6 @@ export const createMedicationEntry = (
   body: CreateMedicationEntryInput
 ): Promise<MedicationEntry> =>
   apiCall('/v2/medications/entries', { method: 'POST', body });
-
-export const updateMedicationEntry = (
-  id: string,
-  body: UpdateMedicationEntryInput
-): Promise<MedicationEntry> =>
-  apiCall(`/v2/medications/entries/${id}`, { method: 'PUT', body });
 
 export const deleteMedicationEntry = (id: string): Promise<void> =>
   apiCall(`/v2/medications/entries/${id}`, { method: 'DELETE' });
@@ -108,12 +99,6 @@ export const logInjection = (
 ): Promise<InjectionEntry & { pen: MedicationPen | null }> =>
   apiCall('/v2/medications/injections', { method: 'POST', body });
 
-export const updateInjection = (
-  id: string,
-  body: UpdateInjectionInput
-): Promise<InjectionEntry> =>
-  apiCall(`/v2/medications/injections/${id}`, { method: 'PUT', body });
-
 export const deleteInjection = (id: string): Promise<void> =>
   apiCall(`/v2/medications/injections/${id}`, { method: 'DELETE' });
 
@@ -130,12 +115,6 @@ export const addTitrationStep = (
     method: 'POST',
     body,
   });
-
-export const updateTitrationStep = (
-  id: string,
-  body: UpdateTitrationStepInput
-): Promise<TitrationStep> =>
-  apiCall(`/v2/medications/titration/${id}`, { method: 'PUT', body });
 
 export const deleteTitrationStep = (id: string): Promise<void> =>
   apiCall(`/v2/medications/titration/${id}`, { method: 'DELETE' });

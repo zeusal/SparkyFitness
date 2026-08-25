@@ -1,59 +1,6 @@
 import { getClient, getSystemClient } from '../db/poolManager.js';
 import { log } from '../config/logging.js';
 import { normalizeBarcode } from '../utils/foodUtils.js';
-import {
-  buildSqlSearch,
-  buildSqlExactMatchOrder,
-} from '../utils/dbSearchHelper.js';
-import {
-  localizeImages,
-  toImageArray,
-  resolveImageInput,
-} from '../utils/imageLocalizer.js';
-import type {
-  NutrientValue,
-  NutrientFields,
-  FoodVariantInput,
-} from '../types/nutrition.js';
-
-/** A value bound into a parameterised query. */
-type SqlParam = string | number | boolean | null | undefined;
-
-/** An update may change any subset of a food's fields. */
-export type FoodUpdate = Partial<FoodInput>;
-
-/** Booleans arrive from CSV/provider payloads as strings or 0/1 too. */
-type BooleanLike = boolean | string | number | null | undefined;
-
-/**
- * The food fields this repository reads when creating or updating a row.
- *
- * Values arrive from user input, CSV import, and provider adapters, so numeric
- * and boolean fields are accepted in their raw form and passed through the
- * `sanitize*` helpers below.
- */
-export interface FoodInput extends NutrientFields {
-  id?: string;
-  name: string;
-  user_id: string;
-  brand?: string | null;
-  barcode?: string | null;
-  provider_external_id?: string | null;
-  provider_type?: string | null;
-  is_custom?: boolean | string | null;
-  shared_with_public?: boolean | string | null;
-  provider_verified?: boolean | string | null;
-  is_quick_food?: boolean | string | null;
-  images?: string[] | null;
-  image_url?: string | null;
-  image_source_url?: string | null;
-  serving_size?: NutrientValue;
-  serving_unit?: string | null;
-  source?: string | null;
-  ai_confidence?: string | null;
-  allergens?: string[] | null;
-  traces?: string[] | null;
-}
 
 const DEFAULT_VARIANT_JSON_SQL = `
   json_build_object(
@@ -100,7 +47,8 @@ const PREFERRED_DEFAULT_VARIANT_JOIN_SQL = `
     LIMIT 1
   ) fv ON TRUE
 `;
-function sanitizeGlycemicIndex(gi: string | null | undefined) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeGlycemicIndex(gi: any) {
   const allowedGICategories = [
     'None',
     'Very Low',
@@ -121,7 +69,8 @@ function sanitizeGlycemicIndex(gi: string | null | undefined) {
   }
   return gi;
 }
-function sanitizeNumeric(value: NutrientValue) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeNumeric(value: any) {
   if (
     value === null ||
     value === undefined ||
@@ -135,10 +84,11 @@ function sanitizeNumeric(value: NutrientValue) {
   if (typeof value === 'string') {
     sanitizedValue = value.replace(/^["']|["']$/g, '');
   }
-  const num = parseFloat(String(sanitizedValue));
+  const num = parseFloat(sanitizedValue);
   return isNaN(num) ? null : num;
 }
-function sanitizeBoolean(value: BooleanLike) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeBoolean(value: any) {
   if (
     value === true ||
     value === 'TRUE' ||
@@ -160,52 +110,40 @@ function sanitizeBoolean(value: BooleanLike) {
   return null;
 }
 async function searchFoods(
-  name: string | null | undefined,
-  userId: string | null | undefined,
-  exactMatch: boolean,
-  broadMatch: boolean,
-  checkCustom: boolean,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  name: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  userId: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  exactMatch: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  broadMatch: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  checkCustom: any,
   limit = 10
 ) {
   const client = await getClient(userId); // User-specific operation
   try {
     let query = `
       SELECT
-        f.id, f.name, f.brand, f.barcode, f.is_custom, f.user_id, f.shared_with_public, f.provider_external_id, f.provider_type, f.provider_verified, f.images,
+        f.id, f.name, f.brand, f.is_custom, f.user_id, f.shared_with_public, f.provider_external_id, f.provider_type,
         ${DEFAULT_VARIANT_JSON_SQL}
       FROM foods f
       ${PREFERRED_DEFAULT_VARIANT_JOIN_SQL}
-      WHERE f.is_quick_food = FALSE`;
-    const queryParams: SqlParam[] = [];
+      WHERE f.is_quick_food = FALSE AND `;
+    const queryParams = [];
     let paramIndex = 1;
-    let orderByClause = '';
     if (exactMatch) {
-      query += ` AND CONCAT(f.brand, ' ', f.name) ILIKE $${paramIndex++}`;
+      query += `CONCAT(f.brand, ' ', f.name) ILIKE $${paramIndex++}`;
       queryParams.push(name);
     } else if (broadMatch) {
-      const {
-        whereClauses,
-        queryParams: searchParams,
-        nextParamIndex,
-      } = buildSqlSearch("CONCAT(f.brand, ' ', f.name)", name, 1);
-      if (whereClauses.length > 0) {
-        query += ` AND ${whereClauses.join(' AND ')}`;
-        queryParams.push(...searchParams);
-        paramIndex = nextParamIndex;
-
-        const exactMatchParamIndex = paramIndex;
-        queryParams.push(`%${name}%`);
-        paramIndex++;
-        orderByClause = ` ORDER BY ${buildSqlExactMatchOrder("CONCAT(f.brand, ' ', f.name)", exactMatchParamIndex)}, f.name ASC`;
-      }
+      query += `CONCAT(f.brand, ' ', f.name) ILIKE $${paramIndex++}`;
+      queryParams.push(`%${name}%`);
     } else if (checkCustom) {
-      query += ` AND f.name = $${paramIndex++}`;
+      query += `f.name = $${paramIndex++}`;
       queryParams.push(name);
     } else {
       throw new Error('Invalid search parameters.');
-    }
-    if (orderByClause) {
-      query += orderByClause;
     }
     query += ` LIMIT $${paramIndex++}`;
     queryParams.push(limit);
@@ -215,15 +153,16 @@ async function searchFoods(
     client.release();
   }
 }
-async function createFood(foodData: FoodInput) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function createFood(foodData: any) {
   const client = await getClient(foodData.user_id); // User-specific operation
   try {
     await client.query('BEGIN'); // Start transaction
     // 1. Create the food entry
     const foodResult = await client.query(
       `INSERT INTO foods (
-        name, is_custom, user_id, brand, barcode, provider_external_id, shared_with_public, provider_type, provider_verified, is_quick_food, images, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, now(), now()) RETURNING id, name, brand, is_custom, user_id, shared_with_public, is_quick_food, provider_external_id, provider_type, provider_verified, images`,
+        name, is_custom, user_id, brand, barcode, provider_external_id, shared_with_public, provider_type, is_quick_food, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), now()) RETURNING id, name, brand, is_custom, user_id, shared_with_public, is_quick_food, provider_external_id, provider_type`,
       [
         foodData.name,
         sanitizeBoolean(foodData.is_custom) ?? true,
@@ -235,9 +174,7 @@ async function createFood(foodData: FoodInput) {
         foodData.provider_external_id,
         sanitizeBoolean(foodData.shared_with_public) ?? false,
         foodData.provider_type,
-        sanitizeBoolean(foodData.provider_verified) ?? false,
         sanitizeBoolean(foodData.is_quick_food) ?? false,
-        JSON.stringify(resolveImageInput(foodData)),
       ]
     );
     const newFood = foodResult.rows[0];
@@ -281,46 +218,6 @@ async function createFood(foodData: FoodInput) {
     );
     const newVariantId = variantResult.rows[0].id;
     await client.query('COMMIT'); // Commit transaction
-
-    // Localize provider-hosted images after COMMIT so network latency never
-    // holds the transaction open. Every food-creation path funnels through
-    // here, so provider imports get local copies without each caller opting in.
-    try {
-      const localizedImages = await localizeImages(
-        newFood.images,
-        newFood.id,
-        'foods'
-      );
-      if (localizedImages) {
-        // Guarded like updateFood: the food is already committed, so an edit
-        // can land while these downloads run. Don't clobber a newer value.
-        const localizeWrite = await client.query(
-          'UPDATE foods SET images = $1::jsonb WHERE id = $2 AND images = $3::jsonb',
-          [
-            JSON.stringify(localizedImages),
-            newFood.id,
-            JSON.stringify(toImageArray(newFood.images)),
-          ]
-        );
-        if (localizeWrite.rowCount === 0) {
-          log(
-            'debug',
-            `[food.createFood] Images for ${newFood.id} changed during localization; keeping the newer value`
-          );
-        } else {
-          newFood.images = localizedImages;
-        }
-      }
-    } catch (imageError) {
-      // The food itself is already committed; keep it and leave the remote URLs.
-      const message =
-        imageError instanceof Error ? imageError.message : String(imageError);
-      log(
-        'warn',
-        `[food] Image localization failed for ${newFood.id}: ${message}`
-      );
-    }
-
     // Return the new food with its default variant details
     return {
       ...newFood,
@@ -361,13 +258,14 @@ async function createFood(foodData: FoodInput) {
     client.release();
   }
 }
-async function findFoodByBarcode(barcode: string, userId: string) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function findFoodByBarcode(barcode: any, userId: any) {
   barcode = normalizeBarcode(barcode);
   const client = await getClient(userId);
   try {
     const result = await client.query(
       `SELECT
-        f.id, f.name, f.brand, f.barcode, f.is_custom, f.user_id, f.shared_with_public, f.provider_external_id, f.provider_type, f.provider_verified, f.images,
+        f.id, f.name, f.brand, f.barcode, f.is_custom, f.user_id, f.shared_with_public, f.provider_external_id, f.provider_type,
         ${DEFAULT_VARIANT_JSON_SQL}
       FROM foods f
       ${PREFERRED_DEFAULT_VARIANT_JOIN_SQL}
@@ -380,12 +278,13 @@ async function findFoodByBarcode(barcode: string, userId: string) {
     client.release();
   }
 }
-async function getFoodById(foodId: string, userId: string) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getFoodById(foodId: any, userId: any) {
   const client = await getClient(userId); // User-specific operation (RLS will handle access)
   try {
     const result = await client.query(
       `SELECT
-        f.id, f.name, f.brand, f.barcode, f.is_custom, f.user_id, f.shared_with_public, f.provider_external_id, f.provider_type, f.provider_verified, f.images,
+        f.id, f.name, f.brand, f.barcode, f.is_custom, f.user_id, f.shared_with_public, f.provider_external_id, f.provider_type,
         ${DEFAULT_VARIANT_JSON_SQL}
       FROM foods f
       ${PREFERRED_DEFAULT_VARIANT_JOIN_SQL}
@@ -397,7 +296,8 @@ async function getFoodById(foodId: string, userId: string) {
     client.release();
   }
 }
-async function getFoodOwnerId(foodId: string, userId: string) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getFoodOwnerId(foodId: any, userId: any) {
   const client = await getClient(userId); // User-specific operation (RLS will handle access)
   try {
     const foodResult = await client.query(
@@ -411,7 +311,8 @@ async function getFoodOwnerId(foodId: string, userId: string) {
     client.release();
   }
 }
-async function updateFood(id: string, userId: string, foodData: FoodUpdate) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function updateFood(id: any, userId: any, foodData: any) {
   const client = await getClient(userId); // User-specific operation
   try {
     // Distinguish "barcode key omitted" (leave unchanged) from "barcode set
@@ -434,11 +335,9 @@ async function updateFood(id: string, userId: string, foodData: FoodUpdate) {
         provider_external_id = COALESCE($6, provider_external_id),
         shared_with_public = COALESCE($7, shared_with_public),
         provider_type = COALESCE($8, provider_type),
-        provider_verified = COALESCE($9, provider_verified),
-        is_quick_food = COALESCE($10, is_quick_food),
-        images = COALESCE($11::jsonb, images),
+        is_quick_food = COALESCE($9, is_quick_food),
         updated_at = now()
-      WHERE id = $12
+      WHERE id = $10
       RETURNING *`,
       [
         foodData.name,
@@ -449,64 +348,17 @@ async function updateFood(id: string, userId: string, foodData: FoodUpdate) {
         foodData.provider_external_id,
         foodData.shared_with_public,
         foodData.provider_type,
-        foodData.provider_verified,
         foodData.is_quick_food,
-        // undefined => key omitted => leave images untouched
-        foodData.images === undefined
-          ? null
-          : JSON.stringify(toImageArray(foodData.images)),
         id,
       ]
     );
-    const updated = result.rows[0];
-
-    // Mirror createFood: a caller that sets a provider-hosted URL here (e.g.
-    // backfilling the photo onto an already-imported food) gets a local copy
-    // too, rather than leaving the row permanently hotlinked.
-    if (updated && foodData.images !== undefined) {
-      try {
-        const localizedImages = await localizeImages(
-          updated.images,
-          updated.id,
-          'foods'
-        );
-        if (localizedImages) {
-          // Downloads happen outside the transaction, so another request can
-          // have replaced `images` in the meantime. Only write the localized
-          // result back if the row still holds exactly what we localized;
-          // otherwise the newer value wins and this stale write is skipped.
-          const localizeWrite = await client.query(
-            'UPDATE foods SET images = $1::jsonb WHERE id = $2 AND images = $3::jsonb',
-            [
-              JSON.stringify(localizedImages),
-              updated.id,
-              JSON.stringify(toImageArray(updated.images)),
-            ]
-          );
-          if (localizeWrite.rowCount === 0) {
-            log(
-              'debug',
-              `[food.updateFood] Images for ${updated.id} changed during localization; keeping the newer value`
-            );
-          } else {
-            updated.images = localizedImages;
-          }
-        }
-      } catch (imageError) {
-        // Non-fatal, as in createFood: keep the row and its remote URLs.
-        log(
-          'warn',
-          `[food.updateFood] Image localization failed for ${updated.id}; keeping remote URLs:`,
-          imageError
-        );
-      }
-    }
-    return updated;
+    return result.rows[0];
   } finally {
     client.release();
   }
 }
-async function deleteFood(id: string, userId: string) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function deleteFood(id: any, userId: any) {
   const client = await getClient(userId); // User-specific operation
   try {
     const result = await client.query(
@@ -519,45 +371,33 @@ async function deleteFood(id: string, userId: string) {
   }
 }
 async function getFoodsWithPagination(
-  searchTerm: string | null | undefined,
-  foodFilter: string | null | undefined,
-  authenticatedUserId: string | null | undefined,
-  limit: number,
-  offset: number,
-  sortBy: string | null | undefined
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  searchTerm: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  foodFilter: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  authenticatedUserId: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  limit: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  offset: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  sortBy: any
 ) {
   const client = await getClient(authenticatedUserId); // User-specific operation
   try {
     const whereClauses = ['f.is_quick_food = FALSE'];
-    const {
-      whereClauses: searchClauses,
-      queryParams: searchParams,
-      nextParamIndex,
-    } = buildSqlSearch("CONCAT(f.brand, ' ', f.name)", searchTerm, 1);
-    whereClauses.push(...searchClauses);
-    const queryParams: SqlParam[] = [...searchParams];
-    let paramIndex = nextParamIndex;
-
-    // Handle ownership/source filtering
-    if (foodFilter === 'mine') {
-      whereClauses.push(`f.user_id = $${paramIndex}`);
-      queryParams.push(authenticatedUserId);
+    const queryParams = [];
+    let paramIndex = 1;
+    if (searchTerm) {
+      whereClauses.push(`CONCAT(brand, ' ', name) ILIKE $${paramIndex}`);
+      queryParams.push(`%${searchTerm}%`);
       paramIndex++;
-    } else if (foodFilter === 'family') {
-      whereClauses.push(
-        `f.user_id IS NOT NULL AND f.user_id != $${paramIndex} AND f.shared_with_public = FALSE`
-      );
-      queryParams.push(authenticatedUserId);
-      paramIndex++;
-    } else if (foodFilter === 'public') {
-      whereClauses.push('f.shared_with_public = TRUE');
-    } else if (foodFilter === 'system') {
-      whereClauses.push('f.user_id IS NULL');
     }
-
+    // RLS will handle ownership filtering
     let query = `
       SELECT
-        f.id, f.name, f.brand, f.barcode, f.is_custom, f.user_id, f.shared_with_public, f.provider_external_id, f.provider_type, f.provider_verified, f.images,
+        f.id, f.name, f.brand, f.barcode, f.is_custom, f.user_id, f.shared_with_public, f.provider_external_id, f.provider_type,
         ${DEFAULT_VARIANT_JSON_SQL}
       FROM foods f
       ${PREFERRED_DEFAULT_VARIANT_JOIN_SQL}
@@ -585,18 +425,10 @@ async function getFoodsWithPagination(
         );
       }
     }
-    const selectQueryParams = [...queryParams];
-    let selectParamIndex = paramIndex;
-    if (searchTerm) {
-      const exactMatchParamIndex = selectParamIndex;
-      selectQueryParams.push(`%${searchTerm}%`);
-      selectParamIndex++;
-      orderByClause = `${buildSqlExactMatchOrder("CONCAT(f.brand, ' ', f.name)", exactMatchParamIndex)}, ${orderByClause}`;
-    }
     query += ` ORDER BY ${orderByClause}`;
-    query += ` LIMIT $${selectParamIndex} OFFSET $${selectParamIndex + 1}`;
-    selectQueryParams.push(limit, offset);
-    const foodsResult = await client.query(query, selectQueryParams);
+    query += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    queryParams.push(limit, offset);
+    const foodsResult = await client.query(query, queryParams);
     return foodsResult.rows;
   } finally {
     client.release();
@@ -604,36 +436,24 @@ async function getFoodsWithPagination(
 }
 
 async function countFoods(
-  searchTerm: string | null | undefined,
-  foodFilter: string | null | undefined,
-  authenticatedUserId: string | null | undefined
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  searchTerm: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  foodFilter: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  authenticatedUserId: any
 ) {
   const client = await getClient(authenticatedUserId); // User-specific operation
   try {
     const whereClauses = ['is_quick_food = FALSE'];
-    const { whereClauses: searchClauses, queryParams: searchParams } =
-      buildSqlSearch("CONCAT(brand, ' ', name)", searchTerm, 1);
-    whereClauses.push(...searchClauses);
-    const countQueryParams: SqlParam[] = [...searchParams];
-    let paramIndex = countQueryParams.length + 1;
-
-    // Handle ownership/source filtering
-    if (foodFilter === 'mine') {
-      whereClauses.push(`user_id = $${paramIndex}`);
-      countQueryParams.push(authenticatedUserId);
+    const countQueryParams = [];
+    let paramIndex = 1;
+    if (searchTerm) {
+      whereClauses.push(`CONCAT(brand, ' ', name) ILIKE $${paramIndex}`);
+      countQueryParams.push(`%${searchTerm}%`);
       paramIndex++;
-    } else if (foodFilter === 'family') {
-      whereClauses.push(
-        `user_id IS NOT NULL AND user_id != $${paramIndex} AND shared_with_public = FALSE`
-      );
-      countQueryParams.push(authenticatedUserId);
-      paramIndex++;
-    } else if (foodFilter === 'public') {
-      whereClauses.push('shared_with_public = TRUE');
-    } else if (foodFilter === 'system') {
-      whereClauses.push('user_id IS NULL');
     }
-
+    // RLS will handle ownership filtering
     const countQuery = `
       SELECT COUNT(*)
       FROM foods
@@ -685,7 +505,8 @@ async function getFoodDeletionImpact(
     );
 
     const currentUserFoodEntries = currentUserEntriesResult.rows.map(
-      (row: { id: string; entry_date: string; meal_type_id: string }) => ({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (row: any) => ({
         id: row.id,
         entry_date: row.entry_date,
         meal_type_id: row.meal_type_id,
@@ -693,9 +514,15 @@ async function getFoodDeletionImpact(
       })
     );
 
-    // Other users' diary rows are counted for the impact warning but never
-    // returned — their entry ids/dates belong to those users, not the caller.
-    const otherUserFoodEntriesCount = otherUserEntriesResult.rows.length;
+    const otherUserFoodEntries = otherUserEntriesResult.rows.map(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (row: any) => ({
+        id: row.id,
+        entry_date: row.entry_date,
+        meal_type_id: row.meal_type_id,
+        isCurrentUser: false,
+      })
+    );
 
     // Structural reference counts (meals, plans, templates)
     const [
@@ -743,14 +570,14 @@ async function getFoodDeletionImpact(
       parseInt(otherUserTemplatesResult.rows[0].count, 10);
 
     const foodEntriesCount =
-      currentUserFoodEntries.length + otherUserFoodEntriesCount;
+      currentUserFoodEntries.length + otherUserFoodEntries.length;
     const currentUserReferences =
       currentUserFoodEntries.length +
       parseInt(currentUserMealFoodsResult.rows[0].count, 10) +
       parseInt(currentUserMealPlansResult.rows[0].count, 10) +
       parseInt(currentUserTemplatesResult.rows[0].count, 10);
     const otherUserReferences =
-      otherUserFoodEntriesCount +
+      otherUserFoodEntries.length +
       parseInt(otherUserMealFoodsResult.rows[0].count, 10) +
       parseInt(otherUserMealPlansResult.rows[0].count, 10) +
       parseInt(otherUserTemplatesResult.rows[0].count, 10);
@@ -767,12 +594,13 @@ async function getFoodDeletionImpact(
         [authenticatedUserId]
       );
       familySharedUsers = familyAccessResult.rows.map(
-        (row: { family_user_id: string }) => row.family_user_id
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (row: any) => row.family_user_id
       );
     }
 
     return {
-      foodEntries: currentUserFoodEntries,
+      foodEntries: [...currentUserFoodEntries, ...otherUserFoodEntries],
       foodEntriesCount,
       mealFoodsCount,
       mealPlansCount,
@@ -788,7 +616,8 @@ async function getFoodDeletionImpact(
     systemClient.release();
   }
 }
-async function deleteFoodAndDependencies(foodId: string, userId: string) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function deleteFoodAndDependencies(foodId: any, userId: any) {
   const client = await getClient(userId);
   try {
     await client.query('BEGIN');
@@ -859,130 +688,51 @@ async function deleteFoodAndDependencies(foodId: string, userId: string) {
     client.release();
   }
 }
-// CSV/bulk import values arrive loosely typed (numbers may still be strings),
-// so nutrient fields accept the raw shapes the sanitize* helpers normalize.
-type NumericInput = number | string | null | undefined;
-type BooleanInput = boolean | string | null | undefined;
-
-interface BulkImportFoodData {
-  name: string;
-  brand?: string | null;
-  is_custom?: BooleanInput;
-  user_id?: string;
-  shared_with_public?: BooleanInput;
-  is_quick_food?: BooleanInput;
-  barcode?: string | null;
-  provider_external_id?: string | null;
-  provider_type?: string | null;
-  provider_verified?: BooleanInput;
-  images?: string[] | null;
-  serving_size?: NumericInput;
-  serving_unit?: string | null;
-  is_default?: BooleanInput;
-  calories?: NumericInput;
-  protein?: NumericInput;
-  carbs?: NumericInput;
-  fat?: NumericInput;
-  saturated_fat?: NumericInput;
-  polyunsaturated_fat?: NumericInput;
-  monounsaturated_fat?: NumericInput;
-  trans_fat?: NumericInput;
-  cholesterol?: NumericInput;
-  sodium?: NumericInput;
-  potassium?: NumericInput;
-  dietary_fiber?: NumericInput;
-  sugars?: NumericInput;
-  vitamin_a?: NumericInput;
-  vitamin_c?: NumericInput;
-  calcium?: NumericInput;
-  iron?: NumericInput;
-  glycemic_index?: string | null;
-  custom_nutrients?: Record<string, unknown> | null;
-  source?: string | null;
-  ai_confidence?: number | null;
-  allergens?: string[] | null;
-  traces?: string[] | null;
-}
-
-interface GroupedImportFood {
-  name: string;
-  brand?: string | null;
-  is_custom: boolean;
-  user_id: string;
-  shared_with_public: BooleanInput;
-  is_quick_food: BooleanInput;
-  barcode?: string | null;
-  provider_external_id?: string | null;
-  provider_type?: string | null;
-  provider_verified?: BooleanInput;
-  images?: string[] | null;
-  variants: BulkImportFoodData[];
-}
-
-interface DuplicateFoodRow {
-  id: string;
-  name: string;
-  brand: string | null;
-}
-
-async function createFoodsInBulk(
-  userId: string,
-  foodDataArray: BulkImportFoodData[],
-  overwrite = false
-) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function createFoodsInBulk(userId: any, foodDataArray: any) {
   class DuplicateFoodError extends Error {
-    duplicates: DuplicateFoodRow[];
-    constructor(message: string, duplicates: DuplicateFoodRow[]) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    duplicates: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    constructor(message: any, duplicates: any) {
       super(message);
       this.name = 'DuplicateFoodError';
       this.duplicates = duplicates;
     }
   }
   // 1. --- Grouping incoming Variants by Food (name + brand)
-  // brand is nullable; normalize null/undefined/'' to '' so blank-brand foods
-  // group together and match the COALESCE(brand, '') lookup below.
-  const brandKey = (brand: string | null | undefined) => brand || '';
-  const groupedFoods = foodDataArray.reduce(
-    (acc: Record<string, GroupedImportFood>, variant: BulkImportFoodData) => {
-      const key = `${variant.name}|${brandKey(variant.brand)}`;
-      if (!acc[key]) {
-        acc[key] = {
-          name: variant.name,
-          brand: variant.brand || null,
-          is_custom: true,
-          user_id: userId,
-          shared_with_public: variant.shared_with_public || false,
-          is_quick_food: variant.is_quick_food || false,
-          barcode: variant.barcode || null,
-          provider_external_id: variant.provider_external_id || null,
-          provider_type: variant.provider_type || null,
-          provider_verified: variant.provider_verified,
-          images: resolveImageInput(variant),
-          variants: [],
-        };
-      }
-      if (sanitizeBoolean(variant.provider_verified) === true) {
-        acc[key].provider_verified = true;
-      }
-      acc[key].variants.push(variant);
-      return acc;
-    },
-    {}
-  );
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const groupedFoods = foodDataArray.reduce((acc: any, variant: any) => {
+    const key = `${variant.name}|${variant.brand}`;
+    if (!acc[key]) {
+      acc[key] = {
+        name: variant.name,
+        brand: variant.brand,
+        is_custom: true,
+        user_id: userId,
+        shared_with_public: variant.shared_with_public || false,
+        is_quick_food: variant.is_quick_food || false,
+        variants: [],
+      };
+    }
+    acc[key].variants.push(variant);
+    return acc;
+  }, {});
   const foodsToCreate = Object.values(groupedFoods);
   if (foodsToCreate.length === 0) {
     return {
       message: 'No food data provided to import.',
       createdFoods: 0,
-      updatedFoods: 0,
       createdVariants: 0,
     };
   }
   // 2. Pre-flight Duplicate Check before starting the db transaction
   const potentialDuplicates = foodsToCreate.map((food) => [
     userId,
+    // @ts-expect-error TS(2571): Object is of type 'unknown'.
     food.name,
-    brandKey(food.brand),
+    // @ts-expect-error TS(2571): Object is of type 'unknown'.
+    food.brand,
   ]);
   const flatValues = potentialDuplicates.flat();
   let placeholderIndex = 1;
@@ -993,27 +743,23 @@ async function createFoodsInBulk(
     )
     .join(', ');
   const duplicateCheckQuery = `
-    SELECT id, name, brand FROM foods
-    WHERE (user_id, name, COALESCE(brand, '')) IN (VALUES ${placeholderString})
+    SELECT name, brand FROM foods
+    WHERE (user_id, name, brand) IN (VALUES ${placeholderString})
   `;
   const clientForDuplicateCheck = await getClient(userId);
-  let existingFoods: DuplicateFoodRow[];
+  let existingFoods;
   try {
     const { rows } = await clientForDuplicateCheck.query(
       // User-specific check for duplicates
       duplicateCheckQuery,
       flatValues
     );
-    existingFoods = rows as DuplicateFoodRow[];
+    existingFoods = rows;
   } finally {
     clientForDuplicateCheck.release();
   }
-  // Map existing (name|brand) -> food id so we can overwrite in place when requested.
-  const existingFoodIdByKey = new Map<string, string>(
-    existingFoods.map((f) => [`${f.name}|${brandKey(f.brand)}`, f.id])
-  );
-  if (!overwrite && existingFoods.length > 0) {
-    // Duplicates found and the user did not opt into overwriting: abort.
+  if (existingFoods.length > 0) {
+    // If duplicates are found, throw an error.
     throw new DuplicateFoodError(
       'The import was terminated because duplicate entries were found in your food list.',
       existingFoods
@@ -1024,228 +770,85 @@ async function createFoodsInBulk(
   try {
     await client.query('BEGIN');
     let totalFoodsCreated = 0;
-    let totalFoodsUpdated = 0;
     let totalVariantsCreated = 0;
-    // Downloads are deferred until after COMMIT so network latency never holds
-    // the bulk transaction open.
-    const pendingImageLocalization: { foodId: string; images: unknown }[] = [];
     for (const food of foodsToCreate) {
-      const existingFoodId = existingFoodIdByKey.get(
-        `${food.name}|${brandKey(food.brand)}`
-      );
-      let foodId: string;
-      if (existingFoodId) {
-        // Overwrite path: update the existing food record in place.
-        await client.query(
-          `UPDATE foods SET
-             is_custom = $2,
-             shared_with_public = $3,
-             is_quick_food = $4,
-             provider_verified = CASE WHEN $5 THEN TRUE ELSE provider_verified END,
-             updated_at = now()
-           WHERE id = $1`,
-          [
-            existingFoodId,
-            sanitizeBoolean(food.is_custom) ?? true,
-            sanitizeBoolean(food.shared_with_public) ?? false,
-            sanitizeBoolean(food.is_quick_food) ?? false,
-            sanitizeBoolean(food.provider_verified) ?? false,
-          ]
-        );
-        foodId = existingFoodId;
-        totalFoodsUpdated++;
-      } else {
-        const foodResult = await client.query(
-          `INSERT INTO foods (name, brand, is_custom, user_id, shared_with_public, is_quick_food,barcode,provider_external_id,provider_type,provider_verified, images, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, now(), now())
+      const foodResult = await client.query(
+        `INSERT INTO foods (name, brand, is_custom, user_id, shared_with_public, is_quick_food,barcode,provider_external_id,provider_type, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), now())
            RETURNING id`,
-          [
-            food.name,
-            food.brand,
-            sanitizeBoolean(food.is_custom) ?? true,
-            food.user_id,
-            sanitizeBoolean(food.shared_with_public) ?? false,
-            sanitizeBoolean(food.is_quick_food) ?? false,
-            (food.barcode && normalizeBarcode(food.barcode)) || null,
-            food.provider_external_id || null,
-            food.provider_type || null,
-            sanitizeBoolean(food.provider_verified) ?? false,
-            JSON.stringify(resolveImageInput(food)),
-          ]
-        );
-        foodId = foodResult.rows[0].id;
-        pendingImageLocalization.push({ foodId, images: food.images });
-        totalFoodsCreated++;
-      }
+        [
+          // @ts-expect-error TS(2571): Object is of type 'unknown'.
+          food.name,
+          // @ts-expect-error TS(2571): Object is of type 'unknown'.
+          food.brand,
+          // @ts-expect-error TS(2571): Object is of type 'unknown'.
+          sanitizeBoolean(food.is_custom) ?? true,
+          // @ts-expect-error TS(2571): Object is of type 'unknown'.
+          food.user_id,
+          // @ts-expect-error TS(2571): Object is of type 'unknown'.
+          sanitizeBoolean(food.shared_with_public) ?? false,
+          // @ts-expect-error TS(2571): Object is of type 'unknown'.
+          sanitizeBoolean(food.is_quick_food) ?? false,
+          // @ts-expect-error TS(2571): Object is of type 'unknown'.
+          (food.barcode && normalizeBarcode(food.barcode)) || null,
+          // @ts-expect-error TS(2571): Object is of type 'unknown'.
+          food.provider_external_id || null,
+          // @ts-expect-error TS(2571): Object is of type 'unknown'.
+          food.provider_type || null,
+        ]
+      );
+      const newFoodId = foodResult.rows[0].id;
+      totalFoodsCreated++;
+      // @ts-expect-error TS(2571): Object is of type 'unknown'.
       for (const variant of food.variants) {
-        const variantIsDefault = sanitizeBoolean(variant.is_default) ?? true;
-        // When overwriting, reuse a variant with the same serving so existing
-        // diary entries (which reference the variant id) keep their nutrition.
-        const existingVariant = existingFoodId
-          ? (
-              await client.query(
-                `SELECT id FROM food_variants
-                 WHERE food_id = $1 AND serving_size = $2 AND serving_unit = $3
-                 LIMIT 1`,
-                [
-                  foodId,
-                  sanitizeNumeric(variant.serving_size),
-                  variant.serving_unit,
-                ]
-              )
-            ).rows[0]
-          : null;
-        if (variantIsDefault) {
-          // Keep a single default variant per food.
-          await client.query(
-            'UPDATE food_variants SET is_default = FALSE WHERE food_id = $1',
-            [foodId]
-          );
-        }
-        if (existingVariant) {
-          await client.query(
-            // COALESCE, not bare assignment: a nutrient the CSV never carried
-            // arrives here as undefined (the importer omits unmapped columns
-            // rather than asserting zero for them), and sanitizeNumeric turns
-            // that into a null parameter. Assigning it directly would wipe the
-            // stored value on an overwrite import, replacing a real number with
-            // NULL for every column the file happened not to include. A mapped
-            // but blank cell parses to 0 on the way in, which is not null and
-            // so still overwrites -- clearing a value on purpose keeps working.
-            `UPDATE food_variants SET
-                is_default = $2,
-                calories = COALESCE($3, calories),
-                protein = COALESCE($4, protein),
-                carbs = COALESCE($5, carbs),
-                fat = COALESCE($6, fat),
-                saturated_fat = COALESCE($7, saturated_fat),
-                polyunsaturated_fat = COALESCE($8, polyunsaturated_fat),
-                monounsaturated_fat = COALESCE($9, monounsaturated_fat),
-                trans_fat = COALESCE($10, trans_fat),
-                cholesterol = COALESCE($11, cholesterol),
-                sodium = COALESCE($12, sodium),
-                potassium = COALESCE($13, potassium),
-                dietary_fiber = COALESCE($14, dietary_fiber),
-                sugars = COALESCE($15, sugars),
-                vitamin_a = COALESCE($16, vitamin_a),
-                vitamin_c = COALESCE($17, vitamin_c),
-                calcium = COALESCE($18, calcium),
-                iron = COALESCE($19, iron),
-                glycemic_index = COALESCE($20, glycemic_index),
-                custom_nutrients = COALESCE($21, custom_nutrients),
-                updated_at = now()
-              WHERE id = $1`,
-            [
-              existingVariant.id,
-              variantIsDefault,
-              sanitizeNumeric(variant.calories),
-              sanitizeNumeric(variant.protein),
-              sanitizeNumeric(variant.carbs),
-              sanitizeNumeric(variant.fat),
-              sanitizeNumeric(variant.saturated_fat),
-              sanitizeNumeric(variant.polyunsaturated_fat),
-              sanitizeNumeric(variant.monounsaturated_fat),
-              sanitizeNumeric(variant.trans_fat),
-              sanitizeNumeric(variant.cholesterol),
-              sanitizeNumeric(variant.sodium),
-              sanitizeNumeric(variant.potassium),
-              sanitizeNumeric(variant.dietary_fiber),
-              sanitizeNumeric(variant.sugars),
-              sanitizeNumeric(variant.vitamin_a),
-              sanitizeNumeric(variant.vitamin_c),
-              sanitizeNumeric(variant.calcium),
-              sanitizeNumeric(variant.iron),
-              sanitizeGlycemicIndex(variant.glycemic_index),
-              // null (not {}) so the COALESCE above keeps the stored map when
-              // the import carried no custom nutrients at all.
-              variant.custom_nutrients ?? null,
-            ]
-          );
-        } else {
-          await client.query(
-            `INSERT INTO food_variants (
+        await client.query(
+          `INSERT INTO food_variants (
               food_id, serving_size, serving_unit, is_default, calories, protein, carbs, fat,
               saturated_fat, polyunsaturated_fat, monounsaturated_fat, trans_fat,
               cholesterol, sodium, potassium, dietary_fiber, sugars,
               vitamin_a, vitamin_c, calcium, iron, glycemic_index, custom_nutrients,
               source, ai_confidence, allergens, traces, created_at, updated_at
             ) VALUES (
-              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-              $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, now(), now()
+              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+              $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, now(), now()
             )`,
-            [
-              foodId,
-              sanitizeNumeric(variant.serving_size),
-              variant.serving_unit,
-              variantIsDefault,
-              sanitizeNumeric(variant.calories),
-              sanitizeNumeric(variant.protein),
-              sanitizeNumeric(variant.carbs),
-              sanitizeNumeric(variant.fat),
-              sanitizeNumeric(variant.saturated_fat),
-              sanitizeNumeric(variant.polyunsaturated_fat),
-              sanitizeNumeric(variant.monounsaturated_fat),
-              sanitizeNumeric(variant.trans_fat),
-              sanitizeNumeric(variant.cholesterol),
-              sanitizeNumeric(variant.sodium),
-              sanitizeNumeric(variant.potassium),
-              sanitizeNumeric(variant.dietary_fiber),
-              sanitizeNumeric(variant.sugars),
-              sanitizeNumeric(variant.vitamin_a),
-              sanitizeNumeric(variant.vitamin_c),
-              sanitizeNumeric(variant.calcium),
-              sanitizeNumeric(variant.iron),
-              sanitizeGlycemicIndex(variant.glycemic_index),
-              variant.custom_nutrients ?? {},
-              variant.source ?? 'manual',
-              variant.ai_confidence ?? null,
-              variant.allergens ?? null,
-              variant.traces ?? null,
-            ]
-          );
-        }
+          [
+            newFoodId,
+            sanitizeNumeric(variant.serving_size),
+            variant.serving_unit,
+            sanitizeBoolean(variant.is_default) ?? true,
+            sanitizeNumeric(variant.calories),
+            sanitizeNumeric(variant.protein),
+            sanitizeNumeric(variant.carbs),
+            sanitizeNumeric(variant.fat),
+            sanitizeNumeric(variant.saturated_fat),
+            sanitizeNumeric(variant.polyunsaturated_fat),
+            sanitizeNumeric(variant.monounsaturated_fat),
+            sanitizeNumeric(variant.trans_fat),
+            sanitizeNumeric(variant.cholesterol),
+            sanitizeNumeric(variant.sodium),
+            sanitizeNumeric(variant.potassium),
+            sanitizeNumeric(variant.dietary_fiber),
+            sanitizeNumeric(variant.sugars),
+            sanitizeNumeric(variant.vitamin_a),
+            sanitizeNumeric(variant.vitamin_c),
+            sanitizeNumeric(variant.calcium),
+            sanitizeNumeric(variant.iron),
+            sanitizeGlycemicIndex(variant.glycemic_index),
+            variant.custom_nutrients ?? {},
+            variant.source ?? 'manual',
+            variant.ai_confidence ?? null,
+            variant.allergens ?? null,
+            variant.traces ?? null,
+          ]
+        );
         totalVariantsCreated++;
       }
     }
     await client.query('COMMIT');
-
-    // Pull provider-hosted images local, in small batches so a large import
-    // doesn't open hundreds of simultaneous outbound connections.
-    const IMAGE_BATCH_SIZE = 4;
-    for (
-      let i = 0;
-      i < pendingImageLocalization.length;
-      i += IMAGE_BATCH_SIZE
-    ) {
-      const batch = pendingImageLocalization.slice(i, i + IMAGE_BATCH_SIZE);
-      await Promise.all(
-        batch.map(async ({ foodId, images }) => {
-          try {
-            const localized = await localizeImages(images, foodId, 'foods');
-            if (localized) {
-              await client.query(
-                'UPDATE foods SET images = $1::jsonb WHERE id = $2',
-                [JSON.stringify(localized), foodId]
-              );
-            }
-          } catch (imageError) {
-            const message =
-              imageError instanceof Error
-                ? imageError.message
-                : String(imageError);
-            log(
-              'warn',
-              `[food] Bulk image localization failed for ${foodId}: ${message}`
-            );
-          }
-        })
-      );
-    }
-
     return {
       message: 'Food data imported successfully.',
       createdFoods: totalFoodsCreated,
-      updatedFoods: totalFoodsUpdated,
       createdVariants: totalVariantsCreated,
     };
   } catch (error) {
@@ -1256,7 +859,8 @@ async function createFoodsInBulk(
     client.release();
   }
 }
-async function getFoodsNeedingReview(userId: string) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getFoodsNeedingReview(userId: any) {
   const client = await getClient(userId); // User-specific operation
   try {
     const result = await client.query(
@@ -1288,7 +892,8 @@ async function getFoodsNeedingReview(userId: string) {
     client.release();
   }
 }
-async function clearUserIgnoredUpdate(userId: string, variantId: string) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function clearUserIgnoredUpdate(userId: any, variantId: any) {
   const client = await getClient(userId); // User-specific operation
   try {
     await client.query(
@@ -1300,50 +905,7 @@ async function clearUserIgnoredUpdate(userId: string, variantId: string) {
     client.release();
   }
 }
-// Name-only match for the diary CSV importer's food resolution. Restricted to
-// the caller-selected scopes (own always included; family/public opt-in) on
-// top of RLS visibility, so an unticked scope is never matched even if RLS
-// would otherwise allow reading it. Precedence own > family > public, with
-// most-recently-logged (then newest-created) breaking ties within a tier —
-// picks the food a "Chicken Breast" import most likely meant among several
-// same-named foods now that brand is not part of the match key.
-async function findVisibleFoodByName(
-  userId: string,
-  foodName: string,
-  scope: { family?: boolean; public?: boolean } = {}
-) {
-  const client = await getClient(userId);
-  try {
-    const result = await client.query(
-      `SELECT f.id, f.name, f.brand, f.user_id, f.shared_with_public,
-              fv.id AS default_variant_id, fv.serving_size, fv.serving_unit,
-              ${DEFAULT_VARIANT_JSON_SQL}
-       FROM foods f
-       ${PREFERRED_DEFAULT_VARIANT_JOIN_SQL}
-       WHERE LOWER(f.name) = LOWER($2)
-         AND f.is_quick_food = FALSE
-         AND (
-           f.user_id = $1
-           OR ($3 AND f.user_id IS NOT NULL AND f.user_id != $1 AND f.shared_with_public = FALSE)
-           OR ($4 AND f.shared_with_public = TRUE)
-         )
-       ORDER BY
-         CASE
-           WHEN f.user_id = $1 THEN 0
-           WHEN f.shared_with_public = FALSE THEN 1
-           ELSE 2
-         END ASC,
-         (SELECT MAX(fe.entry_date) FROM food_entries fe WHERE fe.food_id = f.id) DESC NULLS LAST,
-         f.created_at DESC
-       LIMIT 1`,
-      [userId, foodName, !!scope.family, !!scope.public]
-    );
-    return result.rows[0] || null;
-  } finally {
-    client.release();
-  }
-}
-
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function findFoodByProviderExternalId(
   userId: string,
   providerExternalId: string,
@@ -1352,11 +914,10 @@ async function findFoodByProviderExternalId(
   const client = await getClient(userId);
   try {
     const result = await client.query(
-      `SELECT f.id, f.name, f.brand, f.barcode, f.is_custom, f.user_id, f.shared_with_public, f.provider_external_id, f.provider_type, f.provider_verified, f.images,
-              fv.id AS default_variant_id, fv.serving_size, fv.serving_unit,
-              ${DEFAULT_VARIANT_JSON_SQL}
+      `SELECT f.id, f.name, f.brand, f.provider_external_id, f.provider_type,
+              fv.id as default_variant_id, fv.serving_size, fv.serving_unit
        FROM foods f
-       ${PREFERRED_DEFAULT_VARIANT_JOIN_SQL}
+       LEFT JOIN food_variants fv ON fv.food_id = f.id AND fv.is_default = TRUE
        WHERE f.provider_external_id = $1
          AND f.provider_type = $2
          AND f.user_id = $3
@@ -1369,15 +930,14 @@ async function findFoodByProviderExternalId(
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function updateFoodVariantNutrition(
   variantId: string,
   userId: string,
-  nutritionData: FoodVariantInput
+  nutritionData: any
 ) {
   const client = await getClient(userId);
   try {
-    // custom_nutrients is optional and COALESCE-guarded so existing callers
-    // (e.g. health-data ingest) that omit it keep the stored value untouched.
     await client.query(
       `UPDATE food_variants SET
         serving_size = $2,
@@ -1399,7 +959,6 @@ async function updateFoodVariantNutrition(
         vitamin_c = $18,
         calcium = $19,
         iron = $20,
-        custom_nutrients = COALESCE($21::jsonb, custom_nutrients),
         updated_at = now()
       WHERE id = $1`,
       [
@@ -1423,9 +982,6 @@ async function updateFoodVariantNutrition(
         sanitizeNumeric(nutritionData.vitamin_c),
         sanitizeNumeric(nutritionData.calcium),
         sanitizeNumeric(nutritionData.iron),
-        nutritionData.custom_nutrients
-          ? JSON.stringify(nutritionData.custom_nutrients)
-          : null,
       ]
     );
   } finally {
@@ -1439,7 +995,6 @@ export { sanitizeBoolean };
 export { searchFoods };
 export { createFood };
 export { findFoodByBarcode };
-export { findVisibleFoodByName };
 export { findFoodByProviderExternalId };
 export { updateFoodVariantNutrition };
 export { getFoodById };
@@ -1450,7 +1005,6 @@ export { getFoodsWithPagination };
 export { countFoods };
 export { getFoodDeletionImpact };
 export { createFoodsInBulk };
-export type { BulkImportFoodData };
 export { getFoodsNeedingReview };
 export { clearUserIgnoredUpdate };
 export { deleteFoodAndDependencies };
@@ -1461,7 +1015,6 @@ export default {
   searchFoods,
   createFood,
   findFoodByBarcode,
-  findVisibleFoodByName,
   findFoodByProviderExternalId,
   updateFoodVariantNutrition,
   getFoodById,

@@ -1,5 +1,4 @@
 import React from 'react';
-import { useTranslation } from 'react-i18next';
 import { Platform, Text } from 'react-native';
 
 /**
@@ -15,16 +14,10 @@ interface HealthSourceLabelProps {
   className?: string;
 }
 
-const HealthSourceLabel: React.FC<HealthSourceLabelProps> = ({ className }) => {
-  const { t } = useTranslation();
-  const sourceName = Platform.OS === 'ios'
-    ? t('healthSync.appleHealth', { defaultValue: 'Apple Health' })
-    : t('healthSync.healthConnect', { defaultValue: 'Health Connect' });
-  return (
+const HealthSourceLabel: React.FC<HealthSourceLabelProps> = ({ className }) => (
   <Text className={`text-text-muted text-xs ${className ?? ''}`}>
-    <Text className="font-bold">{t('healthSync.source', { defaultValue: 'Source:' })}</Text> {sourceName}
+    <Text className="font-bold">Source:</Text> {healthSourceName}
   </Text>
-  );
-};
+);
 
 export default HealthSourceLabel;

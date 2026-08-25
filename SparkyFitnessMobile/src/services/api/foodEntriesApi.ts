@@ -6,7 +6,6 @@ export interface CreateFoodEntryPayload {
   quantity: number;
   unit: string;
   entry_date: string;
-  entry_time?: string | null;
   // Linked food entry
   food_id?: string;
   variant_id?: string;
@@ -54,7 +53,6 @@ export interface UpdateFoodEntryPayload {
   meal_type_id?: string;
   variant_id?: string;
   entry_date?: string;
-  entry_time?: string | null;
   // Nutrition snapshot overrides (server applies to entry snapshot)
   food_name?: string;
   brand_name?: string;

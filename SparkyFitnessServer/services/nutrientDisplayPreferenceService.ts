@@ -1,20 +1,12 @@
 import nutrientDisplayPreferenceRepository from '../models/nutrientDisplayPreferenceRepository.js';
 import { log } from '../config/logging.js';
 import customNutrientService from './customNutrientService.js';
-
-// The shape of a `user_nutrient_display_preferences` row as this service reads it.
-interface NutrientDisplayPreferenceRow {
-  view_group: string;
-  platform: string;
-  visible_nutrients: string[] | null;
-}
 const defaultNutrients = [
   'calories',
   'protein',
   'carbs',
   'fat',
   'dietary_fiber',
-  'sugars',
 ];
 const predefinedNutrients = [
   'calories',
@@ -37,26 +29,17 @@ const predefinedNutrients = [
   'glycemic_index',
 ];
 /**
- * The view groups a nutrient created from the Custom Nutrients settings page is made
- * visible in. Callers with a narrower intent pass their own set — a supplement's
- * nutrients, for instance, deliberately omit `food_database`, because adding a
- * multivitamin says nothing about what the user wants to see on FOOD rows.
- */
-const DEFAULT_AUTO_ADD_VIEW_GROUPS = [
-  'food_database',
-  'goal',
-  'report_tabular',
-  'report_chart',
-];
-
-/**
  * Automatically adds a nutrient to specific view groups if it's not already present.
+ * Target views: food_database, goal, report_tabular, report_chart
  */
-async function addNutrientToSpecificViews(
-  userId: string,
-  nutrientName: string,
-  targetGroups: string[] = DEFAULT_AUTO_ADD_VIEW_GROUPS
-) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function addNutrientToSpecificViews(userId: any, nutrientName: any) {
+  const targetGroups = [
+    'food_database',
+    'goal',
+    'report_tabular',
+    'report_chart',
+  ];
   const platforms = ['desktop', 'mobile'];
   log(
     'debug',
@@ -75,8 +58,8 @@ async function addNutrientToSpecificViews(
   for (const group of targetGroups) {
     for (const platform of platforms) {
       const existing = rawUserPrefs.find(
-        (p: NutrientDisplayPreferenceRow) =>
-          p.view_group === group && p.platform === platform
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (p: any) => p.view_group === group && p.platform === platform
       );
       let visibleNutrients;
       if (existing) {
@@ -205,14 +188,6 @@ const defaultPreferences = [
     visible_nutrients: defaultNutrients,
   },
   {
-    // Mobile-only view group for the Diary screen's custom nutrient pills.
-    // No desktop counterpart exists; defaults to an empty selection since the
-    // 4 core macros are always shown and custom nutrients are opt-in.
-    view_group: 'diary',
-    platform: 'mobile',
-    visible_nutrients: [],
-  },
-  {
     view_group: 'food_database',
     platform: 'mobile',
     visible_nutrients: predefinedNutrients,
@@ -286,21 +261,6 @@ async function getNutrientDisplayPreferences(userId: any) {
         completePreferences.push(prefToPush);
       }
     }
-  }
-  // 'diary' is mobile-only (no desktop counterpart), so it's handled outside
-  // the viewGroups x platforms cross-product above rather than adding a
-  // spurious diary/desktop row.
-  const diaryPref = userPreferences.find(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (p: any) => p.view_group === 'diary' && p.platform === 'mobile'
-  );
-  if (diaryPref) {
-    completePreferences.push(diaryPref);
-  } else {
-    const diaryDefault = defaultPreferences.find(
-      (p) => p.view_group === 'diary' && p.platform === 'mobile'
-    );
-    completePreferences.push(JSON.parse(JSON.stringify(diaryDefault)));
   }
   return completePreferences;
 }

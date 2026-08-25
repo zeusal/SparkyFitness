@@ -11,12 +11,9 @@ import { fetchWorkoutPresetsPage } from '../../src/services/api/workoutPresetsAp
 jest.mock('../../src/hooks', () => ({
   useFoods: jest.fn(),
   useMeals: jest.fn(),
-  useMedications: jest.fn(() => ({ data: [], isLoading: false, isError: false, refetch: jest.fn() })),
   useRecentMeals: jest.fn(),
   useServerConnection: jest.fn(),
   useSuggestedExercises: jest.fn(),
-  useProfile: jest.fn(() => ({ profile: undefined, isLoading: false })),
-  useFavorites: jest.fn(() => ({ favoriteFoods: [], favoriteMeals: [], isLoading: false, isError: false, refetch: jest.fn() })),
 }));
 
 jest.mock('../../src/services/api/foodsApi', () => ({
@@ -99,9 +96,13 @@ function createMeal(id: string, name: string, calories: number) {
 }
 
 describe('LibraryScreen', () => {
+  let focusListener: (() => void) | undefined;
   const navigation = {
     navigate: jest.fn(),
-    addListener: jest.fn(() => jest.fn()),
+    addListener: jest.fn((event: string, callback: () => void) => {
+      if (event === 'focus') focusListener = callback;
+      return jest.fn();
+    }),
   } as any;
 
   const route = {
@@ -136,6 +137,7 @@ describe('LibraryScreen', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    focusListener = undefined;
     mockUseServerConnection.mockReturnValue({
       isConnected: true,
       isLoading: false,
@@ -309,12 +311,6 @@ describe('LibraryScreen', () => {
     const screen = renderScreen();
     fireEvent.press(screen.getByText('Workout presets'));
     expect(navigation.navigate).toHaveBeenCalledWith('WorkoutPresetsLibrary');
-  });
-
-  it('navigates to MedicationsList when the Medications row is pressed', () => {
-    const screen = renderScreen();
-    fireEvent.press(screen.getByText('Medications'));
-    expect(navigation.navigate).toHaveBeenCalledWith('MedicationsList');
   });
 
   it('does not queue multiple create screens during the same navigation transition', () => {

@@ -24,12 +24,7 @@ async function createWorkoutPreset(userId: any, presetData: any) {
       throw new Error(`Notes for exercise ${ex.exercise_id} must be a string.`);
     }
   }
-  // Ownership always comes from the authenticated request — the body's
-  // user_id (if any) is stripped by the schema and must not be trusted.
-  return workoutPresetRepository.createWorkoutPreset({
-    ...presetData,
-    user_id: userId,
-  });
+  return workoutPresetRepository.createWorkoutPreset(presetData);
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getWorkoutPresets(userId: any, page: any, limit: any) {
@@ -37,15 +32,21 @@ async function getWorkoutPresets(userId: any, page: any, limit: any) {
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getWorkoutPresetById(userId: any, presetId: any) {
-  // RLS already gates read access (owner, public, or family-shared via
-  // can_view_exercise_library). If the row comes back, the caller is allowed to
-  // see it; an extra owner/public check here would wrongly 403 shared presets.
   const preset = await workoutPresetRepository.getWorkoutPresetById(
     presetId,
     userId
   );
   if (!preset) {
     throw new Error('Workout preset not found.');
+  }
+  const ownerId = await workoutPresetRepository.getWorkoutPresetOwnerId(
+    userId,
+    presetId
+  );
+  if (ownerId !== userId && !preset.is_public) {
+    throw new Error(
+      'Forbidden: You do not have access to this workout preset.'
+    );
   }
   return preset;
 }

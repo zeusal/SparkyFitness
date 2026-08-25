@@ -52,10 +52,6 @@ import {
   EXERCISE_CATEGORY_META,
   ExerciseCategory,
 } from '@/constants/exercises';
-import {
-  resolveExerciseImageSrc,
-  filterValidExerciseImages,
-} from '@/utils/exercises';
 
 import { useBulkSelection } from '@/hooks/useBulkSelection';
 import BulkActionToolbar from '@/components/BulkActionToolbar';
@@ -66,46 +62,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { getEnergyUnitString } from '@/utils/nutritionCalculations';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { Exercise as ExerciseInterface } from '@/types/exercises';
-
-// The row thumbnail needs its own error state, so it is a component rather than
-// inline JSX in the column's cell renderer. Mirrors the search list item: show
-// the stored image, fall back to the category icon when there is none or it
-// fails to load.
-const ExerciseRowThumbnail = ({
-  exercise,
-}: {
-  exercise: ExerciseInterface;
-}) => {
-  const [imageError, setImageError] = useState(false);
-  const meta =
-    EXERCISE_CATEGORY_META[exercise.category as ExerciseCategory] ??
-    EXERCISE_CATEGORY_META['general'];
-  const CategoryIcon = meta.icon;
-  const image = filterValidExerciseImages(exercise.images)[0];
-  const src = resolveExerciseImageSrc(image);
-
-  if (!src || imageError) {
-    return (
-      <div
-        className={`flex-shrink-0 w-10 h-10 rounded-md flex items-center justify-center ${meta.bg}`}
-      >
-        <CategoryIcon className={`w-4 h-4 ${meta.color}`} />
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex-shrink-0 w-10 h-10 rounded-md overflow-hidden ring-1 ring-gray-200 dark:ring-gray-700 bg-gray-50 dark:bg-gray-800">
-      <img
-        src={src}
-        alt={exercise.name}
-        loading="lazy"
-        className="w-full h-full object-contain"
-        onError={() => setImageError(true)}
-      />
-    </div>
-  );
-};
 
 const ExerciseDatabaseManager = () => {
   const { t } = useTranslation();
@@ -241,9 +197,17 @@ const ExerciseDatabaseManager = () => {
         enableSorting: true,
         cell: ({ row }) => {
           const exercise = row.original;
+          const meta =
+            EXERCISE_CATEGORY_META[exercise.category as ExerciseCategory] ??
+            EXERCISE_CATEGORY_META['general'];
+          const CategoryIcon = meta.icon;
           return (
             <div className="flex items-center gap-3">
-              <ExerciseRowThumbnail exercise={exercise} />
+              <div
+                className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ${meta.bg}`}
+              >
+                <CategoryIcon className={`w-3.5 h-3.5 ${meta.color}`} />
+              </div>
               <div className="flex flex-col">
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="font-semibold text-sm">{exercise.name}</span>

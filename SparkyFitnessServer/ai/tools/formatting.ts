@@ -1,9 +1,5 @@
 import { localDateToDay } from '@workspace/shared';
-import {
-  getCharacterLimit,
-  truncateIfNeeded,
-  truncateJsonRecords,
-} from './truncation.js';
+import { truncateIfNeeded } from './truncation.js';
 
 // pg returns DATE columns as local-midnight Date objects; render them as
 // calendar-day strings.
@@ -44,86 +40,48 @@ export function compactRecord(
 
 /**
  * Formats successful tool result data as text, with optional truncation.
- * Object payloads are truncated at record boundaries (whole rows dropped)
- * so the emitted JSON is never sliced mid-record into invalid syntax.
  */
-export function formatSuccess(
-  data: unknown,
-  title?: string,
-  profile: 'full' | 'core' = 'full'
-): string {
+export function formatSuccess(data: unknown, title?: string): string {
+  let text: string;
+
   if (typeof data === 'string') {
-    const text = title ? `# ${title}\n\n${data}` : data;
-    return truncateIfNeeded(text, undefined, profile);
+    text = data;
+  } else {
+    text = JSON.stringify(data, null, 2);
   }
 
-  const body = truncateJsonRecords(
-    data,
-    (value) =>
-      profile === 'core'
-        ? JSON.stringify(value)
-        : JSON.stringify(value, null, 2),
-    profile
-  );
-  return title ? `# ${title}\n\n${body}` : body;
+  if (title) {
+    text = `# ${title}\n\n${text}`;
+  }
+
+  return truncateIfNeeded(text);
 }
 
 /**
- * Minified JSON result with record-boundary truncation — the drop-in
- * replacement for bare `JSON.stringify(data)` returns in read tools. Output is
- * byte-identical to JSON.stringify while the payload fits the profile limit.
- */
-export function formatJsonResult(
-  data: unknown,
-  profile: 'full' | 'core' = 'full'
-): string {
-  return truncateJsonRecords(data, undefined, profile);
-}
-
-/**
- * Formats a list of items as readable text. Oversized lists are truncated at
- * item boundaries — whole trailing items are dropped and reported — so an
- * entry is never cut off mid-line.
+ * Formats a list of items as readable text.
  */
 export function formatList<T>(
   items: T[],
   title: string,
   formatItem: (item: T) => string,
-  meta?: { total_count: number; has_more: boolean; next_offset: number | null },
-  profile: 'full' | 'core' = 'full'
+  meta?: { total_count: number; has_more: boolean; next_offset: number | null }
 ): string {
-  const formatted = items.map(formatItem);
+  let text = `# ${title}\n\n`;
 
-  const build = (shown: number): string => {
-    let text = `# ${title}\n\n`;
-    if (formatted.length === 0) {
-      text += 'No results found.';
-    } else {
-      text += formatted.slice(0, shown).join('\n\n');
-    }
-    if (meta) {
-      text += `\n\n---\nShowing ${shown} of ${meta.total_count} results.`;
-      if (meta.has_more) {
-        text += ` Use offset=${meta.next_offset} to see more.`;
-      }
-    }
-    if (shown < formatted.length) {
-      text += `\n⚠️ ${formatted.length - shown} fetched item(s) omitted for length. Use 'limit' and 'offset' parameters to paginate, or add filters to narrow your search.`;
-    }
-    return text;
-  };
-
-  const limit = getCharacterLimit(profile);
-  let shown = formatted.length;
-  let text = build(shown);
-  while (text.length > limit && shown > 1) {
-    shown = Math.ceil(shown / 2);
-    text = build(shown);
+  if (items.length === 0) {
+    text += 'No results found.';
+  } else {
+    text += items.map(formatItem).join('\n\n');
   }
-  // A single item can still overflow; fall back to a plain string cut.
-  return text.length > limit
-    ? truncateIfNeeded(text, undefined, profile)
-    : text;
+
+  if (meta) {
+    text += `\n\n---\nShowing ${items.length} of ${meta.total_count} results.`;
+    if (meta.has_more) {
+      text += ` Use offset=${meta.next_offset} to see more.`;
+    }
+  }
+
+  return truncateIfNeeded(text);
 }
 
 /**

@@ -58,8 +58,6 @@ const SyncRangeDialog = ({
         return 'Strava';
       case 'fitbit':
         return 'Fitbit';
-      case 'oura':
-        return 'Oura';
       case 'polar':
         return 'Polar';
       case 'garmin':

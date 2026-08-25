@@ -1,7 +1,7 @@
 import React from 'react';
 import { Alert } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { pressAction } from './helpers/nativeHeaderTestUtils';
+import { pressAction, expectActionPresent } from './helpers/nativeHeaderTestUtils';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Toast from 'react-native-toast-message';
@@ -56,19 +56,13 @@ const buildRoute = (paramsOverrides: Record<string, unknown> = {}) => ({
   },
 });
 
-const mockNavigation = {
+const navigation = {
   setOptions: jest.fn(),
   goBack: jest.fn(),
   navigate: jest.fn(),
   setParams: jest.fn(),
   dispatch: jest.fn(),
 } as any;
-jest.mock('@react-navigation/native', () => ({
-  ...jest.requireActual('@react-navigation/native'),
-  useNavigation: () => mockNavigation,
-}));
-
-const navigation = mockNavigation;
 
 const renderScreen = (paramsOverrides: Record<string, unknown> = {}) => {
   const queryClient = new QueryClient({

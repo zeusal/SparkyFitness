@@ -1,9 +1,9 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
+  ActivityIndicator,
   Platform,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
@@ -17,7 +17,6 @@ import Icon from '../components/Icon';
 import StepperInput from '../components/StepperInput';
 import BottomSheetPicker from '../components/BottomSheetPicker';
 import CalendarSheet, { type CalendarSheetRef } from '../components/CalendarSheet';
-import { FooterSaveBar } from '../components/FormScreenChrome';
 import { useAddFoodEntry } from '../hooks/useAddFoodEntry';
 import { useMealTypes } from '../hooks/useMealTypes';
 import { usePreferences } from '../hooks';
@@ -26,7 +25,7 @@ import { getNetCarbsValue } from '../utils/nutrientUtils';
 import { goalsQueryKey } from '../hooks/queryKeys';
 import { fetchDailyGoals } from '../services/api/goalsApi';
 import { fireSuccessHaptic } from '../services/haptics';
-import { getMealTypeDisplayLabel } from '../utils/mealNutrition';
+import { getMealTypeLabel } from '../constants/meals';
 import { formatDateLabel, getTodayDate } from '../utils/dateUtils';
 import type { FoodDisplayValues } from '../utils/foodDetails';
 import { parseDecimalInput, DECIMAL_INPUT_REGEX } from '../utils/numericInput';
@@ -59,13 +58,11 @@ function saveFoodPayloadToDisplayValues(p: SaveFoodPayload): FoodDisplayValues {
 type Props = FoodPhotoFlowScreenProps<'LogEntry'>;
 
 const FoodPhotoLogEntryScreen: React.FC<Props> = ({ navigation, route }) => {
-  const { t , i18n: translationI18n } = useTranslation();
-  const dateLocale = translationI18n.language.startsWith('pl') ? 'pl-PL' : 'en-US';
   const insets = useSafeAreaInsets();
   const textPrimary = useCSSVariable('--color-text-primary') as string;
   const { backColor } = useHeaderActionColors();
 
-  const { saveFoodPayload, mealTypeId: initialMealTypeId } = route.params;
+  const { saveFoodPayload } = route.params;
 
   const { mealTypes, defaultMealTypeId } = useMealTypes();
   const [selectedMealTypeId, setSelectedMealTypeId] = useState<string | null>(null);
@@ -108,23 +105,16 @@ const FoodPhotoLogEntryScreen: React.FC<Props> = ({ navigation, route }) => {
     fat: goalPercent(displayValues.fat * servingsNumber, goals?.fat),
   };
 
-  // Preselect the originating meal type (MealTypeDetail → search → photo flow)
-  // ONLY when it still exists in the selectable list — a stale/hidden/deleted
-  // id must never be submitted for a new entry. Otherwise default once the
-  // default arrives. Done during render (instead of in an effect); the
-  // `!selectedMealTypeId` guard makes it self-limiting.
-  const originatingTypeExists =
-    initialMealTypeId != null && mealTypes.some((mt) => mt.id === initialMealTypeId);
-  if (!selectedMealTypeId && originatingTypeExists) {
-    setSelectedMealTypeId(initialMealTypeId);
-  } else if (!selectedMealTypeId && defaultMealTypeId) {
-    setSelectedMealTypeId(defaultMealTypeId);
-  }
+  useEffect(() => {
+    if (!selectedMealTypeId && defaultMealTypeId) {
+      setSelectedMealTypeId(defaultMealTypeId);
+    }
+  }, [defaultMealTypeId, selectedMealTypeId]);
 
   const { addEntryAsync, isPending, invalidateCache } = useAddFoodEntry({
     onSuccess: () => {
       fireSuccessHaptic();
-      Toast.show({ type: 'success', text1: t('foodPhotoLogEntry.estimateSaved', { defaultValue: 'Estimate saved' }) });
+      Toast.show({ type: 'success', text1: 'Estimate saved' });
       navigation.getParent<NativeStackNavigationProp<RootStackParamList>>()?.popToTop();
     },
   });
@@ -143,21 +133,21 @@ const FoodPhotoLogEntryScreen: React.FC<Props> = ({ navigation, route }) => {
   const mealPickerOptions = useMemo(
     () =>
       mealTypes.map((mt) => ({
-        label: getMealTypeDisplayLabel(mt, t),
+        label: getMealTypeLabel(mt.name),
         value: mt.id,
       })),
-    [mealTypes, t],
+    [mealTypes],
   );
   const selectedMealLabel = useMemo(() => {
     const found = mealTypes.find((mt) => mt.id === selectedMealTypeId);
-    return found ? getMealTypeDisplayLabel(found, t) : t('foodPhotoLogEntry.selectMeal', { defaultValue: 'Select Meal' });
-  }, [mealTypes, selectedMealTypeId, t]);
+    return found ? getMealTypeLabel(found.name) : 'Select meal';
+  }, [mealTypes, selectedMealTypeId]);
 
   const handleSave = async () => {
     if (isPending) return;
 
     if (!selectedMealTypeId) {
-      Toast.show({ type: 'error', text1: t('foodPhotoLogEntry.selectMealType', { defaultValue: 'Select a meal type' }) });
+      Toast.show({ type: 'error', text1: 'Select a meal type' });
       return;
     }
 
@@ -165,8 +155,8 @@ const FoodPhotoLogEntryScreen: React.FC<Props> = ({ navigation, route }) => {
     if (!Number.isFinite(servingsValue) || servingsValue <= 0) {
       Toast.show({
         type: 'error',
-        text1: t('foodPhotoLogEntry.invalidServings', { defaultValue: 'Invalid servings' }),
-        text2: t('foodPhotoLogEntry.positiveServings', { defaultValue: 'Servings must be a positive number.' }),
+        text1: 'Invalid servings',
+        text2: 'Servings must be a positive number.',
       });
       return;
     }
@@ -201,12 +191,12 @@ const FoodPhotoLogEntryScreen: React.FC<Props> = ({ navigation, route }) => {
           onPress={() => navigation.goBack()}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           className="z-10 p-0"
-          accessibilityLabel={t('foodPhotoLogEntry.back', { defaultValue: 'Back' })}
+          accessibilityLabel="Back"
         >
           <Icon name="chevron-back" size={22} color={backColor} />
         </Button>
         <Text className="absolute left-0 right-0 text-center text-text-primary text-lg font-semibold">
-          {t('foodPhotoLogEntry.title', { defaultValue: 'Log entry' })}
+          Log entry
         </Text>
       </View>
 
@@ -229,12 +219,12 @@ const FoodPhotoLogEntryScreen: React.FC<Props> = ({ navigation, route }) => {
 
         {/* Meal row */}
         <View className="flex-row items-center mb-4">
-          <Text className="text-text-secondary text-base mr-2">{t('foodPhotoLogEntry.meal', { defaultValue: 'Meal' })}</Text>
+          <Text className="text-text-secondary text-base mr-2">Meal</Text>
           <BottomSheetPicker
             value={selectedMealTypeId ?? ''}
             options={mealPickerOptions}
             onSelect={(value) => setSelectedMealTypeId(value)}
-            title={t('foodPhotoLogEntry.selectMeal', { defaultValue: 'Select Meal' })}
+            title="Select Meal"
             renderTrigger={({ onPress }) => (
               <TouchableOpacity
                 onPress={onPress}
@@ -257,14 +247,14 @@ const FoodPhotoLogEntryScreen: React.FC<Props> = ({ navigation, route }) => {
 
         {/* Date row */}
         <View className="flex-row items-center mb-4">
-          <Text className="text-text-secondary text-base mr-2">{t('foodPhotoLogEntry.date', { defaultValue: 'Date' })}</Text>
+          <Text className="text-text-secondary text-base mr-2">Date</Text>
           <TouchableOpacity
             onPress={() => calendarRef.current?.present()}
             activeOpacity={0.7}
             className="flex-row items-center"
           >
             <Text className="text-text-primary text-base font-medium">
-              {formatDateLabel(entryDate, t, dateLocale)}
+              {formatDateLabel(entryDate)}
             </Text>
             <Icon
               name="chevron-down"
@@ -278,7 +268,7 @@ const FoodPhotoLogEntryScreen: React.FC<Props> = ({ navigation, route }) => {
 
         {/* Servings row */}
         <View className="flex-row items-center justify-between mb-4">
-          <Text className="text-text-secondary text-base">{t('foodPhotoLogEntry.servings', { defaultValue: 'Servings' })}</Text>
+          <Text className="text-text-secondary text-base">Servings</Text>
           <StepperInput
             value={quantity}
             onChangeText={handleQuantityChange}
@@ -289,13 +279,27 @@ const FoodPhotoLogEntryScreen: React.FC<Props> = ({ navigation, route }) => {
         </View>
       </KeyboardAwareScrollView>
 
-      <FooterSaveBar
-        onPress={() => {
-          void handleSave();
-        }}
-        disabled={isPending}
-        busy={isPending}
-      />
+      <View
+        className="px-4 gap-3 border-t border-border-subtle pt-3"
+        style={{ paddingBottom: Math.max(insets.bottom, 16) }}
+      >
+        <Button
+          variant="primary"
+          disabled={isPending}
+          onPress={() => {
+            void handleSave();
+          }}
+        >
+          {isPending ? (
+            <View className="flex-row items-center gap-2">
+              <ActivityIndicator size="small" color="#fff" />
+              <Text className="text-white font-semibold">Saving…</Text>
+            </View>
+          ) : (
+            'Save'
+          )}
+        </Button>
+      </View>
 
       <CalendarSheet
         ref={calendarRef}

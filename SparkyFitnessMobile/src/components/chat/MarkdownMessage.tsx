@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { Linking } from 'react-native';
 import { useCSSVariable } from 'uniwind';
 import {
@@ -16,9 +16,8 @@ import { addLog } from '../../services/LogService';
  * `markdownStyle` defaults are light-mode colors that would be invisible on the
  * dark/AMOLED themes, so we override every text-bearing element's color from
  * theme CSS vars (the native side merges per-element, keeping its default sizes
- * and margins). LaTeX math parsing is disabled at runtime via `md4cFlags`; the
- * optional native math libs are excluded from the build separately by the
- * `withEnrichedMarkdownNoMath` config plugin.
+ * and margins). LaTeX math is disabled via `md4cFlags` so prebuild doesn't pull
+ * in the optional native math libs.
  *
  * While the model streams, it emits partial markdown (an unclosed `**`, a
  * half-typed link). We repair the tail on the JS thread with `remend` before
@@ -96,13 +95,6 @@ export default function MarkdownMessage({
       markdownStyle={markdownStyle}
       md4cFlags={MD4C_FLAGS}
       streamingAnimation={streaming}
-      // A selectable native TextView uses ArrowKeyMovementMethod, whose
-      // setText path adds a selection span that triggers checkForResize() —
-      // which dereferences layoutParams and NPE-crashes (Android only) when a
-      // recycled FlatList cell applies its async render after layoutParams has
-      // gone null. Chat copies via the message action bar's Copy button, so we
-      // don't need drag-to-select here.
-      selectable={false}
       onLinkPress={openLink}
     />
   );

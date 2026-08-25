@@ -1,10 +1,8 @@
 import React from 'react';
-import { Alert } from 'react-native';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import FoodFormScreen from '../../src/screens/FoodFormScreen';
-import i18n, { initializeI18n } from '../../src/localization/i18n';
 import { useMealTypes, usePreferences } from '../../src/hooks';
 import { useSaveFood } from '../../src/hooks/useSaveFood';
 import { useAddFoodEntry } from '../../src/hooks/useAddFoodEntry';
@@ -13,24 +11,15 @@ import {
   useFoodVariants,
 } from '../../src/hooks/useFoodVariants';
 import { setPendingMealIngredientSelection } from '../../src/services/mealBuilderSelection';
-import { updateFoodEntriesSnapshot } from '../../src/services/api/foodsApi';
 
 const mockPop = jest.fn((count: number) => ({ type: 'POP', payload: { count } }));
 const mockPopToTop = jest.fn(() => ({ type: 'POP_TO_TOP' }));
 const mockFoodForm = jest.fn();
-const mockNavigation = {
-  setOptions: jest.fn(),
-  goBack: jest.fn(),
-  navigate: jest.fn(),
-  dispatch: jest.fn(),
-  addListener: jest.fn(() => jest.fn()),
-} as any;
 
 jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
   return {
     ...actual,
-    useNavigation: () => mockNavigation,
     StackActions: {
       pop: (count: number) => mockPop(count),
       popToTop: () => mockPopToTop(),
@@ -58,17 +47,6 @@ jest.mock('../../src/hooks/useFoodVariants', () => ({
 
 jest.mock('../../src/services/mealBuilderSelection', () => ({
   setPendingMealIngredientSelection: jest.fn(),
-}));
-
-// The edit path writes through foodsApi directly (not a hook), so without this
-// the save hits the real client, throws for lack of a server config, and never
-// reaches the post-save prompt.
-jest.mock('../../src/services/api/foodsApi', () => ({
-  createFoodVariant: jest.fn(() => Promise.resolve({ id: 'variant-new' })),
-  deleteFoodVariant: jest.fn(() => Promise.resolve()),
-  updateFoodVariant: jest.fn(() => Promise.resolve({})),
-  updateFood: jest.fn(() => Promise.resolve({})),
-  updateFoodEntriesSnapshot: jest.fn(() => Promise.resolve()),
 }));
 
 jest.mock('@tanstack/react-query', () => ({
@@ -139,7 +117,6 @@ jest.mock('../../src/components/CalendarSheet', () => {
 
 let mockSubmittedFoodFormData: any;
 let mockUnitSelectionResult: any;
-let mockEquivalentDraft: any[] = [];
 
 jest.mock('../../src/components/FoodForm', () => {
   const React = require('react');
@@ -157,11 +134,6 @@ jest.mock('../../src/components/FoodForm', () => {
               onPress={() => unitSelector.onUnitSelectionChange?.(mockUnitSelectionResult)}
             >
               <Text>Select Converted Unit</Text>
-            </Pressable>
-          ) : null}
-          {props.equivalents ? (
-            <Pressable onPress={() => props.equivalents.onChange(mockEquivalentDraft)}>
-              <Text>Apply Equivalent Fixture</Text>
             </Pressable>
           ) : null}
           <Pressable onPress={() => onSubmit(mockSubmittedFoodFormData)}>
@@ -188,34 +160,14 @@ const mockToast = Toast as unknown as { show: jest.Mock };
 const insets = { top: 0, bottom: 0, left: 0, right: 0 };
 const frame = { x: 0, y: 0, width: 390, height: 844 };
 
-// The edit flow can raise two Alerts: "Save nutrition" (overwrite vs new
-// variant) and, after a successful save, "Update past entries?". An
-// unanswered Alert leaves a pending promise and the save never completes, so
-// tests must answer both. Defaults are the non-destructive choices.
-function answerSyncPrompt(choice: 'keep' | 'update' = 'keep') {
-  return jest
-    .spyOn(Alert, 'alert')
-    .mockImplementation((title, _message, buttons) => {
-      const list = (buttons ?? []) as { text?: string; onPress?: () => void }[];
-      const press = (text: string) =>
-        list.find((b) => b.text === text)?.onPress?.();
-
-      if (title === 'Update past entries?') {
-        press(choice === 'update' ? 'Update' : "Don't Update");
-        return;
-      }
-      if (title === 'Save nutrition' || title === 'Zapisz wartości odżywcze') {
-        press('Zaktualizuj istniejący');
-        press('Update existing');
-        return;
-      }
-      // Anything else: take the first non-cancel action so the flow proceeds.
-      list.find((b) => b.text && b.text !== 'Cancel')?.onPress?.();
-    });
-}
-
 describe('FoodFormScreen', () => {
-  const navigation = mockNavigation;
+  const navigation = {
+    setOptions: jest.fn(),
+    goBack: jest.fn(),
+    navigate: jest.fn(),
+    dispatch: jest.fn(),
+    addListener: jest.fn(() => jest.fn()),
+  } as any;
 
   const mockSaveFoodAsync = jest.fn();
   const mockAddEntry = jest.fn();
@@ -236,10 +188,8 @@ describe('FoodFormScreen', () => {
       </SafeAreaProvider>,
     );
 
-  beforeEach(async () => {
-    await act(async () => { await initializeI18n('en'); await i18n.changeLanguage('en'); });
+  beforeEach(() => {
     jest.clearAllMocks();
-    answerSyncPrompt('keep');
     mockFoodForm.mockClear();
     mockSubmittedFoodFormData = {
       name: 'Custom Meal Food',
@@ -445,14 +395,11 @@ describe('FoodFormScreen', () => {
       screen.getByPlaceholderText('012345678905'),
       '0123456789012',
     );
-    fireEvent.press(screen.getByText('Save'));
+    fireEvent.press(screen.getByText('Save Food'));
 
     await waitFor(() => {
-      // Second argument is the optional image payload — undefined when the
-      // user added no photos, which keeps the request plain JSON.
       expect(mockSaveFoodAsync).toHaveBeenCalledWith(
         expect.objectContaining({ barcode: '0123456789012' }),
-        undefined,
       );
     });
   });
@@ -464,7 +411,7 @@ describe('FoodFormScreen', () => {
     });
 
     fireEvent.changeText(screen.getByPlaceholderText('012345678905'), '12345');
-    fireEvent.press(screen.getByText('Save'));
+    fireEvent.press(screen.getByText('Save Food'));
 
     expect(mockSaveFoodAsync).not.toHaveBeenCalled();
     expect(mockToast.show).toHaveBeenCalledWith(
@@ -522,7 +469,7 @@ describe('FoodFormScreen', () => {
       mockFoodForm.mock.calls[mockFoodForm.mock.calls.length - 1]?.[0];
     expect(adjustModeCall?.showAutoScaleNutrition).toBe(true);
     expect(adjustModeCall?.initialAutoScaleNutritionEnabled).toBe(false);
-    expect(adjustModeCall?.submitLabel).toBe('Save');
+    expect(adjustModeCall?.submitLabel).toBe('Update Values');
   });
 
   it('passes a true auto-scale default through when the shared preference is enabled', () => {
@@ -671,7 +618,7 @@ describe('FoodFormScreen', () => {
       'valueChange',
       true,
     );
-    fireEvent.press(screen.getByText('Save'));
+    fireEvent.press(screen.getByText('Update Values'));
 
     await waitFor(() => {
       expect(mockCreateVariant).toHaveBeenCalledWith(
@@ -705,87 +652,6 @@ describe('FoodFormScreen', () => {
         source: 'FoodEntryAdd-key',
       }),
     );
-  });
-
-  it('ignores a second save press while adjust-nutrition writes are in flight', async () => {
-    let resolveCreate: (variant: unknown) => void;
-    mockCreateVariant.mockImplementation(
-      () => new Promise((resolve) => { resolveCreate = resolve; }),
-    );
-    mockSubmittedFoodFormData = {
-      ...mockSubmittedFoodFormData,
-      servingUnit: 'oz',
-    };
-
-    const screen = renderScreen({
-      mode: 'adjust-entry-nutrition',
-      initialValues: {
-        name: 'Greek Yogurt',
-        servingSize: '100',
-        servingUnit: 'g',
-        calories: '120',
-      },
-      returnTo: 'FoodEntryAdd',
-      returnKey: 'FoodEntryAdd-key',
-      foodId: 'food-1',
-      variantId: 'variant-1',
-      customNutrients: null,
-      availableUnitVariants: [
-        {
-          id: 'variant-1',
-          food_id: 'food-1',
-          serving_size: 100,
-          serving_unit: 'g',
-          calories: 120,
-          protein: 10,
-          carbs: 8,
-          fat: 4,
-        },
-      ],
-      selectedUnitSelection: {
-        kind: 'existing',
-        variant: {
-          id: 'variant-1',
-          food_id: 'food-1',
-          serving_size: 100,
-          serving_unit: 'g',
-          calories: 120,
-          protein: 10,
-          carbs: 8,
-          fat: 4,
-        },
-      },
-    });
-
-    fireEvent.press(screen.getByText('Select Converted Unit'));
-    fireEvent(
-      screen.getByLabelText('Save nutrition for future use'),
-      'valueChange',
-      true,
-    );
-
-    fireEvent.press(screen.getByText('Save'));
-    fireEvent.press(screen.getByText('Save'));
-
-    // The second press must not start a second variant POST.
-    expect(mockCreateVariant).toHaveBeenCalledTimes(1);
-
-    resolveCreate!({
-      id: 'variant-oz',
-      food_id: 'food-1',
-      serving_size: 100,
-      serving_unit: 'oz',
-      calories: 200,
-      protein: 10,
-      carbs: 20,
-      fat: 5,
-    });
-
-    await waitFor(() => {
-      expect(navigation.dispatch).toHaveBeenCalledTimes(1);
-    });
-    expect(navigation.goBack).toHaveBeenCalledTimes(1);
-    expect(mockCreateVariant).toHaveBeenCalledTimes(1);
   });
 
   it('defers local manual-only unit creation until submit', async () => {
@@ -872,7 +738,7 @@ describe('FoodFormScreen', () => {
       'valueChange',
       true,
     );
-    fireEvent.press(screen.getByText('Save'));
+    fireEvent.press(screen.getByText('Update Values'));
 
     await waitFor(() => {
       expect(mockCreateVariant).toHaveBeenCalledWith({
@@ -898,8 +764,6 @@ describe('FoodFormScreen', () => {
         vitamin_c: undefined,
         glycemic_index: undefined,
         custom_nutrients: undefined,
-        source: undefined,
-        ai_confidence: undefined,
       });
     });
 
@@ -994,7 +858,7 @@ describe('FoodFormScreen', () => {
 
       fireEvent.press(screen.getByText('Select Converted Unit'));
       // Toggle stays OFF — default state. No need to interact with it.
-      fireEvent.press(screen.getByText('Save'));
+      fireEvent.press(screen.getByText('Update Values'));
 
       await waitFor(() => {
         expect(navigation.dispatch).toHaveBeenCalled();
@@ -1286,7 +1150,7 @@ describe('FoodFormScreen', () => {
     });
 
     fireEvent.press(screen.getByText('Select Converted Unit'));
-    fireEvent.press(screen.getByText('Save'));
+    fireEvent.press(screen.getByText('Save Changes'));
 
     await waitFor(() => {
       expect(navigation.dispatch).toHaveBeenCalledWith(
@@ -1307,209 +1171,6 @@ describe('FoodFormScreen', () => {
       );
     });
     expect(mockCreateVariant).not.toHaveBeenCalled();
-  });
-
-  it('asks before touching past diary entries, and leaves them alone by default', async () => {
-    // Diary entries hold a nutrition snapshot from when they were logged, so a
-    // library edit must not silently rewrite history. Prompted on every save,
-    // matching web, because one form saves nutrition, name, brand and photo
-    // together.
-    const alertSpy = answerSyncPrompt('keep');
-    mockUseFoodVariants.mockReturnValue({
-      variants: [
-        {
-          id: 'variant-1',
-          food_id: 'food-1',
-          serving_size: 100,
-          serving_unit: 'g',
-          calories: 120,
-          protein: 10,
-          carbs: 8,
-          fat: 4,
-          is_default: true,
-        },
-      ],
-      isLoading: false,
-      isError: false,
-    } as any);
-    mockSubmittedFoodFormData = {
-      ...mockSubmittedFoodFormData,
-      name: 'Greek Yogurt',
-      brand: 'Brand Co',
-      servingSize: '100',
-      servingUnit: 'g',
-      calories: '999',
-      protein: '10',
-      carbs: '8',
-      fat: '4',
-    };
-
-    const screen = renderScreen({
-      mode: 'edit-food',
-      item: {
-        id: 'food-1',
-        name: 'Greek Yogurt',
-        brand: 'Brand Co',
-        servingSize: 100,
-        servingUnit: 'g',
-        calories: 120,
-        protein: 10,
-        carbs: 8,
-        fat: 4,
-        source: 'local',
-        originalItem: {},
-      },
-      initialValues: {
-        name: 'Greek Yogurt',
-        brand: 'Brand Co',
-        servingSize: '100',
-        servingUnit: 'g',
-        calories: '120',
-        protein: '10',
-        carbs: '8',
-        fat: '4',
-      },
-      returnKey: 'FoodDetail-key',
-      foodId: 'food-1',
-      variantId: 'variant-1',
-    });
-
-    fireEvent.press(screen.getByText('Save'));
-
-    await waitFor(() => {
-      expect(navigation.goBack).toHaveBeenCalled();
-    });
-
-    expect(alertSpy).toHaveBeenCalledWith(
-      'Update past entries?',
-      expect.any(String),
-      expect.any(Array),
-      expect.any(Object),
-    );
-    // Declining must leave history untouched.
-    expect(updateFoodEntriesSnapshot).not.toHaveBeenCalled();
-  });
-
-  it('syncs past entries only when the user opts in', async () => {
-    answerSyncPrompt('update');
-    mockUseFoodVariants.mockReturnValue({
-      variants: [
-        {
-          id: 'variant-1',
-          food_id: 'food-1',
-          serving_size: 100,
-          serving_unit: 'g',
-          calories: 120,
-          protein: 10,
-          carbs: 8,
-          fat: 4,
-          is_default: true,
-        },
-      ],
-      isLoading: false,
-      isError: false,
-    } as any);
-    mockSubmittedFoodFormData = {
-      ...mockSubmittedFoodFormData,
-      name: 'Greek Yogurt',
-      brand: 'Brand Co',
-      servingSize: '100',
-      servingUnit: 'g',
-      calories: '999',
-      protein: '10',
-      carbs: '8',
-      fat: '4',
-    };
-
-    const screen = renderScreen({
-      mode: 'edit-food',
-      item: {
-        id: 'food-1',
-        name: 'Greek Yogurt',
-        brand: 'Brand Co',
-        servingSize: 100,
-        servingUnit: 'g',
-        calories: 120,
-        protein: 10,
-        carbs: 8,
-        fat: 4,
-        source: 'local',
-        originalItem: {},
-      },
-      initialValues: {
-        name: 'Greek Yogurt',
-        brand: 'Brand Co',
-        servingSize: '100',
-        servingUnit: 'g',
-        calories: '120',
-        protein: '10',
-        carbs: '8',
-        fat: '4',
-      },
-      returnKey: 'FoodDetail-key',
-      foodId: 'food-1',
-      variantId: 'variant-1',
-    });
-
-    fireEvent.press(screen.getByText('Save'));
-
-    await waitFor(() => {
-      // Nutrition-only: this save left the food's photos alone, so the
-      // prompt never offered to touch entry photos and must not sync them.
-      expect(updateFoodEntriesSnapshot).toHaveBeenCalledWith(
-        'food-1',
-        undefined,
-        false,
-      );
-    });
-  });
-
-  function buildEquivalentEditParams(count: number) {
-    const variants = Array.from({ length: count + 1 }, (_, index) => ({
-      id: `variant-${index}`,
-      food_id: 'food-1',
-      serving_size: index === 0 ? 100 : index + 1,
-      serving_unit: index === 0 ? 'g' : `unit-${index}`,
-      calories: 120,
-      protein: 10,
-      carbs: 8,
-      fat: 4,
-      is_default: index === 0,
-    }));
-    mockUseFoodVariants.mockReturnValue({ variants: variants as any, isLoading: false, isError: false });
-    mockEquivalentDraft = variants.slice(1).map((variant: any, index) => ({
-      ...variant,
-      serving_size: variant.serving_size + 0.5 + index,
-    }));
-    return {
-      mode: 'edit-food',
-      item: { id: 'food-1', name: 'Greek Yogurt', brand: 'Brand Co', servingSize: 100, servingUnit: 'g', calories: 120, protein: 10, carbs: 8, fat: 4, source: 'local', originalItem: {} as any },
-      initialValues: { name: 'Greek Yogurt', brand: 'Brand Co', servingSize: '100', servingUnit: 'g', calories: '120', protein: '10', carbs: '8', fat: '4' },
-      returnKey: 'FoodDetail-key', foodId: 'food-1', variantId: 'variant-0', customNutrients: null,
-    };
-  }
-
-  it.each([
-    ['en', 0], ['en', 1], ['en', 2],
-    ['pl', 0], ['pl', 1], ['pl', 2], ['pl', 5], ['pl', 22], ['pl', 25],
-  ])('uses the real EditFood save path for %s with %i changed equivalent rows', async (language, count) => {
-    const normalizedLanguage = language as 'en' | 'pl';
-    const expected = normalizedLanguage === 'en'
-      ? (count === 0 ? 'Saved' : `Saved · ${count} equivalent ${count === 1 ? 'unit' : 'units'} updated`)
-      : count === 0 ? 'Zapisano' : count === 1
-        ? 'Zapisano · zaktualizowano 1 równoważną jednostkę'
-        : [2, 22].includes(count)
-          ? `Zapisano · zaktualizowano ${count} równoważne jednostki`
-          : `Zapisano · zaktualizowano ${count} równoważnych jednostek`;
-    await act(async () => { await i18n.changeLanguage(normalizedLanguage); });
-    const screen = renderScreen(buildEquivalentEditParams(count));
-    if (count > 0) {
-      await act(async () => { fireEvent.press(screen.getByText('Apply Equivalent Fixture')); });
-    }
-    await act(async () => { fireEvent.press(screen.getByText('Save')); });
-    await waitFor(() => expect(mockToast.show).toHaveBeenCalledWith({ type: 'success', text1: expected }));
-    screen.unmount();
-    await act(async () => { await i18n.changeLanguage('en'); });
   });
 
   it('refuses to save edit-food submissions while the variants query is still loading', async () => {
@@ -1560,7 +1221,7 @@ describe('FoodFormScreen', () => {
       variantId: 'variant-1',
     });
 
-    fireEvent.press(screen.getByText('Save'));
+    fireEvent.press(screen.getByText('Save Changes'));
 
     await waitFor(() => {
       expect(mockToast.show).toHaveBeenCalledWith(
@@ -1571,3 +1232,4 @@ describe('FoodFormScreen', () => {
     expect(navigation.dispatch).not.toHaveBeenCalled();
   });
 });
+

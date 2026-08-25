@@ -7,7 +7,8 @@ import { log } from '../../config/logging.js';
 import {
   todayInZone,
   instantToDay,
-  utcOffsetMinutesFromIsoString,
+  instantHourMinute,
+  addDays,
 } from '@workspace/shared';
 import {
   parseDurationToSeconds,
@@ -620,11 +621,12 @@ async function processGoogleSleep(
     const interval = sleepPayload.interval || {};
     const stages = sleepPayload.stages || [];
 
-    const rawStartTime = (interval.startTime ?? point.startTime) as
-      | string
-      | Record<string, unknown>
-      | undefined;
-    const startIso = googleTimeToIso(rawStartTime);
+    const startIso = googleTimeToIso(
+      (interval.startTime ?? point.startTime) as
+        | string
+        | Record<string, unknown>
+        | undefined
+    );
     const endIso = googleTimeToIso(
       (interval.endTime ?? point.endTime) as
         | string
@@ -633,18 +635,10 @@ async function processGoogleSleep(
     );
     if (!startIso) continue;
 
-    // Only the string form can carry an explicit ±HH:MM recording-zone
-    // suffix; the {date,time} object form and Z/naive strings make no zone
-    // claim, so those rows fall back to the profile timezone at read time.
-    const recordUtcOffsetMinutes =
-      typeof rawStartTime === 'string'
-        ? utcOffsetMinutesFromIsoString(rawStartTime)
-        : null;
-
-    // Anchor to the wake-up day, matching how Google Health / Fitbit file a
-    // sleep session (it belongs to the day the session ends, not the day you
-    // fell asleep). Fall back to the start day when there is no end time.
-    const sleepDate = instantToDay(endIso ?? startIso, tz);
+    const startDate = instantToDay(startIso, tz);
+    // Anchor to the "sleep date": if civil start is before noon, attribute to previous day.
+    const startHour = instantHourMinute(startIso, tz).hour;
+    const sleepDate = startHour < 12 ? addDays(startDate, -1) : startDate;
 
     const minutesAsleep = parseInt(summary.minutesAsleep as string, 10) || 0;
     const minutesInPeriod =
@@ -697,9 +691,6 @@ async function processGoogleSleep(
       entry_date: sleepDate,
       bedtime: startIso,
       wake_time: endIso,
-      ...(recordUtcOffsetMinutes !== null
-        ? { record_utc_offset_minutes: recordUtcOffsetMinutes }
-        : {}),
       duration_in_seconds: durationSec,
       time_asleep_in_seconds: minutesAsleep * 60,
       sleep_score: efficiency,
@@ -857,7 +848,7 @@ async function processGoogleActivities(
         {
           set_number: 1,
           set_type: 'Working Set',
-          duration: Math.round(durationSeconds),
+          duration: Math.round(durationSeconds / 60),
           notes: 'Automatically created from Google Health sync',
         },
       ],

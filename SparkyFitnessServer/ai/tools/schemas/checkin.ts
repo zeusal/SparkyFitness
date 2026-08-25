@@ -35,24 +35,6 @@ const logBiometricsSchema = z
       .min(0)
       .optional()
       .describe('Body fat percentage'),
-    // Smart-scale composition. The masses follow weight_unit like weight does;
-    // body_water is a percentage and is never unit-converted.
-    muscle_mass: z.coerce
-      .number()
-      .min(0)
-      .optional()
-      .describe('Muscle mass (uses weight_unit)'),
-    bone_mass: z.coerce
-      .number()
-      .min(0)
-      .optional()
-      .describe('Bone mass (uses weight_unit)'),
-    body_water: z.coerce
-      .number()
-      .min(0)
-      .max(100)
-      .optional()
-      .describe('Body water percentage'),
   })
   .strict();
 
@@ -113,20 +95,12 @@ const logMoodSchema = z
       .int()
       .min(1)
       .max(10)
-      .optional()
-      .default(5)
-      .describe('Mood score (1-10); defaults to 5 if omitted'),
+      .describe('Mood score (1-10)'),
     notes: z
       .string()
       .max(2000)
       .optional()
       .describe('Optional notes about the mood'),
-    mood_tags: z
-      .array(z.string())
-      .optional()
-      .describe(
-        'Optional list of mood tags/emotions (e.g. ["anxious", "tired", "sad"])'
-      ),
     entry_date: dateSchema,
   })
   .strict();
@@ -233,7 +207,6 @@ export const manageCheckinInput = z.object({
       'get_fasting_status',
       'get_biometrics_history',
     ])
-    .optional()
     .describe('Action to perform; see tool description for per-action fields.'),
   entry_date: dateSchema.optional().describe('Date for the entry (YYYY-MM-DD)'),
   // biometrics
@@ -251,22 +224,6 @@ export const manageCheckinInput = z.object({
     .optional()
     .describe('Unit for body measurements'),
   body_fat: z.coerce.number().min(0).optional().describe('Body fat percentage'),
-  muscle_mass: z.coerce
-    .number()
-    .min(0)
-    .optional()
-    .describe('Muscle mass (uses weight_unit)'),
-  bone_mass: z.coerce
-    .number()
-    .min(0)
-    .optional()
-    .describe('Bone mass (uses weight_unit)'),
-  body_water: z.coerce
-    .number()
-    .min(0)
-    .max(100)
-    .optional()
-    .describe('Body water percentage'),
   // custom metrics / categories
   category_name: z
     .string()
@@ -292,12 +249,6 @@ export const manageCheckinInput = z.object({
     .max(10)
     .optional()
     .describe('Mood score (1-10)'),
-  mood_tags: z
-    .array(z.string())
-    .optional()
-    .describe(
-      'Optional mood tags for log_mood (e.g. ["anxious", "tired", "sad"])'
-    ),
   // fasting
   start_time: z
     .string()

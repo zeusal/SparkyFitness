@@ -1,3 +1,4 @@
+import React from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
 import { useCSSVariable } from 'uniwind';
 import Icon, { type IconName } from './Icon';
@@ -14,9 +15,7 @@ interface StatusViewProps {
   loading?: boolean;
   /** Icon to display (ignored when loading) */
   icon?: IconName;
-  /** Icon color theme intent (default 'accent') */
-  iconTone?: 'accent' | 'muted' | 'danger';
-  /** Explicit icon color; overrides iconTone */
+  /** Icon color (defaults to accent-primary) */
   iconColor?: string;
   /** Icon size (default 48) */
   iconSize?: number;
@@ -26,8 +25,6 @@ interface StatusViewProps {
   subtitle?: string;
   /** Action button */
   action?: StatusViewAction;
-  /** Compact block for use inside lists/sections instead of filling the screen */
-  inline?: boolean;
   /** Additional className for the outer container */
   className?: string;
 }
@@ -35,39 +32,24 @@ interface StatusViewProps {
 export default function StatusView({
   loading,
   icon,
-  iconTone = 'accent',
   iconColor,
   iconSize = 48,
   title,
   subtitle,
   action,
-  inline,
   className,
 }: StatusViewProps) {
-  const [accentColor, mutedColor, dangerColor] = useCSSVariable([
-    '--color-accent-primary',
-    '--color-text-muted',
-    '--color-icon-danger',
-  ]) as [string, string, string];
-  const toneColor =
-    iconTone === 'muted' ? mutedColor : iconTone === 'danger' ? dangerColor : accentColor;
-
-  const containerClassName = inline
-    ? 'px-6 py-10 items-center'
-    : 'flex-1 justify-center items-center px-6';
-  const titleClassName = inline
-    ? `text-text-primary text-base font-medium text-center ${loading || icon ? 'mt-4' : ''}`
-    : 'text-text-secondary text-base mt-4 text-center';
+  const accentColor = useCSSVariable('--color-accent-primary') as string;
 
   return (
-    <View className={`${containerClassName} ${className ?? ''}`}>
+    <View className={`flex-1 justify-center items-center px-6 ${className ?? ''}`}>
       {loading ? (
         <ActivityIndicator size="large" color={accentColor} />
       ) : icon ? (
-        <Icon name={icon} size={iconSize} color={iconColor ?? toneColor} />
+        <Icon name={icon} size={iconSize} color={iconColor ?? accentColor} />
       ) : null}
       {title && (
-        <Text className={titleClassName}>
+        <Text className="text-text-secondary text-base mt-4 text-center">
           {title}
         </Text>
       )}

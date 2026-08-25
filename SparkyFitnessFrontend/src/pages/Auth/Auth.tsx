@@ -34,11 +34,9 @@ import { MagicLinkRequestDialog } from './MagicLinkRequestDialog';
 import { useQueryClient } from '@tanstack/react-query';
 import { AuthResponse } from '@/types/auth';
 import { getErrorMessage } from '@/utils/api';
-import { useTranslation } from 'react-i18next';
 
 const Auth = () => {
   const navigate = useNavigate();
-  const { t } = useTranslation();
   const { loggingLevel } = usePreferences();
   const { signIn, user: authUser, loading: authLoading } = useAuth();
   debug(loggingLevel, 'Auth: Component rendered.');
@@ -247,8 +245,8 @@ const Auth = () => {
   );
 
   const validatePassword = (pwd: string) => {
-    if (pwd.length < 8) {
-      return t('settings.accountSecurity.passwordLengthError');
+    if (pwd.length < 6) {
+      return 'Password must be at least 6 characters long.';
     }
     if (!/[A-Z]/.test(pwd)) {
       return 'Password must contain at least one uppercase letter.';
@@ -354,40 +352,22 @@ const Auth = () => {
 
   const handlePasskeySignIn = async () => {
     info(loggingLevel, 'Auth: Attempting Passkey sign-in.');
-    if (typeof window !== 'undefined' && !window.isSecureContext) {
-      toast({
-        title: t('auth.passkeyErrorTitle', 'Passkey Error'),
-        description: t(
-          'auth.passkeySecureContextError',
-          'Passkey authentication requires a Secure Context (HTTPS or localhost). Please sign in using email/password.'
-        ),
-        variant: 'destructive',
-      });
-      return;
-    }
     setLoading(true);
     try {
       const { error } = await authClient.signIn.passkey();
       if (error) throw error;
 
       info(loggingLevel, 'Auth: Passkey sign-in successful.');
-      toast({
-        title: t('auth.successTitle', 'Success'),
-        description: t('auth.passkeySuccess', 'Logged in with Passkey!'),
-      });
+      toast({ title: 'Success', description: 'Logged in with Passkey!' });
       navigate('/');
     } catch (err: unknown) {
       const message = getErrorMessage(err);
       error(loggingLevel, 'Auth: Passkey sign-in failed:', err);
       toast({
-        title: t('auth.passkeyErrorTitle', 'Passkey Error'),
+        title: 'Passkey Error',
         description:
-          message && message !== 'An unexpected error occurred.'
-            ? message
-            : t(
-                'auth.passkeyGenericError',
-                'Failed to sign in with Passkey. Ensure your device supports it.'
-              ),
+          message ||
+          'Failed to sign in with Passkey. Ensure your device supports it.',
         variant: 'destructive',
       });
     } finally {
@@ -442,7 +422,7 @@ const Auth = () => {
                   <AlertDescription>{formError}</AlertDescription>
                 </Alert>
               )}
-              {(loginSettings?.email?.enabled ?? true) ? (
+              {loginSettings?.email.enabled ? (
                 <Tabs defaultValue="signin" className="w-full">
                   {!loginSettings?.signup_disabled && (
                     <TabsList className="h-10 grid w-full grid-cols-2">
@@ -642,7 +622,6 @@ const Auth = () => {
                               );
                             }}
                             required
-                            minLength={8}
                             autoComplete="new-password"
                           />
                           <PasswordToggle
@@ -667,55 +646,36 @@ const Auth = () => {
                   )}
                 </Tabs>
               ) : (
-                <div className="space-y-4">
-                  {/* Passkey is always available */}
-                  <Button
-                    variant="outline"
-                    className="w-full dark:bg-gray-800 dark:hover:bg-gray-600 flex items-center justify-center"
-                    onClick={handlePasskeySignIn}
-                    disabled={loading}
-                  >
-                    <Fingerprint className="h-4 w-4 mr-2 text-primary" /> Sign
-                    in with Passkey
-                  </Button>
-
-                  {loginSettings?.oidc?.enabled &&
-                    loginSettings.oidc.providers?.length > 0 && (
-                      <>
-                        <div className="flex items-center my-4">
-                          <div className="flex-grow border-t border-gray-300 dark:border-gray-700"></div>
-                          <span className="flex-shrink mx-4 text-gray-400 text-xs uppercase">
-                            Or sign in with
-                          </span>
-                          <div className="flex-grow border-t border-gray-300 dark:border-gray-700"></div>
-                        </div>
-                        <div className="space-y-2">
-                          {loginSettings.oidc.providers.map((provider) => (
-                            <Button
-                              key={provider.id}
-                              variant="outline"
-                              className="w-full dark:bg-gray-800 dark:hover:bg-gray-600 flex items-center justify-center"
-                              onClick={() => {
-                                if (provider.id) {
-                                  initiateOidcLogin({
-                                    providerId: provider.id,
-                                  });
-                                }
-                              }}
-                            >
-                              {provider.logo_url && (
-                                <img
-                                  src={provider.logo_url}
-                                  alt={`${provider.display_name} logo`}
-                                  className="h-5 w-5 mr-2"
-                                />
-                              )}
-                              {provider.display_name || 'Sign In with OIDC'}
-                            </Button>
-                          ))}
-                        </div>
-                      </>
-                    )}
+                <div>
+                  {loginSettings?.oidc.enabled &&
+                  loginSettings.oidc.providers?.length > 0 ? (
+                    loginSettings.oidc.providers.map((provider) => (
+                      <Button
+                        key={provider.id}
+                        variant="outline"
+                        className="w-full dark:bg-gray-800 dark:hover:bg-gray-600 flex items-center justify-center"
+                        onClick={() => {
+                          if (provider.id) {
+                            initiateOidcLogin({ providerId: provider.id });
+                          }
+                        }}
+                      >
+                        {provider.logo_url && (
+                          <img
+                            src={provider.logo_url}
+                            alt={`${provider.display_name} logo`}
+                            className="h-5 w-5 mr-2"
+                          />
+                        )}
+                        {provider.display_name || 'Sign In with OIDC'}
+                      </Button>
+                    ))
+                  ) : (
+                    <p className="text-center text-red-500">
+                      No login methods are currently enabled. Please contact an
+                      administrator.
+                    </p>
+                  )}
                 </div>
               )}
             </CardContent>

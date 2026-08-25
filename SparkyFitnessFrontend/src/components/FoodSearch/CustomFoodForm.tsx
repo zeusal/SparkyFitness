@@ -11,8 +11,6 @@ import { usePreferences } from '@/contexts/PreferencesContext';
 import { useIsMobile } from '@/hooks/use-mobile';
 import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
 import { BarcodeScannerDialog } from './BarcodeScannerDialog';
-import { ProviderNutrientViewer } from './ProviderNutrientViewer';
-import ProviderVerifiedBadge from './ProviderVerifiedBadge';
 import type { Food, FoodVariant } from '@/types/food';
 
 import { useCustomNutrients } from '@/hooks/Foods/useCustomNutrients';
@@ -23,7 +21,6 @@ import { useUserAiConfigAllowed } from '@/hooks/AI/useUserAiConfigAllowed';
 import { UNIT_GROUPS } from '@/constants/foodForm';
 import { deriveSavedAiUnits } from '@/utils/foodAiUnits';
 import { getConversionFactor } from '@workspace/shared';
-import { FoodImagePicker } from './FoodImagePicker';
 
 interface CustomFoodFormProps {
   onSave: (foodData: Food) => void;
@@ -66,7 +63,6 @@ const CustomFoodForm = ({
     variantErrors,
     loading,
     showSyncConfirmation,
-    syncTouchesPhotos,
     loadedVariants,
     conversionBaseVariants,
     hasTrustedCompatibilityBase,
@@ -77,7 +73,6 @@ const CustomFoodForm = ({
     duplicateVariant,
     removeVariant,
     updateVariant,
-    applyProviderNutrientMatch,
     applyAiEstimate,
     handleSubmit,
     handleSyncConfirmation,
@@ -85,8 +80,6 @@ const CustomFoodForm = ({
     setShowBarcodeConflictConfirmation,
     barcodeConflictFoodName,
     handleBarcodeConflictConfirm,
-    imageItems,
-    setImageItems,
   } = useCustomFoodForm({
     food,
     initialVariants,
@@ -170,14 +163,11 @@ const CustomFoodForm = ({
     <>
       <Card>
         <CardHeader>
-          <div className="flex flex-wrap items-center gap-2">
-            <CardTitle>
-              {food && food.id
-                ? t('customFoodForm.editFoodTitle', 'Edit Food')
-                : t('customFoodForm.addCustomFoodTitle', 'Add Custom Food')}
-            </CardTitle>
-            {food?.provider_verified ? <ProviderVerifiedBadge /> : null}
-          </div>
+          <CardTitle>
+            {food && food.id
+              ? t('customFoodForm.editFoodTitle', 'Edit Food')
+              : t('customFoodForm.addCustomFoodTitle', 'Add Custom Food')}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -232,14 +222,6 @@ const CustomFoodForm = ({
               </div>
             </div>
 
-            <div className="pt-2">
-              <FoodImagePicker
-                idPrefix="custom-food"
-                items={imageItems}
-                onItemsChange={setImageItems}
-              />
-            </div>
-
             <div className="flex items-center space-x-2 pt-2">
               <Checkbox
                 id="is_quick_food"
@@ -255,11 +237,6 @@ const CustomFoodForm = ({
                 )}
               </Label>
             </div>
-
-            <ProviderNutrientViewer
-              food={food}
-              onApplyMatch={applyProviderNutrientMatch}
-            />
 
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -368,58 +345,15 @@ const CustomFoodForm = ({
           open={showSyncConfirmation}
           onOpenChange={(open) => {
             if (!open) {
-              handleSyncConfirmation('none');
+              handleSyncConfirmation(false);
             }
           }}
-          // When this save replaced the food's photos the user gets a third
-          // outcome, because the two photo results genuinely differ: the
-          // confirm action forces the new photo onto every past entry
-          // (replacing photos set on individual diary entries, which are then
-          // deleted), while the secondary action rewrites nutrition only and
-          // leaves every entry's photo alone. With photos untouched there is
-          // nothing to decide, so it stays a plain yes/no about nutrition.
-          onConfirm={() =>
-            handleSyncConfirmation(
-              syncTouchesPhotos ? 'nutrition-and-photos' : 'nutrition'
-            )
-          }
-          variant={syncTouchesPhotos ? 'destructive' : 'default'}
-          secondaryActionLabel={
-            syncTouchesPhotos
-              ? t(
-                  'customFoodForm.syncConfirmationNutritionOnly',
-                  'Update nutrition only'
-                )
-              : undefined
-          }
-          onSecondaryAction={
-            syncTouchesPhotos
-              ? () => handleSyncConfirmation('nutrition')
-              : undefined
-          }
-          title={t(
-            'customFoodForm.syncConfirmationTitle',
-            'Sync Past Entries?'
+          onConfirm={() => handleSyncConfirmation(true)}
+          title={t('customFoodForm.syncConfirmTitle', 'Sync Past Entries?')}
+          description={t(
+            'customFoodForm.syncConfirmDescription',
+            'Do you want to update all your past diary entries for this food with the new nutritional information?'
           )}
-          description={
-            syncTouchesPhotos
-              ? t(
-                  'customFoodForm.syncConfirmationDescriptionWithPhotos',
-                  "Do you want to update all your past diary entries for this food with the new nutrition and photos? Updating photos replaces photos you set on individual diary entries, and can't be undone."
-                )
-              : t(
-                  'customFoodForm.syncConfirmationDescription',
-                  "Do you want to update all your past diary entries for this food with the new nutrition? Entries you don't update keep their original values."
-                )
-          }
-          confirmLabel={
-            syncTouchesPhotos
-              ? t(
-                  'customFoodForm.syncConfirmationConfirmWithPhotos',
-                  'Update nutrition & photos'
-                )
-              : t('customFoodForm.syncConfirmationConfirm', 'Update')
-          }
         />
       )}
 

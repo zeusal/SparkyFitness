@@ -13,25 +13,6 @@ import preferenceService from '../services/preferenceService.js';
 import { searchFatSecretByBarcode } from '../integrations/fatsecret/fatsecretService.js';
 import { lookupBarcode } from '../services/foodCoreService.js';
 import { normalizeBarcode } from '../utils/foodUtils.js';
-
-// provider_nutrients / provider_nutrient_units are the provider's full field
-// dump + units surfaced for the alias viewer (covered by
-// customNutrientMatching.test.ts). Drop them here so these exact-shape mapping
-// assertions stay focused on the standard fields.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function stripProviderNutrients<T>(food: any): T {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const strip = (v: any) => {
-    if (!v) return;
-    delete v.provider_nutrients;
-    delete v.provider_nutrient_units;
-  };
-  strip(food?.default_variant);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if (Array.isArray(food?.variants)) food.variants.forEach(strip);
-  return food;
-}
-
 vi.mock('../models/foodRepository.js');
 vi.mock('../services/externalProviderService.js');
 vi.mock('../services/preferenceService.js');
@@ -217,7 +198,7 @@ const makeOffResponse = (overrides = {}) => ({
 describe('mapOpenFoodFactsProduct', () => {
   it('should map a full OFF product to the local food schema', () => {
     const offProduct = makeOffResponse().product;
-    const result = stripProviderNutrients(mapOpenFoodFactsProduct(offProduct));
+    const result = mapOpenFoodFactsProduct(offProduct);
     // serving_quantity=37, scale=0.37, all per-100g values scaled to per-serving
     expect(result).toEqual({
       name: 'Nutella',
@@ -226,8 +207,6 @@ describe('mapOpenFoodFactsProduct', () => {
       provider_external_id: '3017620422003',
       provider_type: 'openfoodfacts',
       is_custom: false,
-      // No image fields on the fixture product, so nothing to hotlink.
-      image_url: null,
       default_variant: {
         serving_size: 37,
         serving_unit: 'g',
@@ -391,7 +370,7 @@ describe('mapOpenFoodFactsProduct', () => {
 describe('mapUsdaBarcodeProduct', () => {
   it('should map a full USDA branded food to the local food schema', () => {
     const usdaFood = makeUsdaFood();
-    const result = stripProviderNutrients(mapUsdaBarcodeProduct(usdaFood));
+    const result = mapUsdaBarcodeProduct(usdaFood);
     // servingSize=37, scale=0.37, all per-100g values scaled to per-serving
     expect(result).toEqual({
       name: 'CHOCOLATE HAZELNUT SPREAD',
@@ -960,37 +939,6 @@ describe('lookupBarcode', () => {
     expect(
       externalProviderService.getExternalDataProviderDetails
     ).toHaveBeenCalledWith(TEST_USER_ID, TEST_PROVIDER_ID);
-  });
-  it('resolves provider credentials against the authenticated actor, not the switched data-context user', async () => {
-    // A delegate (ACTOR) switched into a family member's context (CONTEXT).
-    const CONTEXT_USER = 'victim-context-1';
-    const ACTOR_USER = 'delegate-actor-2';
-    // @ts-expect-error TS(2339): mockResolvedValue not on mock type
-    foodRepository.findFoodByBarcode.mockResolvedValue(null);
-    // @ts-expect-error TS(2339): mockResolvedValue not on mock type
-    externalProviderService.getExternalDataProviderDetails.mockResolvedValue(
-      makeUsdaProvider()
-    );
-    // @ts-expect-error TS(2339): mockResolvedValue not on mock type
-    searchUsdaFoodsByBarcode.mockResolvedValue({ foods: [makeUsdaFood()] });
-
-    const result = await lookupBarcode(
-      '3017620422003',
-      CONTEXT_USER,
-      TEST_PROVIDER_ID,
-      ACTOR_USER
-    );
-
-    expect(result.source).toBe('usda');
-    // Provider secrets are decrypted for the actor — never the switched victim.
-    expect(
-      externalProviderService.getExternalDataProviderDetails
-    ).toHaveBeenCalledWith(ACTOR_USER, TEST_PROVIDER_ID);
-    // The local food library is still searched in the switched data context.
-    expect(foodRepository.findFoodByBarcode).toHaveBeenCalledWith(
-      '3017620422003',
-      CONTEXT_USER
-    );
   });
   it('should skip USDA when provider is inactive', async () => {
     // @ts-expect-error TS(2339): Property 'mockResolvedValue' does not exist on typ... Remove this comment to see the full error message

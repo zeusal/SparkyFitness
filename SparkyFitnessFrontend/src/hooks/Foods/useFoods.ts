@@ -176,13 +176,7 @@ export const useUpdateFoodEntriesSnapshotMutation = () => {
   const invalidate = useFoodEntryInvalidation();
   const { t } = useTranslation();
   return useMutation({
-    mutationFn: ({
-      foodId,
-      syncImages,
-    }: {
-      foodId: string;
-      syncImages: boolean;
-    }) => updateFoodEntriesSnapshot(foodId, syncImages),
+    mutationFn: (syncFoodId: string) => updateFoodEntriesSnapshot(syncFoodId),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: foodKeys.all,
@@ -271,13 +265,7 @@ export const useImportCsvMutation = () => {
   const { t } = useTranslation();
 
   return useMutation({
-    mutationFn: ({
-      foods,
-      overwrite,
-    }: {
-      foods: FoodDataForBackend[];
-      overwrite: boolean;
-    }) => importFoodsFromCsv(foods, overwrite),
+    mutationFn: (foods: FoodDataForBackend[]) => importFoodsFromCsv(foods),
     onSuccess: () => {
       return queryClient.invalidateQueries({
         queryKey: foodKeys.all,

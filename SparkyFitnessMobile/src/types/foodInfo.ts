@@ -2,9 +2,7 @@ import type { FoodItem, TopFoodItem } from './foods';
 import type { ExternalFoodItem, ExternalFoodVariant } from './externalFoods';
 import type { Meal, MealIngredientDraft } from './meals';
 import type { BarcodeFood } from '../services/api/externalFoodSearchApi';
-import type { TFunction } from 'i18next';
-import { localizeNutrientKey } from '../utils/nutrientLocalization';
-import { parseDecimalInput, toFiniteNumber } from '../utils/numericInput';
+import { parseDecimalInput } from '../utils/numericInput';
 
 /** Convert a numeric value to a form-compatible string. Returns '' for null/undefined. */
 export const toFormString = (v: number | null | undefined): string =>
@@ -13,6 +11,17 @@ export const toFormString = (v: number | null | undefined): string =>
 /** Parse an optional form string to a number. Returns undefined for empty strings. */
 export const parseOptional = (s: string): number | undefined =>
   s === '' ? undefined : (parseDecimalInput(s) || 0);
+
+function toFiniteNumber(value: unknown): number {
+  const numericValue =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string'
+        ? Number(value)
+        : Number.NaN;
+
+  return Number.isFinite(numericValue) ? numericValue : 0;
+}
 
 function toOptionalFiniteNumber(value: unknown): number | undefined {
   if (value == null || value === '') {
@@ -27,37 +36,24 @@ function toTrimmedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-
 /** Ordered list of extra nutrient fields for display and form conversion. */
 export const EXTRA_NUTRIENT_FIELDS = [
-  // i18n-audit-ignore-next-line hardcoded-ui-text -- canonical English metadata; rendered labels are localized at presentation.
   { key: 'fiber', label: 'Fiber', unit: 'g' },
-  // i18n-audit-ignore-next-line hardcoded-ui-text -- canonical English metadata; rendered labels are localized at presentation.
   { key: 'sugars', label: 'Sugars', unit: 'g' },
-  // i18n-audit-ignore-next-line hardcoded-ui-text -- canonical English metadata; rendered labels are localized at presentation.
   { key: 'saturatedFat', label: 'Saturated Fat', unit: 'g' },
-  // i18n-audit-ignore-next-line hardcoded-ui-text -- canonical English metadata; rendered labels are localized at presentation.
   { key: 'transFat', label: 'Trans Fat', unit: 'g' },
-  // i18n-audit-ignore-next-line hardcoded-ui-text -- canonical English metadata; rendered labels are localized at presentation.
   { key: 'cholesterol', label: 'Cholesterol', unit: 'mg' },
-  // i18n-audit-ignore-next-line hardcoded-ui-text -- canonical English metadata; rendered labels are localized at presentation.
   { key: 'sodium', label: 'Sodium', unit: 'mg' },
-  // i18n-audit-ignore-next-line hardcoded-ui-text -- canonical English metadata; rendered labels are localized at presentation.
   { key: 'potassium', label: 'Potassium', unit: 'mg', additional: true },
-  // i18n-audit-ignore-next-line hardcoded-ui-text -- canonical English metadata; rendered labels are localized at presentation.
   { key: 'calcium', label: 'Calcium', unit: 'mg', additional: true },
-  // i18n-audit-ignore-next-line hardcoded-ui-text -- canonical English metadata; rendered labels are localized at presentation.
   { key: 'iron', label: 'Iron', unit: 'mg', additional: true },
-  // i18n-audit-ignore-next-line hardcoded-ui-text -- canonical English metadata; rendered labels are localized at presentation.
   { key: 'vitaminA', label: 'Vitamin A', unit: 'mcg', additional: true },
-  // i18n-audit-ignore-next-line hardcoded-ui-text -- canonical English metadata; rendered labels are localized at presentation.
   { key: 'vitaminC', label: 'Vitamin C', unit: 'mg', additional: true },
 ] as const;
 
 type ExtraNutrientKey = typeof EXTRA_NUTRIENT_FIELDS[number]['key'];
 
 export interface NutrientDisplayItem {
-  /** Application-owned key; custom nutrient names may remain literal. */
   label: string;
   value: number;
   unit: string;
@@ -75,14 +71,14 @@ export interface BuildNutrientDisplayListOptions {
 /** Build primary + additional display lists from a camelCase nutrient source. */
 export function buildNutrientDisplayList(
   source: Partial<Record<ExtraNutrientKey, number>>,
-  options: BuildNutrientDisplayListOptions & { t?: TFunction } = {},
+  options: BuildNutrientDisplayListOptions = {},
 ) {
   const primary: NutrientDisplayItem[] = [];
   const additional: NutrientDisplayItem[] = [];
   for (const field of EXTRA_NUTRIENT_FIELDS) {
     const value = source[field.key];
     if (value == null) continue;
-    const item: NutrientDisplayItem = { label: options.t ? localizeNutrientKey(options.t, field.key) : field.label, value, unit: field.unit };
+    const item: NutrientDisplayItem = { label: field.label, value, unit: field.unit };
     if ('additional' in field && field.additional) {
       additional.push(item);
     } else {
@@ -91,7 +87,7 @@ export function buildNutrientDisplayList(
   }
 
   if (options.showNetCarbs && options.carbs !== undefined) {
-    const carbClusterLabels = new Set([options.t ? localizeNutrientKey(options.t, 'fiber') : 'Fiber', options.t ? localizeNutrientKey(options.t, 'sugars') : 'Sugars']);
+    const carbClusterLabels = new Set(['Fiber', 'Sugars']);
     let insertIdx = 0;
     for (let i = 0; i < primary.length; i++) {
       if (carbClusterLabels.has(primary[i].label)) {
@@ -99,8 +95,7 @@ export function buildNutrientDisplayList(
       }
     }
     primary.splice(insertIdx, 0, {
-      // i18n-audit-ignore-next-line hardcoded-ui-text -- canonical nutrient metadata; presentation localizes this label when a translator is available.
-      label: options.t ? localizeNutrientKey(options.t, 'totalCarbs') : 'Total Carbs',
+      label: 'Total Carbs',
       value: options.carbs,
       unit: 'g',
     });
@@ -114,9 +109,6 @@ export interface FoodInfoItem {
   name: string;
   brand: string | null;
   barcode?: string | null;
-  provider_type?: string;
-  provider_external_id?: string;
-  is_custom?: boolean;
   userId?: string;
   sharedWithPublic?: boolean;
   servingSize: number;
@@ -141,13 +133,6 @@ export interface FoodInfoItem {
   variantId?: string;
   externalVariants?: ExternalFoodVariant[];
   provider_verified?: boolean;
-  // Photos. `images` is set for already-saved foods and meals; the two URL
-  // fields carry a provider result's photo before it has been imported, and
-  // must survive as far as the create payload or the food is saved without
-  // one. See docs/content/8.developer/12.food-provider-images.md.
-  images?: string[] | null;
-  image_url?: string | null;
-  image_source_url?: string | null;
   // Yield count for meal-source items — surfaces "meal makes N servings"
   // context in the diary-add screen for serving-unit meals where the
   // per-serving size suffix is suppressed.
@@ -169,9 +154,6 @@ export const foodItemToFoodInfo = (item: FoodItem | TopFoodItem ): FoodInfoItem 
   barcode: item.barcode ?? null,
   userId: item.user_id,
   sharedWithPublic: item.shared_with_public,
-  provider_type: item.provider_type ?? undefined,
-  provider_external_id: item.provider_external_id ?? undefined,
-  provider_verified: item.provider_verified,
   servingSize: item.default_variant.serving_size,
   servingUnit: item.default_variant.serving_unit,
   calories: item.default_variant.calories,
@@ -191,7 +173,6 @@ export const foodItemToFoodInfo = (item: FoodItem | TopFoodItem ): FoodInfoItem 
   vitaminC: item.default_variant.vitamin_c,
   customNutrients: item.default_variant.custom_nutrients ?? null,
   variantId: item.default_variant.id,
-  images: item.images ?? null,
   source: 'local',
   originalItem: item,
 });
@@ -200,10 +181,6 @@ export const externalFoodItemToFoodInfo = (item: ExternalFoodItem): FoodInfoItem
   id: item.id,
   name: item.name,
   brand: item.brand,
-  barcode: item.barcode ?? null,
-  provider_type: item.provider_type,
-  provider_external_id: item.provider_external_id,
-  is_custom: item.is_custom,
   servingSize: item.serving_size,
   servingUnit: item.serving_unit,
   servingDescription: item.serving_description,
@@ -224,9 +201,6 @@ export const externalFoodItemToFoodInfo = (item: ExternalFoodItem): FoodInfoItem
   vitaminC: item.vitamin_c,
   externalVariants: item.variants,
   provider_verified: item.provider_verified,
-  images: item.images ?? null,
-  image_url: item.image_url ?? null,
-  image_source_url: item.image_source_url ?? null,
   source: 'external',
   originalItem: item,
 });
@@ -279,7 +253,6 @@ export const mealToFoodInfo = (meal: Meal): FoodInfoItem => {
     vitaminA: hasField('vitamin_a') ? Math.round(perServing(sumField('vitamin_a'))) : undefined,
     vitaminC: hasField('vitamin_c') ? Math.round(perServing(sumField('vitamin_c'))) : undefined,
     mealTotalServings: totalServings,
-    images: meal.images ?? null,
     source: 'meal',
     originalItem: meal,
   };
@@ -294,7 +267,7 @@ export const mealIngredientDraftToFoodInfo = (
     'serving';
 
   return {
-    id: ingredient.food_id || '',
+    id: ingredient.food_id,
     name: ingredient.food_name || 'Food',
     brand: ingredient.brand,
     servingSize: toFiniteNumber(ingredient.serving_size),

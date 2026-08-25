@@ -7,7 +7,6 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import MealBuilder from '../../components/MealBuilder';
-import FavoriteStarButton from '@/components/FavoriteStarButton';
 import type { Meal, MealFood } from '@/types/meal';
 
 interface LogMealDialogProps {
@@ -16,7 +15,6 @@ interface LogMealDialogProps {
   onOpenChange: (open: boolean) => void;
   date: string;
   mealType: string;
-  initialEntryTime?: string | null;
 }
 
 const LogMealDialog: React.FC<LogMealDialogProps> = ({
@@ -25,7 +23,6 @@ const LogMealDialog: React.FC<LogMealDialogProps> = ({
   onOpenChange,
   date,
   mealType,
-  initialEntryTime,
 }) => {
   const handleSave = () => {
     onOpenChange(false);
@@ -43,12 +40,7 @@ const LogMealDialog: React.FC<LogMealDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <span>Log Meal: {mealTemplate.name}</span>
-            {mealTemplate.id && (
-              <FavoriteStarButton type="meal" id={mealTemplate.id} />
-            )}
-          </DialogTitle>
+          <DialogTitle>Log Meal: {mealTemplate.name}</DialogTitle>
           <DialogDescription>
             Adjust the portion size or ingredients for this meal entry.
           </DialogDescription>
@@ -63,7 +55,6 @@ const LogMealDialog: React.FC<LogMealDialogProps> = ({
           foodEntryMealType={mealType}
           initialServingSize={mealTemplate.serving_size}
           initialServingUnit={mealTemplate.serving_unit}
-          initialEntryTime={initialEntryTime}
         />
       </DialogContent>
     </Dialog>

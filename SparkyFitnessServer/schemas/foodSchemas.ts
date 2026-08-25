@@ -5,10 +5,9 @@ export const FoodVariantSchema = z.object({
   user_id: z.string().optional(),
   serving_size: z.number(),
   serving_unit: z.string(),
-  serving_description: z.preprocess(
-    (value) => (value === null ? undefined : value),
-    z.string().optional()
-  ),
+  serving_description: z.string().optional(),
+  serving_weight: z.number().optional(),
+  serving_weight_unit: z.string().optional(),
   calories: z.number(),
   protein: z.number(),
   carbs: z.number(),
@@ -31,15 +30,6 @@ export const FoodVariantSchema = z.object({
   custom_nutrients: z
     .record(z.string(), z.union([z.string(), z.number()]))
     .optional(),
-  // Every nutrient field the provider reported for this food, keyed by the
-  // provider's EXACT label (e.g. "Magnesium, Mg"). Surfaced to the client so
-  // users can see what a provider calls each nutrient and add it as a custom
-  // nutrient alias. Transient/import-only; never persisted.
-  provider_nutrients: z.record(z.string(), z.number()).optional(),
-  // Unit per provider field (same label keys as provider_nutrients), for
-  // providers that report units (USDA, OFF). Used to prefill a custom
-  // nutrient's unit. Import-only; never persisted.
-  provider_nutrient_units: z.record(z.string(), z.string()).optional(),
   source: z.enum(['manual', 'ai_estimate', 'imported']).optional(),
   ai_confidence: z.enum(['high', 'medium', 'low']).nullable().optional(),
   allergens: z.array(z.string()).nullable().optional(),
@@ -57,15 +47,6 @@ export const NormalizedFoodSchema = z.object({
   provider_type: z.string().optional(),
   provider_verified: z.boolean().optional(),
   is_custom: z.boolean(),
-  // Upstream provider photo on a not-yet-imported result. Hotlinked by the
-  // search UI; localized into `images` on import (see models/food.ts). Without
-  // these keys the surrounding z.object() silently strips them, which leaves
-  // provider results image-less and starves the localization pipeline.
-  image_url: z.string().nullable().optional(),
-  // Full-size counterpart when a provider serves two sizes (mealie, tandoor).
-  image_source_url: z.string().nullable().optional(),
-  // Local foods returned through this shape carry their stored array.
-  images: z.array(z.string()).optional(),
   default_variant: FoodVariantSchema,
   variants: z.array(FoodVariantSchema).optional(),
 });

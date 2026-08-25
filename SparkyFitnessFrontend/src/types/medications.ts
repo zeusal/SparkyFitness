@@ -2,20 +2,6 @@
 // api service (src/api) and page components can import them (page components are
 // not allowed to import from src/api directly — see eslint no-restricted-imports).
 
-import type {
-  FoodVariantNutrientField,
-  MedicationWithMeal,
-} from '@workspace/shared';
-
-/**
- * A supplement's per-dose payload: the fixed food-variant nutrient columns plus the
- * user's own custom nutrients. Keyed off the shared field list so it cannot drift from
- * what the report and the nutrient grid actually read.
- */
-export type MedicationNutrients = Partial<
-  Record<FoodVariantNutrientField, number>
-> & { custom_nutrients?: Record<string, number> };
-
 export interface Medication {
   id: string;
   user_id: string;
@@ -35,8 +21,6 @@ export interface Medication {
   is_active: boolean;
   is_quick: boolean;
   is_glp1: boolean;
-  is_supplement: boolean;
-  nutrients: MedicationNutrients;
   notes: string | null;
   source: string;
   prescriber?: string | null;
@@ -61,12 +45,10 @@ export interface MedicationSchedule {
   cycle_off_days: number | null;
   prn_reason: string | null;
   prn_max_per_day: number | null;
-  with_meal: MedicationWithMeal | null;
+  with_meal: string | null;
   start_date: string | null;
   end_date: string | null;
   active: boolean;
-  created_at: string;
-  updated_at: string;
 }
 
 export type MedicationDetail = Medication & { schedules: MedicationSchedule[] };
@@ -127,11 +109,6 @@ export interface SerumCurveResponse {
   currentLevelFraction: number | null;
   /** Day positions of logged injections (relative to the curve anchor), for chart markers. */
   doseDays: number[];
-  /**
-   * ISO timestamp of day 0 (the earliest injection in the window), so the chart can
-   * plot real dates instead of day offsets. Null when there is no curve to anchor.
-   */
-  anchorDate: string | null;
   disclaimer: string;
 }
 
@@ -151,30 +128,13 @@ export interface ListMedicationsOptions {
 
 export interface LogInjectionInput {
   medication_id: string;
-  /** Omit while deduct_pen is true to let the server auto-pick the pen (in-use first, else oldest sealed). */
   pen_id?: string | null;
   injected_at?: string;
-  entry_date?: string | null;
   site?: string | null;
-  /** Omit to let the server resolve it from the active titration step or the medication's default dose. */
   dose_mg?: number | null;
   deduct_pen?: boolean;
   notes?: string | null;
 }
-
-// pen_id/deduct_pen are deliberately not editable — delete and re-log to change the pen.
-export interface UpdateInjectionInput {
-  injected_at?: string;
-  entry_date?: string | null;
-  site?: string | null;
-  dose_mg?: number | null;
-  notes?: string | null;
-  custom_fields?: Record<string, unknown> | null;
-}
-
-export type UpdateTitrationStepInput = Partial<
-  Omit<TitrationStep, 'id' | 'medication_id'>
->;
 
 export interface MedicationEntry {
   id: string;
@@ -193,19 +153,6 @@ export interface MedicationEntry {
   custom_fields: Record<string, unknown>;
   created_at: string;
   updated_at: string;
-  /**
-   * Per-dose nutrient payload snapshotted at log time (server-derived from the
-   * medication for supplement entries). NULL for non-supplement entries. Read-only;
-   * not client-writable on create.
-   */
-  nutrients_snapshot?: MedicationNutrients | null;
-  /**
-   * 'injection' rows are GLP-1 injection logs merged into the entries feed by the server;
-   * their id is an injection id, so deletes must go through the injection endpoint.
-   */
-  entry_type?: 'entry' | 'injection';
-  /** Injection site — only populated on entry_type='injection' rows. */
-  site?: string | null;
 }
 
 export interface CreateMedicationEntryInput {
@@ -220,16 +167,6 @@ export interface CreateMedicationEntryInput {
   dose_unit_snapshot?: string | null;
   notes?: string | null;
   source?: string;
-  custom_fields?: Record<string, unknown> | null;
-}
-
-export interface UpdateMedicationEntryInput {
-  schedule_id?: string | null;
-  status?: 'taken' | 'skipped' | 'snoozed' | 'prn_taken';
-  taken_at?: string | null;
-  scheduled_for?: string | null;
-  entry_date?: string | null;
-  notes?: string | null;
   custom_fields?: Record<string, unknown> | null;
 }
 

@@ -3,10 +3,6 @@ import { z } from 'zod';
 import exerciseService from '../services/exerciseService.js';
 import exercisePresetEntryRepository from '../models/exercisePresetEntryRepository.js';
 import exercisePresetEntryRoutes from '../routes/exercisePresetEntryRoutes.js';
-// @ts-expect-error no supertest types
-import request from 'supertest';
-import express from 'express';
-import errorHandler from '../middleware/errorHandler.js';
 
 vi.mock('@workspace/shared', () => ({
   createPresetSessionRequestSchema: {
@@ -15,14 +11,14 @@ vi.mock('@workspace/shared', () => ({
         data.workout_preset_id !== undefined && data.workout_preset_id !== null;
       const hasExercises = data.exercises !== undefined;
 
-      if (!hasPresetId && !hasExercises) {
+      if (hasPresetId === hasExercises) {
         return {
           success: false,
           error: {
             issues: [
               {
                 message:
-                  'Provide a workout source: workout_preset_id or exercises.',
+                  'Provide exactly one workout source: workout_preset_id or exercises.',
               },
             ],
             flatten: () => ({ formErrors: [], fieldErrors: {} }),
@@ -101,13 +97,10 @@ const presetSessionResponseSchema = z
                 set_type: z.string().nullable(),
                 reps: z.number().nullable(),
                 weight: z.number().nullable(),
-                // Per-set duration is integer SECONDS (issue #1903).
-                duration: z.number().int().nullable(),
+                duration: z.number().nullable(),
                 rest_time: z.number().nullable(),
                 notes: z.string().nullable(),
                 rpe: z.number().nullable(),
-                completed_at: z.string().nullable(),
-                is_pr: z.boolean(),
               })
               .strict()
           ),
@@ -264,8 +257,6 @@ const groupedSessionFixture = presetSessionResponseSchema.parse({
           rest_time: null,
           notes: null,
           rpe: null,
-          completed_at: null,
-          is_pr: false,
         },
       ],
       exercise_snapshot: {
@@ -344,34 +335,17 @@ describe('exercisePresetEntryRoutes', () => {
       }
     );
   });
-  it('accepts create payloads that tag a preset while supplying client exercises', async () => {
-    // @ts-expect-error TS(2339): Property 'mockResolvedValue' does not exist on typ... Remove this comment to see the full error message
-    exerciseService.createGroupedWorkoutSession.mockResolvedValue(
-      groupedSessionFixture
-    );
-    const body = {
-      workout_preset_id: 42,
-      name: 'Morning Workout',
-      entry_date: '2026-03-12',
-      exercises: [
-        {
-          exercise_id: '11111111-1111-4111-8111-111111111111',
-        },
-      ],
-    };
-    const response = await invokeRoute('post', '/', { body });
-    expect(response.statusCode).toBe(201);
-    expect(exerciseService.createGroupedWorkoutSession).toHaveBeenCalledWith(
-      '99999999-9999-4999-8999-999999999999',
-      '99999999-9999-4999-8999-999999999999',
-      body
-    );
-  });
-  it('rejects create payloads with neither a preset nor exercises', async () => {
+  it('rejects ambiguous create payloads', async () => {
     const response = await invokeRoute('post', '/', {
       body: {
+        workout_preset_id: 42,
         name: 'Morning Workout',
         entry_date: '2026-03-12',
+        exercises: [
+          {
+            exercise_id: '11111111-1111-4111-8111-111111111111',
+          },
+        ],
       },
     });
     expect(response.statusCode).toBe(400);
@@ -396,7 +370,7 @@ describe('exercisePresetEntryRoutes', () => {
   });
   it('surfaces 409 conflicts from grouped workout updates', async () => {
     const conflictError = new Error(
-      'Nested exercise editing is only supported for manual, sparky, or workout plan sessions.'
+      'Nested exercise editing is only supported for manual or sparky workouts.'
     );
     // @ts-expect-error TS(2339): Property 'status' does not exist on type 'Error'.
     conflictError.status = 409;
@@ -420,7 +394,7 @@ describe('exercisePresetEntryRoutes', () => {
     expect(response.statusCode).toBe(409);
     expect(response.body).toEqual({
       message:
-        'Nested exercise editing is only supported for manual, sparky, or workout plan sessions.',
+        'Nested exercise editing is only supported for manual or sparky workouts.',
     });
   });
   it('deletes grouped workout sessions', async () => {
@@ -438,132 +412,5 @@ describe('exercisePresetEntryRoutes', () => {
       groupedSessionFixture.id,
       '99999999-9999-4999-8999-999999999999'
     );
-  });
-});
-
-const app = express();
-
-app.use(express.json());
-
-app.use((req: any, _res, next) => {
-  req.userId = '99999999-9999-4999-8999-999999999999';
-  req.originalUserId = '99999999-9999-4999-8999-999999999999';
-  next();
-});
-
-app.use('/exercise-preset-entries', exercisePresetEntryRoutes);
-app.use(errorHandler);
-
-describe('exercisePresetEntryRoutes http (supertest)', () => {
-  const sessionId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-  const exerciseEntryId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
-  const exerciseId = '11111111-1111-4111-8111-111111111111';
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('accepts nested updates for Workout Plan sessions over http', async () => {
-    const planSession = {
-      ...groupedSessionFixture,
-      source: 'Workout Plan',
-      exercises: [
-        {
-          ...groupedSessionFixture.exercises[0],
-          source: 'Workout Plan',
-        },
-      ],
-    };
-    // @ts-expect-error TS(2339): Property 'mockResolvedValue' does not exist on typ... Remove this comment to see the full error message
-    exerciseService.updateGroupedWorkoutSession.mockResolvedValue(planSession);
-
-    const response = await request(app)
-      .put(`/exercise-preset-entries/${sessionId}`)
-      .send({
-        exercises: [
-          {
-            id: exerciseEntryId,
-            exercise_id: exerciseId,
-            sort_order: 0,
-            duration_minutes: 12,
-            sets: [
-              {
-                id: 1,
-                set_number: 1,
-                reps: 12,
-                weight: 60,
-                completed_at: '2026-03-12T10:00:00.000Z',
-                is_pr: true,
-              },
-            ],
-          },
-        ],
-      });
-
-    expect(response.statusCode).toBe(200);
-    expect(exerciseService.updateGroupedWorkoutSession).toHaveBeenCalledWith(
-      '99999999-9999-4999-8999-999999999999',
-      '99999999-9999-4999-8999-999999999999',
-      sessionId,
-      expect.objectContaining({
-        exercises: [
-          expect.objectContaining({
-            id: exerciseEntryId,
-            exercise_id: exerciseId,
-            duration_minutes: 12,
-            sets: [
-              expect.objectContaining({
-                id: 1,
-                reps: 12,
-                weight: 60,
-                completed_at: '2026-03-12T10:00:00.000Z',
-                is_pr: true,
-              }),
-            ],
-          }),
-        ],
-      })
-    );
-    expect(response.body).toEqual(planSession);
-  });
-
-  it('returns http 409 when grouped workout update rejects a non-editable session', async () => {
-    const error = Object.assign(
-      new Error(
-        'Nested exercise editing is only supported for manual, sparky, or workout plan sessions.'
-      ),
-      { status: 409 }
-    );
-    // @ts-expect-error TS(2339): Property 'mockRejectedValue' does not exist on typ... Remove this comment to see the full error message
-    exerciseService.updateGroupedWorkoutSession.mockRejectedValue(error);
-
-    const response = await request(app)
-      .put(`/exercise-preset-entries/${sessionId}`)
-      .send({
-        exercises: [
-          {
-            id: exerciseEntryId,
-            exercise_id: exerciseId,
-            sort_order: 0,
-            duration_minutes: 12,
-            sets: [
-              {
-                id: 1,
-                set_number: 1,
-                reps: 12,
-                weight: 60,
-                completed_at: '2026-03-12T10:00:00.000Z',
-                is_pr: true,
-              },
-            ],
-          },
-        ],
-      });
-
-    expect(response.statusCode).toBe(409);
-    expect(response.body).toEqual({
-      message:
-        'Nested exercise editing is only supported for manual, sparky, or workout plan sessions.',
-    });
   });
 });

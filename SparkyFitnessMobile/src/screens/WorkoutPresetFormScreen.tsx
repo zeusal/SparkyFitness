@@ -1,27 +1,23 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { View, Text } from 'react-native';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { View, Text, Platform } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { CommonActions } from '@react-navigation/native';
 import FormInput from '../components/FormInput';
 import FormScreenChrome from '../components/FormScreenChrome';
-import WorkoutFormExerciseList, {
-  type WorkoutFormExerciseListHandle,
-} from '../components/WorkoutFormExerciseList';
-import { useSetEditAccessoryBar, type SetRowAccessoryHandle } from '../components/SetRowChrome';
+import WorkoutEditableExerciseList from '../components/WorkoutEditableExerciseList';
 import {
   useCreateWorkoutPreset,
   useUpdateWorkoutPreset,
   usePreferences,
+  useProfile,
 } from '../hooks';
 import { useExerciseSetEditing } from '../hooks/useExerciseSetEditing';
 import { useSelectedExercise } from '../hooks/useSelectedExercise';
 import { useWorkoutPresetForm, type PresetDraft } from '../hooks/useWorkoutPresetForm';
 import { useExerciseImageSource } from '../hooks/useExerciseImageSource';
-import { type HeaderItem } from '../hooks/useScreenHeader';
-import { buildPresetExercisesPayload, canReorderDraftExercises } from '../utils/workoutSession';
-import type { WorkoutSetMetaPatch } from '../types/drafts';
-import type { Exercise } from '../types/exercise';
+import { createNativeHeaderTextButtonItem } from '../utils/nativeHeaderItems';
+import { useCSSVariable } from 'uniwind';
+import { buildPresetExercisesPayload } from '../utils/workoutSession';
 import type { WorkoutPreset } from '../types/workoutPresets';
 import type {
   RootStackParamList,
@@ -32,7 +28,6 @@ import type {
   WorkoutPresetUpdatePayload,
 } from '../services/api/workoutPresetsApi';
 
-type CreateParams = Extract<RootStackParamList['WorkoutPresetForm'], { mode: 'create-preset' }>;
 type EditParams = Extract<RootStackParamList['WorkoutPresetForm'], { mode: 'edit-preset' }>;
 
 type WorkoutPresetFormScreenProps = RootStackScreenProps<'WorkoutPresetForm'>;
@@ -44,31 +39,17 @@ interface PresetFormBodyProps {
   setName: (s: string) => void;
   setDescription: (s: string) => void;
   weightUnit: 'kg' | 'lbs';
-  distanceUnit: 'km' | 'miles';
   exerciseSetEditing: ReturnType<typeof useExerciseSetEditing>;
   updateSetField: (
     exerciseClientId: string,
     setClientId: string,
-    field: 'weight' | 'reps' | 'duration' | 'distance',
+    field: 'weight' | 'reps',
     value: string,
-  ) => void;
-  updateSetMeta: (
-    exerciseClientId: string,
-    setClientId: string,
-    patch: WorkoutSetMetaPatch,
   ) => void;
   removeSet: (exerciseClientId: string, setClientId: string) => void;
   setExerciseRest: (exerciseClientId: string, seconds: number) => void;
-  supersetWith: (currentClientId: string, pickedClientId: string) => void;
-  ungroupExercise: (clientId: string) => void;
-  reorderExercises: (fromItemIndex: number, toItemIndex: number) => void;
   isEligibleForPrefill: (clientId: string) => boolean;
   onAddExercisePress: () => void;
-  onReplaceExercise: (clientId: string) => void;
-  onDuplicateExercise: (clientId: string) => void;
-  onRegisterAccessoryHandle: (key: string, handle: SetRowAccessoryHandle | null) => void;
-  onViewExercise: (exercise: Exercise) => void;
-  listRef: React.Ref<WorkoutFormExerciseListHandle>;
 }
 
 const PresetFormBody: React.FC<PresetFormBodyProps> = ({
@@ -76,82 +57,61 @@ const PresetFormBody: React.FC<PresetFormBodyProps> = ({
   setName,
   setDescription,
   weightUnit,
-  distanceUnit,
   exerciseSetEditing,
   updateSetField,
-  updateSetMeta,
   removeSet,
   setExerciseRest,
-  supersetWith,
-  ungroupExercise,
-  reorderExercises,
   isEligibleForPrefill,
   onAddExercisePress,
-  onReplaceExercise,
-  onDuplicateExercise,
-  onRegisterAccessoryHandle,
-  onViewExercise,
-  listRef,
 }) => {
-  const { t } = useTranslation();
   const { getImageSource } = useExerciseImageSource();
 
   return (
     <View className="gap-4">
-      <View className="gap-1.5">
-        <Text className="text-text-secondary text-sm font-medium">{t('workoutPresetForm.nameRequired', { defaultValue: 'Name *' })}</Text>
-        <FormInput
-          placeholder={t('workoutPresetForm.namePlaceholder', { defaultValue: 'e.g. Push Day' })}
-          value={state.name}
-          onChangeText={setName}
-          autoCapitalize="words"
-          autoCorrect={false}
-          autoFocus
-          returnKeyType="next"
-        />
+      <View className="bg-surface rounded-xl p-4 gap-4 shadow-sm">
+        <View className="gap-1.5">
+          <Text className="text-text-secondary text-sm font-medium">Name *</Text>
+          <FormInput
+            placeholder="e.g. Push Day"
+            value={state.name}
+            onChangeText={setName}
+            autoCapitalize="words"
+            autoCorrect={false}
+            autoFocus
+            returnKeyType="next"
+          />
+        </View>
+
+        <View className="gap-1.5">
+          <Text className="text-text-secondary text-sm font-medium">Description</Text>
+          <FormInput
+            placeholder="Optional notes about this routine"
+            value={state.description}
+            onChangeText={setDescription}
+            multiline
+            numberOfLines={2}
+            style={{ minHeight: 48, textAlignVertical: 'top' }}
+          />
+        </View>
       </View>
 
-      <View className="gap-1.5">
-        <Text className="text-text-secondary text-sm font-medium">{t('workoutPresetForm.description', { defaultValue: 'Description' })}</Text>
-        <FormInput
-          placeholder={t('workoutPresetForm.descriptionPlaceholder', { defaultValue: 'Optional notes about this routine' })}
-          value={state.description}
-          onChangeText={setDescription}
-          multiline
-          numberOfLines={2}
-          style={{ minHeight: 48, textAlignVertical: 'top' }}
-        />
-      </View>
-
-      {/* Pull back part of FormScreenChrome's px-4 so the cards sit at the
-          same 12px inset as the active workout screen (px-3). */}
-      <View className="-mx-1">
-        <WorkoutFormExerciseList
-          ref={listRef}
+      <View className="bg-surface rounded-xl p-4 shadow-sm">
+        <WorkoutEditableExerciseList
+          mode="add"
           exercises={state.exercises}
-          weightUnit={weightUnit}
-          distanceUnit={distanceUnit}
           getImageSource={getImageSource}
+          weightUnit={weightUnit}
           activeSetKey={exerciseSetEditing.activeSetKey}
           activeSetField={exerciseSetEditing.activeSetField}
           onActivateSet={exerciseSetEditing.activateSet}
           onDeactivateSet={exerciseSetEditing.deactivateSet}
-          onRegisterAccessoryHandle={onRegisterAccessoryHandle}
-          updateSetField={updateSetField}
-          updateSetMeta={updateSetMeta}
-          removeSet={removeSet}
+          onUpdateSetField={updateSetField}
+          onRemoveSet={removeSet}
           onAddSet={exerciseSetEditing.handleAddSet}
           onRemoveExercise={exerciseSetEditing.handleRemoveExercise}
-          setExerciseRest={setExerciseRest}
-          onReplaceExercise={onReplaceExercise}
-          onDuplicateExercise={onDuplicateExercise}
-          supersetWith={supersetWith}
-          ungroupExercise={ungroupExercise}
-          onReorderExercises={reorderExercises}
           onAddExercisePress={onAddExercisePress}
-          onViewExercise={onViewExercise}
+          onChangeRest={setExerciseRest}
           isEligibleForPrefill={isEligibleForPrefill}
-          rpeEditable={false}
         />
       </View>
     </View>
@@ -167,15 +127,12 @@ function getWeightUnit(value: string | undefined | null): 'kg' | 'lbs' {
 interface CreatePresetModeProps {
   navigation: Navigation;
   route: Route;
-  params: CreateParams;
 }
 
-const CreatePresetMode: React.FC<CreatePresetModeProps> = ({ navigation, route, params }) => {
-  const { t } = useTranslation();
-  const { sourceSession } = params;
-  const { preferences, isLoading: isPreferencesLoading } = usePreferences();
+const CreatePresetMode: React.FC<CreatePresetModeProps> = ({ navigation, route }) => {
+  const { profile } = useProfile();
+  const { preferences } = usePreferences();
   const weightUnit = getWeightUnit(preferences?.default_weight_unit);
-  const distanceUnit = (preferences?.default_distance_unit as 'km' | 'miles') ?? 'km';
 
   const {
     state,
@@ -183,17 +140,10 @@ const CreatePresetMode: React.FC<CreatePresetModeProps> = ({ navigation, route, 
     setDescription,
     addExercise,
     removeExercise,
-    replaceExercise,
-    duplicateExercise,
     addSet,
     removeSet,
     updateSetField,
-    updateSetMeta,
     setExerciseRest,
-    supersetWith,
-    ungroupExercise,
-    reorderExercises,
-    populateFromSession,
   } = useWorkoutPresetForm();
 
   const [eligibleIds, setEligibleIds] = useState<Set<string>>(() => new Set());
@@ -209,20 +159,6 @@ const CreatePresetMode: React.FC<CreatePresetModeProps> = ({ navigation, route, 
     },
     [addExercise],
   );
-  // A replaced exercise is effectively freshly added: mark it prefill-eligible
-  // so its empty set seeds from the new exercise's history.
-  const wrappedReplaceExercise = useCallback(
-    (clientId: string, exercise: Parameters<typeof replaceExercise>[1]) => {
-      const result = replaceExercise(clientId, exercise);
-      setEligibleIds(prev => {
-        const next = new Set(prev);
-        next.add(clientId);
-        return next;
-      });
-      return result;
-    },
-    [replaceExercise],
-  );
   const isEligibleForPrefill = useCallback(
     (clientId: string) => eligibleIds.has(clientId),
     [eligibleIds],
@@ -232,53 +168,13 @@ const CreatePresetMode: React.FC<CreatePresetModeProps> = ({ navigation, route, 
     addExercise: wrappedAddExercise,
     removeExercise,
     addSet,
-    replaceExercise: wrappedReplaceExercise,
   });
   useSelectedExercise(route.params, exerciseSetEditing.handleAddExercise);
 
-  // Sticky Done/Next bar for the focused set cell, on both platforms.
-  const { onRegisterAccessoryHandle, accessoryBar } = useSetEditAccessoryBar({
-    activeSetKey: exerciseSetEditing.activeSetKey,
-    activeSetField: exerciseSetEditing.activeSetField,
-    onDeactivateSet: exerciseSetEditing.deactivateSet,
-    rpeEnabled: false,
-  });
-
-  // "Save as preset" from a logged workout: seed the form from the session
-  // once preferences resolve (the weight unit drives the kg→display mapping).
-  const hasPopulatedRef = useRef(false);
-  useEffect(() => {
-    if (sourceSession == null || hasPopulatedRef.current || isPreferencesLoading) return;
-    hasPopulatedRef.current = true;
-    populateFromSession(sourceSession, weightUnit, distanceUnit);
-  }, [sourceSession, isPreferencesLoading, populateFromSession, weightUnit, distanceUnit]);
-
   const { createPresetAsync, isPending } = useCreateWorkoutPreset();
-
-  const exerciseListRef = useRef<WorkoutFormExerciseListHandle>(null);
-  const reorderAction: HeaderItem | null = canReorderDraftExercises(state.exercises)
-    ? {
-        kind: 'icon',
-        sfSymbol: 'arrow.up.arrow.down',
-        ionicon: 'swap-vertical',
-        role: 'secondary',
-        onPress: () => exerciseListRef.current?.openReorder(),
-        accessibilityLabel: t('workoutPresetForm.reorderExercises', { defaultValue: 'Reorder exercises' }),
-        identifier: 'preset-create-reorder',
-      }
-    : null;
+  const handleSaveRef = useRef<(() => Promise<void>) | null>(null);
 
   const openExerciseSearch = () => {
-    // Plain Add: drop any pending replace target so a cancelled replace can't
-    // misroute this add.
-    exerciseSetEditing.setReplaceTarget(null);
-    navigation.navigate('ExerciseSearch', { returnKey: route.key });
-  };
-
-  // ⋮ "Replace exercise": the next ExerciseSearch return swaps this entry in
-  // place instead of appending.
-  const handleReplaceExercise = (clientId: string) => {
-    exerciseSetEditing.setReplaceTarget(clientId);
     navigation.navigate('ExerciseSearch', { returnKey: route.key });
   };
 
@@ -287,8 +183,8 @@ const CreatePresetMode: React.FC<CreatePresetModeProps> = ({ navigation, route, 
     if (!trimmedName) {
       Toast.show({
         type: 'error',
-        text1: t('workoutPresetForm.errors.missingName', { defaultValue: 'Missing name' }),
-        text2: t('workoutPresetForm.errors.nameRequired', { defaultValue: 'Please enter a name for this preset.' }),
+        text1: 'Missing name',
+        text2: 'Please enter a name for this preset.',
       });
       return;
     }
@@ -297,36 +193,76 @@ const CreatePresetMode: React.FC<CreatePresetModeProps> = ({ navigation, route, 
     if (exercisesWithSets.length === 0) {
       Toast.show({
         type: 'error',
-        text1: t('workoutPresetForm.errors.addExercise', { defaultValue: 'Add an exercise' }),
-        text2: t('workoutPresetForm.errors.addExerciseSet', { defaultValue: 'Add at least one exercise with a set before saving.' }),
+        text1: 'Add an exercise',
+        text2: 'Add at least one exercise with a set before saving.',
+      });
+      return;
+    }
+
+    if (!profile?.id) {
+      Toast.show({
+        type: 'error',
+        text1: 'Profile not loaded',
+        text2: 'Please try again in a moment.',
       });
       return;
     }
 
     const trimmedDescription = state.description.trim();
     const payload: WorkoutPresetCreatePayload = {
+      user_id: profile.id,
       name: trimmedName,
       description: trimmedDescription.length > 0 ? trimmedDescription : null,
       is_public: false,
-      exercises: buildPresetExercisesPayload(state.exercises, weightUnit, distanceUnit),
+      exercises: buildPresetExercisesPayload(state.exercises, weightUnit),
     };
 
     try {
       const created = await createPresetAsync(payload);
-      Toast.show({ type: 'success', text1: t('workoutPresetForm.created', { defaultValue: 'Workout preset created' }) });
+      Toast.show({ type: 'success', text1: 'Workout preset created' });
       navigation.replace('WorkoutPresetDetail', { preset: created });
     } catch {
       // Error toast handled in useCreateWorkoutPreset.
     }
   };
+  useLayoutEffect(() => {
+    handleSaveRef.current = handleSave;
+  });
+
+  const presetHeaderTintColor = String(useCSSVariable('--color-text-primary'));
+
+  useLayoutEffect(() => {
+    if (Platform.OS !== 'ios') return;
+
+    navigation.setOptions({
+      unstable_headerLeftItems: () => [
+        createNativeHeaderTextButtonItem({
+          label: 'Cancel',
+          identifier: 'preset-create-cancel',
+          tintColor: presetHeaderTintColor,
+          onPress: () => navigation.goBack(),
+          disabled: isPending,
+        }),
+      ],
+      unstable_headerRightItems: () => [
+        createNativeHeaderTextButtonItem({
+          label: 'Save',
+          identifier: 'preset-create-save',
+          tintColor: presetHeaderTintColor,
+          onPress: () => void handleSaveRef.current?.(),
+          disabled: isPending,
+          fontWeight: '600',
+        }),
+      ],
+    });
+  }, [navigation, presetHeaderTintColor, isPending]);
+
   return (
     <FormScreenChrome
-      title={t('workoutPresetForm.newTitle', { defaultValue: 'New Preset' })}
-      saveLabel={t('common.save', { defaultValue: 'Save' })}
-      savingLabel={t('common.saving', { defaultValue: 'Saving…' })}
+      title="New Preset"
+      saveLabel="Save"
+      savingLabel="Saving…"
       isSaving={isPending}
-      headerAction={reorderAction}
-      keyboardAccessory={accessoryBar}
       onSave={() => {
         void handleSave();
       }}
@@ -337,24 +273,12 @@ const CreatePresetMode: React.FC<CreatePresetModeProps> = ({ navigation, route, 
         setName={setName}
         setDescription={setDescription}
         weightUnit={weightUnit}
-        distanceUnit={distanceUnit}
         exerciseSetEditing={exerciseSetEditing}
         updateSetField={updateSetField}
-        updateSetMeta={updateSetMeta}
         removeSet={removeSet}
         setExerciseRest={setExerciseRest}
-        supersetWith={supersetWith}
-        ungroupExercise={ungroupExercise}
-        reorderExercises={reorderExercises}
         isEligibleForPrefill={isEligibleForPrefill}
         onAddExercisePress={openExerciseSearch}
-        onReplaceExercise={handleReplaceExercise}
-        onDuplicateExercise={duplicateExercise}
-        onRegisterAccessoryHandle={onRegisterAccessoryHandle}
-        onViewExercise={(exercise) =>
-          navigation.navigate('ExerciseDetail', { item: exercise, hideWorkoutActions: true })
-        }
-        listRef={exerciseListRef}
       />
     </FormScreenChrome>
   );
@@ -372,10 +296,8 @@ export function buildPresetEditPayload(args: {
   initialDescription: string;
   exercisesModified: boolean;
   weightUnit: 'kg' | 'lbs';
-  distanceUnit: 'km' | 'miles';
 }): WorkoutPresetUpdatePayload {
-  const { state, initialPreset, initialDescription, exercisesModified, weightUnit, distanceUnit } =
-    args;
+  const { state, initialPreset, initialDescription, exercisesModified, weightUnit } = args;
   const payload: WorkoutPresetUpdatePayload = {};
 
   const trimmedName = state.name.trim();
@@ -388,22 +310,20 @@ export function buildPresetEditPayload(args: {
     payload.description = trimmedDesc;
   }
 
-  // is_public is intentionally never sent: the form has no UI, and sending false
+  // is_public is intentionally never sent — the form has no UI; sending false
   // would unshare a previously-public preset (server uses COALESCE).
 
   if (exercisesModified) {
-    payload.exercises = buildPresetExercisesPayload(state.exercises, weightUnit, distanceUnit);
+    payload.exercises = buildPresetExercisesPayload(state.exercises, weightUnit);
   }
 
   return payload;
 }
 
 const EditPresetMode: React.FC<EditPresetModeProps> = ({ navigation, route, params }) => {
-  const { t } = useTranslation();
   const { preset, returnKey } = params;
   const { preferences, isLoading: isPreferencesLoading } = usePreferences();
   const weightUnit = getWeightUnit(preferences?.default_weight_unit);
-  const distanceUnit = (preferences?.default_distance_unit as 'km' | 'miles') ?? 'km';
 
   const {
     state,
@@ -411,16 +331,10 @@ const EditPresetMode: React.FC<EditPresetModeProps> = ({ navigation, route, para
     setDescription,
     addExercise,
     removeExercise,
-    replaceExercise,
-    duplicateExercise,
     addSet,
     removeSet,
     updateSetField,
-    updateSetMeta,
     setExerciseRest,
-    supersetWith,
-    ungroupExercise,
-    reorderExercises,
     populateFromPreset,
     exercisesModifiedRef,
     initialDescriptionRef,
@@ -439,20 +353,6 @@ const EditPresetMode: React.FC<EditPresetModeProps> = ({ navigation, route, para
     },
     [addExercise],
   );
-  // A replaced exercise is effectively freshly added: mark it prefill-eligible
-  // so its empty set seeds from the new exercise's history.
-  const wrappedReplaceExercise = useCallback(
-    (clientId: string, exercise: Parameters<typeof replaceExercise>[1]) => {
-      const result = replaceExercise(clientId, exercise);
-      setEligibleIds(prev => {
-        const next = new Set(prev);
-        next.add(clientId);
-        return next;
-      });
-      return result;
-    },
-    [replaceExercise],
-  );
   const isEligibleForPrefill = useCallback(
     (clientId: string) => eligibleIds.has(clientId),
     [eligibleIds],
@@ -462,51 +362,20 @@ const EditPresetMode: React.FC<EditPresetModeProps> = ({ navigation, route, para
     addExercise: wrappedAddExercise,
     removeExercise,
     addSet,
-    replaceExercise: wrappedReplaceExercise,
   });
   useSelectedExercise(route.params, exerciseSetEditing.handleAddExercise);
-
-  // Sticky Done/Next bar for the focused set cell, on both platforms.
-  const { onRegisterAccessoryHandle, accessoryBar } = useSetEditAccessoryBar({
-    activeSetKey: exerciseSetEditing.activeSetKey,
-    activeSetField: exerciseSetEditing.activeSetField,
-    onDeactivateSet: exerciseSetEditing.deactivateSet,
-    rpeEnabled: false,
-  });
 
   const hasPopulatedRef = useRef(false);
   useEffect(() => {
     if (hasPopulatedRef.current || isPreferencesLoading) return;
     hasPopulatedRef.current = true;
-    populateFromPreset(preset, weightUnit, distanceUnit);
-  }, [isPreferencesLoading, populateFromPreset, preset, weightUnit, distanceUnit]);
+    populateFromPreset(preset, weightUnit);
+  }, [isPreferencesLoading, populateFromPreset, preset, weightUnit]);
 
   const { updatePresetAsync, isPending } = useUpdateWorkoutPreset();
-
-  const exerciseListRef = useRef<WorkoutFormExerciseListHandle>(null);
-  const reorderAction: HeaderItem | null = canReorderDraftExercises(state.exercises)
-    ? {
-        kind: 'icon',
-        sfSymbol: 'arrow.up.arrow.down',
-        ionicon: 'swap-vertical',
-        role: 'secondary',
-        onPress: () => exerciseListRef.current?.openReorder(),
-        accessibilityLabel: t('workoutPresetForm.reorderExercises', { defaultValue: 'Reorder exercises' }),
-        identifier: 'preset-edit-reorder',
-      }
-    : null;
+  const handleSaveRef = useRef<(() => Promise<void>) | null>(null);
 
   const openExerciseSearch = () => {
-    // Plain Add: drop any pending replace target so a cancelled replace can't
-    // misroute this add.
-    exerciseSetEditing.setReplaceTarget(null);
-    navigation.navigate('ExerciseSearch', { returnKey: route.key });
-  };
-
-  // ⋮ "Replace exercise": the next ExerciseSearch return swaps this entry in
-  // place instead of appending.
-  const handleReplaceExercise = (clientId: string) => {
-    exerciseSetEditing.setReplaceTarget(clientId);
     navigation.navigate('ExerciseSearch', { returnKey: route.key });
   };
 
@@ -515,14 +384,14 @@ const EditPresetMode: React.FC<EditPresetModeProps> = ({ navigation, route, para
     if (!trimmedName) {
       Toast.show({
         type: 'error',
-        text1: t('workoutPresetForm.errors.missingName', { defaultValue: 'Missing name' }),
-        text2: t('workoutPresetForm.errors.nameRequired', { defaultValue: 'Please enter a name for this preset.' }),
+        text1: 'Missing name',
+        text2: 'Please enter a name for this preset.',
       });
       return;
     }
 
     // Edit mode intentionally skips the "at least one set" check that create
-    // mode enforces: the server allows preset exercises with no sets, and a
+    // mode enforces — the server allows preset exercises with no sets, and a
     // user editing only the name/description should not be forced to add one.
 
     const payload = buildPresetEditPayload({
@@ -531,7 +400,6 @@ const EditPresetMode: React.FC<EditPresetModeProps> = ({ navigation, route, para
       initialDescription: initialDescriptionRef.current,
       exercisesModified: exercisesModifiedRef.current,
       weightUnit,
-      distanceUnit,
     });
 
     if (Object.keys(payload).length === 0) {
@@ -541,7 +409,7 @@ const EditPresetMode: React.FC<EditPresetModeProps> = ({ navigation, route, para
 
     try {
       const updated = await updatePresetAsync({ id: preset.id, payload });
-      Toast.show({ type: 'success', text1: t('workoutPresetForm.updated', { defaultValue: 'Workout preset updated' }) });
+      Toast.show({ type: 'success', text1: 'Workout preset updated' });
       navigation.dispatch({
         ...CommonActions.setParams({ updatedPreset: updated }),
         source: returnKey,
@@ -551,14 +419,44 @@ const EditPresetMode: React.FC<EditPresetModeProps> = ({ navigation, route, para
       // Error toast handled in useUpdateWorkoutPreset.
     }
   };
+  useLayoutEffect(() => {
+    handleSaveRef.current = handleSave;
+  });
+
+  const presetHeaderTintColor = String(useCSSVariable('--color-text-primary'));
+
+  useLayoutEffect(() => {
+    if (Platform.OS !== 'ios') return;
+
+    navigation.setOptions({
+      unstable_headerLeftItems: () => [
+        createNativeHeaderTextButtonItem({
+          label: 'Cancel',
+          identifier: 'preset-edit-cancel',
+          tintColor: presetHeaderTintColor,
+          onPress: () => navigation.goBack(),
+          disabled: isPending,
+        }),
+      ],
+      unstable_headerRightItems: () => [
+        createNativeHeaderTextButtonItem({
+          label: 'Save Changes',
+          identifier: 'preset-edit-save',
+          tintColor: presetHeaderTintColor,
+          onPress: () => void handleSaveRef.current?.(),
+          disabled: isPending,
+          fontWeight: '600',
+        }),
+      ],
+    });
+  }, [navigation, presetHeaderTintColor, isPending]);
+
   return (
     <FormScreenChrome
-      title={t('workoutPresetForm.editTitle', { defaultValue: 'Edit Preset' })}
-      saveLabel={t('common.save', { defaultValue: 'Save' })}
-      savingLabel={t('common.saving', { defaultValue: 'Saving…' })}
+      title="Edit Preset"
+      saveLabel="Save Changes"
+      savingLabel="Saving…"
       isSaving={isPending}
-      headerAction={reorderAction}
-      keyboardAccessory={accessoryBar}
       onSave={() => {
         void handleSave();
       }}
@@ -569,24 +467,12 @@ const EditPresetMode: React.FC<EditPresetModeProps> = ({ navigation, route, para
         setName={setName}
         setDescription={setDescription}
         weightUnit={weightUnit}
-        distanceUnit={distanceUnit}
         exerciseSetEditing={exerciseSetEditing}
         updateSetField={updateSetField}
-        updateSetMeta={updateSetMeta}
         removeSet={removeSet}
         setExerciseRest={setExerciseRest}
-        supersetWith={supersetWith}
-        ungroupExercise={ungroupExercise}
-        reorderExercises={reorderExercises}
         isEligibleForPrefill={isEligibleForPrefill}
         onAddExercisePress={openExerciseSearch}
-        onReplaceExercise={handleReplaceExercise}
-        onDuplicateExercise={duplicateExercise}
-        onRegisterAccessoryHandle={onRegisterAccessoryHandle}
-        onViewExercise={(exercise) =>
-          navigation.navigate('ExerciseDetail', { item: exercise, hideWorkoutActions: true })
-        }
-        listRef={exerciseListRef}
       />
     </FormScreenChrome>
   );
@@ -599,7 +485,7 @@ const WorkoutPresetFormScreen: React.FC<WorkoutPresetFormScreenProps> = ({
   if (route.params.mode === 'edit-preset') {
     return <EditPresetMode navigation={navigation} route={route} params={route.params} />;
   }
-  return <CreatePresetMode navigation={navigation} route={route} params={route.params} />;
+  return <CreatePresetMode navigation={navigation} route={route} />;
 };
 
 export default WorkoutPresetFormScreen;

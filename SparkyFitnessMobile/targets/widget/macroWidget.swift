@@ -148,9 +148,15 @@ private struct MacroRingWithLabel: View {
     let numberFontSize: CGFloat
 
     private var centerText: String {
-        guard snapshot.hasData else { return "-" }
-        return localizedNumberString(snapshot.caloriesConsumed)
+        guard snapshot.hasData else { return "—" }
+        return Self.numberFormatter.string(from: NSNumber(value: Int(snapshot.caloriesConsumed.rounded()))) ?? "0"
     }
+
+    private static let numberFormatter: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        return f
+    }()
 
     var body: some View {
         MacroRing(snapshot: snapshot, size: ringSize, strokeWidth: strokeWidth)
@@ -160,18 +166,11 @@ private struct MacroRingWithLabel: View {
                         .font(.system(size: numberFontSize, weight: .bold, design: .rounded))
                         .minimumScaleFactor(0.6)
                         .lineLimit(1)
-                    Text(localizedWidgetString("widget.kcal"))
+                    Text("kcal")
                         .font(.system(size: numberFontSize * 0.58))
                         .foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, strokeWidth)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(
-                    String(
-                        format: localizedWidgetString("widget.a11y.kcal"),
-                        centerText
-                    )
-                )
             )
     }
 }
@@ -182,10 +181,7 @@ private struct MacroRow: View {
     let color: Color
 
     private var valueText: String {
-        String(
-            format: localizedWidgetString("widget.grams"),
-            localizedNumberString(grams)
-        )
+        "\(Int(grams.rounded())) g"
     }
 
     var body: some View {
@@ -206,7 +202,6 @@ private struct MacroRow: View {
                 .minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
     }
 }
 
@@ -239,9 +234,9 @@ struct macroWidgetEntryView: View {
                 numberFontSize: 18
             )
             VStack(spacing: 3) {
-                MacroRow(label: localizedWidgetString("widget.protein"), grams: entry.snapshot.proteinGrams, color: MacroPalette.protein)
-                MacroRow(label: localizedWidgetString("widget.carbs"), grams: entry.snapshot.carbsGrams, color: MacroPalette.carbs)
-                MacroRow(label: localizedWidgetString("widget.fat"), grams: entry.snapshot.fatGrams, color: MacroPalette.fat)
+                MacroRow(label: "Protein", grams: entry.snapshot.proteinGrams, color: MacroPalette.protein)
+                MacroRow(label: "Carbs", grams: entry.snapshot.carbsGrams, color: MacroPalette.carbs)
+                MacroRow(label: "Fat", grams: entry.snapshot.fatGrams, color: MacroPalette.fat)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -263,9 +258,9 @@ struct macroWidgetEntryView: View {
                 )
 
                 VStack(alignment: .leading, spacing: 20) {
-                    MacroRow(label: localizedWidgetString("widget.protein"), grams: entry.snapshot.proteinGrams, color: MacroPalette.protein)
-                    MacroRow(label: localizedWidgetString("widget.carbs"), grams: entry.snapshot.carbsGrams, color: MacroPalette.carbs)
-                    MacroRow(label: localizedWidgetString("widget.fat"), grams: entry.snapshot.fatGrams, color: MacroPalette.fat)
+                    MacroRow(label: "Protein", grams: entry.snapshot.proteinGrams, color: MacroPalette.protein)
+                    MacroRow(label: "Carbs", grams: entry.snapshot.carbsGrams, color: MacroPalette.carbs)
+                    MacroRow(label: "Fat", grams: entry.snapshot.fatGrams, color: MacroPalette.fat)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -277,13 +272,11 @@ struct macroWidgetEntryView: View {
                 VStack(spacing: 16) {
                     ActionButton(
                         icon: "magnifyingglass",
-                        destination: URL(string: "sparkyfitnessmobile://search")!,
-                        accessibilityLabel: localizedWidgetString("widget.search_food")
+                        destination: URL(string: "sparkyfitnessmobile://search")!
                     )
                     ActionButton(
                         icon: "barcode.viewfinder",
-                        destination: URL(string: "sparkyfitnessmobile://scan")!,
-                        accessibilityLabel: localizedWidgetString("widget.scan_barcode")
+                        destination: URL(string: "sparkyfitnessmobile://scan")!
                     )
                 }
                 .frame(width: buttonColumnWidth)
@@ -302,8 +295,8 @@ struct macroWidget: Widget {
             macroWidgetEntryView(entry: entry)
                 .containerBackground(.fill.tertiary, for: .widget)
         }
-        .configurationDisplayName("widget.macro.name")
-        .description("widget.macro.description")
+        .configurationDisplayName("Macros")
+        .description("Today's protein, carbs, and fat at a glance.")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }

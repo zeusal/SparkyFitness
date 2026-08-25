@@ -47,10 +47,8 @@ interface WorkoutPlaybackSetRowProps {
   setIndex: number;
   setNumber: number;
   setType: string | null | undefined;
-  isTimedExercise: boolean;
   reps: number | null | undefined;
   weight: number | null | undefined;
-  duration: number | null | undefined;
   restTime: number | null | undefined;
   notes: string | null | undefined;
   completed: boolean;
@@ -61,7 +59,7 @@ interface WorkoutPlaybackSetRowProps {
   onUncompleteSet: (pointer: WorkoutSetPointer) => void;
   onSetFieldChange: (
     pointer: WorkoutSetPointer,
-    field: 'reps' | 'weight' | 'duration' | 'rest_time' | 'set_type' | 'notes',
+    field: 'reps' | 'weight' | 'rest_time' | 'set_type' | 'notes',
     value: number | string | null
   ) => void;
   onOpenRestEditor: (pointer: WorkoutSetPointer) => void;
@@ -77,10 +75,8 @@ const WorkoutPlaybackSetRow = ({
   setIndex,
   setNumber,
   setType,
-  isTimedExercise,
   reps,
   weight,
-  duration,
   restTime,
   notes,
   completed,
@@ -166,68 +162,39 @@ const WorkoutPlaybackSetRow = ({
             </SelectContent>
           </Select>
 
-          {isTimedExercise ? (
-            <Input
-              type="number"
-              inputMode="numeric"
-              min={0}
-              step={1}
-              aria-label={t(
-                'workout.durationSet',
-                'Duration set {{setNumber}}',
-                { setNumber }
-              )}
-              value={duration ?? ''}
-              onClick={(event) => event.stopPropagation()}
-              onChange={(event) =>
-                onSetFieldChange(
-                  pointer,
-                  'duration',
-                  parseNullableInteger(event.target.value)
-                )
-              }
-              placeholder={t('workout.durationSec', 'Duration (s)')}
-              className="col-span-2 w-full focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 sm:col-start-3 sm:col-span-2"
-            />
-          ) : (
-            <>
-              <Input
-                type="number"
-                inputMode="numeric"
-                min={0}
-                step={1}
-                aria-label={`Reps set ${setNumber}`}
-                value={reps ?? ''}
-                onClick={(event) => event.stopPropagation()}
-                onChange={(event) =>
-                  onSetFieldChange(
-                    pointer,
-                    'reps',
-                    parseNullableInteger(event.target.value)
-                  )
-                }
-                placeholder={t('common.reps', 'reps')}
-                className="col-span-1 w-full focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 sm:col-start-3"
-              />
+          <Input
+            type="number"
+            inputMode="numeric"
+            min={0}
+            step={1}
+            aria-label={`Reps set ${setNumber}`}
+            value={reps ?? ''}
+            onClick={(event) => event.stopPropagation()}
+            onChange={(event) =>
+              onSetFieldChange(
+                pointer,
+                'reps',
+                parseNullableInteger(event.target.value)
+              )
+            }
+            placeholder={t('common.reps', 'reps')}
+            className="col-span-1 w-full focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 sm:col-start-3"
+          />
 
-              <div
-                className="col-span-1 w-full sm:col-start-4"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <UnitInput
-                  value={weight ?? ''}
-                  unit={weightUnit}
-                  type="weight"
-                  placeholder={t('common.weight', 'Weight')}
-                  onChange={(value) =>
-                    onSetFieldChange(pointer, 'weight', value)
-                  }
-                  inputClassName="focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                  aria-label={`Weight set ${setNumber}`}
-                />
-              </div>
-            </>
-          )}
+          <div
+            className="col-span-1 w-full sm:col-start-4"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <UnitInput
+              value={weight ?? ''}
+              unit={weightUnit}
+              type="weight"
+              placeholder={t('common.weight', 'Weight')}
+              onChange={(value) => onSetFieldChange(pointer, 'weight', value)}
+              inputClassName="focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
+              aria-label={`Weight set ${setNumber}`}
+            />
+          </div>
 
           <Button
             type="button"

@@ -84,10 +84,10 @@ export interface DailyExerciseEntry {
     id: string;
     set_number: number;
     set_type: string;
-    reps: number | null;
-    weight: number | null;
-    duration?: number; // seconds
-    rest_time?: number; // seconds
+    reps: number;
+    weight: number;
+    duration?: number;
+    rest_time?: number;
     notes?: string;
   }[];
   [key: string]: string | number | boolean | object | undefined;
@@ -191,8 +191,6 @@ import {
 export interface SymptomEntry {
   id: string;
   user_id: string;
-  /** Set when the symptom was logged as a side effect of a specific medication. */
-  medication_id?: string | null;
   symptom_name_snapshot: string;
   severity: number;
   entry_date: string;

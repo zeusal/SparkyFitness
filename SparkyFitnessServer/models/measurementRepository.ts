@@ -1,57 +1,6 @@
 import { getClient } from '../db/poolManager.js';
 import { log } from '../config/logging.js';
-// @ts-expect-error TS(7016): Could not find a declaration file for module 'pg-f... Remove this comment to see the full error message
-import format from 'pg-format';
-import {
-  resolveBackgroundStepCalories,
-  isDayString,
-  isValidTimeZone,
-  todayInZone,
-} from '@workspace/shared';
-
-/**
- * Helper to derive a default UTC entry_timestamp ISO string when omitted or invalid.
- * Avoids timezone jump issues by leveraging isDayString and Date.UTC date construction.
- * Compares entryDate with todayInZone(userTimezone) to detect if logging for the user's current day.
- */
-function defaultEntryTimestamp(
-  entryTimestamp: string | null | undefined,
-  entryDate: string | null | undefined,
-  entryHour: number | null | undefined,
-  userTimezone?: string | null
-): string {
-  if (entryTimestamp && entryTimestamp.trim() !== '') {
-    return entryTimestamp;
-  }
-  if (entryDate && isDayString(entryDate)) {
-    const parts = entryDate.split('-');
-    const year = Number(parts[0]);
-    const month = Number(parts[1]);
-    const day = Number(parts[2]);
-
-    if (
-      entryHour !== null &&
-      entryHour !== undefined &&
-      !isNaN(Number(entryHour))
-    ) {
-      return new Date(
-        Date.UTC(year, month - 1, day, Number(entryHour), 0, 0, 0)
-      ).toISOString();
-    }
-
-    const now = new Date();
-    const tz =
-      userTimezone && isValidTimeZone(userTimezone) ? userTimezone : 'UTC';
-    const currentDayInZone = todayInZone(tz);
-    if (entryDate === currentDayInZone) {
-      return now.toISOString();
-    }
-
-    return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0)).toISOString();
-  }
-
-  return new Date().toISOString();
-}
+import { CALORIE_CALCULATION_CONSTANTS } from '@workspace/shared';
 // SECURITY: Whitelist allowed measurement columns to prevent SQL injection via dynamic keys
 const ALLOWED_CHECK_IN_COLUMNS = [
   'weight',
@@ -61,23 +10,7 @@ const ALLOWED_CHECK_IN_COLUMNS = [
   'steps',
   'height',
   'body_fat_percentage',
-  'muscle_mass_kg',
-  'bone_mass_kg',
-  'body_water_percentage',
 ];
-// Column types for the batch-UPDATE unnest casts in bulkUpsertCheckInMeasurements.
-const CHECK_IN_COLUMN_TYPES: Record<string, string> = {
-  weight: 'numeric',
-  neck: 'numeric',
-  waist: 'numeric',
-  hips: 'numeric',
-  steps: 'integer',
-  height: 'numeric',
-  body_fat_percentage: 'numeric',
-  muscle_mass_kg: 'numeric',
-  bone_mass_kg: 'numeric',
-  body_water_percentage: 'numeric',
-};
 // Tolerance in milliliters for matching historical manual records with incoming sync data
 const WATER_ADOPTION_TOLERANCE_ML = 5;
 
@@ -99,14 +32,8 @@ async function upsertStepData(
     );
     let result;
     if (existingRecord.rows.length > 0) {
-      // Max-wins per day: an automated sync (device or provider) reports a
-      // day's running step total, and reads can arrive out of order (a partial
-      // early-day read, late-propagating records, cross-source dedup). GREATEST
-      // keeps the largest total seen so a smaller/partial read never clobbers a
-      // complete day. Manual user edits go through upsertCheckInMeasurements,
-      // which overwrites, so a deliberate correction is still possible.
       const updateResult = await client.query(
-        'UPDATE check_in_measurements SET steps = GREATEST($1::integer, steps), updated_at = now(), updated_by_user_id = $2 WHERE entry_date = $3 AND user_id = $4 RETURNING *',
+        'UPDATE check_in_measurements SET steps = $1, updated_at = now(), updated_by_user_id = $2 WHERE entry_date = $3 AND user_id = $4 RETURNING *',
         [value, actingUserId, date, userId]
       );
       result = updateResult.rows[0];
@@ -187,32 +114,6 @@ async function upsertWaterData(
     client.release();
   }
 }
-
-async function incrementWaterData(
-  userId: string,
-  actingUserId: string,
-  waterMl: number,
-  date: string,
-  source = 'manual'
-) {
-  const client = await getClient(actingUserId);
-  try {
-    const query = `
-      INSERT INTO water_intake (user_id, entry_date, water_ml, source, created_by_user_id, updated_by_user_id, created_at, updated_at)
-      VALUES ($1, $2, GREATEST(0::numeric, $3::numeric), $4, $5, $5, now(), now())
-      ON CONFLICT (user_id, entry_date, source)
-      DO UPDATE SET
-        water_ml = GREATEST(0::numeric, water_intake.water_ml + $3::numeric),
-        updated_at = now(),
-        updated_by_user_id = $5
-      RETURNING *`;
-    const values = [userId, date, waterMl, source, actingUserId];
-    const result = await client.query(query, values);
-    return result.rows[0];
-  } finally {
-    client.release();
-  }
-}
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getWaterIntakeByDate(userId: any, date: any, source = null) {
   const client = await getClient(userId);
@@ -224,13 +125,9 @@ async function getWaterIntakeByDate(userId: any, date: any, source = null) {
         'SELECT * FROM water_intake WHERE user_id = $1 AND entry_date = $2 AND source = $3';
       values = [userId, date, source];
     } else {
-      // Sum all sources for the day. `manual_ml` is broken out separately
-      // because only manually logged water can be decremented from the diary
-      // "-" control (synced provider rows are owned by their provider), so the
-      // UI needs the manual subtotal to know whether that control does anything.
-      query = `SELECT COALESCE(SUM(water_ml), 0) as water_ml,
-                      COALESCE(SUM(water_ml) FILTER (WHERE source = 'manual'), 0) as manual_ml
-               FROM water_intake WHERE user_id = $1 AND entry_date = $2`;
+      // Sum all sources for the day
+      query =
+        'SELECT SUM(water_ml) as water_ml FROM water_intake WHERE user_id = $1 AND entry_date = $2';
       values = [userId, date];
     }
     const result = await client.query(query, values);
@@ -406,157 +303,6 @@ async function upsertCheckInMeasurements(
     client.release();
   }
 }
-/**
- * Batch counterpart of upsertCheckInMeasurements/upsertStepData for health-data
- * ingestion: one client + one transaction for the whole batch instead of one
- * client per record. Same-date measurement objects are merged with
- * later-entry-wins-per-column semantics, matching the net effect of today's
- * sequential per-record upserts. Identity handling mirrors the per-record
- * functions: getClient(actingUserId) for RLS context, rows target userId, and
- * actingUserId stamps the audit columns.
- *
- * Returns the written DB row for each input entry (same-date entries share
- * their merged row; entries with no allowed columns get null, matching
- * upsertCheckInMeasurements).
- */
-async function bulkUpsertCheckInMeasurements(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  userId: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  actingUserId: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  entries: Array<{ entryDate: string; measurements: any }>
-) {
-  if (!entries || entries.length === 0) {
-    return [];
-  }
-  const client = await getClient(actingUserId); // User-specific operation, using actingUserId for RLS context
-  try {
-    await client.query('BEGIN');
-    // Merge measurements per date (later record wins per column), whitelisting
-    // columns exactly as upsertCheckInMeasurements does.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mergedByDate = new Map<string, Record<string, any>>();
-    for (const { entryDate, measurements } of entries) {
-      const filteredMeasurements = { ...measurements };
-      delete filteredMeasurements.id;
-      const merged = mergedByDate.get(entryDate) ?? {};
-      for (const key of Object.keys(filteredMeasurements)) {
-        if (!ALLOWED_CHECK_IN_COLUMNS.includes(key)) {
-          console.warn(
-            `Attempted to upsert unauthorized measurement key: ${key}`
-          );
-          continue;
-        }
-        merged[key] = filteredMeasurements[key];
-      }
-      mergedByDate.set(entryDate, merged);
-    }
-    const writableDates = [...mergedByDate.keys()].filter(
-      (date) => Object.keys(mergedByDate.get(date)!).length > 0
-    );
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const writtenByDate = new Map<string, any>();
-    if (writableDates.length > 0) {
-      const existing = await client.query(
-        'SELECT * FROM check_in_measurements WHERE user_id = $1 AND entry_date = ANY($2::date[])',
-        [userId, writableDates]
-      );
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const existingByDate = new Map<string, any>(
-        // entry_date comes back as a YYYY-MM-DD string (poolManager DATE parser)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        existing.rows.map((row: any) => [String(row.entry_date), row])
-      );
-      const updateDates = writableDates.filter((date) =>
-        existingByDate.has(date)
-      );
-      const insertDates = writableDates.filter(
-        (date) => !existingByDate.has(date)
-      );
-      if (updateDates.length > 0) {
-        // Batch UPDATE via unnest: only columns present in the batch are
-        // touched; COALESCE keeps a row's other columns intact (measurement
-        // values are validated numbers, never null, so COALESCE is exact).
-        // steps is the exception — it is max-wins per day so a smaller/partial
-        // sync read can't clobber a complete day's total (see upsertStepData).
-        // GREATEST ignores a null u.steps (date not carrying steps this batch),
-        // leaving cm.steps intact, exactly as COALESCE would.
-        const updateColumns = [
-          ...new Set(
-            updateDates.flatMap((date) => Object.keys(mergedByDate.get(date)!))
-          ),
-        ];
-        const setClauses = updateColumns
-          .map((column) =>
-            column === 'steps'
-              ? 'steps = GREATEST(u.steps, cm.steps)'
-              : `${column} = COALESCE(u.${column}, cm.${column})`
-          )
-          .join(', ');
-        const unnestParams = updateColumns
-          .map(
-            (column, index) =>
-              `$${index + 3}::${CHECK_IN_COLUMN_TYPES[column]}[]`
-          )
-          .join(', ');
-        const updateResult = await client.query(
-          `UPDATE check_in_measurements cm
-           SET ${setClauses}, updated_at = now(), updated_by_user_id = $1
-           FROM unnest($2::uuid[], ${unnestParams}) AS u(id, ${updateColumns.join(', ')})
-           WHERE cm.id = u.id
-           RETURNING cm.*`,
-          [
-            actingUserId,
-            updateDates.map((date) => existingByDate.get(date).id),
-            ...updateColumns.map((column) =>
-              updateDates.map((date) => mergedByDate.get(date)![column] ?? null)
-            ),
-          ]
-        );
-        for (const row of updateResult.rows) {
-          writtenByDate.set(String(row.entry_date), row);
-        }
-      }
-      if (insertDates.length > 0) {
-        const insertColumns = [
-          ...new Set(
-            insertDates.flatMap((date) => Object.keys(mergedByDate.get(date)!))
-          ),
-        ];
-        const nowIso = new Date().toISOString();
-        const insertRows = insertDates.map((date) => [
-          userId,
-          date,
-          ...insertColumns.map(
-            (column) => mergedByDate.get(date)![column] ?? null
-          ),
-          actingUserId,
-          actingUserId,
-          nowIso,
-          nowIso,
-        ]);
-        const insertResult = await client.query(
-          format(
-            `INSERT INTO check_in_measurements (user_id, entry_date, ${insertColumns.join(', ')}, created_by_user_id, updated_by_user_id, created_at, updated_at)
-             VALUES %L RETURNING *`,
-            insertRows
-          )
-        );
-        for (const row of insertResult.rows) {
-          writtenByDate.set(String(row.entry_date), row);
-        }
-      }
-    }
-    await client.query('COMMIT');
-    return entries.map(({ entryDate }) => writtenByDate.get(entryDate) ?? null);
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-}
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getCheckInMeasurementsByDate(userId: any, date: any) {
   const client = await getClient(userId); // User-specific operation
@@ -598,9 +344,6 @@ async function getLatestCheckInMeasurementsOnOrBeforeDate(
          (SELECT steps FROM check_in_measurements WHERE user_id = $1 AND entry_date = $2 AND steps IS NOT NULL LIMIT 1) as steps,
          (SELECT height FROM check_in_measurements WHERE user_id = $1 AND entry_date <= $2 AND height IS NOT NULL AND height > 0 ORDER BY entry_date DESC LIMIT 1) as height,
          (SELECT body_fat_percentage FROM check_in_measurements WHERE user_id = $1 AND entry_date <= $2 AND body_fat_percentage IS NOT NULL AND body_fat_percentage > 0 ORDER BY entry_date DESC LIMIT 1) as body_fat_percentage,
-         (SELECT muscle_mass_kg FROM check_in_measurements WHERE user_id = $1 AND entry_date <= $2 AND muscle_mass_kg IS NOT NULL AND muscle_mass_kg > 0 ORDER BY entry_date DESC LIMIT 1) as muscle_mass_kg,
-         (SELECT bone_mass_kg FROM check_in_measurements WHERE user_id = $1 AND entry_date <= $2 AND bone_mass_kg IS NOT NULL AND bone_mass_kg > 0 ORDER BY entry_date DESC LIMIT 1) as bone_mass_kg,
-         (SELECT body_water_percentage FROM check_in_measurements WHERE user_id = $1 AND entry_date <= $2 AND body_water_percentage IS NOT NULL AND body_water_percentage > 0 ORDER BY entry_date DESC LIMIT 1) as body_water_percentage,
          le.created_at,
          le.updated_at,
          le.created_by_user_id,
@@ -986,53 +729,39 @@ async function getCustomMeasurementsByDateRange(
   }
 }
 async function upsertCustomMeasurement(
-  userId: string,
-  actingUserId: string,
-  categoryId: string,
-  value: string | number | boolean,
-  entryDate: string,
-  entryHour?: number | null,
-  entryTimestamp?: string | null,
-  notes?: string | null,
-  frequency?: string | null,
-  source = 'manual',
-  userTimezone?: string | null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  userId: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  actingUserId: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  categoryId: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  value: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  entryDate: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  entryHour: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  entryTimestamp: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  notes: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  frequency: any,
+  source = 'manual'
 ) {
   const client = await getClient(actingUserId); // User-specific operation, using actingUserId for RLS context
   try {
     let query;
     let values;
     // Normalize entry_hour and entry_timestamp for 'Daily' frequency to prevent duplicates
-    let normalizedEntryHour = entryHour ?? null;
-    let normalizedEntryTimestamp = entryTimestamp ?? null;
+    let normalizedEntryHour = entryHour;
+    let normalizedEntryTimestamp = entryTimestamp;
     if (frequency === 'Daily') {
       normalizedEntryHour = 0; // Set hour to 0 for daily measurements
       // Normalize timestamp to the beginning of the day
-      if (entryDate && isDayString(entryDate)) {
-        const parts = entryDate.split('-');
-        normalizedEntryTimestamp = new Date(
-          Date.UTC(
-            Number(parts[0]),
-            Number(parts[1]) - 1,
-            Number(parts[2]),
-            0,
-            0,
-            0,
-            0
-          )
-        ).toISOString();
-      } else {
-        const dateObj = new Date(entryDate);
-        dateObj.setUTCHours(0, 0, 0, 0);
-        normalizedEntryTimestamp = dateObj.toISOString();
-      }
-    } else {
-      normalizedEntryTimestamp = defaultEntryTimestamp(
-        normalizedEntryTimestamp,
-        entryDate,
-        normalizedEntryHour,
-        userTimezone
-      );
+      const dateObj = new Date(entryDate);
+      dateObj.setUTCHours(0, 0, 0, 0);
+      normalizedEntryTimestamp = dateObj.toISOString();
     }
     // For 'Unlimited' and 'All' frequencies, always insert a new entry.
     // For 'Daily' and 'Hourly', check for existing entries to update.
@@ -1050,7 +779,7 @@ async function upsertCustomMeasurement(
         entryDate,
         normalizedEntryHour,
         normalizedEntryTimestamp,
-        notes ?? null,
+        notes,
         actingUserId,
         source,
       ];
@@ -1060,12 +789,7 @@ async function upsertCustomMeasurement(
         SELECT id FROM custom_measurements
         WHERE user_id = $1 AND category_id = $2 AND entry_date = $3 AND source = $4
       `;
-      const existingEntryValues: unknown[] = [
-        userId,
-        categoryId,
-        entryDate,
-        source,
-      ];
+      const existingEntryValues = [userId, categoryId, entryDate, source];
       if (frequency === 'Hourly' && normalizedEntryHour !== null) {
         existingEntryQuery += ` AND entry_hour = $${existingEntryValues.length + 1}`;
         existingEntryValues.push(normalizedEntryHour);
@@ -1090,7 +814,7 @@ async function upsertCustomMeasurement(
         values = [
           value,
           normalizedEntryTimestamp,
-          notes ?? null,
+          notes,
           actingUserId,
           source,
           id,
@@ -1109,7 +833,7 @@ async function upsertCustomMeasurement(
           entryDate,
           normalizedEntryHour,
           normalizedEntryTimestamp,
-          notes ?? null,
+          notes,
           actingUserId,
           source,
         ];
@@ -1117,234 +841,6 @@ async function upsertCustomMeasurement(
     }
     const result = await client.query(query, values);
     return result.rows[0];
-  } finally {
-    client.release();
-  }
-}
-
-export interface BulkCustomMeasurementInputRow {
-  categoryId: string;
-  value: string | number | boolean;
-  entryDate: string;
-  entryHour?: number | null;
-  entryTimestamp?: string | null;
-  notes?: string | null;
-  frequency: string;
-  source?: string | null;
-  userTimezone?: string | null;
-}
-
-/**
- * Batch counterpart of upsertCustomMeasurement for health-data ingestion: one
- * client + one transaction for the whole batch instead of one client per
- * record. Rows are normalized exactly like the per-record upsert, deduped by
- * the same existence keys it checks (last row in payload order wins, matching
- * the sequential net effect); 'Unlimited'/'All' frequencies always insert.
- * Identity handling mirrors upsertCustomMeasurement: getClient(actingUserId)
- * for RLS context, rows target userId, and actingUserId stamps the audit
- * columns on both INSERT and UPDATE.
- *
- * Returns the written DB row for each input row (deduped rows share their
- * winner's row).
- */
-async function bulkUpsertCustomMeasurements(
-  userId: string,
-  actingUserId: string,
-  rows: BulkCustomMeasurementInputRow[],
-  userTimezone?: string | null
-) {
-  if (!rows || rows.length === 0) {
-    return [];
-  }
-  const client = await getClient(actingUserId); // User-specific operation, using actingUserId for RLS context
-  try {
-    await client.query('BEGIN');
-    // Normalize entry_hour and entry_timestamp for 'Daily' frequency to
-    // prevent duplicates (identical to upsertCustomMeasurement).
-    const prepared = rows.map((row) => {
-      let normalizedEntryHour = row.entryHour;
-      let normalizedEntryTimestamp = row.entryTimestamp;
-      if (row.frequency === 'Daily') {
-        normalizedEntryHour = 0; // Set hour to 0 for daily measurements
-        // Normalize timestamp to the beginning of the day
-        if (row.entryDate && isDayString(row.entryDate)) {
-          const parts = row.entryDate.split('-');
-          normalizedEntryTimestamp = new Date(
-            Date.UTC(
-              Number(parts[0]),
-              Number(parts[1]) - 1,
-              Number(parts[2]),
-              0,
-              0,
-              0,
-              0
-            )
-          ).toISOString();
-        } else {
-          const dateObj = new Date(row.entryDate);
-          dateObj.setUTCHours(0, 0, 0, 0);
-          normalizedEntryTimestamp = dateObj.toISOString();
-        }
-      } else {
-        normalizedEntryTimestamp = defaultEntryTimestamp(
-          normalizedEntryTimestamp,
-          row.entryDate,
-          normalizedEntryHour,
-          row.userTimezone ?? userTimezone
-        );
-      }
-      return {
-        ...row,
-        source: row.source === undefined ? 'manual' : row.source,
-        entryHour: normalizedEntryHour,
-        entryTimestamp: normalizedEntryTimestamp,
-      };
-    });
-    // Existence keys mirror the per-record SELECT: 'Hourly' keys on
-    // (category, date, source, hour); 'Daily' on (category, date, source)
-    // with hour NULL-or-0; other non-Unlimited frequencies on
-    // (category, date, source) with no hour predicate. Frequency comes from
-    // the category, so rows sharing a category share a key class.
-    const alwaysInsertIndexes: number[] = [];
-    const keyByIndex: (string | null)[] = new Array(rows.length).fill(null);
-    const winnerByKey = new Map<string, number>();
-    for (let i = 0; i < prepared.length; i++) {
-      const row = prepared[i];
-      if (row.frequency === 'Unlimited' || row.frequency === 'All') {
-        alwaysInsertIndexes.push(i);
-        continue;
-      }
-      const keyClass =
-        row.frequency === 'Hourly' && row.entryHour !== null
-          ? `hourly:${row.entryHour}`
-          : row.frequency === 'Daily'
-            ? 'daily'
-            : 'other';
-      const key = `${keyClass}|${row.categoryId}|${row.entryDate}|${row.source}`;
-      keyByIndex[i] = key;
-      winnerByKey.set(key, i); // last row in payload order wins
-    }
-    const keyedWinnerIndexes = [...winnerByKey.values()];
-    // One superset SELECT for all keyed rows, then exact per-key matching in
-    // JS (mirrors the per-record existence SELECT semantics).
-    const existingByKey = new Map<string, Record<string, unknown>>();
-    if (keyedWinnerIndexes.length > 0) {
-      const categoryIds = [
-        ...new Set(keyedWinnerIndexes.map((i) => prepared[i].categoryId)),
-      ];
-      const dates = [
-        ...new Set(keyedWinnerIndexes.map((i) => prepared[i].entryDate)),
-      ];
-      const sources = [
-        ...new Set(keyedWinnerIndexes.map((i) => prepared[i].source)),
-      ];
-      const existing = await client.query(
-        `SELECT id, category_id, entry_date, source, entry_hour FROM custom_measurements
-         WHERE user_id = $1 AND category_id = ANY($2) AND entry_date = ANY($3::date[]) AND source = ANY($4)`,
-        [userId, categoryIds, dates, sources]
-      );
-      for (const index of keyedWinnerIndexes) {
-        const row = prepared[index];
-        const match = existing.rows.find((dbRow: Record<string, unknown>) => {
-          if (dbRow.category_id !== row.categoryId) return false;
-          // entry_date comes back as a YYYY-MM-DD string (poolManager DATE parser)
-          if (String(dbRow.entry_date) !== String(row.entryDate)) return false;
-          if (dbRow.source !== row.source) return false;
-          if (row.frequency === 'Hourly' && row.entryHour !== null) {
-            return dbRow.entry_hour === row.entryHour;
-          }
-          if (row.frequency === 'Daily') {
-            return dbRow.entry_hour === null || dbRow.entry_hour === 0;
-          }
-          return true;
-        });
-        if (match) {
-          existingByKey.set(keyByIndex[index]!, match);
-        }
-      }
-    }
-    const writtenByInput: Record<string, unknown>[] = new Array(rows.length);
-    const updateIndexes = keyedWinnerIndexes.filter((i) =>
-      existingByKey.has(keyByIndex[i]!)
-    );
-    if (updateIndexes.length > 0) {
-      const updateResult = await client.query(
-        `UPDATE custom_measurements cm
-         SET value = u.value, entry_timestamp = u.entry_timestamp, notes = u.notes, updated_by_user_id = $1, updated_at = now(), source = u.source
-         FROM unnest($2::uuid[], $3::text[], $4::timestamptz[], $5::text[], $6::text[]) AS u(id, value, entry_timestamp, notes, source)
-         WHERE cm.id = u.id
-         RETURNING cm.*`,
-        [
-          actingUserId,
-          updateIndexes.map((i) => existingByKey.get(keyByIndex[i]!)!.id),
-          updateIndexes.map((i) => prepared[i].value),
-          updateIndexes.map((i) => prepared[i].entryTimestamp),
-          updateIndexes.map((i) => prepared[i].notes ?? null),
-          updateIndexes.map((i) => prepared[i].source),
-        ]
-      );
-      const updatedById = new Map<string, Record<string, unknown>>(
-        updateResult.rows.map((row: Record<string, unknown>) => [
-          row.id as string,
-          row,
-        ])
-      );
-      for (const index of updateIndexes) {
-        const existingRow = existingByKey.get(keyByIndex[index]!);
-        if (existingRow && existingRow.id) {
-          const updatedRow = updatedById.get(String(existingRow.id));
-          if (updatedRow) {
-            writtenByInput[index] = updatedRow;
-          }
-        }
-      }
-    }
-    const insertIndexes = [
-      ...alwaysInsertIndexes,
-      ...keyedWinnerIndexes.filter((i) => !existingByKey.has(keyByIndex[i]!)),
-    ].sort((a, b) => a - b);
-    if (insertIndexes.length > 0) {
-      const nowIso = new Date().toISOString();
-      const insertRows = insertIndexes.map((index) => {
-        const row = prepared[index];
-        return [
-          userId,
-          row.categoryId,
-          row.value,
-          row.entryDate,
-          row.entryHour ?? null,
-          row.entryTimestamp,
-          row.notes ?? null,
-          actingUserId,
-          actingUserId,
-          nowIso,
-          nowIso,
-          row.source,
-        ];
-      });
-      const insertResult = await client.query(
-        format(
-          `INSERT INTO custom_measurements (user_id, category_id, value, entry_date, entry_hour, entry_timestamp, notes, created_by_user_id, updated_by_user_id, created_at, updated_at, source)
-           VALUES %L RETURNING *`,
-          insertRows
-        )
-      );
-      // INSERT ... RETURNING preserves VALUES order, so align by position.
-      for (let k = 0; k < insertIndexes.length; k++) {
-        writtenByInput[insertIndexes[k]] = insertResult.rows[k];
-      }
-    }
-    // Deduped-away rows share their winner's written row.
-    for (let i = 0; i < rows.length; i++) {
-      if (writtenByInput[i] === undefined && keyByIndex[i] !== null) {
-        writtenByInput[i] = writtenByInput[winnerByKey.get(keyByIndex[i]!)!];
-      }
-    }
-    await client.query('COMMIT');
-    return writtenByInput;
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
   } finally {
     client.release();
   }
@@ -1363,117 +859,66 @@ async function deleteCustomMeasurement(id: any, userId: any) {
   }
 }
 /**
- * Weight and height for step-calorie estimation.
- *
- * Deliberately whole-table latest rather than latest-on-or-before the target day. The
- * Diary has always read it this way, and the acceptance criterion for #2094 is that
- * Reports agrees with the Diary -- date-scoping it here would make the two disagree again
- * for every day after a weight change. Note that BMR in the same balance *does* use
- * on-or-before, so the two are inconsistent with each other. Tracked separately; do not
- * "fix" one without the other.
- */
-async function getLatestWeightHeight(
-  userId: string
-): Promise<{ weightKg: number | null; heightCm: number | null }> {
-  const client = await getClient(userId);
-  try {
-    const result = await client.query(
-      `SELECT
-         (SELECT weight FROM check_in_measurements
-           WHERE user_id = $1 AND weight IS NOT NULL AND weight > 0
-           ORDER BY entry_date DESC, updated_at DESC LIMIT 1) AS weight,
-         (SELECT height FROM check_in_measurements
-           WHERE user_id = $1 AND height IS NOT NULL AND height > 0
-           ORDER BY entry_date DESC, updated_at DESC LIMIT 1) AS height`,
-      [userId]
-    );
-    const weight = parseFloat(result.rows[0]?.weight);
-    const height = parseFloat(result.rows[0]?.height);
-    return {
-      // `> 0`, not just finite: a stored 0 would otherwise survive the `??` fallbacks
-      // downstream and zero out the day's step calories. The per-date Diary lookup
-      // filters the same way, and the two must agree.
-      weightKg: Number.isFinite(weight) && weight > 0 ? weight : null,
-      heightCm: Number.isFinite(height) && height > 0 ? height : null,
-    };
-  } finally {
-    client.release();
-  }
-}
-
-/**
  * Compute step calories for a user on a given date.
- *
- * Background steps = total check-in steps minus the steps a logged workout already
- * accounted for. `activitySteps` is passed in rather than re-derived from the session
- * tree because the caller has already walked it to split active/logged calories; walking
- * it twice is two implementations of one rule.
+ * Background steps = total check-in steps minus steps already logged in exercise sessions.
+ * @param {string} userId
+ * @param {string} date - YYYY-MM-DD
+ * @param {Array} sessions - exercise sessions for the date (ExerciseSessionResponse[])
+ * @returns {Promise<number>} step calories burned
  */
-async function getStepCaloriesForDate(
-  userId: string,
-  date: string,
-  activitySteps: number
-): Promise<number> {
-  const [{ weightKg, heightCm }, totalSteps] = await Promise.all([
-    getLatestWeightHeight(userId),
-    getCheckInStepsForDate(userId, date),
-  ]);
-
-  return resolveBackgroundStepCalories({
-    totalSteps,
-    activitySteps,
-    weightKg,
-    heightCm,
-  });
-}
-
-/** The day's total step count as recorded on the check-in row, or 0. */
-async function getCheckInStepsForDate(
-  userId: string,
-  date: string
-): Promise<number> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getStepCaloriesForDate(userId: any, date: any, sessions: any) {
   const client = await getClient(userId);
   try {
-    const result = await client.query(
-      'SELECT steps FROM check_in_measurements WHERE user_id = $1 AND entry_date = $2',
-      [userId, date]
+    const [checkInResult, weightResult, heightResult] = await Promise.all([
+      client.query(
+        'SELECT steps FROM check_in_measurements WHERE user_id = $1 AND entry_date = $2',
+        [userId, date]
+      ),
+      client.query(
+        `SELECT weight FROM check_in_measurements
+         WHERE user_id = $1 AND weight IS NOT NULL
+         ORDER BY entry_date DESC, updated_at DESC LIMIT 1`,
+        [userId]
+      ),
+      client.query(
+        `SELECT height FROM check_in_measurements
+         WHERE user_id = $1 AND height IS NOT NULL
+         ORDER BY entry_date DESC, updated_at DESC LIMIT 1`,
+        [userId]
+      ),
+    ]);
+    const totalSteps = parseInt(checkInResult.rows[0]?.steps ?? '0', 10) || 0;
+    const weightKg =
+      parseFloat(weightResult.rows[0]?.weight) ||
+      CALORIE_CALCULATION_CONSTANTS.DEFAULT_WEIGHT_KG;
+    const heightCm =
+      parseFloat(heightResult.rows[0]?.height) ||
+      CALORIE_CALCULATION_CONSTANTS.DEFAULT_HEIGHT_CM;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const activitySteps = sessions.reduce((sum: any, s: any) => {
+      if (s.type === 'preset') {
+        return (
+          sum +
+          (s.exercises ?? []).reduce(
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (eSum: any, e: any) =>
+              eSum + (parseInt(String(e.steps ?? '0'), 10) || 0),
+            0
+          )
+        );
+      }
+      return sum + (parseInt(String(s.steps ?? '0'), 10) || 0);
+    }, 0);
+    const backgroundSteps = Math.max(0, totalSteps - activitySteps);
+    const strideLengthM =
+      (heightCm * CALORIE_CALCULATION_CONSTANTS.STRIDE_LENGTH_MULTIPLIER) / 100;
+    const distanceKm = (backgroundSteps * strideLengthM) / 1000;
+    return Math.round(
+      distanceKm *
+        weightKg *
+        CALORIE_CALCULATION_CONSTANTS.NET_CALORIES_PER_KG_PER_KM
     );
-    return parseInt(result.rows[0]?.steps ?? '0', 10) || 0;
-  } finally {
-    client.release();
-  }
-}
-
-/**
- * Synced resting/BMR values keyed by date, for a whole range.
- *
- * The per-date sibling `getExternalBmrForDate` issues one query per day; the ranged
- * report path would turn that into one query per day in the window.
- */
-async function getExternalBmrByDateRange(
-  userId: string,
-  startDate: string,
-  endDate: string
-): Promise<Map<string, number>> {
-  const client = await getClient(userId);
-  try {
-    const result = await client.query(
-      `SELECT DISTINCT ON (cm.entry_date)
-              TO_CHAR(cm.entry_date, 'YYYY-MM-DD') AS entry_date, cm.value
-       FROM custom_measurements cm
-       JOIN custom_categories cc ON cm.category_id = cc.id
-       WHERE cm.user_id = $1
-         AND cc.name = 'basal_metabolic_rate'
-         AND cm.entry_date BETWEEN $2 AND $3
-       ORDER BY cm.entry_date, cm.updated_at DESC, cm.entry_timestamp DESC`,
-      [userId, startDate, endDate]
-    );
-    const byDate = new Map<string, number>();
-    for (const row of result.rows) {
-      const value = parseFloat(row.value);
-      if (Number.isFinite(value)) byDate.set(row.entry_date, value);
-    }
-    return byDate;
   } finally {
     client.release();
   }
@@ -1542,7 +987,6 @@ async function getMostRecentMeasurement(userId: any, measurementType: any) {
 }
 export { upsertStepData };
 export { upsertWaterData };
-export { incrementWaterData };
 export { getWaterIntakesByDates };
 export { getWaterIntakeEntryById };
 export { getWaterIntakeEntryOwnerId };
@@ -1569,8 +1013,6 @@ export { getLatestCheckInMeasurementsOnOrBeforeDate };
 export { getExternalBmrForDate };
 export { getMostRecentMeasurement };
 export { getStepCaloriesForDate };
-export { getLatestWeightHeight };
-export { getExternalBmrByDateRange };
 
 // ── Water Intake Entries (granular drink-by-drink tracking) ──────────────
 
@@ -1608,212 +1050,6 @@ async function insertWaterIntakeLog(
   }
 }
 
-/**
- * Idempotently upserts synced hydration samples by (user_id, source, source_id)
- * instead of deleting-and-replacing a date window. Mobile hydration reads are
- * incremental (a rolling overlap cursor, not a full-day resend), so deleting
- * everything in a calendar-day window and reinserting only what's in the
- * current batch would silently drop earlier same-day entries that aren't in
- * this batch. Per-record upsert makes re-syncing the same record idempotent
- * without ever deleting entries this batch didn't see.
- *
- * Samples without a sourceId can't join that per-record key, and their
- * producers (older mobile apps sending one day-aggregate per day, CSV health
- * imports) re-send the same rows on every sync or re-import. For non-manual
- * sources those samples use replace-per-day semantics instead: each
- * (entry_date, source) receiving unkeyed samples in this batch has ALL its
- * previous rows deleted first — keyed ones included, because an unkeyed
- * day-aggregate is that client's full-day truth for the source, and keyed
- * rows left beside it would double the total with no way to ever adopt the
- * aggregate row (its records already exist keyed). A later per-record sync
- * adopts the aggregate row back into keyed form, so mixed old/new clients
- * self-heal in both directions. Manual unkeyed samples stay additive —
- * wiping the user's tapped-in drink log because a CSV import omitted a
- * source column would destroy real data.
- */
-async function upsertWaterIntakeSamples(
-  userId: string,
-  actingUserId: string,
-  samples: Array<{
-    entryDate: string;
-    waterMl: number;
-    containerId?: number | null;
-    containerName: string;
-    source: string;
-    sourceId?: string | null;
-    loggedAt?: string | null;
-  }>
-) {
-  const client = await getClient(actingUserId);
-  try {
-    await client.query('BEGIN');
-
-    const writtenRows: Array<Record<string, unknown>> = [];
-    const affectedDatesBySource = new Map<string, Set<string>>();
-
-    // Replace-per-day pre-pass for unkeyed non-manual samples (see doc comment):
-    // clear each affected (entry_date, source) once, before any of this batch's
-    // inserts, so multiple unkeyed samples for the same day in one batch all
-    // survive.
-    const unkeyedDatesBySource = new Map<string, Set<string>>();
-    for (const sample of samples) {
-      if (!sample.sourceId && sample.source !== 'manual') {
-        const dates =
-          unkeyedDatesBySource.get(sample.source) || new Set<string>();
-        dates.add(sample.entryDate);
-        unkeyedDatesBySource.set(sample.source, dates);
-      }
-    }
-    for (const [source, dates] of unkeyedDatesBySource) {
-      for (const dateStr of dates) {
-        await client.query(
-          `DELETE FROM water_intake_entries
-           WHERE user_id = $1 AND entry_date = $2 AND source = $3`,
-          [userId, dateStr, source]
-        );
-      }
-    }
-
-    for (const sample of samples) {
-      const dates =
-        affectedDatesBySource.get(sample.source) || new Set<string>();
-      dates.add(sample.entryDate);
-      affectedDatesBySource.set(sample.source, dates);
-
-      let res;
-      if (sample.sourceId) {
-        // Adopt a pre-existing unkeyed row for this exact (user, source, date)
-        // if one exists — e.g. a legacy row from before source_id existed
-        // (single-total-per-day rows backfilled from the water_intake
-        // aggregate). Without this, the first keyed re-sync of that day would
-        // insert a second row alongside the legacy one and double the total,
-        // since ON CONFLICT can't match a row that has no source_id to
-        // conflict against. Expected to be at most one such row per
-        // (user, entry_date, source), but that isn't schema-enforced, so the
-        // update is bounded to a single row via the ctid subquery — if more
-        // than one exists, only one gets adopted instead of stamping the
-        // same source_id onto multiple rows (which would trip the partial
-        // unique index on (user_id, source, source_id) and fail the batch).
-        // The NOT EXISTS guard skips adoption entirely when this source_id is
-        // already keyed: a re-sync of a known record must land on the
-        // ON CONFLICT update below, not stamp its id onto a second leftover
-        // unkeyed row (same unique-index trip, and it would keep failing on
-        // every subsequent sync).
-        const adopted = await client.query(
-          `UPDATE water_intake_entries
-           SET source_id = $1,
-               water_ml = $2,
-               container_id = $3,
-               container_name = $4,
-               logged_at = COALESCE($5, logged_at)
-           WHERE ctid = (
-             SELECT ctid FROM water_intake_entries
-             WHERE user_id = $6 AND source = $7 AND entry_date = $8 AND source_id IS NULL
-             LIMIT 1
-           )
-           AND NOT EXISTS (
-             SELECT 1 FROM water_intake_entries
-             WHERE user_id = $6 AND source = $7 AND source_id = $1
-           )
-           RETURNING *`,
-          [
-            sample.sourceId,
-            sample.waterMl,
-            sample.containerId || null,
-            sample.containerName,
-            sample.loggedAt || null,
-            userId,
-            sample.source,
-            sample.entryDate,
-          ]
-        );
-        if (adopted.rows.length > 0) {
-          res = adopted;
-        } else {
-          res = await client.query(
-            `INSERT INTO water_intake_entries
-              (user_id, entry_date, water_ml, container_id, container_name, source, source_id, created_at, created_by_user_id, logged_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8, COALESCE($9, NOW()))
-             ON CONFLICT (user_id, source, source_id) WHERE source IS NOT NULL AND source_id IS NOT NULL
-             DO UPDATE SET
-               entry_date = EXCLUDED.entry_date,
-               water_ml = EXCLUDED.water_ml,
-               container_id = EXCLUDED.container_id,
-               container_name = EXCLUDED.container_name,
-               logged_at = COALESCE($9, water_intake_entries.logged_at)
-             RETURNING *`,
-            [
-              userId,
-              sample.entryDate,
-              sample.waterMl,
-              sample.containerId || null,
-              sample.containerName,
-              sample.source,
-              sample.sourceId,
-              actingUserId,
-              sample.loggedAt || null,
-            ]
-          );
-        }
-      } else {
-        log(
-          'warn',
-          sample.source === 'manual'
-            ? `[upsertWaterIntakeSamples] Sample without sourceId for source '${sample.source}'; inserting additively (not deduped).`
-            : `[upsertWaterIntakeSamples] Sample without sourceId for source '${sample.source}'; using replace-per-day semantics for ${sample.entryDate}.`
-        );
-        res = await client.query(
-          `INSERT INTO water_intake_entries
-            (user_id, entry_date, water_ml, container_id, container_name, source, created_at, created_by_user_id, logged_at)
-           VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, COALESCE($8, NOW()))
-           RETURNING *`,
-          [
-            userId,
-            sample.entryDate,
-            sample.waterMl,
-            sample.containerId || null,
-            sample.containerName,
-            sample.source,
-            actingUserId,
-            sample.loggedAt || null,
-          ]
-        );
-      }
-      writtenRows.push(res.rows[0]);
-    }
-
-    // Recalculate and update daily totals in water_intake for every
-    // (source, date) combination touched by this batch's samples.
-    for (const [source, dates] of affectedDatesBySource) {
-      for (const dateStr of dates) {
-        const sumRes = await client.query(
-          `SELECT COALESCE(SUM(water_ml), 0) as total_ml
-           FROM water_intake_entries
-           WHERE user_id = $1 AND entry_date = $2 AND source = $3`,
-          [userId, dateStr, source]
-        );
-        const totalMl = Number(sumRes.rows[0]?.total_ml || 0);
-
-        await client.query(
-          `INSERT INTO water_intake (user_id, entry_date, water_ml, source, created_by_user_id, updated_by_user_id, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $5, NOW(), NOW())
-           ON CONFLICT (user_id, entry_date, source)
-           DO UPDATE SET water_ml = $3, updated_at = NOW(), updated_by_user_id = $5`,
-          [userId, dateStr, totalMl, source, actingUserId]
-        );
-      }
-    }
-
-    await client.query('COMMIT');
-    return writtenRows;
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-}
-
 async function getWaterIntakeLogsByDates(userId: string, dates: string[]) {
   const client = await getClient(userId);
   try {
@@ -1830,24 +1066,15 @@ async function getWaterIntakeLogsByDates(userId: string, dates: string[]) {
   }
 }
 
-async function getWaterIntakeLogByDate(
-  userId: string,
-  date: string,
-  source?: string | null
-) {
+async function getWaterIntakeLogByDate(userId: string, date: string) {
   const client = await getClient(userId);
   try {
     const result = await client.query(
-      source
-        ? `SELECT id, user_id, entry_date, water_ml, container_id, container_name, source, created_at, logged_at
-           FROM water_intake_entries
-           WHERE user_id = $1 AND entry_date = $2 AND source = $3
-           ORDER BY logged_at DESC`
-        : `SELECT id, user_id, entry_date, water_ml, container_id, container_name, source, created_at, logged_at
-           FROM water_intake_entries
-           WHERE user_id = $1 AND entry_date = $2
-           ORDER BY logged_at DESC`,
-      source ? [userId, date, source] : [userId, date]
+      `SELECT id, user_id, entry_date, water_ml, container_id, container_name, source, created_at, logged_at
+       FROM water_intake_entries
+       WHERE user_id = $1 AND entry_date = $2
+       ORDER BY logged_at DESC`,
+      [userId, date]
     );
     return result.rows;
   } finally {
@@ -1909,7 +1136,7 @@ async function getWaterTotalsByDateRange(
   const client = await getClient(userId);
   try {
     let query = `
-      SELECT TO_CHAR(entry_date, 'YYYY-MM-DD') as entry_date, SUM(water_ml) as total_ml
+      SELECT entry_date, SUM(water_ml) as total_ml
       FROM water_intake_entries
       WHERE user_id = $1
     `;
@@ -1939,7 +1166,6 @@ async function getWaterTotalsByDateRange(
 export default {
   upsertStepData,
   upsertWaterData,
-  incrementWaterData,
   getWaterIntakeByDate,
   getWaterIntakesByDates,
   getWaterIntakeEntryById,
@@ -1947,7 +1173,6 @@ export default {
   updateWaterIntake,
   deleteWaterIntake,
   insertWaterIntakeLog,
-  upsertWaterIntakeSamples,
   getWaterIntakeLogByDate,
   getWaterIntakeLogsByDates,
   deleteWaterIntakeLog,
@@ -1955,7 +1180,6 @@ export default {
   updateWaterIntakeLogTime,
   getWaterTotalsByDateRange,
   upsertCheckInMeasurements,
-  bulkUpsertCheckInMeasurements,
   getCheckInMeasurementsByDate,
   updateCheckInMeasurements,
   deleteCheckInMeasurements,
@@ -1969,7 +1193,6 @@ export default {
   getCustomMeasurementsByDateRange,
   getCustomCategoryOwnerId,
   upsertCustomMeasurement,
-  bulkUpsertCustomMeasurements,
   deleteCustomMeasurement,
   getCustomMeasurementOwnerId,
   getLatestMeasurement,
@@ -1977,6 +1200,4 @@ export default {
   getExternalBmrForDate,
   getMostRecentMeasurement,
   getStepCaloriesForDate,
-  getLatestWeightHeight,
-  getExternalBmrByDateRange,
 };

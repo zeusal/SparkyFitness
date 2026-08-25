@@ -1,149 +1,65 @@
 import { getClient } from '../db/poolManager.js';
-import type { PoolClient } from 'pg';
-import type {
-  MealInput,
-  MealFoodInput,
-  MealPlanInput,
-  FoodEntryInput,
-  FoodEntrySnapshot,
-} from '../types/nutrition.js';
-
-/** A value bound into a parameterised query. */
-type SqlParam = string | number | boolean | null | undefined;
-
-/** An ingredient row read back from `meal_foods`, joined to its meal. */
-interface MealFoodRow {
-  id: string;
-  meal_id: string;
-  [column: string]: unknown;
-}
-
-/**
- * A meal row as read back from a query. Columns vary by call site, so the
- * index signature keeps arbitrary selected columns reachable without `any`.
- */
-interface MealRow {
-  id: string;
-  foods?: unknown[];
-  [column: string]: unknown;
-}
-
 import { log } from '../config/logging.js';
 // @ts-expect-error TS(7016): Could not find a declaration file for module 'pg-f... Remove this comment to see the full error message
 import format from 'pg-format';
-import {
-  buildSqlSearch,
-  buildSqlExactMatchOrder,
-} from '../utils/dbSearchHelper.js';
-import { localizeImages, toImageArray } from '../utils/imageLocalizer.js';
 // --- Helpers ---
-// Shared column list + joins for reading a meal's ingredient rows (meal_foods).
-// A row is polymorphic (item_type 'food' | 'meal'): food rows carry the food
-// nutrition snapshot (falling back to the live variant), meal rows carry the
-// linked child meal's identity/serving metadata for the client to resolve. The
-// only per-call difference is the WHERE clause, so callers append it.
-const MEAL_FOODS_SELECT = `
-  SELECT mf.id, mf.meal_id, mf.food_id, mf.child_meal_id, mf.item_type,
-         mf.variant_id, mf.quantity, mf.unit,
-         f.name AS food_name, f.brand,
-         cm.name AS child_meal_name,
-         cm.serving_size AS child_meal_serving_size,
-         cm.serving_unit AS child_meal_serving_unit,
-         cm.total_servings AS child_meal_total_servings,
-         COALESCE(mf.serving_size, fv.serving_size)               AS serving_size,
-         COALESCE(mf.serving_unit, fv.serving_unit)               AS serving_unit,
-         COALESCE(mf.calories, fv.calories)                       AS calories,
-         COALESCE(mf.protein, fv.protein)                         AS protein,
-         COALESCE(mf.carbs, fv.carbs)                             AS carbs,
-         COALESCE(mf.fat, fv.fat)                                 AS fat,
-         COALESCE(mf.saturated_fat, fv.saturated_fat)             AS saturated_fat,
-         COALESCE(mf.polyunsaturated_fat, fv.polyunsaturated_fat) AS polyunsaturated_fat,
-         COALESCE(mf.monounsaturated_fat, fv.monounsaturated_fat) AS monounsaturated_fat,
-         COALESCE(mf.trans_fat, fv.trans_fat)                     AS trans_fat,
-         COALESCE(mf.cholesterol, fv.cholesterol)                 AS cholesterol,
-         COALESCE(mf.sodium, fv.sodium)                           AS sodium,
-         COALESCE(mf.potassium, fv.potassium)                     AS potassium,
-         COALESCE(mf.dietary_fiber, fv.dietary_fiber)             AS dietary_fiber,
-         COALESCE(mf.sugars, fv.sugars)                           AS sugars,
-         COALESCE(mf.vitamin_a, fv.vitamin_a)                     AS vitamin_a,
-         COALESCE(mf.vitamin_c, fv.vitamin_c)                     AS vitamin_c,
-         COALESCE(mf.calcium, fv.calcium)                         AS calcium,
-         COALESCE(mf.iron, fv.iron)                               AS iron,
-         COALESCE(mf.glycemic_index, fv.glycemic_index)           AS glycemic_index,
-         COALESCE(mf.custom_nutrients, fv.custom_nutrients)       AS custom_nutrients
-  FROM meal_foods mf
-  LEFT JOIN foods f ON mf.food_id = f.id
-  LEFT JOIN food_variants fv ON mf.variant_id = fv.id
-  LEFT JOIN meals cm ON mf.child_meal_id = cm.id`;
-
-// Attach the ordered ingredient list (foods and linked meals) to each meal in
-// a single round-trip. Used by every meal read path.
-async function attachFoodsToMeals(client: PoolClient, meals: MealRow[]) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function attachFoodsToMeals(client: any, meals: any) {
   if (meals.length === 0) return meals;
-  const mealIds = meals.map((m: MealRow) => m.id);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mealIds = meals.map((m: any) => m.id);
   const mealFoodsResult = await client.query(
-    `${MEAL_FOODS_SELECT} WHERE mf.meal_id = ANY($1::uuid[])`,
+    `SELECT mf.id, mf.meal_id, mf.food_id, mf.variant_id, mf.quantity, mf.unit,
+            f.name AS food_name, f.brand,
+            COALESCE(mf.serving_size, fv.serving_size)               AS serving_size,
+            COALESCE(mf.serving_unit, fv.serving_unit)               AS serving_unit,
+            COALESCE(mf.calories, fv.calories)                       AS calories,
+            COALESCE(mf.protein, fv.protein)                         AS protein,
+            COALESCE(mf.carbs, fv.carbs)                             AS carbs,
+            COALESCE(mf.fat, fv.fat)                                 AS fat,
+            COALESCE(mf.saturated_fat, fv.saturated_fat)             AS saturated_fat,
+            COALESCE(mf.polyunsaturated_fat, fv.polyunsaturated_fat) AS polyunsaturated_fat,
+            COALESCE(mf.monounsaturated_fat, fv.monounsaturated_fat) AS monounsaturated_fat,
+            COALESCE(mf.trans_fat, fv.trans_fat)                     AS trans_fat,
+            COALESCE(mf.cholesterol, fv.cholesterol)                 AS cholesterol,
+            COALESCE(mf.sodium, fv.sodium)                           AS sodium,
+            COALESCE(mf.potassium, fv.potassium)                     AS potassium,
+            COALESCE(mf.dietary_fiber, fv.dietary_fiber)             AS dietary_fiber,
+            COALESCE(mf.sugars, fv.sugars)                           AS sugars,
+            COALESCE(mf.vitamin_a, fv.vitamin_a)                     AS vitamin_a,
+            COALESCE(mf.vitamin_c, fv.vitamin_c)                     AS vitamin_c,
+            COALESCE(mf.calcium, fv.calcium)                         AS calcium,
+            COALESCE(mf.iron, fv.iron)                               AS iron,
+            COALESCE(mf.glycemic_index, fv.glycemic_index)           AS glycemic_index,
+            COALESCE(mf.custom_nutrients, fv.custom_nutrients)       AS custom_nutrients
+     FROM meal_foods mf
+     JOIN foods f ON mf.food_id = f.id
+     LEFT JOIN food_variants fv ON mf.variant_id = fv.id
+     WHERE mf.meal_id = ANY($1::uuid[])`,
     [mealIds]
   );
-  // Group the ingredient rows by their meal so each meal gets its own list.
-  const foodsByMealId: Record<string, MealFoodRow[]> = {};
-  for (const food of mealFoodsResult.rows as MealFoodRow[]) {
-    const bucket = (foodsByMealId[food.meal_id] ??= []);
-    bucket.push(food);
+  const foodsByMealId = {};
+  for (const food of mealFoodsResult.rows) {
+    // @ts-expect-error TS(7053): Element implicitly has an 'any' type because expre... Remove this comment to see the full error message
+    if (!foodsByMealId[food.meal_id]) foodsByMealId[food.meal_id] = [];
+    // @ts-expect-error TS(7053): Element implicitly has an 'any' type because expre... Remove this comment to see the full error message
+    foodsByMealId[food.meal_id].push(food);
   }
   for (const meal of meals) {
-    meal.foods = foodsByMealId[meal.id] ?? [];
+    // @ts-expect-error TS(7053): Element implicitly has an 'any' type because expre... Remove this comment to see the full error message
+    meal.foods = foodsByMealId[meal.id] || [];
   }
   return meals;
 }
-// Normalizes an ingredient (a food or a linked child meal) into the ordered
-// meal_foods INSERT value tuple. item_type is derived from which reference is
-// present; meal rows null out food_id/variant_id but may still carry an
-// aggregated nutrition snapshot for the linked meal.
-function buildMealFoodValues(mealId: string) {
-  return (item: MealFoodInput) => {
-    const isChildMeal =
-      item.item_type === 'meal' || (!!item.child_meal_id && !item.food_id);
-    return [
-      mealId,
-      isChildMeal ? null : item.food_id,
-      isChildMeal ? item.child_meal_id : null,
-      isChildMeal ? 'meal' : 'food',
-      isChildMeal ? null : (item.variant_id ?? null),
-      item.quantity,
-      item.unit,
-      item.serving_size ?? null,
-      item.serving_unit ?? null,
-      item.calories ?? null,
-      item.protein ?? null,
-      item.carbs ?? null,
-      item.fat ?? null,
-      item.saturated_fat ?? null,
-      item.polyunsaturated_fat ?? null,
-      item.monounsaturated_fat ?? null,
-      item.trans_fat ?? null,
-      item.cholesterol ?? null,
-      item.sodium ?? null,
-      item.potassium ?? null,
-      item.dietary_fiber ?? null,
-      item.sugars ?? null,
-      item.vitamin_a ?? null,
-      item.vitamin_c ?? null,
-      item.calcium ?? null,
-      item.iron ?? null,
-      item.glycemic_index ?? null,
-      item.custom_nutrients ?? null,
-    ];
-  };
-}
 // --- Meal Template CRUD Operations ---
-async function createMeal(mealData: MealInput) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function createMeal(mealData: any) {
   const client = await getClient(mealData.user_id); // User-specific operation
   try {
     await client.query('BEGIN');
     const mealResult = await client.query(
-      `INSERT INTO meals (user_id, name, description, is_public, serving_size, serving_unit, total_servings, images, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, now(), now()) RETURNING id, user_id, name, description, is_public, serving_size, serving_unit, total_servings, images, created_at, updated_at`,
+      `INSERT INTO meals (user_id, name, description, is_public, serving_size, serving_unit, total_servings, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, now(), now()) RETURNING id, user_id, name, description, is_public, serving_size, serving_unit, total_servings, created_at, updated_at`,
       [
         mealData.user_id,
         mealData.name,
@@ -152,17 +68,42 @@ async function createMeal(mealData: MealInput) {
         mealData.serving_size,
         mealData.serving_unit,
         mealData.total_servings,
-        JSON.stringify(toImageArray(mealData.images)),
       ]
     );
     const newMeal = mealResult.rows[0];
     if (mealData.foods && mealData.foods.length > 0) {
-      const mealFoodsValues = mealData.foods.map(
-        buildMealFoodValues(newMeal.id)
-      );
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const mealFoodsValues = mealData.foods.map((food: any) => [
+        newMeal.id,
+        food.food_id,
+        food.variant_id,
+        food.quantity,
+        food.unit,
+        food.serving_size ?? null,
+        food.serving_unit ?? null,
+        food.calories ?? null,
+        food.protein ?? null,
+        food.carbs ?? null,
+        food.fat ?? null,
+        food.saturated_fat ?? null,
+        food.polyunsaturated_fat ?? null,
+        food.monounsaturated_fat ?? null,
+        food.trans_fat ?? null,
+        food.cholesterol ?? null,
+        food.sodium ?? null,
+        food.potassium ?? null,
+        food.dietary_fiber ?? null,
+        food.sugars ?? null,
+        food.vitamin_a ?? null,
+        food.vitamin_c ?? null,
+        food.calcium ?? null,
+        food.iron ?? null,
+        food.glycemic_index ?? null,
+        food.custom_nutrients ?? null,
+      ]);
       const mealFoodsQuery = format(
         `INSERT INTO meal_foods (
-           meal_id, food_id, child_meal_id, item_type, variant_id, quantity, unit,
+           meal_id, food_id, variant_id, quantity, unit,
            serving_size, serving_unit, calories, protein, carbs, fat,
            saturated_fat, polyunsaturated_fat, monounsaturated_fat, trans_fat,
            cholesterol, sodium, potassium, dietary_fiber, sugars,
@@ -174,27 +115,6 @@ async function createMeal(mealData: MealInput) {
       await client.query(mealFoodsQuery);
     }
     await client.query('COMMIT');
-
-    // Pull any externally-hosted images local once the meal has an id. Runs
-    // after COMMIT so network latency never holds the transaction open.
-    try {
-      const localizedImages = await localizeImages(
-        newMeal.images,
-        newMeal.id,
-        'meals'
-      );
-      if (localizedImages) {
-        await client.query(
-          'UPDATE meals SET images = $1::jsonb WHERE id = $2',
-          [JSON.stringify(localizedImages), newMeal.id]
-        );
-        newMeal.images = localizedImages;
-      }
-    } catch (imageError) {
-      // The meal is already committed; keep it and leave the remote URLs.
-      log('warn', 'Error localizing meal images:', imageError);
-    }
-
     return newMeal;
   } catch (error) {
     await client.query('ROLLBACK');
@@ -204,11 +124,12 @@ async function createMeal(mealData: MealInput) {
     client.release();
   }
 }
-async function getMeals(userId: string, filter = 'all') {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getMeals(userId: any, filter = 'all') {
   const client = await getClient(userId); // User-specific operation
   try {
     let query = `
-      SELECT id, user_id, name, description, is_public, serving_size, serving_unit, total_servings, images, created_at, updated_at
+      SELECT id, user_id, name, description, is_public, serving_size, serving_unit, total_servings, created_at, updated_at
       FROM meals
       WHERE 1=1`; // Start with a true condition to easily append AND clauses
     const queryParams = [];
@@ -219,80 +140,151 @@ async function getMeals(userId: string, filter = 'all') {
     // For 'family' and 'public' filters, separate functions will be called in mealService
     query += ' ORDER BY name ASC';
     const result = await client.query(query, queryParams);
-    // Await so attachFoodsToMeals' queries finish before finally releases the client.
-    return await attachFoodsToMeals(client, result.rows);
+    const meals = result.rows;
+    // For each meal, fetch its associated foods
+    for (const meal of meals) {
+      const mealFoodsResult = await client.query(
+        `SELECT mf.id, mf.food_id, mf.variant_id, mf.quantity, mf.unit,
+                f.name AS food_name, f.brand,
+                COALESCE(mf.serving_size, fv.serving_size)               AS serving_size,
+                COALESCE(mf.serving_unit, fv.serving_unit)               AS serving_unit,
+                COALESCE(mf.calories, fv.calories)                       AS calories,
+                COALESCE(mf.protein, fv.protein)                         AS protein,
+                COALESCE(mf.carbs, fv.carbs)                             AS carbs,
+                COALESCE(mf.fat, fv.fat)                                 AS fat,
+                COALESCE(mf.saturated_fat, fv.saturated_fat)             AS saturated_fat,
+                COALESCE(mf.polyunsaturated_fat, fv.polyunsaturated_fat) AS polyunsaturated_fat,
+                COALESCE(mf.monounsaturated_fat, fv.monounsaturated_fat) AS monounsaturated_fat,
+                COALESCE(mf.trans_fat, fv.trans_fat)                     AS trans_fat,
+                COALESCE(mf.cholesterol, fv.cholesterol)                 AS cholesterol,
+                COALESCE(mf.sodium, fv.sodium)                           AS sodium,
+                COALESCE(mf.potassium, fv.potassium)                     AS potassium,
+                COALESCE(mf.dietary_fiber, fv.dietary_fiber)             AS dietary_fiber,
+                COALESCE(mf.sugars, fv.sugars)                           AS sugars,
+                COALESCE(mf.vitamin_a, fv.vitamin_a)                     AS vitamin_a,
+                COALESCE(mf.vitamin_c, fv.vitamin_c)                     AS vitamin_c,
+                COALESCE(mf.calcium, fv.calcium)                         AS calcium,
+                COALESCE(mf.iron, fv.iron)                               AS iron,
+                COALESCE(mf.glycemic_index, fv.glycemic_index)           AS glycemic_index,
+                COALESCE(mf.custom_nutrients, fv.custom_nutrients)       AS custom_nutrients
+         FROM meal_foods mf
+         JOIN foods f ON mf.food_id = f.id
+         LEFT JOIN food_variants fv ON mf.variant_id = fv.id
+         WHERE mf.meal_id = $1`,
+        [meal.id]
+      );
+      meal.foods = mealFoodsResult.rows;
+    }
+    return meals;
   } finally {
     client.release();
   }
 }
-async function searchMeals(
-  searchTerm: string | null | undefined,
-  userId: string | null | undefined,
-  limit: number | null = null
-) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function searchMeals(searchTerm: any, userId: any, limit = null) {
   const client = await getClient(userId); // User-specific operation
   try {
-    const {
-      whereClauses: searchClauses,
-      queryParams: searchParams,
-      nextParamIndex,
-    } = buildSqlSearch('name', searchTerm, 1);
-    const whereClauses: string[] = [...searchClauses];
-    const queryParams: SqlParam[] = [...searchParams];
-    const paramIndex = nextParamIndex;
-
-    const whereSql =
-      whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
-
-    let orderClause = 'name ASC';
-    const selectQueryParams = [...queryParams];
-    let selectParamIndex = paramIndex;
-    if (searchTerm) {
-      const exactMatchParamIndex = selectParamIndex;
-      selectQueryParams.push(`%${searchTerm}%`);
-      selectParamIndex++;
-      orderClause = `${buildSqlExactMatchOrder('name', exactMatchParamIndex)}, name ASC`;
-    }
-
     let query = `
-      SELECT id, user_id, name, description, is_public, serving_size, serving_unit, total_servings, images
+      SELECT id, user_id, name, description, is_public, serving_size, serving_unit, total_servings
       FROM meals
-      ${whereSql}
-      ORDER BY ${orderClause}`;
-
+      WHERE name ILIKE '%' || $1 || '%'
+      ORDER BY name ASC`;
+    const queryParams = [searchTerm];
     if (limit !== null) {
-      query += ` LIMIT $${selectParamIndex}`;
-      selectQueryParams.push(limit);
+      query += ' LIMIT $3';
+      queryParams.push(limit);
     }
-    const result = await client.query(query, selectQueryParams);
-    // Await so attachFoodsToMeals' queries finish before finally releases the client.
-    return await attachFoodsToMeals(client, result.rows);
+    const result = await client.query(query, queryParams);
+    const meals = result.rows;
+    // For each meal, fetch its associated foods
+    for (const meal of meals) {
+      const mealFoodsResult = await client.query(
+        `SELECT mf.id, mf.food_id, mf.variant_id, mf.quantity, mf.unit,
+                f.name AS food_name, f.brand,
+                COALESCE(mf.serving_size, fv.serving_size)               AS serving_size,
+                COALESCE(mf.serving_unit, fv.serving_unit)               AS serving_unit,
+                COALESCE(mf.calories, fv.calories)                       AS calories,
+                COALESCE(mf.protein, fv.protein)                         AS protein,
+                COALESCE(mf.carbs, fv.carbs)                             AS carbs,
+                COALESCE(mf.fat, fv.fat)                                 AS fat,
+                COALESCE(mf.saturated_fat, fv.saturated_fat)             AS saturated_fat,
+                COALESCE(mf.polyunsaturated_fat, fv.polyunsaturated_fat) AS polyunsaturated_fat,
+                COALESCE(mf.monounsaturated_fat, fv.monounsaturated_fat) AS monounsaturated_fat,
+                COALESCE(mf.trans_fat, fv.trans_fat)                     AS trans_fat,
+                COALESCE(mf.cholesterol, fv.cholesterol)                 AS cholesterol,
+                COALESCE(mf.sodium, fv.sodium)                           AS sodium,
+                COALESCE(mf.potassium, fv.potassium)                     AS potassium,
+                COALESCE(mf.dietary_fiber, fv.dietary_fiber)             AS dietary_fiber,
+                COALESCE(mf.sugars, fv.sugars)                           AS sugars,
+                COALESCE(mf.vitamin_a, fv.vitamin_a)                     AS vitamin_a,
+                COALESCE(mf.vitamin_c, fv.vitamin_c)                     AS vitamin_c,
+                COALESCE(mf.calcium, fv.calcium)                         AS calcium,
+                COALESCE(mf.iron, fv.iron)                               AS iron,
+                COALESCE(mf.glycemic_index, fv.glycemic_index)           AS glycemic_index,
+                COALESCE(mf.custom_nutrients, fv.custom_nutrients)       AS custom_nutrients
+         FROM meal_foods mf
+         JOIN foods f ON mf.food_id = f.id
+         LEFT JOIN food_variants fv ON mf.variant_id = fv.id
+         WHERE mf.meal_id = $1`,
+        [meal.id]
+      );
+      meal.foods = mealFoodsResult.rows;
+    }
+    return meals;
   } finally {
     client.release();
   }
 }
-async function getMealById(mealId: string, userId: string) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getMealById(mealId: any, userId: any) {
   const client = await getClient(userId); // User-specific operation (RLS will handle access)
   try {
     const mealResult = await client.query(
-      `SELECT id, user_id, name, description, is_public, serving_size, serving_unit, total_servings, images, created_at, updated_at
+      `SELECT id, user_id, name, description, is_public, serving_size, serving_unit, total_servings, created_at, updated_at
        FROM meals WHERE id = $1`,
       [mealId]
     );
     const meal = mealResult.rows[0];
     if (meal) {
-      await attachFoodsToMeals(client, [meal]);
+      const mealFoodsResult = await client.query(
+        `SELECT mf.id, mf.food_id, mf.variant_id, mf.quantity, mf.unit,
+                f.name AS food_name, f.brand,
+                COALESCE(mf.serving_size, fv.serving_size)               AS serving_size,
+                COALESCE(mf.serving_unit, fv.serving_unit)               AS serving_unit,
+                COALESCE(mf.calories, fv.calories)                       AS calories,
+                COALESCE(mf.protein, fv.protein)                         AS protein,
+                COALESCE(mf.carbs, fv.carbs)                             AS carbs,
+                COALESCE(mf.fat, fv.fat)                                 AS fat,
+                COALESCE(mf.saturated_fat, fv.saturated_fat)             AS saturated_fat,
+                COALESCE(mf.polyunsaturated_fat, fv.polyunsaturated_fat) AS polyunsaturated_fat,
+                COALESCE(mf.monounsaturated_fat, fv.monounsaturated_fat) AS monounsaturated_fat,
+                COALESCE(mf.trans_fat, fv.trans_fat)                     AS trans_fat,
+                COALESCE(mf.cholesterol, fv.cholesterol)                 AS cholesterol,
+                COALESCE(mf.sodium, fv.sodium)                           AS sodium,
+                COALESCE(mf.potassium, fv.potassium)                     AS potassium,
+                COALESCE(mf.dietary_fiber, fv.dietary_fiber)             AS dietary_fiber,
+                COALESCE(mf.sugars, fv.sugars)                           AS sugars,
+                COALESCE(mf.vitamin_a, fv.vitamin_a)                     AS vitamin_a,
+                COALESCE(mf.vitamin_c, fv.vitamin_c)                     AS vitamin_c,
+                COALESCE(mf.calcium, fv.calcium)                         AS calcium,
+                COALESCE(mf.iron, fv.iron)                               AS iron,
+                COALESCE(mf.glycemic_index, fv.glycemic_index)           AS glycemic_index,
+                COALESCE(mf.custom_nutrients, fv.custom_nutrients)       AS custom_nutrients
+         FROM meal_foods mf
+         JOIN foods f ON mf.food_id = f.id
+         LEFT JOIN food_variants fv ON mf.variant_id = fv.id
+         WHERE mf.meal_id = $1`,
+        [mealId]
+      );
+      meal.foods = mealFoodsResult.rows;
     }
     return meal;
   } finally {
     client.release();
   }
 }
-async function updateMeal(
-  mealId: string,
-  userId: string,
-  updateData: MealInput
-) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function updateMeal(mealId: any, userId: any, updateData: any) {
   const client = await getClient(userId); // User-specific operation
   try {
     await client.query('BEGIN');
@@ -304,10 +296,9 @@ async function updateMeal(
         serving_size = COALESCE($4, serving_size),
         serving_unit = COALESCE($5, serving_unit),
         total_servings = COALESCE($6, total_servings),
-        images = COALESCE($7::jsonb, images),
         updated_at = now()
-       WHERE id = $8
-       RETURNING id, user_id, name, description, is_public, serving_size, serving_unit, total_servings, images, created_at, updated_at`,
+       WHERE id = $7
+       RETURNING id, user_id, name, description, is_public, serving_size, serving_unit, total_servings, created_at, updated_at`,
       [
         updateData.name,
         updateData.description,
@@ -315,10 +306,6 @@ async function updateMeal(
         updateData.serving_size,
         updateData.serving_unit,
         updateData.total_servings,
-        // undefined => key omitted => leave images untouched
-        updateData.images === undefined
-          ? null
-          : JSON.stringify(toImageArray(updateData.images)),
         mealId,
       ]
     );
@@ -328,12 +315,38 @@ async function updateMeal(
       await client.query('DELETE FROM meal_foods WHERE meal_id = $1', [mealId]);
       // Insert new meal_foods
       if (updateData.foods.length > 0) {
-        const mealFoodsValues = updateData.foods.map(
-          buildMealFoodValues(mealId)
-        );
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const mealFoodsValues = updateData.foods.map((food: any) => [
+          mealId,
+          food.food_id,
+          food.variant_id,
+          food.quantity,
+          food.unit,
+          food.serving_size ?? null,
+          food.serving_unit ?? null,
+          food.calories ?? null,
+          food.protein ?? null,
+          food.carbs ?? null,
+          food.fat ?? null,
+          food.saturated_fat ?? null,
+          food.polyunsaturated_fat ?? null,
+          food.monounsaturated_fat ?? null,
+          food.trans_fat ?? null,
+          food.cholesterol ?? null,
+          food.sodium ?? null,
+          food.potassium ?? null,
+          food.dietary_fiber ?? null,
+          food.sugars ?? null,
+          food.vitamin_a ?? null,
+          food.vitamin_c ?? null,
+          food.calcium ?? null,
+          food.iron ?? null,
+          food.glycemic_index ?? null,
+          food.custom_nutrients ?? null,
+        ]);
         const mealFoodsQuery = format(
           `INSERT INTO meal_foods (
-             meal_id, food_id, child_meal_id, item_type, variant_id, quantity, unit,
+             meal_id, food_id, variant_id, quantity, unit,
              serving_size, serving_unit, calories, protein, carbs, fat,
              saturated_fat, polyunsaturated_fat, monounsaturated_fat, trans_fat,
              cholesterol, sodium, potassium, dietary_fiber, sugars,
@@ -355,7 +368,8 @@ async function updateMeal(
     client.release();
   }
 }
-async function deleteMeal(mealId: string, userId: string) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function deleteMeal(mealId: any, userId: any) {
   const client = await getClient(userId); // User-specific operation
   try {
     await client.query('BEGIN');
@@ -375,7 +389,8 @@ async function deleteMeal(mealId: string, userId: string) {
   }
 }
 // --- Meal Plan CRUD Operations ---
-async function createMealPlanEntry(planData: MealPlanInput) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function createMealPlanEntry(planData: any) {
   const client = await getClient(planData.user_id); // User-specific operation
   try {
     let mealTypeId = planData.meal_type_id;
@@ -413,11 +428,8 @@ async function createMealPlanEntry(planData: MealPlanInput) {
     client.release();
   }
 }
-async function getMealPlanEntries(
-  userId: string,
-  startDate: string,
-  endDate: string
-) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getMealPlanEntries(userId: any, startDate: any, endDate: any) {
   const client = await getClient(userId); // User-specific operation
   try {
     const result = await client.query(
@@ -459,11 +471,8 @@ async function getMealPlanEntries(
     client.release();
   }
 }
-async function updateMealPlanEntry(
-  planId: string,
-  userId: string,
-  updateData: MealPlanInput
-) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function updateMealPlanEntry(planId: any, userId: any, updateData: any) {
   const client = await getClient(userId); // User-specific operation
   try {
     let mealTypeId = updateData.meal_type_id;
@@ -513,7 +522,8 @@ async function updateMealPlanEntry(
     client.release();
   }
 }
-async function deleteMealPlanEntry(planId: string, userId: string) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function deleteMealPlanEntry(planId: any, userId: any) {
   const client = await getClient(userId); // User-specific operation
   try {
     const result = await client.query(
@@ -528,7 +538,8 @@ async function deleteMealPlanEntry(planId: string, userId: string) {
     client.release();
   }
 }
-async function getMealPlanEntryById(planId: string, userId: string) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getMealPlanEntryById(planId: any, userId: any) {
   const client = await getClient(userId); // User-specific operation
   try {
     const result = await client.query(
@@ -558,7 +569,8 @@ async function getMealPlanEntryById(planId: string, userId: string) {
   }
 }
 // --- Helper for logging meal plan to food entries ---
-async function createFoodEntryFromMealPlan(entryData: FoodEntryInput) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function createFoodEntryFromMealPlan(entryData: any) {
   const client = await getClient(entryData.user_id); // User-specific operation
   try {
     let mealTypeId = entryData.meal_type_id;
@@ -592,10 +604,8 @@ async function createFoodEntryFromMealPlan(entryData: FoodEntryInput) {
     client.release();
   }
 }
-async function deleteMealPlanEntriesByTemplateId(
-  templateId: string,
-  userId: string
-) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function deleteMealPlanEntriesByTemplateId(templateId: any, userId: any) {
   const client = await getClient(userId); // User-specific operation
   try {
     const result = await client.query(
@@ -614,7 +624,8 @@ async function deleteMealPlanEntriesByTemplateId(
     client.release();
   }
 }
-async function getRecentMeals(userId: string, limit = 3) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getRecentMeals(userId: any, limit = 3) {
   const client = await getClient(userId); // User-specific operation
   try {
     const result = await client.query(
@@ -652,78 +663,80 @@ async function getRecentMeals(userId: string, limit = 3) {
         m.serving_size,
         m.serving_unit,
         m.total_servings,
-        m.images,
         m.created_at,
-        m.updated_at,
-        lu.last_used_date
+        m.updated_at
       FROM latest_usage lu
       JOIN meals m ON m.id = lu.meal_id
       ORDER BY lu.last_used_date DESC, lu.last_used_at DESC, m.name ASC
       LIMIT $2`,
       [userId, limit]
     );
-    // await before returning: attachFoodsToMeals runs more queries on `client`,
-    // and the finally below releases it. Returning the un-awaited promise would
-    // release the client back to the pool before those queries finish.
-    return await attachFoodsToMeals(client, result.rows);
+    return attachFoodsToMeals(client, result.rows);
   } finally {
     client.release();
   }
 }
-async function getTopMeals(userId: string, limit = 3) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getTopMeals(userId: any, limit = null) {
   const client = await getClient(userId); // User-specific operation
   try {
-    // "Top meals" = the meals this user logs most often, ranked by how many
-    // times they have been logged. Usage is counted over the same two sources
-    // as getRecentMeals: meals logged directly (food_entries.meal_id) and meals
-    // logged as a template (food_entry_meals.meal_template_id).
-    //
-    // Join meals first, then GROUP/LIMIT, so the LIMIT is applied to *active*
-    // meals only. A frequently logged meal that was later deleted still leaves
-    // its id in the usage history; limiting before the join would let those
-    // dead ids take top slots and then get dropped by the inner join, returning
-    // fewer than `limit` (or zero) results. (Matches getRecentMeals' ordering.)
-    const result = await client.query(
-      `WITH meal_usage AS (
-        SELECT fe.meal_id AS meal_id
-        FROM food_entries fe
-        WHERE fe.user_id = $1
-          AND fe.meal_id IS NOT NULL
-        UNION ALL
-        SELECT fem.meal_template_id AS meal_id
-        FROM food_entry_meals fem
-        WHERE fem.user_id = $1
-          AND fem.meal_template_id IS NOT NULL
-      )
-      SELECT
-        m.id,
-        m.user_id,
-        m.name,
-        m.description,
-        m.is_public,
-        m.serving_size,
-        m.serving_unit,
-        m.total_servings,
-        m.images,
-        m.created_at,
-        m.updated_at,
-        COUNT(*) AS usage_count
-      FROM meal_usage mu
-      JOIN meals m ON m.id = mu.meal_id
+    // For "top meals", we'll use a simple heuristic: meals with more foods,
+    // or more recently created public meals. This can be refined later.
+    let query = `
+      SELECT m.id, m.user_id, m.name, m.description, m.is_public, m.serving_size, m.serving_unit, m.total_servings, m.created_at, m.updated_at,
+             COUNT(mf.id) AS food_count
+      FROM meals m
+      LEFT JOIN meal_foods mf ON m.id = mf.meal_id
       GROUP BY m.id
-      ORDER BY usage_count DESC, m.name ASC
-      LIMIT $2`,
-      [userId, limit]
-    );
-    // await before the finally releases the client: attachFoodsToMeals runs
-    // more queries on this same client, so returning the promise unawaited would
-    // release the client back to the pool before those queries finish.
-    return await attachFoodsToMeals(client, result.rows);
+      ORDER BY food_count DESC, m.created_at DESC`;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const queryParams: any = [];
+    if (limit !== null) {
+      query += ' LIMIT $2';
+      queryParams.push(limit);
+    }
+    const result = await client.query(query, queryParams);
+    const meals = result.rows;
+    for (const meal of meals) {
+      const mealFoodsResult = await client.query(
+        `SELECT mf.id, mf.food_id, mf.variant_id, mf.quantity, mf.unit,
+                f.name AS food_name, f.brand,
+                COALESCE(mf.serving_size, fv.serving_size)               AS serving_size,
+                COALESCE(mf.serving_unit, fv.serving_unit)               AS serving_unit,
+                COALESCE(mf.calories, fv.calories)                       AS calories,
+                COALESCE(mf.protein, fv.protein)                         AS protein,
+                COALESCE(mf.carbs, fv.carbs)                             AS carbs,
+                COALESCE(mf.fat, fv.fat)                                 AS fat,
+                COALESCE(mf.saturated_fat, fv.saturated_fat)             AS saturated_fat,
+                COALESCE(mf.polyunsaturated_fat, fv.polyunsaturated_fat) AS polyunsaturated_fat,
+                COALESCE(mf.monounsaturated_fat, fv.monounsaturated_fat) AS monounsaturated_fat,
+                COALESCE(mf.trans_fat, fv.trans_fat)                     AS trans_fat,
+                COALESCE(mf.cholesterol, fv.cholesterol)                 AS cholesterol,
+                COALESCE(mf.sodium, fv.sodium)                           AS sodium,
+                COALESCE(mf.potassium, fv.potassium)                     AS potassium,
+                COALESCE(mf.dietary_fiber, fv.dietary_fiber)             AS dietary_fiber,
+                COALESCE(mf.sugars, fv.sugars)                           AS sugars,
+                COALESCE(mf.vitamin_a, fv.vitamin_a)                     AS vitamin_a,
+                COALESCE(mf.vitamin_c, fv.vitamin_c)                     AS vitamin_c,
+                COALESCE(mf.calcium, fv.calcium)                         AS calcium,
+                COALESCE(mf.iron, fv.iron)                               AS iron,
+                COALESCE(mf.glycemic_index, fv.glycemic_index)           AS glycemic_index,
+                COALESCE(mf.custom_nutrients, fv.custom_nutrients)       AS custom_nutrients
+         FROM meal_foods mf
+         JOIN foods f ON mf.food_id = f.id
+         LEFT JOIN food_variants fv ON mf.variant_id = fv.id
+         WHERE mf.meal_id = $1`,
+        [meal.id]
+      );
+      meal.foods = mealFoodsResult.rows;
+    }
+    return meals;
   } finally {
     client.release();
   }
 }
-async function getMealOwnerId(mealId: string, userId: string) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getMealOwnerId(mealId: any, userId: any) {
   const client = await getClient(userId); // User-specific operation (RLS will handle access)
   try {
     const result = await client.query(
@@ -735,7 +748,8 @@ async function getMealOwnerId(mealId: string, userId: string) {
     client.release();
   }
 }
-async function getMealsNeedingReview(userId: string) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getMealsNeedingReview(userId: any) {
   const client = await getClient(userId); // User-specific operation
   try {
     const result = await client.query(
@@ -765,9 +779,12 @@ async function getMealsNeedingReview(userId: string) {
 }
 
 async function updateMealEntriesSnapshot(
-  userId: string,
-  mealId: string,
-  newSnapshotData: FoodEntrySnapshot
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  userId: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  mealId: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  newSnapshotData: any
 ) {
   const client = await getClient(userId); // User-specific operation
   try {
@@ -784,7 +801,8 @@ async function updateMealEntriesSnapshot(
     client.release();
   }
 }
-async function clearUserIgnoredUpdate(userId: string, variantId: string) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function clearUserIgnoredUpdate(userId: any, variantId: any) {
   const client = await getClient(userId); // User-specific operation
   try {
     await client.query(
@@ -796,114 +814,15 @@ async function clearUserIgnoredUpdate(userId: string, variantId: string) {
     client.release();
   }
 }
-// Returns true when `ancestorMealId` transitively contains `descendantMealId`
-// as a linked sub-meal (following meal_foods.child_meal_id edges). Used by the
-// service to reject cycles before inserting a meal-as-ingredient link.
-async function mealContainsMeal(
-  ancestorMealId: string,
-  descendantMealId: string,
-  userId: string
-) {
-  const client = await getClient(userId);
-  try {
-    const result = await client.query(
-      `WITH RECURSIVE descendants AS (
-         SELECT child_meal_id
-         FROM meal_foods
-         WHERE meal_id = $1 AND child_meal_id IS NOT NULL
-         UNION
-         SELECT mf.child_meal_id
-         FROM meal_foods mf
-         JOIN descendants d ON mf.meal_id = d.child_meal_id
-         WHERE mf.child_meal_id IS NOT NULL
-       )
-       SELECT 1 FROM descendants WHERE child_meal_id = $2 LIMIT 1`,
-      [ancestorMealId, descendantMealId]
-    );
-    return result.rowCount > 0;
-  } finally {
-    client.release();
-  }
-}
-// Returns the depth of the linked-sub-meal subtree rooted at `mealId` (0 when
-// it links no other meals). Used to bound nesting depth before adding a link.
-// The depth < 20 guard prevents runaway if a cycle somehow exists.
-async function getMealSubtreeDepth(mealId: string, userId: string) {
-  const client = await getClient(userId);
-  try {
-    const result = await client.query(
-      `WITH RECURSIVE tree AS (
-         SELECT child_meal_id, 1 AS depth
-         FROM meal_foods
-         WHERE meal_id = $1 AND child_meal_id IS NOT NULL
-         UNION ALL
-         SELECT mf.child_meal_id, t.depth + 1
-         FROM meal_foods mf
-         JOIN tree t ON mf.meal_id = t.child_meal_id
-         WHERE mf.child_meal_id IS NOT NULL AND t.depth < 20
-       )
-       SELECT COALESCE(MAX(depth), 0)::int AS depth FROM tree`,
-      [mealId]
-    );
-    return result.rows[0]?.depth ?? 0;
-  } finally {
-    client.release();
-  }
-}
-// Returns the max height of the ancestors chain pointing to `mealId` (0 when
-// it is not referenced by any other sub-meals). Used to bound nesting depth.
-async function getMealAncestryHeight(mealId: string, userId: string) {
-  const client = await getClient(userId);
-  try {
-    const result = await client.query(
-      `WITH RECURSIVE tree AS (
-         SELECT meal_id, 1 AS height
-         FROM meal_foods
-         WHERE child_meal_id = $1
-         UNION ALL
-         SELECT mf.meal_id, t.height + 1
-         FROM meal_foods mf
-         JOIN tree t ON mf.child_meal_id = t.meal_id
-         WHERE t.height < 20
-       )
-       SELECT COALESCE(MAX(height), 0)::int AS height FROM tree`,
-      [mealId]
-    );
-    return result.rows[0]?.height ?? 0;
-  } finally {
-    client.release();
-  }
-}
-// Returns the parent meals that reference `mealId` as a linked sub-meal, so
-// callers can warn about (or block) deleting a meal still used as a component.
-async function getMealComponentUsage(mealId: string, userId: string) {
-  const client = await getClient(userId);
-  try {
-    const result = await client.query(
-      `SELECT DISTINCT m.id, m.name, m.user_id
-       FROM meal_foods mf
-       JOIN meals m ON mf.meal_id = m.id
-       WHERE mf.child_meal_id = $1`,
-      [mealId]
-    );
-    return result.rows;
-  } finally {
-    client.release();
-  }
-}
-async function getMealDeletionImpact(mealId: string, userId: string) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getMealDeletionImpact(mealId: any, userId: any) {
   const client = await getClient(userId); // User-specific operation (RLS will handle access)
   try {
     const result = await client.query(
       `SELECT mpt.user_id
        FROM meal_plan_template_assignments mpta
        JOIN meal_plan_templates mpt ON mpta.template_id = mpt.id
-       WHERE mpta.meal_id = $1
-       UNION ALL
-       SELECT m.user_id
-       FROM meal_foods mf
-       JOIN meals m ON mf.meal_id = m.id
-       WHERE mf.child_meal_id = $1`,
+       WHERE mpta.meal_id = $1`,
       [mealId]
     );
     const usage = {
@@ -922,7 +841,8 @@ async function getMealDeletionImpact(mealId: string, userId: string) {
     client.release();
   }
 }
-async function deleteMealPlanEntriesByMealId(mealId: string, userId: string) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function deleteMealPlanEntriesByMealId(mealId: any, userId: any) {
   const client = await getClient(userId);
   try {
     const result = await client.query(
@@ -938,7 +858,8 @@ async function deleteMealPlanEntriesByMealId(mealId: string, userId: string) {
     client.release();
   }
 }
-async function getMealPlanOwnerId(mealPlanId: string) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getMealPlanOwnerId(mealPlanId: any) {
   const client = await getClient(mealPlanId); // User-specific operation (RLS will handle access)
   try {
     const result = await client.query(
@@ -950,21 +871,22 @@ async function getMealPlanOwnerId(mealPlanId: string) {
     client.release();
   }
 }
-async function getPublicMeals(userId: string) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getPublicMeals(userId: any) {
   const client = await getClient(userId); // User-specific operation for RLS
   try {
     const result =
-      await client.query(`SELECT id, user_id, name, description, is_public, serving_size, serving_unit, total_servings, images, created_at, updated_at
+      await client.query(`SELECT id, user_id, name, description, is_public, serving_size, serving_unit, total_servings, created_at, updated_at
        FROM meals
        WHERE is_public = TRUE
        ORDER BY name ASC`);
-    // Await so attachFoodsToMeals' queries finish before finally releases the client.
-    return await attachFoodsToMeals(client, result.rows);
+    return attachFoodsToMeals(client, result.rows);
   } finally {
     client.release();
   }
 }
-async function getFamilyMeals(userId: string) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getFamilyMeals(userId: any) {
   const client = await getClient(userId); // User-specific operation
   try {
     // This query assumes a mechanism for defining "family" meals,
@@ -972,41 +894,11 @@ async function getFamilyMeals(userId: string) {
     // For now, let's assume it fetches meals shared with the user via family access.
     // This might need to be refined based on actual family sharing implementation.
     const result = await client.query(
-      `SELECT m.id, m.user_id, m.name, m.description, m.is_public, m.serving_size, m.serving_unit, m.total_servings, m.images, m.created_at, m.updated_at
+      `SELECT m.id, m.user_id, m.name, m.description, m.is_public, m.serving_size, m.serving_unit, m.total_servings, m.created_at, m.updated_at
        FROM meals m
        JOIN family_access fa ON m.user_id = fa.owner_user_id
        WHERE fa.family_user_id = $1 AND fa.is_active = TRUE
        ORDER BY m.name ASC`,
-      [userId]
-    );
-    // Await so attachFoodsToMeals' queries finish before finally releases the client.
-    return await attachFoodsToMeals(client, result.rows);
-  } finally {
-    client.release();
-  }
-}
-async function getFavoriteMeals(userId: string) {
-  const client = await getClient(userId); // User-specific operation
-  try {
-    const result = await client.query(
-      `SELECT
-        m.id,
-        m.user_id,
-        m.name,
-        m.description,
-        m.is_public,
-        m.serving_size,
-        m.serving_unit,
-        m.total_servings,
-        m.images,
-        m.created_at,
-        m.updated_at,
-        ff.created_at AS favorited_at
-      FROM food_favorites ff
-      JOIN meals m ON m.id = ff.meal_id
-      WHERE ff.user_id = $1
-        AND ff.meal_id IS NOT NULL
-      ORDER BY ff.created_at DESC`,
       [userId]
     );
     return attachFoodsToMeals(client, result.rows);
@@ -1014,34 +906,7 @@ async function getFavoriteMeals(userId: string) {
     client.release();
   }
 }
-async function addMealFavorite(userId: string, mealId: string) {
-  const client = await getClient(userId); // User-specific operation
-  try {
-    await client.query(
-      `INSERT INTO food_favorites (user_id, meal_id)
-       VALUES ($1, $2)
-       ON CONFLICT (user_id, meal_id) DO NOTHING`,
-      [userId, mealId]
-    );
-  } finally {
-    client.release();
-  }
-}
-async function removeMealFavorite(userId: string, mealId: string) {
-  const client = await getClient(userId); // User-specific operation
-  try {
-    const result = await client.query(
-      `DELETE FROM food_favorites
-       WHERE user_id = $1 AND meal_id = $2`,
-      [userId, mealId]
-    );
-    return (result.rowCount ?? 0) > 0;
-  } finally {
-    client.release();
-  }
-}
 export { createMeal };
-export { getFavoriteMeals, addMealFavorite, removeMealFavorite };
 export { getMeals };
 export { getMealById };
 export { updateMeal };
@@ -1065,10 +930,6 @@ export { deleteMealPlanEntriesByMealId };
 export { getMealsNeedingReview };
 export { updateMealEntriesSnapshot };
 export { clearUserIgnoredUpdate };
-export { mealContainsMeal };
-export { getMealComponentUsage };
-export { getMealSubtreeDepth };
-export { getMealAncestryHeight };
 export default {
   createMeal,
   getMeals,
@@ -1094,11 +955,4 @@ export default {
   getMealsNeedingReview,
   updateMealEntriesSnapshot,
   clearUserIgnoredUpdate,
-  mealContainsMeal,
-  getMealComponentUsage,
-  getMealSubtreeDepth,
-  getMealAncestryHeight,
-  getFavoriteMeals,
-  addMealFavorite,
-  removeMealFavorite,
 };

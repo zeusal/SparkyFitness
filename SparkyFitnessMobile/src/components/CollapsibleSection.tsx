@@ -1,5 +1,4 @@
 import React, { useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
@@ -27,7 +26,6 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
   children,
   itemCount,
 }) => {
-  const { t } = useTranslation();
   const textSecondary = useCSSVariable('--color-text-secondary') as string;
   const rotation = useSharedValue(expanded ? 0 : -90);
 
@@ -53,7 +51,7 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
         activeOpacity={0.7}
         accessibilityRole="button"
         accessibilityState={{ expanded }}
-        accessibilityHint={expanded ? t('common.collapseSection', { defaultValue: 'Collapse this section' }) : t('common.expandSection', { defaultValue: 'Expand this section' })}
+        accessibilityHint={expanded ? 'Collapse this section' : 'Expand this section'}
       >
         <View className="flex-row items-center gap-2">
           <Animated.View style={chevronStyle}>
@@ -62,7 +60,7 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
           <Text className="text-base font-semibold text-text-primary">{title}</Text>
         </View>
         <Text className="text-sm text-text-muted">
-          ({itemCount} {t('common.itemCount', { count: itemCount, defaultValue: "{{count}} items" })})
+          ({itemCount} {itemCount === 1 ? 'item' : 'items'})
         </Text>
       </TouchableOpacity>
       {expanded && <View className="mt-1">{children}</View>}

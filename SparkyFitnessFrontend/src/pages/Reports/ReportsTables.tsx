@@ -4,13 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
   Table,
   TableBody,
   TableCell,
@@ -46,48 +39,6 @@ import {
   getPrecision,
 } from '@workspace/shared';
 
-/** Timed sets carry no reps, so an entry made only of them has no range. */
-const formatRepRange = (sets: DailyExerciseEntry['sets']) => {
-  const reps = sets.map((s) => s.reps).filter((r): r is number => r != null);
-  if (reps.length === 0) return '-';
-  return `${Math.min(...reps)} - ${Math.max(...reps)}`;
-};
-
-/** Duration-only entries carry no weights, so averaging them shows a dash. */
-const formatAvgWeight = (
-  sets: DailyExerciseEntry['sets'],
-  weightUnit: string
-) => {
-  const weighted = sets.filter((s) => s.weight != null);
-  if (weighted.length === 0) return '-';
-  return formatWeight(
-    weighted.reduce((acc, s) => acc + Number(s.weight), 0) / weighted.length,
-    weightUnit
-  );
-};
-
-/** Duration-only entries carry no weights, so tonnage shows a dash. */
-const formatTonnage = (
-  sets: DailyExerciseEntry['sets'],
-  weightUnit: string
-) => {
-  if (!sets.some((s) => s.weight != null)) return '-';
-  return formatWeight(
-    sets.reduce(
-      (acc, s) => acc + Number(s.weight ?? 0) * Number(s.reps ?? 0),
-      0
-    ),
-    weightUnit
-  );
-};
-
-export type TableFilterValue =
-  | 'all'
-  | 'food'
-  | 'exercise'
-  | 'measurements'
-  | `category:${string}`;
-
 interface ReportsTablesProps {
   tabularData: DailyFoodEntry[];
   exerciseEntries: DailyExerciseEntry[];
@@ -95,8 +46,6 @@ interface ReportsTablesProps {
   customCategories: CustomCategoriesResponse[];
   customMeasurementsData: CustomMeasurementsResponse[];
   prData: PersonalRecordsMap | undefined;
-  selectedTable: TableFilterValue;
-  onSelectedTableChange: (value: TableFilterValue) => void;
   onExportFoodDiary: () => void;
   onExportBodyMeasurements: () => void;
   onExportCustomMeasurements: (category: CustomCategoriesResponse) => void;
@@ -111,8 +60,6 @@ const ReportsTables = ({
   customCategories,
   customMeasurementsData,
   prData,
-  selectedTable,
-  onSelectedTableChange,
   onExportFoodDiary,
   onExportBodyMeasurements,
   onExportCustomMeasurements,
@@ -387,480 +334,435 @@ const ReportsTables = ({
 
   return (
     <div className="space-y-6">
-      {/* Table type filter */}
-      <div className="flex items-center gap-2">
-        <Select
-          value={selectedTable}
-          onValueChange={(value) =>
-            onSelectedTableChange(value as TableFilterValue)
-          }
-        >
-          <SelectTrigger
-            className="w-full max-w-xs"
-            aria-label={t('reportsTables.showTable', 'Show table')}
-          >
-            <SelectValue
-              placeholder={t('reportsTables.showTable', 'Show table')}
-            />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">
-              {t('reportsTables.allTables', 'All tables')}
-            </SelectItem>
-            <SelectItem value="food">
+      {/* Food Diary Table with Export Button */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>
               {t('reportsTables.foodDiaryTable', 'Food Diary Table')}
-            </SelectItem>
-            <SelectItem value="exercise">
+            </CardTitle>
+            <Button onClick={onExportFoodDiary} variant="outline" size="sm">
+              <Download className="w-4 h-4" />
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t('reportsTables.date', 'Date')}</TableHead>
+                  <TableHead>{t('reportsTables.meal', 'Meal')}</TableHead>
+                  <TableHead className="min-w-[150px] sm:min-w-[200px] md:min-w-[250px]">
+                    {t('reportsTables.food', 'Food')}
+                  </TableHead>
+                  <TableHead>
+                    {t('reportsTables.quantity', 'Quantity')}
+                  </TableHead>
+                  {visibleNutrients.map((nutrient) => {
+                    const metadata = getNutrientMetadata(
+                      nutrient,
+                      customNutrients
+                    );
+                    const isNetCarbs = nutrient === 'carbs' && showNetCarbs;
+                    const label = isNetCarbs
+                      ? t('nutrition.netCarbs', 'Net Carbs')
+                      : t(metadata.label, metadata.defaultLabel);
+                    const unit =
+                      nutrient === 'calories'
+                        ? getEnergyUnitString(energyUnit)
+                        : metadata.unit;
+
+                    return (
+                      <TableHead key={nutrient}>
+                        {label}
+                        {unit ? ` (${unit})` : ''}
+                      </TableHead>
+                    );
+                  })}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {foodDataWithTotals.map((entry, index) => {
+                  debug(
+                    loggingLevel,
+                    `ReportsTables: Processing entry for food: ${entry.food_name}, custom_nutrients:`,
+                    entry.custom_nutrients
+                  );
+                  return (
+                    <TableRow
+                      key={index}
+                      className={
+                        entry.isTotal
+                          ? 'bg-gray-50 dark:bg-gray-900 font-semibold border-t-2'
+                          : ''
+                      }
+                    >
+                      <TableCell>
+                        {formatDateInUserTimezone(
+                          parseISO(entry.entry_date),
+                          dateFormat
+                        )}
+                      </TableCell>
+                      <TableCell className="capitalize">
+                        {entry.meal_type}
+                      </TableCell>
+                      <TableCell className="min-w-[150px] sm:min-w-[200px] md:min-w-[250px]">
+                        {!entry.isTotal && (
+                          <div>
+                            <div className="font-medium">
+                              {(entry.food_name as string) ||
+                                (entry.foods?.name as string)}
+                            </div>
+                            {(entry.brand_name || entry.foods?.brand) && (
+                              <div className="text-sm text-gray-500">
+                                {(entry.brand_name as string) ||
+                                  (entry.foods?.brand as string)}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {entry.isTotal ? '' : `${entry.quantity} ${entry.unit}`}
+                      </TableCell>
+                      {visibleNutrients.map((nutrient) => {
+                        // Special-case glycemic_index because it's a categorical value (string), not numeric
+                        if (nutrient === 'glycemic_index') {
+                          const giValue = entry.isTotal
+                            ? ''
+                            : (entry.glycemic_index as string) ||
+                              (entry.foods?.glycemic_index as string) ||
+                              'None';
+                          return (
+                            <TableCell key={nutrient}>{giValue}</TableCell>
+                          );
+                        }
+
+                        // Directly use the pre-calculated nutrient value from the entry,
+                        // substituting net carbs when the user preference is enabled.
+                        const rawValue =
+                          (entry[nutrient as keyof DailyFoodEntry] as number) ||
+                          0;
+                        const value =
+                          nutrient === 'carbs' && showNetCarbs
+                            ? getNetCarbsValue(rawValue, entry.dietary_fiber)
+                            : rawValue;
+
+                        const displayValue =
+                          nutrient === 'calories'
+                            ? Math.round(
+                                convertEnergy(value, 'kcal', energyUnit)
+                              ).toString()
+                            : formatNutrientValue(
+                                nutrient,
+                                value,
+                                customNutrients
+                              );
+
+                        return (
+                          <TableCell key={nutrient}>
+                            {entry.isTotal && Number(value) === 0
+                              ? ''
+                              : displayValue}
+                          </TableCell>
+                        );
+                      })}
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Exercise Entries Table with Export Button */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>
               {t(
                 'reportsTables.exerciseEntriesTable',
                 'Exercise Entries Table'
               )}
-            </SelectItem>
-            <SelectItem value="measurements">
-              {t(
-                'reportsTables.bodyMeasurementsTable',
-                'Body Measurements Table'
+            </CardTitle>
+            <Button
+              onClick={onExportExerciseEntries}
+              variant="outline"
+              size="sm"
+            >
+              <Download className="w-4 h-4" />
+            </Button>
+          </div>
+          <div className="flex items-center space-x-2 mt-4">
+            <Input
+              placeholder={t(
+                'reportsTables.filterByExerciseName',
+                'Filter by exercise name...'
               )}
-            </SelectItem>
-            {customCategories.map((category) => (
-              <SelectItem key={category.id} value={`category:${category.id}`}>
-                {category.display_name || category.name} (
-                {category.measurement_type})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+              value={exerciseNameFilter}
+              onChange={(e) => setExerciseNameFilter(e.target.value)}
+              className="w-full sm:max-w-sm"
+            />
+            <Input
+              placeholder={t(
+                'reportsTables.filterBySetType',
+                'Filter by set type...'
+              )}
+              value={setTypeFilter}
+              onChange={(e) => setSetTypeFilter(e.target.value)}
+              className="w-full sm:max-w-sm"
+            />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead onClick={() => requestSort('entry_date')}>
+                    {t('reportsTables.date', 'Date')}
+                  </TableHead>
+                  <TableHead onClick={() => requestSort('exercise_name')}>
+                    {t('reportsTables.exercise', 'Exercise')}
+                  </TableHead>
+                  <TableHead onClick={() => requestSort('set_number')}>
+                    {t('reportsTables.set', 'Set')}
+                  </TableHead>
+                  <TableHead onClick={() => requestSort('set_type')}>
+                    {t('reportsTables.type', 'Type')}
+                  </TableHead>
+                  <TableHead onClick={() => requestSort('reps')}>
+                    {t('reportsTables.reps', 'Reps')}
+                  </TableHead>
+                  <TableHead onClick={() => requestSort('weight')}>
+                    {t('reportsTables.weight', 'Weight')} ({weightUnit})
+                  </TableHead>
+                  <TableHead>{t('reportsTables.tonnage', 'Tonnage')}</TableHead>
+                  <TableHead onClick={() => requestSort('duration')}>
+                    {t('reportsTables.durationMin', 'Duration (min)')}
+                  </TableHead>
+                  <TableHead onClick={() => requestSort('rest_time')}>
+                    {t('reportsTables.restS', 'Rest (s)')}
+                  </TableHead>
+                  <TableHead>{t('reportsTables.notes', 'Notes')}</TableHead>
+                  <TableHead onClick={() => requestSort('calories_burned')}>
+                    {t(
+                      'reportsTables.caloriesBurned',
+                      `Calories Burned (${getEnergyUnitString(energyUnit)})`
+                    )}
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredExerciseEntries.map((entry) => {
+                  const isPr =
+                    prData &&
+                    prData[entry.exercises.id] &&
+                    prData[entry.exercises.id]?.date === entry.entry_date;
+                  const isExpanded = expandedRows[entry.id];
 
-      {/* Food Diary Table with Export Button */}
-      {(selectedTable === 'all' || selectedTable === 'food') && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>
-                {t('reportsTables.foodDiaryTable', 'Food Diary Table')}
-              </CardTitle>
-              <Button onClick={onExportFoodDiary} variant="outline" size="sm">
-                <Download className="w-4 h-4" />
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t('reportsTables.date', 'Date')}</TableHead>
-                    <TableHead>{t('reportsTables.meal', 'Meal')}</TableHead>
-                    <TableHead className="min-w-[250px]">
-                      {t('reportsTables.food', 'Food')}
-                    </TableHead>
-                    <TableHead>
-                      {t('reportsTables.quantity', 'Quantity')}
-                    </TableHead>
-                    {visibleNutrients.map((nutrient) => {
-                      const metadata = getNutrientMetadata(
-                        nutrient,
-                        customNutrients
-                      );
-                      const isNetCarbs = nutrient === 'carbs' && showNetCarbs;
-                      const label = isNetCarbs
-                        ? t('nutrition.netCarbs', 'Net Carbs')
-                        : t(metadata.label, metadata.defaultLabel);
-                      const unit =
-                        nutrient === 'calories'
-                          ? getEnergyUnitString(energyUnit)
-                          : metadata.unit;
-
-                      return (
-                        <TableHead key={nutrient}>
-                          {label}
-                          {unit ? ` (${unit})` : ''}
-                        </TableHead>
-                      );
-                    })}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {foodDataWithTotals.map((entry, index) => {
-                    debug(
-                      loggingLevel,
-                      `ReportsTables: Processing entry for food: ${entry.food_name}, custom_nutrients:`,
-                      entry.custom_nutrients
-                    );
-                    return (
+                  return (
+                    <React.Fragment key={entry.id}>
                       <TableRow
-                        key={index}
                         className={
-                          entry.isTotal
-                            ? 'bg-gray-50 dark:bg-gray-900 font-semibold border-t-2'
-                            : ''
+                          isPr ? 'bg-yellow-100 dark:bg-yellow-900' : ''
                         }
                       >
                         <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              setExpandedRows((prev) => ({
+                                ...prev,
+                                [entry.id]: !prev[entry.id],
+                              }))
+                            }
+                          >
+                            {isExpanded ? '▼' : '▶'}
+                          </Button>
                           {formatDateInUserTimezone(
                             parseISO(entry.entry_date),
                             dateFormat
                           )}
                         </TableCell>
-                        <TableCell className="capitalize">
-                          {entry.meal_type}
+                        <TableCell>{entry.exercises.name}</TableCell>
+                        <TableCell>{entry.sets.length}</TableCell>
+                        <TableCell></TableCell>
+                        <TableCell>
+                          {Math.min(...entry.sets.map((s) => s.reps))} -{' '}
+                          {Math.max(...entry.sets.map((s) => s.reps))}
                         </TableCell>
-                        <TableCell className="min-w-[250px]">
-                          {!entry.isTotal && (
-                            <div>
-                              <div className="font-medium">
-                                {(entry.food_name as string) ||
-                                  (entry.foods?.name as string)}
-                              </div>
-                              {(entry.brand_name || entry.foods?.brand) && (
-                                <div className="text-sm text-gray-500">
-                                  {(entry.brand_name as string) ||
-                                    (entry.foods?.brand as string)}
-                                </div>
-                              )}
-                            </div>
+                        <TableCell>
+                          {entry.sets.length > 0
+                            ? formatWeight(
+                                entry.sets.reduce(
+                                  (acc, s) => acc + Number(s.weight),
+                                  0
+                                ) / entry.sets.length,
+                                weightUnit
+                              )
+                            : formatWeight(0, weightUnit)}
+                        </TableCell>
+                        <TableCell>
+                          {entry.sets.length > 0
+                            ? formatWeight(
+                                entry.sets.reduce(
+                                  (acc, s) =>
+                                    acc + Number(s.weight) * Number(s.reps),
+                                  0
+                                ),
+                                weightUnit
+                              )
+                            : formatWeight(0, weightUnit)}
+                        </TableCell>
+                        <TableCell>
+                          {entry.sets.reduce(
+                            (acc, s) => acc + (s.duration || 0),
+                            0
                           )}
                         </TableCell>
                         <TableCell>
-                          {entry.isTotal
-                            ? ''
-                            : `${entry.quantity} ${entry.unit}`}
+                          {entry.sets.reduce(
+                            (acc, s) => acc + (s.rest_time || 0),
+                            0
+                          )}
                         </TableCell>
-                        {visibleNutrients.map((nutrient) => {
-                          // Special-case glycemic_index because it's a categorical value (string), not numeric
-                          if (nutrient === 'glycemic_index') {
-                            const giValue = entry.isTotal
-                              ? ''
-                              : (entry.glycemic_index as string) ||
-                                (entry.foods?.glycemic_index as string) ||
-                                'None';
-                            return (
-                              <TableCell key={nutrient}>{giValue}</TableCell>
-                            );
-                          }
-
-                          // Directly use the pre-calculated nutrient value from the entry,
-                          // substituting net carbs when the user preference is enabled.
-                          const rawValue =
-                            (entry[
-                              nutrient as keyof DailyFoodEntry
-                            ] as number) || 0;
-                          const value =
-                            nutrient === 'carbs' && showNetCarbs
-                              ? getNetCarbsValue(rawValue, entry.dietary_fiber)
-                              : rawValue;
-
-                          const displayValue =
-                            nutrient === 'calories'
-                              ? Math.round(
-                                  convertEnergy(value, 'kcal', energyUnit)
-                                ).toString()
-                              : formatNutrientValue(
-                                  nutrient,
-                                  value,
-                                  customNutrients
-                                );
-
-                          return (
-                            <TableCell key={nutrient}>
-                              {entry.isTotal && Number(value) === 0
-                                ? ''
-                                : displayValue}
-                            </TableCell>
-                          );
-                        })}
+                        <TableCell>{entry.notes || ''}</TableCell>
+                        <TableCell>
+                          {Math.round(
+                            convertEnergy(
+                              entry.calories_burned,
+                              'kcal',
+                              energyUnit
+                            )
+                          )}
+                        </TableCell>
                       </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Exercise Entries Table with Export Button */}
-      {(selectedTable === 'all' || selectedTable === 'exercise') && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>
-                {t(
-                  'reportsTables.exerciseEntriesTable',
-                  'Exercise Entries Table'
-                )}
-              </CardTitle>
-              <Button
-                onClick={onExportExerciseEntries}
-                variant="outline"
-                size="sm"
-              >
-                <Download className="w-4 h-4" />
-              </Button>
-            </div>
-            <div className="flex items-center space-x-2 mt-4">
-              <Input
-                placeholder={t(
-                  'reportsTables.filterByExerciseName',
-                  'Filter by exercise name...'
-                )}
-                value={exerciseNameFilter}
-                onChange={(e) => setExerciseNameFilter(e.target.value)}
-                className="max-w-sm"
-              />
-              <Input
-                placeholder={t(
-                  'reportsTables.filterBySetType',
-                  'Filter by set type...'
-                )}
-                value={setTypeFilter}
-                onChange={(e) => setSetTypeFilter(e.target.value)}
-                className="max-w-sm"
-              />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead onClick={() => requestSort('entry_date')}>
-                      {t('reportsTables.date', 'Date')}
-                    </TableHead>
-                    <TableHead onClick={() => requestSort('exercise_name')}>
-                      {t('reportsTables.exercise', 'Exercise')}
-                    </TableHead>
-                    <TableHead onClick={() => requestSort('set_number')}>
-                      {t('reportsTables.set', 'Set')}
-                    </TableHead>
-                    <TableHead onClick={() => requestSort('set_type')}>
-                      {t('reportsTables.type', 'Type')}
-                    </TableHead>
-                    <TableHead onClick={() => requestSort('reps')}>
-                      {t('reportsTables.reps', 'Reps')}
-                    </TableHead>
-                    <TableHead onClick={() => requestSort('weight')}>
-                      {t('reportsTables.weight', 'Weight')} ({weightUnit})
-                    </TableHead>
-                    <TableHead>
-                      {t('reportsTables.tonnage', 'Tonnage')}
-                    </TableHead>
-                    <TableHead onClick={() => requestSort('duration')}>
-                      {t('reportsTables.durationSec', 'Duration (s)')}
-                    </TableHead>
-                    <TableHead onClick={() => requestSort('rest_time')}>
-                      {t('reportsTables.restS', 'Rest (s)')}
-                    </TableHead>
-                    <TableHead>{t('reportsTables.notes', 'Notes')}</TableHead>
-                    <TableHead onClick={() => requestSort('calories_burned')}>
-                      {t(
-                        'reportsTables.caloriesBurned',
-                        `Calories Burned (${getEnergyUnitString(energyUnit)})`
-                      )}
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredExerciseEntries.map((entry) => {
-                    const isPr =
-                      prData &&
-                      prData[entry.exercises.id] &&
-                      prData[entry.exercises.id]?.date === entry.entry_date;
-                    const isExpanded = expandedRows[entry.id];
-
-                    return (
-                      <React.Fragment key={entry.id}>
-                        <TableRow
-                          className={
-                            isPr ? 'bg-yellow-100 dark:bg-yellow-900' : ''
-                          }
-                        >
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                setExpandedRows((prev) => ({
-                                  ...prev,
-                                  [entry.id]: !prev[entry.id],
-                                }))
-                              }
-                            >
-                              {isExpanded ? '▼' : '▶'}
-                            </Button>
-                            {formatDateInUserTimezone(
-                              parseISO(entry.entry_date),
-                              dateFormat
-                            )}
-                          </TableCell>
-                          <TableCell>{entry.exercises.name}</TableCell>
-                          <TableCell>{entry.sets.length}</TableCell>
-                          <TableCell></TableCell>
-                          <TableCell>{formatRepRange(entry.sets)}</TableCell>
-                          <TableCell>
-                            {formatAvgWeight(entry.sets, weightUnit)}
-                          </TableCell>
-                          <TableCell>
-                            {formatTonnage(entry.sets, weightUnit)}
-                          </TableCell>
-                          <TableCell>
-                            {entry.sets.reduce(
-                              (acc, s) => acc + (s.duration || 0),
-                              0
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {entry.sets.reduce(
-                              (acc, s) => acc + (s.rest_time || 0),
-                              0
-                            )}
-                          </TableCell>
-                          <TableCell>{entry.notes || ''}</TableCell>
-                          <TableCell>
-                            {Math.round(
-                              convertEnergy(
-                                entry.calories_burned,
-                                'kcal',
-                                energyUnit
-                              )
-                            )}
-                          </TableCell>
-                        </TableRow>
-                        {isExpanded &&
-                          entry.sets.map((set, setIndex) => (
-                            <TableRow
-                              key={`${entry.id}-set-${set.id || setIndex}`}
-                              className="bg-gray-50 dark:bg-gray-800"
-                            >
-                              <TableCell></TableCell>
-                              <TableCell></TableCell>
-                              <TableCell>{set.set_number}</TableCell>
-                              <TableCell>{set.set_type}</TableCell>
-                              <TableCell>{set.reps ?? '-'}</TableCell>
-                              <TableCell>
-                                {set.weight != null
-                                  ? formatWeight(set.weight, weightUnit)
-                                  : '-'}
-                              </TableCell>
-                              <TableCell>
-                                {set.weight != null
-                                  ? formatWeight(
-                                      set.weight * Number(set.reps ?? 0),
-                                      weightUnit
-                                    )
-                                  : '-'}
-                              </TableCell>
-                              <TableCell>{set.duration || '-'}</TableCell>
-                              <TableCell>{set.rest_time || '-'}</TableCell>
-                              <TableCell colSpan={2}>
-                                {set.notes || '-'}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                      </React.Fragment>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+                      {isExpanded &&
+                        entry.sets.map((set, setIndex) => (
+                          <TableRow
+                            key={`${entry.id}-set-${set.id || setIndex}`}
+                            className="bg-gray-50 dark:bg-gray-800"
+                          >
+                            <TableCell></TableCell>
+                            <TableCell></TableCell>
+                            <TableCell>{set.set_number}</TableCell>
+                            <TableCell>{set.set_type}</TableCell>
+                            <TableCell>{set.reps}</TableCell>
+                            <TableCell>
+                              {formatWeight(set.weight, weightUnit)}
+                            </TableCell>
+                            <TableCell>
+                              {formatWeight(
+                                Number(set.weight) * Number(set.reps),
+                                weightUnit
+                              )}
+                            </TableCell>
+                            <TableCell>{set.duration || '-'}</TableCell>
+                            <TableCell>{set.rest_time || '-'}</TableCell>
+                            <TableCell colSpan={2}>
+                              {set.notes || '-'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                    </React.Fragment>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Body Measurements Table with Export Button */}
-      {(selectedTable === 'all' || selectedTable === 'measurements') && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>
-                {t(
-                  'reportsTables.bodyMeasurementsTable',
-                  'Body Measurements Table'
-                )}
-              </CardTitle>
-              <Button
-                onClick={onExportBodyMeasurements}
-                variant="outline"
-                size="sm"
-              >
-                <Download className="w-4 h-4" />
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t('reportsTables.date', 'Date')}</TableHead>
-                    <TableHead>
-                      {t('reportsTables.weight', 'Weight')} ({weightUnit})
-                    </TableHead>
-                    <TableHead>
-                      {t('reportsTables.neck', 'Neck')} ({measurementUnit})
-                    </TableHead>
-                    <TableHead>
-                      {t('reportsTables.waist', 'Waist')} ({measurementUnit})
-                    </TableHead>
-                    <TableHead>
-                      {t('reportsTables.hips', 'Hips')} ({measurementUnit})
-                    </TableHead>
-                    <TableHead>{t('reportsTables.steps', 'Steps')}</TableHead>
-                    <TableHead>
-                      {t('reportsTables.height', 'Height')} ({measurementUnit})
-                    </TableHead>
-                    <TableHead>
-                      {t('reportsTables.bodyFatPercentage', 'Body Fat %')}
-                    </TableHead>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>
+              {t(
+                'reportsTables.bodyMeasurementsTable',
+                'Body Measurements Table'
+              )}
+            </CardTitle>
+            <Button
+              onClick={onExportBodyMeasurements}
+              variant="outline"
+              size="sm"
+            >
+              <Download className="w-4 h-4" />
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t('reportsTables.date', 'Date')}</TableHead>
+                  <TableHead>
+                    {t('reportsTables.weight', 'Weight')} ({weightUnit})
+                  </TableHead>
+                  <TableHead>
+                    {t('reportsTables.neck', 'Neck')} ({measurementUnit})
+                  </TableHead>
+                  <TableHead>
+                    {t('reportsTables.waist', 'Waist')} ({measurementUnit})
+                  </TableHead>
+                  <TableHead>
+                    {t('reportsTables.hips', 'Hips')} ({measurementUnit})
+                  </TableHead>
+                  <TableHead>{t('reportsTables.steps', 'Steps')}</TableHead>
+                  <TableHead>
+                    {t('reportsTables.height', 'Height')} ({measurementUnit})
+                  </TableHead>
+                  <TableHead>
+                    {t('reportsTables.bodyFatPercentage', 'Body Fat %')}
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sortedMeasurementData.map((measurement, index) => (
+                  <TableRow key={index}>
+                    <TableCell>
+                      {formatDateInUserTimezone(
+                        parseISO(measurement.entry_date),
+                        dateFormat
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {formatWeight(measurement.weight, weightUnit)}
+                    </TableCell>
+                    <TableCell>
+                      {formatMeasurement(measurement.neck, measurementUnit)}
+                    </TableCell>
+                    <TableCell>
+                      {formatMeasurement(measurement.waist, measurementUnit)}
+                    </TableCell>
+                    <TableCell>
+                      {formatMeasurement(measurement.hips, measurementUnit)}
+                    </TableCell>
+                    <TableCell>{measurement.steps || '-'}</TableCell>
+                    <TableCell>
+                      {formatHeight(measurement.height, measurementUnit)}
+                    </TableCell>
+                    <TableCell>
+                      {measurement.body_fat_percentage
+                        ? measurement.body_fat_percentage.toFixed(1)
+                        : '-'}
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sortedMeasurementData.map((measurement, index) => (
-                    <TableRow key={index}>
-                      <TableCell>
-                        {formatDateInUserTimezone(
-                          parseISO(measurement.entry_date),
-                          dateFormat
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {formatWeight(measurement.weight, weightUnit)}
-                      </TableCell>
-                      <TableCell>
-                        {formatMeasurement(measurement.neck, measurementUnit)}
-                      </TableCell>
-                      <TableCell>
-                        {formatMeasurement(measurement.waist, measurementUnit)}
-                      </TableCell>
-                      <TableCell>
-                        {formatMeasurement(measurement.hips, measurementUnit)}
-                      </TableCell>
-                      <TableCell>{measurement.steps || '-'}</TableCell>
-                      <TableCell>
-                        {formatHeight(measurement.height, measurementUnit)}
-                      </TableCell>
-                      <TableCell>
-                        {measurement.body_fat_percentage
-                          ? measurement.body_fat_percentage.toFixed(1)
-                          : '-'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Custom Measurements Tables */}
       {customCategories.map((category: CustomCategoriesResponse) => {
-        if (
-          selectedTable !== 'all' &&
-          selectedTable !== `category:${category.id}`
-        )
-          return null;
         const data = customMeasurementsData.filter(
           (m) => m.category_id === category.id
         );

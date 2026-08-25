@@ -56,7 +56,6 @@ import {
 import measurementRepository from '../models/measurementRepository.js';
 import sleepRepository from '../models/sleepRepository.js';
 import exerciseRepository from '../models/exercise.js';
-import exerciseEntryRepository from '../models/exerciseEntry.js';
 
 const UID = 'user-1';
 const CID = 'user-1';
@@ -240,9 +239,10 @@ describe('processGoogleActiveZoneMinutes', () => {
 
 // ─── Sleep anchoring ─────────────────────────────────────────────────────────
 
-// A sleep session is anchored to the day it ends (the wake-up day), matching
-// how Google Health / Fitbit file it. A session that starts before midnight and
-// one that starts after midnight both belong to the morning they end on.
+// The API stores civilStartTime as local time treated as-if-UTC, so
+// getUTCHours() of the ISO string gives the local start hour. Sessions
+// starting before noon local time are attributed to the previous day
+// (they are the tail of the previous night's sleep, not a new day's nap).
 
 function sleepPoint(startIso: string, endIso: string, minutesAsleep = 420) {
   return {
@@ -259,8 +259,8 @@ function sleepPoint(startIso: string, endIso: string, minutesAsleep = 420) {
 }
 
 describe('processGoogleSleep — date anchoring', () => {
-  it('anchors an overnight session to the day it ends', async () => {
-    // Asleep 23:30 May 1 → awake 07:00 May 2 — files under the wake day, May 2.
+  it('attributes a late-evening session (hour >= 12) to its own date', async () => {
+    // 23:30 on May 1 — should land on 2026-05-01
     await processGoogleSleep(
       UID,
       CID,
@@ -269,13 +269,12 @@ describe('processGoogleSleep — date anchoring', () => {
     expect(sleepRepository.upsertSleepEntry).toHaveBeenCalledWith(
       UID,
       CID,
-      expect.objectContaining({ entry_date: '2026-05-02' })
+      expect.objectContaining({ entry_date: '2026-05-01' })
     );
   });
 
-  it('anchors a past-midnight session to its own wake day, not the night before', async () => {
-    // Asleep 00:30 → awake 08:00, both May 2. This is the case that regressed:
-    // it must land on May 2 (wake day), not May 1.
+  it('attributes a past-midnight session (hour < 12) to the previous date', async () => {
+    // 00:30 on May 2 — civil-time interpretation means it is still May 1 night
     await processGoogleSleep(
       UID,
       CID,
@@ -284,14 +283,14 @@ describe('processGoogleSleep — date anchoring', () => {
     expect(sleepRepository.upsertSleepEntry).toHaveBeenCalledWith(
       UID,
       CID,
-      expect.objectContaining({ entry_date: '2026-05-02' })
+      expect.objectContaining({ entry_date: '2026-05-01' })
     );
   });
 
   it('keeps the longer session when two sessions share the same anchor date', async () => {
     const shortNap = sleepPoint(
-      '2026-05-02T00:00:00Z',
-      '2026-05-02T00:45:00Z',
+      '2026-05-01T23:00:00Z',
+      '2026-05-01T23:45:00Z',
       40
     );
     const mainSleep = sleepPoint(
@@ -308,9 +307,9 @@ describe('processGoogleSleep — date anchoring', () => {
     );
   });
 
-  it('anchors to the local wake day in a negative offset timezone', async () => {
-    // Awake 2026-05-02T14:00Z is 10:00 AM on May 2 in New York, so the session
-    // files under May 2 in that zone.
+  it('attributes a past-midnight session (hour < 12 local) to the previous date in a negative offset timezone', async () => {
+    // 2:00 AM local time on May 2 in New York is 2026-05-02T06:00:00Z.
+    // It should be anchored to May 1.
     await processGoogleSleep(
       UID,
       CID,
@@ -320,7 +319,7 @@ describe('processGoogleSleep — date anchoring', () => {
     expect(sleepRepository.upsertSleepEntry).toHaveBeenCalledWith(
       UID,
       CID,
-      expect.objectContaining({ entry_date: '2026-05-02' })
+      expect.objectContaining({ entry_date: '2026-05-01' })
     );
   });
 
@@ -338,30 +337,6 @@ describe('processGoogleSleep — date anchoring', () => {
 });
 
 // ─── Exercise — null guard after createExercise ───────────────────────────────
-
-describe('processGoogleActivities — duration units', () => {
-  it('stores entry duration in minutes and set duration in integer seconds (issue #1903)', async () => {
-    const point = {
-      startTime: '2026-05-01T10:00:00Z',
-      exercise: {
-        displayName: 'Running',
-        activeDuration: '3600s',
-        metricsSummary: {},
-      },
-    };
-    await processGoogleActivities(UID, CID, dataPoints(point));
-
-    expect(exerciseEntryRepository.createExerciseEntry).toHaveBeenCalledWith(
-      UID,
-      expect.objectContaining({
-        duration_minutes: 60,
-        sets: [expect.objectContaining({ duration: 3600 })],
-      }),
-      CID,
-      'Google Health'
-    );
-  });
-});
 
 describe('processGoogleActivities — exercise record null guard', () => {
   it('skips the entry when createExercise returns null', async () => {
@@ -383,57 +358,5 @@ describe('processGoogleActivities — exercise record null guard', () => {
       'error',
       expect.stringContaining('Failed to find or create')
     );
-  });
-});
-
-// ─── Sleep recording-zone stamp (issue #2033) ───────────────────────────────
-
-describe('processGoogleSleep — recording-zone stamp', () => {
-  it('stamps record_utc_offset_minutes for a string startTime with an explicit offset', async () => {
-    await processGoogleSleep(
-      UID,
-      CID,
-      dataPoints(
-        sleepPoint('2026-05-01T23:30:00-04:00', '2026-05-02T07:00:00-04:00')
-      )
-    );
-    const entry = vi.mocked(sleepRepository.upsertSleepEntry).mock.calls[0][2];
-    expect(entry.record_utc_offset_minutes).toBe(-240);
-  });
-
-  it('stamps nothing for a Z-suffixed string (no zone claim)', async () => {
-    await processGoogleSleep(
-      UID,
-      CID,
-      dataPoints(sleepPoint('2026-05-01T23:30:00Z', '2026-05-02T07:00:00Z'))
-    );
-    const entry = vi.mocked(sleepRepository.upsertSleepEntry).mock.calls[0][2];
-    expect(entry.record_utc_offset_minutes).toBeUndefined();
-  });
-
-  it('stamps nothing for the {date,time} object form', async () => {
-    const point = {
-      sleep: {
-        summary: {
-          minutesAsleep: '420',
-          minutesInSleepPeriod: '450',
-          minutesToFallAsleep: '10',
-        },
-        interval: {
-          startTime: {
-            date: { year: 2026, month: 5, day: 1 },
-            time: { hours: 23, minutes: 30 },
-          },
-          endTime: {
-            date: { year: 2026, month: 5, day: 2 },
-            time: { hours: 7, minutes: 0 },
-          },
-        },
-        stages: [],
-      },
-    };
-    await processGoogleSleep(UID, CID, dataPoints(point));
-    const entry = vi.mocked(sleepRepository.upsertSleepEntry).mock.calls[0][2];
-    expect(entry.record_utc_offset_minutes).toBeUndefined();
   });
 });

@@ -1,6 +1,5 @@
 import {
   linkFitbitAccount,
-  linkOuraAccount,
   linkGoogleHealthAccount,
   linkPolarFlowAccount,
   linkWithingsAccount,
@@ -21,9 +20,6 @@ import {
   handleConnectFitbit,
   handleDisconnectFitbit,
   handleManualSyncFitbit,
-  handleConnectOura,
-  handleDisconnectOura,
-  handleManualSyncOura,
   handleConnectPolar,
   handleDisconnectPolar,
   handleManualSyncPolar,
@@ -55,26 +51,6 @@ export const useLinkFitbitMutation = () => {
       successMessage: t(
         'integrations.fitbitLinkSuccess',
         'Fitbit account successfully linked!'
-      ),
-    },
-  });
-};
-
-export const useLinkOuraMutation = () => {
-  const { t } = useTranslation();
-  const invalidate = useDiaryInvalidation();
-
-  return useMutation({
-    mutationFn: linkOuraAccount,
-    onSuccess: invalidate,
-    meta: {
-      errorMessage: t(
-        'integrations.ouraLinkError',
-        'Failed to link Oura account.'
-      ),
-      successMessage: t(
-        'integrations.ouraLinkSuccess',
-        'Oura account successfully linked!'
       ),
     },
   });
@@ -279,30 +255,6 @@ export const useManualSyncFitbitMutation = () => {
   return useMutation({
     mutationFn: ({ startDate, endDate }: SyncVariables) =>
       handleManualSyncFitbit(startDate, endDate),
-    onSuccess: () => {
-      invalidateSyncData();
-    },
-  });
-};
-
-export const useConnectOuraMutation = () => {
-  return useMutation({
-    mutationFn: handleConnectOura,
-  });
-};
-
-export const useDisconnectOuraMutation = () => {
-  return useMutation({
-    mutationFn: handleDisconnectOura,
-  });
-};
-
-export const useManualSyncOuraMutation = () => {
-  const invalidateSyncData = useDiaryInvalidation();
-
-  return useMutation({
-    mutationFn: ({ startDate, endDate }: SyncVariables) =>
-      handleManualSyncOura(startDate, endDate),
     onSuccess: () => {
       invalidateSyncData();
     },

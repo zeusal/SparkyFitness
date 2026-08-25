@@ -21,7 +21,7 @@ import { usePreferences } from '@/contexts/PreferencesContext';
 import { error } from '@/utils/logging';
 import ExerciseHistoryDisplay from '@/components/ExerciseHistoryDisplay';
 import type { ExerciseToLog, WorkoutPresetSet } from '@/types/workout';
-import { Plus, ChevronDown, XCircle, X, Clock } from 'lucide-react';
+import { Plus, ChevronDown, XCircle } from 'lucide-react';
 import ExerciseActivityDetailsEditor from '@/components/ExerciseActivityDetailsEditor';
 import {
   DndContext,
@@ -44,17 +44,6 @@ import { SetColumnHeaders } from '../Exercises/SetHeader';
 import { cn } from '@/lib/utils';
 import { CardioLog } from '../Exercises/CardioLog';
 import { v4 as uuidv4 } from 'uuid';
-import {
-  todayInZone,
-  prefillEntryTime,
-  resolveExerciseModality,
-  setsDurationMinutes,
-  userHourMinute,
-} from '@workspace/shared';
-import {
-  defaultSetForModality,
-  toSetTableModality,
-} from '@/constants/exercises';
 
 interface LogExerciseEntryDialogProps {
   isOpen: boolean;
@@ -88,14 +77,10 @@ const LogExerciseEntryDialog: React.FC<LogExerciseEntryDialogProps> = ({
   getEnergyUnitString,
 }) => {
   const { t } = useTranslation();
-  const { loggingLevel, weightUnit, distanceUnit, convertDistance, timezone } =
+  const { loggingLevel, weightUnit, distanceUnit, convertDistance } =
     usePreferences();
 
-  const modality = resolveExerciseModality(
-    exercise?.modality,
-    exercise?.category
-  );
-  const isCardio = modality === 'duration_distance';
+  const isCardio = exercise?.category === 'cardio';
 
   const [notes, setNotes] = useState<string>('');
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -113,10 +98,6 @@ const LogExerciseEntryDialog: React.FC<LogExerciseEntryDialogProps> = ({
       return '';
     }
   );
-  const [entryTime, setEntryTime] = useState<string>(() => {
-    const isToday = selectedDate === todayInZone(timezone);
-    return isToday ? prefillEntryTime({ isToday: true, tz: timezone }) : '';
-  });
   const [activityDetails, setActivityDetails] = useState<
     ActivityDetailKeyValuePair[]
   >([]);
@@ -129,17 +110,20 @@ const LogExerciseEntryDialog: React.FC<LogExerciseEntryDialogProps> = ({
     if (initialSets && initialSets.length > 0) {
       return initialSets.map((set) => ({
         ...set,
-        weight: set.weight != null ? Number(set.weight) : null,
+        weight: Number(set.weight) || 0,
         _dndId: uuidv4(),
       }));
     }
-    return [{ ...defaultSetForModality(modality), _dndId: uuidv4() }];
+    return [
+      {
+        set_number: 1,
+        set_type: 'Working Set',
+        reps: 10,
+        weight: 0,
+        _dndId: uuidv4(),
+      },
+    ];
   });
-
-  // Cardio renders the entry-level Duration/Distance form only while it has
-  // at most one set; a multi-set cardio source (e.g. an interval preset)
-  // keeps the duration set table so no rows are hidden.
-  const cardioForm = isCardio && sets.length <= 1;
 
   const handleSetChange = (
     index: number,
@@ -248,40 +232,23 @@ const LogExerciseEntryDialog: React.FC<LogExerciseEntryDialogProps> = ({
         }))
         .filter((detail) => detail.detail_type !== '');
 
-      const totalDuration = cardioForm
+      const totalDuration = isCardio
         ? durationInput === ''
           ? 0
           : durationInput
-        : setsDurationMinutes(sets);
-
-      // Cardio performance also lives on its single backing set (issue
-      // #1903): duration in seconds + distance in km, no between-set rest.
-      // These agree with the entry-level totals below by construction. A
-      // multi-set cardio entry keeps its rows untouched instead.
-      const cardioSetValues = cardioForm
-        ? {
-            duration:
-              durationInput === ''
-                ? null
-                : Math.round(Number(durationInput) * 60),
-            distance:
-              distanceInput === ''
-                ? null
-                : convertDistance(Number(distanceInput), distanceUnit, 'km'),
-            rest_time: 0,
-          }
-        : null;
+        : sets.reduce(
+            (acc, set) => acc + (set.duration || 0) + (set.rest_time || 0) / 60,
+            0
+          );
 
       const entryData = {
         exercise_id: exercise.id,
         sets: sets.map(({ _dndId, ...set }) => ({
           ...set,
-          weight: set.weight ?? null,
-          ...(cardioSetValues ?? {}),
+          weight: set.weight ?? 0,
         })),
         notes,
         entry_date: selectedDate,
-        entry_time: entryTime || null,
         calories_burned: Number(caloriesBurnedInput),
         duration_minutes: totalDuration,
         imageFile,
@@ -328,7 +295,7 @@ const LogExerciseEntryDialog: React.FC<LogExerciseEntryDialogProps> = ({
 
         <div className="space-y-4 py-2">
           {/* ── Cardio log or strength sets ── */}
-          {cardioForm ? (
+          {isCardio ? (
             <CardioLog
               durationMinutes={durationInput}
               distance={distanceInput}
@@ -355,7 +322,7 @@ const LogExerciseEntryDialog: React.FC<LogExerciseEntryDialogProps> = ({
                 collisionDetection={closestCenter}
                 onDragEnd={handleDragEnd}
               >
-                <SetColumnHeaders modality={toSetTableModality(modality)} />
+                <SetColumnHeaders category={exercise?.category} />
                 <SortableContext items={sets.map((set) => set._dndId)}>
                   <div className="space-y-0.5">
                     {sets.map((set, index) => (
@@ -371,7 +338,6 @@ const LogExerciseEntryDialog: React.FC<LogExerciseEntryDialogProps> = ({
                         onDuplicateSet={(_, sIdx) => handleDuplicateSet(sIdx)}
                         onRemoveSet={(_, sIdx) => handleRemoveSet(sIdx)}
                         weightUnit={weightUnit}
-                        modality={toSetTableModality(modality)}
                       />
                     ))}
                   </div>
@@ -389,48 +355,6 @@ const LogExerciseEntryDialog: React.FC<LogExerciseEntryDialogProps> = ({
               </Button>
             </div>
           )}
-
-          {/* Start Time (optional) */}
-          <div className="space-y-1.5 max-w-[280px]">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="entryTime" className="text-sm">
-                Start Time (optional)
-              </Label>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setEntryTime('')}
-                  disabled={!entryTime}
-                  className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-3 py-1 text-sm font-medium text-muted-foreground shadow-sm hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-40 disabled:pointer-events-none"
-                  title="Clear time"
-                >
-                  <X className="h-4 w-4" />
-                  Clear
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const { hour, minute } = userHourMinute(timezone);
-                    setEntryTime(
-                      `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
-                    );
-                  }}
-                  className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-3 py-1 text-sm font-medium text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors"
-                  title="Set to current local time"
-                >
-                  <Clock className="h-4 w-4" />
-                  Now
-                </button>
-              </div>
-            </div>
-            <Input
-              id="entryTime"
-              type="time"
-              value={entryTime}
-              onChange={(e) => setEntryTime(e.target.value)}
-              className="text-sm h-9"
-            />
-          </div>
 
           {/* ── Notes ── */}
           <div className="space-y-1.5">
@@ -475,7 +399,7 @@ const LogExerciseEntryDialog: React.FC<LogExerciseEntryDialogProps> = ({
 
             <CollapsibleContent className="space-y-3 pt-2">
               {/* Calories — only for strength (cardio shows it in CardioLog) */}
-              {!cardioForm && (
+              {!isCardio && (
                 <div className="space-y-1.5">
                   <Label htmlFor="calories-burned" className="text-sm">
                     {t(
@@ -519,7 +443,7 @@ const LogExerciseEntryDialog: React.FC<LogExerciseEntryDialogProps> = ({
               )}
 
               {/* Avg heart rate — only for strength (cardio shows it in CardioLog) */}
-              {!cardioForm && (
+              {!isCardio && (
                 <div className="space-y-1.5">
                   <Label htmlFor="avg-heart-rate" className="text-sm">
                     {t(

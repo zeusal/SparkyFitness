@@ -6,7 +6,6 @@ interface MealTypeUpdate {
   sort_order?: number;
   is_visible?: boolean;
   show_in_quick_log?: boolean;
-  default_time?: string | null;
 }
 
 export const getMealTypes = async (): Promise<MealTypeDefinition[]> => {
@@ -19,7 +18,6 @@ export const getMealTypes = async (): Promise<MealTypeDefinition[]> => {
 export const createMealType = async (data: {
   name: string;
   sort_order: number;
-  default_time?: string | null;
 }): Promise<MealTypeDefinition> => {
   const response = await apiCall('/meal-types', {
     method: 'POST',

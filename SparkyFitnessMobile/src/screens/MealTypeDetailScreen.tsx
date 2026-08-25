@@ -1,42 +1,37 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCSSVariable } from 'uniwind';
+import Icon from '../components/Icon';
+import Button from '../components/ui/Button';
 import FoodNutritionSummary from '../components/FoodNutritionSummary';
 import ServingAdjustSheet, { type ServingAdjustSheetRef } from '../components/ServingAdjustSheet';
 import CopyMealSheet, { type CopyMealSheetRef } from '../components/CopyMealSheet';
 import SwipeableFoodRow from '../components/SwipeableFoodRow';
 import StatusView from '../components/StatusView';
 import { useActiveWorkoutBarPadding } from '../components/ActiveWorkoutBar';
-import { useDailySummary, useServerConnection, useMealTypes } from '../hooks';
+import { useDailySummary, useServerConnection } from '../hooks';
 import { useCopyFoodEntries } from '../hooks/useCopyFoodEntries';
 import { usePreferences } from '../hooks/usePreferences';
-import { useScreenHeader } from '../hooks/useScreenHeader';
-import { useNativeIOSHeadersActive } from '../services/nativeTabBarPreference';
 import { formatDateLabel } from '../utils/dateUtils';
 import {
   calculateEntryNutrition,
   calculateMealNutrition,
-  filterFoodEntriesByMealTypeId,
-  getHistoricalMealTypeLabel,
-  getMealPercentage,
+  filterFoodEntriesByMealType,
 } from '../utils/mealNutrition';
+import { getMealTypeLabel } from '../constants/meals';
 import type { RootStackScreenProps } from '../types/navigation';
-import { getLocalizedMealLabel } from '../constants/meals';
 
 type MealTypeDetailScreenProps = RootStackScreenProps<'MealTypeDetail'>;
 
 const MealTypeDetailScreen: React.FC<MealTypeDetailScreenProps> = ({ navigation, route }) => {
-  const { t , i18n: translationI18n } = useTranslation();
-  const dateLocale = translationI18n.language.startsWith('pl') ? 'pl-PL' : 'en-US';
-  const { date, mealType, mealTypeId, mealLabel } = route.params;
+  const { date, mealType, mealLabel } = route.params;
   const insets = useSafeAreaInsets();
-  const usesNativeHeader = useNativeIOSHeadersActive();
   const activeWorkoutBarPadding = useActiveWorkoutBarPadding('stack');
   const servingSheetRef = useRef<ServingAdjustSheetRef>(null);
   const copySheetRef = useRef<CopyMealSheetRef>(null);
   const accentColor = useCSSVariable('--color-accent-primary') as string;
+  const textPrimary = useCSSVariable('--color-text-primary') as string;
 
   const { isConnected, isLoading: isConnectionLoading } = useServerConnection();
   const { summary, isLoading, isError, refetch } = useDailySummary({
@@ -46,48 +41,14 @@ const MealTypeDetailScreen: React.FC<MealTypeDetailScreenProps> = ({ navigation,
   const { preferences } = usePreferences({ enabled: isConnected });
   const showNetCarbs = preferences?.show_net_carbs === true;
 
-  const { mealTypes } = useMealTypes();
-
   const [refreshing, setRefreshing] = useState(false);
 
-  // Resolve the display label from the canonical definition (ownership-aware):
-  // a pre-resolved mealLabel wins (Diary sends it), otherwise resolve from the
-  // active meal type by id, then fall back to the literal historical name.
-  const resolvedType = useMemo(() => {
-    if (mealTypeId) {
-      return mealTypes.find((m) => m.id === mealTypeId) ?? null;
-    }
-    return null;
-  }, [mealTypeId, mealTypes]);
-  const mealTypeName = resolvedType?.name ?? mealType ?? '';
-  const label =
-    mealLabel ??
-    (resolvedType
-      ? resolvedType.user_id == null
-        ? getLocalizedMealLabel(t, resolvedType.name.toLowerCase() === 'snack' ? 'snacks' : resolvedType.name.toLowerCase())
-        : resolvedType.name
-      : getHistoricalMealTypeLabel(mealTypeName, t));
-
+  const label = mealLabel ?? getMealTypeLabel(mealType);
   const entries = useMemo(
-    () =>
-      filterFoodEntriesByMealTypeId(
-        summary?.foodEntries ?? [],
-        mealTypeId,
-        mealTypeName,
-        mealTypes,
-      ),
-    [summary?.foodEntries, mealTypeId, mealTypeName, mealTypes],
+    () => filterFoodEntriesByMealType(summary?.foodEntries ?? [], mealType),
+    [summary?.foodEntries, mealType],
   );
   const nutrition = useMemo(() => calculateMealNutrition(entries), [entries]);
-  const isSystemMealType = resolvedType ? resolvedType.user_id === null : false;
-  const targetCalories = useMemo(() => {
-    // Target-calorie percentages are only meaningful for SYSTEM meal types: a
-    // custom type named "breakfast" (or a historical group) must never inherit
-    // the system Breakfast target calories.
-    if (!isSystemMealType || !summary?.goals || !summary?.calorieGoal) return 0;
-    const percentage = getMealPercentage(mealTypeName, summary.goals);
-    return Math.round((summary.calorieGoal * percentage) / 100);
-  }, [isSystemMealType, summary, mealTypeName]);
 
   const { copyMeal, isPending: isCopying } = useCopyFoodEntries({
     onSuccess: () => copySheetRef.current?.dismiss(),
@@ -95,7 +56,7 @@ const MealTypeDetailScreen: React.FC<MealTypeDetailScreenProps> = ({ navigation,
   // "other" is a synthetic bucket that aggregates every non-standard meal type,
   // so it has no single real meal type to copy from (the server would match
   // nothing). Only offer copy for concrete meal types.
-  const canCopy = isConnected && entries.length > 0 && mealTypeName.toLowerCase() !== 'other';
+  const canCopy = isConnected && entries.length > 0 && mealType !== 'other';
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -108,29 +69,42 @@ const MealTypeDetailScreen: React.FC<MealTypeDetailScreenProps> = ({ navigation,
       return (
         <StatusView
           icon="cloud-offline"
-          iconTone="muted"
+          iconColor="#9CA3AF"
           iconSize={64}
-          title={t('mealTypeDetail.states.noServer', { defaultValue: 'No server configured' })}
-          subtitle={t('mealTypeDetail.states.noServerHint', { defaultValue: 'Configure your server connection in Settings to view meal nutrition.' })}
-          action={{ label: t('common.goToSettings', { defaultValue: 'Go to Settings' }), onPress: () => navigation.navigate('Tabs', { screen: 'Settings' }), variant: 'primary' }}
+          title="No server configured"
+          subtitle="Configure your server connection in Settings to view meal nutrition."
+          action={{ label: 'Go to Settings', onPress: () => navigation.navigate('Tabs', { screen: 'Settings' }), variant: 'primary' }}
         />
       );
     }
 
     if (isLoading || isConnectionLoading) {
-      return <StatusView loading title={t('mealTypeDetail.states.loading', { defaultValue: 'Loading meal…' })} />;
+      return (
+        <View className="flex-1 items-center justify-center p-8">
+          <ActivityIndicator size="large" color={accentColor} />
+          <Text className="text-text-muted text-base mt-4">Loading meal...</Text>
+        </View>
+      );
     }
 
     if (isError) {
       return (
-        <StatusView
-          icon="alert-circle"
-          iconTone="danger"
-          iconSize={64}
-          title={t('mealTypeDetail.states.loadFailed', { defaultValue: 'Failed to load meal' })}
-          subtitle={t('common.connectionRetry', { defaultValue: 'Please check your connection and try again.' })}
-          action={{ label: t('common.retry', { defaultValue: 'Retry' }), onPress: () => refetch(), variant: 'primary' }}
-        />
+        <View className="flex-1 items-center justify-center p-8">
+          <Icon name="alert-circle" size={64} color="#EF4444" />
+          <Text className="text-text-muted text-lg text-center mt-4">
+            Failed to load meal
+          </Text>
+          <Text className="text-text-muted text-sm text-center mt-2">
+            Please check your connection and try again.
+          </Text>
+          <Button
+            variant="primary"
+            className="px-6 mt-6"
+            onPress={() => refetch()}
+          >
+            Retry
+          </Button>
+        </View>
       );
     }
 
@@ -138,10 +112,10 @@ const MealTypeDetailScreen: React.FC<MealTypeDetailScreenProps> = ({ navigation,
       return (
         <StatusView
           icon="food"
-          iconTone="muted"
+          iconColor="#9CA3AF"
           iconSize={64}
-          title={t('mealTypeDetail.states.noFoods', { defaultValue: 'No {{meal}} foods', meal: label.toLowerCase() })}
-          subtitle={t('mealTypeDetail.states.noFoodsHint', { defaultValue: '{{date}} has no foods logged for this meal.', date: formatDateLabel(date, t, dateLocale) })}
+          title={`No ${label.toLowerCase()} foods`}
+          subtitle={`${formatDateLabel(date)} has no foods logged for this meal.`}
         />
       );
     }
@@ -158,18 +132,17 @@ const MealTypeDetailScreen: React.FC<MealTypeDetailScreenProps> = ({ navigation,
       >
         <FoodNutritionSummary
           name={label}
-          brand={targetCalories > 0 ? `${formatDateLabel(date, t, dateLocale)} · ${t('mealTypeDetail.targetCalories', { defaultValue: 'Target: {{calories}} kcal', calories: targetCalories })}` : formatDateLabel(date, t, dateLocale)}
+          brand={formatDateLabel(date)}
           values={nutrition.values}
           showNetCarbs={showNetCarbs}
           customNutrients={Object.keys(nutrition.customNutrients).length > 0 ? nutrition.customNutrients : null}
-          calorieGoal={targetCalories > 0 ? targetCalories : undefined}
         />
 
         <View className="bg-surface rounded-xl p-4 shadow-sm">
           <View className="flex-row items-center mb-3">
-            <Text className="text-base font-bold text-text-secondary flex-1">{t('mealTypeDetail.labels.foods', { defaultValue: 'Foods' })}</Text>
+            <Text className="text-base font-bold text-text-secondary flex-1">Foods</Text>
             <Text className="text-xs text-text-muted font-medium">
-              {t('common.itemCount', { defaultValue: '{{count}} items', count: entries.length })}
+              {entries.length} {entries.length === 1 ? 'item' : 'items'}
             </Text>
           </View>
           {entries.map((entry, index) => (
@@ -185,47 +158,35 @@ const MealTypeDetailScreen: React.FC<MealTypeDetailScreenProps> = ({ navigation,
     );
   };
 
-  const header = useScreenHeader({
-    left: { kind: 'back' },
-    right: [
-      {
-        kind: 'icon',
-        sfSymbol: 'plus',
-        ionicon: 'add',
-        role: 'primary',
-        onPress: () =>
-          navigation.navigate('FoodSearch', {
-            date,
-            mealTypeId: resolvedType?.id,
-          }),
-        accessibilityLabel: t('mealTypeDetail.accessibility.addFood', { defaultValue: 'Add Food' }),
-        identifier: 'meal-type-detail-add',
-      },
-      ...(canCopy
-        ? [
-            {
-              kind: 'icon' as const,
-              sfSymbol: 'doc.on.doc',
-              ionicon: 'copy-outline',
-              role: 'secondary' as const,
-              onPress: () => copySheetRef.current?.present(date, mealTypeId ?? null, mealTypeName),
-              accessibilityLabel: t('mealTypeDetail.accessibility.copyMeal', { defaultValue: 'Copy meal to another day' }),
-              identifier: 'meal-type-detail-copy',
-            },
-          ]
-        : []),
-    ],
-  });
-
   return (
-      <View className="flex-1 bg-background" style={usesNativeHeader ? undefined : { paddingTop: insets.top }}>
-        {header}
-
-        {renderContent()}
-
-        <ServingAdjustSheet ref={servingSheetRef} onViewEntry={(entry) => navigation.navigate('FoodEntryView', { entry })} />
-        <CopyMealSheet ref={copySheetRef} isPending={isCopying} onCopy={copyMeal} />
+    <View className="flex-1 bg-background" style={Platform.OS === 'ios' ? undefined : { paddingTop: insets.top }}>
+      {Platform.OS !== 'ios' && (
+      <View className="flex-row items-center px-4 py-3 border-b border-border-subtle">
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Icon name="chevron-back" size={22} color={textPrimary} />
+        </TouchableOpacity>
+        <View className="flex-1" />
+        {canCopy && (
+          <TouchableOpacity
+            onPress={() => copySheetRef.current?.present(date, mealType)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityRole="button"
+            accessibilityLabel="Copy meal to another day"
+          >
+            <Icon name="copy" size={20} color={accentColor} />
+          </TouchableOpacity>
+        )}
       </View>
+      )}
+
+      {renderContent()}
+
+      <ServingAdjustSheet ref={servingSheetRef} onViewEntry={(entry) => navigation.navigate('FoodEntryView', { entry })} />
+      <CopyMealSheet ref={copySheetRef} isPending={isCopying} onCopy={copyMeal} />
+    </View>
   );
 };
 

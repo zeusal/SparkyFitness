@@ -1,10 +1,5 @@
 import { tool } from 'ai';
-import {
-  dayToUtcRange,
-  todayInZone,
-  utcOffsetMinutesFromIsoString,
-  BUILT_IN_MOODS,
-} from '@workspace/shared';
+import { dayToUtcRange, todayInZone } from '@workspace/shared';
 import { log } from '../../config/logging.js';
 import measurementService from '../../services/measurementService.js';
 import preferenceService from '../../services/preferenceService.js';
@@ -12,7 +7,6 @@ import moodRepository from '../../models/moodRepository.js';
 import fastingRepository from '../../models/fastingRepository.js';
 import sleepRepository from '../../models/sleepRepository.js';
 import { ERRORS, formatZodError } from './errors.js';
-import { normalizeActionArgs } from './dates.js';
 import { formatConfirmation, formatList, formatSuccess } from './formatting.js';
 import { convertWeight, convertMeasurement } from './unitConversion.js';
 import {
@@ -20,57 +14,6 @@ import {
   manageCheckinInput,
   type ManageCheckinInput,
 } from './schemas/checkin.js';
-
-interface BiometricsRow {
-  entry_date: string;
-  weight?: number | string | null;
-  height?: number | string | null;
-  neck?: number | string | null;
-  waist?: number | string | null;
-  hips?: number | string | null;
-  steps?: number | null;
-  body_fat_percentage?: number | string | null;
-  [key: string]: unknown;
-}
-
-interface CustomCategoryRow {
-  id: string;
-  name: string;
-  measurement_type: string;
-  created_at?: string | Date;
-}
-
-interface SleepEntryRow {
-  created_at: string | Date;
-  duration_in_seconds?: number;
-  bedtime?: string | null;
-  wake_time?: string | null;
-  source?: string;
-  sleep_score?: number | null;
-  [key: string]: unknown;
-}
-
-interface FastingLogRow {
-  id: string;
-  start_time?: string | null;
-  end_time?: string | null;
-  status?: string;
-  fasting_type?: string | null;
-  [key: string]: unknown;
-}
-
-interface CustomMeasurementEntryRow {
-  id: string;
-  custom_categories?: {
-    name?: string;
-    measurement_type?: string;
-  } | null;
-  value?: string | number;
-  notes?: string;
-  entry_date?: string;
-  created_at?: string | Date;
-  [key: string]: unknown;
-}
 
 const VALID_ACTIONS = [
   'log_biometrics',
@@ -90,27 +33,13 @@ function isSet<T>(value: T | null | undefined): value is T {
   return value !== null && value !== undefined;
 }
 
-function formatMoodTags(tags?: string[] | null): string {
-  if (!tags || !tags.length) return '';
-  const formatted = tags.map((t) => {
-    const matched = BUILT_IN_MOODS.find(
-      (m) => m.name.toLowerCase() === t.toLowerCase()
-    );
-    if (matched) {
-      return `${matched.emoji} ${matched.displayName}`;
-    }
-    return t; // fallback if it is a custom tag or not found
-  });
-  return ` [${formatted.join(', ')}]`;
-}
-
 // Biometrics rows converted into the user's preferred units, oldest-first —
 // MCP's getBiometricsHistory row shape. Shared with the report tools.
 export async function getBiometricsHistoryRows(
   userId: string,
   startDate?: string,
   endDate?: string
-): Promise<BiometricsRow[]> {
+) {
   const prefs = await preferenceService.getUserPreferences(userId, userId);
   const wUnit = prefs.default_weight_unit || 'kg';
   const mUnit = prefs.default_measurement_unit || 'cm';
@@ -122,7 +51,8 @@ export async function getBiometricsHistoryRows(
     endDate || '9999-12-31'
   );
   // The repository returns newest-first; MCP rendered oldest-first.
-  return [...rows].reverse().map((row: BiometricsRow) => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return [...rows].reverse().map((row: any) => ({
     ...row,
     weight: isSet(row.weight)
       ? convertWeight(Number(row.weight), 'kg', wUnit)
@@ -150,7 +80,7 @@ export function buildCheckinTools(userId: string, tz: string) {
       description: `Health tracking: weight, steps, body measurements, mood, sleep, fasting, custom metrics.
 
 Actions:
-- log_biometrics(entry_date, weight?, steps?, height?, neck?, waist?, hips?, body_fat?, muscle_mass?, bone_mass?, body_water?, weight_unit?:"kg"|"lbs", height_unit?:"cm"|"in", measurements_unit?:"cm"|"in")
+- log_biometrics(entry_date, weight?, steps?, height?, neck?, waist?, hips?, body_fat?, weight_unit?:"kg"|"lbs", height_unit?:"cm"|"in", measurements_unit?:"cm"|"in")
 - log_mood(entry_date, mood_value:1-10, notes?)
 - log_sleep(entry_date, duration_seconds?, sleep_score?:0-100, bedtime?, wake_time?, source?)
 - log_fasting(start_time:ISO8601, end_time?, fasting_status?:"ACTIVE"|"COMPLETED"|"CANCELLED", fasting_type?)
@@ -162,73 +92,7 @@ Actions:
 - get_biometrics_history(start_date?, end_date?) — returns weight and measurements history`,
       inputSchema: manageCheckinInput,
       execute: async (rawArgs) => {
-        const normalized = normalizeActionArgs(
-          rawArgs,
-          tz,
-          VALID_ACTIONS,
-          (args) => {
-            if (
-              args.mood_value !== undefined ||
-              (args.notes !== undefined && args.category_name === undefined)
-            ) {
-              return 'log_mood';
-            }
-            if (
-              args.sleep_score !== undefined ||
-              args.duration_seconds !== undefined ||
-              args.bedtime !== undefined ||
-              args.wake_time !== undefined
-            ) {
-              return 'log_sleep';
-            }
-            if (
-              args.start_time !== undefined ||
-              args.fasting_status !== undefined
-            ) {
-              return 'log_fasting';
-            }
-            if (args.category_name !== undefined && args.value !== undefined) {
-              return 'log_custom_metric';
-            }
-            if (
-              args.weight !== undefined ||
-              args.steps !== undefined ||
-              args.height !== undefined ||
-              args.body_fat !== undefined ||
-              args.neck !== undefined ||
-              args.waist !== undefined ||
-              args.hips !== undefined
-            ) {
-              return 'log_biometrics';
-            }
-            if (args.category_name !== undefined) {
-              return 'create_category';
-            }
-            if (args.start_date || args.end_date) {
-              return 'get_biometrics_history';
-            }
-            if (args.entry_date) {
-              return 'list_checkin_diary';
-            }
-            return 'list_checkin_diary'; // fallback
-          }
-        ) as Record<string, unknown>;
-
-        // Default missing entry_date to today's date string for logging actions
-        const loggingActions = [
-          'log_biometrics',
-          'log_mood',
-          'log_sleep',
-          'log_custom_metric',
-        ];
-        if (
-          normalized.entry_date === undefined &&
-          loggingActions.includes(normalized.action as string)
-        ) {
-          normalized.entry_date = todayInZone(tz);
-        }
-
-        const parsed = manageCheckinSchema.safeParse(normalized);
+        const parsed = manageCheckinSchema.safeParse(rawArgs);
         if (!parsed.success) {
           return formatZodError(parsed.error);
         }
@@ -244,21 +108,20 @@ Actions:
               const defaultMeasurementUnit =
                 prefs.default_measurement_unit || 'cm';
 
-              // Convert to standard units (kg, cm) for storage. These resolved
-              // units are also what the confirmation text reports: falling back
-              // to a literal 'kg'/'cm' there would tell the user a different
-              // unit than the one the value was actually interpreted as.
+              // Convert to standard units (kg, cm) for storage
               const mUnit = args.measurements_unit || defaultMeasurementUnit;
-              const wUnit = args.weight_unit || defaultWeightUnit;
-              const hUnit = args.height_unit || defaultMeasurementUnit;
               const measurements: Record<string, number> = {};
               if (isSet(args.weight)) {
-                measurements.weight = convertWeight(args.weight, wUnit, 'kg');
+                measurements.weight = convertWeight(
+                  args.weight,
+                  args.weight_unit || defaultWeightUnit,
+                  'kg'
+                );
               }
               if (isSet(args.height)) {
                 measurements.height = convertMeasurement(
                   args.height,
-                  hUnit,
+                  args.height_unit || defaultMeasurementUnit,
                   'cm'
                 );
               }
@@ -281,25 +144,6 @@ Actions:
               if (isSet(args.steps)) {
                 measurements.steps = args.steps;
               }
-              // Smart-scale composition. Masses are stored in kg like weight;
-              // body water is already a percentage and needs no conversion.
-              if (isSet(args.muscle_mass)) {
-                measurements.muscle_mass_kg = convertWeight(
-                  args.muscle_mass,
-                  wUnit,
-                  'kg'
-                );
-              }
-              if (isSet(args.bone_mass)) {
-                measurements.bone_mass_kg = convertWeight(
-                  args.bone_mass,
-                  wUnit,
-                  'kg'
-                );
-              }
-              if (isSet(args.body_water)) {
-                measurements.body_water_percentage = args.body_water;
-              }
 
               await measurementService.upsertCheckInMeasurements(
                 userId,
@@ -310,21 +154,24 @@ Actions:
 
               const parts: string[] = [];
               if (isSet(args.weight))
-                parts.push(`weight: ${args.weight}${wUnit}`);
+                parts.push(`weight: ${args.weight}${args.weight_unit || 'kg'}`);
               if (isSet(args.steps)) parts.push(`steps: ${args.steps}`);
               if (isSet(args.height))
-                parts.push(`height: ${args.height}${hUnit}`);
+                parts.push(`height: ${args.height}${args.height_unit || 'cm'}`);
               if (isSet(args.body_fat))
                 parts.push(`body fat: ${args.body_fat}%`);
-              if (isSet(args.neck)) parts.push(`neck: ${args.neck}${mUnit}`);
-              if (isSet(args.waist)) parts.push(`waist: ${args.waist}${mUnit}`);
-              if (isSet(args.hips)) parts.push(`hips: ${args.hips}${mUnit}`);
-              if (isSet(args.muscle_mass))
-                parts.push(`muscle mass: ${args.muscle_mass}${wUnit}`);
-              if (isSet(args.bone_mass))
-                parts.push(`bone mass: ${args.bone_mass}${wUnit}`);
-              if (isSet(args.body_water))
-                parts.push(`body water: ${args.body_water}%`);
+              if (isSet(args.neck))
+                parts.push(
+                  `neck: ${args.neck}${args.measurements_unit || 'cm'}`
+                );
+              if (isSet(args.waist))
+                parts.push(
+                  `waist: ${args.waist}${args.measurements_unit || 'cm'}`
+                );
+              if (isSet(args.hips))
+                parts.push(
+                  `hips: ${args.hips}${args.measurements_unit || 'cm'}`
+                );
               const summary =
                 parts.length > 0 ? parts.join(', ') : 'no changes';
               return formatConfirmation(
@@ -338,7 +185,7 @@ Actions:
                 userId
               );
               const category = categories.find(
-                (cat: CustomCategoryRow) =>
+                (cat: any) =>
                   String(cat.name).toLowerCase() ===
                   args.category_name.toLowerCase()
               );
@@ -367,27 +214,20 @@ Actions:
                 userId,
                 userId
               );
-              interface MappedCategoryRow {
-                id: string;
-                category_name: string;
-                measurement_type: string;
-                created_at?: string | Date;
-              }
               const categories = rows
-                .map((row: CustomCategoryRow) => ({
+                .map((row: any) => ({
                   id: row.id,
                   category_name: row.name,
                   measurement_type: row.measurement_type,
                   created_at: row.created_at,
                 }))
-                .sort((a: MappedCategoryRow, b: MappedCategoryRow) =>
+                .sort((a: any, b: any) =>
                   String(a.category_name).localeCompare(String(b.category_name))
                 );
               return formatList(
                 categories,
                 'Custom Measurement Categories',
-                (c: MappedCategoryRow) =>
-                  `**${c.category_name}**\n  ID: ${c.id}`
+                (c: any) => `**${c.category_name}**\n  ID: ${c.id}`
               );
             }
 
@@ -408,12 +248,10 @@ Actions:
                 userId,
                 args.mood_value,
                 args.notes || null,
-                args.entry_date,
-                args.mood_tags || null
+                args.entry_date
               );
-              const tagsStr = formatMoodTags(args.mood_tags);
               return formatConfirmation(
-                `Mood logged for ${args.entry_date}: ${args.mood_value}/10${tagsStr}${args.notes ? ' — ' + args.notes : ''}.`
+                `Mood logged for ${args.entry_date}: ${args.mood_value}/10${args.notes ? ' — ' + args.notes : ''}.`
               );
             }
 
@@ -440,12 +278,6 @@ Actions:
               let bedtime = args.bedtime;
               let wakeTime = args.wake_time;
               const duration = args.duration_seconds ?? 28800; // Default 8h
-              // An explicit ±HH:MM suffix on a caller-supplied timestamp is a
-              // recording-zone claim worth stamping; generated defaults are
-              // profile-tz wall clocks and stay unstamped (Z suffix → null).
-              const recordUtcOffsetMinutes =
-                utcOffsetMinutesFromIsoString(args.bedtime) ??
-                utcOffsetMinutesFromIsoString(args.wake_time);
 
               if (!bedtime && !wakeTime) {
                 // Default: wake time is 7 AM on entry_date in the user's
@@ -475,7 +307,6 @@ Actions:
                 wake_time: wakeTime,
                 duration_in_seconds: duration,
                 source: args.source || 'manual',
-                record_utc_offset_minutes: recordUtcOffsetMinutes ?? undefined,
               });
 
               const parts: string[] = [];
@@ -532,10 +363,8 @@ Actions:
               const wUnit = prefs.default_weight_unit || 'kg';
               const mUnit = prefs.default_measurement_unit || 'cm';
 
-              let bio: BiometricsRow | null =
-                bioRow && Object.keys(bioRow).length > 0
-                  ? (bioRow as BiometricsRow)
-                  : null;
+              let bio: Record<string, any> | null =
+                bioRow && Object.keys(bioRow).length > 0 ? bioRow : null;
               if (bio) {
                 bio = {
                   ...bio,
@@ -562,11 +391,11 @@ Actions:
               const moods = moodEntry ? [moodEntry] : [];
               const sleeps = [...sleepRows]
                 .sort(
-                  (a: SleepEntryRow, b: SleepEntryRow) =>
+                  (a: any, b: any) =>
                     new Date(a.created_at).getTime() -
                     new Date(b.created_at).getTime()
                 )
-                .map((row: SleepEntryRow) => ({
+                .map((row: any) => ({
                   ...row,
                   duration_seconds: row.duration_in_seconds,
                   bedtime: row.bedtime
@@ -576,7 +405,7 @@ Actions:
                     ? new Date(row.wake_time).toISOString()
                     : null,
                 }));
-              const fasts = fastRows.map((row: FastingLogRow) => ({
+              const fasts = fastRows.map((row: any) => ({
                 id: row.id,
                 start_time: row.start_time
                   ? new Date(row.start_time).toISOString()
@@ -587,34 +416,23 @@ Actions:
                 fasting_status: row.status,
                 fasting_type: row.fasting_type,
               }));
-              interface MappedCustomMetric {
-                id: string;
-                category_name?: string;
-                value?: string | number;
-                measurement_type?: string;
-                notes?: string;
-                entry_date?: string;
-                created_at?: string | Date;
-              }
               const customs = [...customRows]
-                .map(
-                  (row: CustomMeasurementEntryRow): MappedCustomMetric => ({
-                    id: row.id,
-                    category_name: row.custom_categories?.name,
-                    value: row.value,
-                    measurement_type: row.custom_categories?.measurement_type,
-                    notes: row.notes,
-                    entry_date: row.entry_date,
-                    created_at: row.created_at,
-                  })
-                )
+                .map((row: any) => ({
+                  id: row.id,
+                  category_name: row.custom_categories?.name,
+                  value: row.value,
+                  measurement_type: row.custom_categories?.measurement_type,
+                  notes: row.notes,
+                  entry_date: row.entry_date,
+                  created_at: row.created_at,
+                }))
                 .sort(
-                  (a: MappedCustomMetric, b: MappedCustomMetric) =>
+                  (a: any, b: any) =>
                     String(a.category_name).localeCompare(
                       String(b.category_name)
                     ) ||
-                    new Date(a.created_at || 0).getTime() -
-                      new Date(b.created_at || 0).getTime()
+                    new Date(a.created_at).getTime() -
+                      new Date(b.created_at).getTime()
                 );
 
               let text = `### Check-in Diary: ${dateLabel}\n\n`;
@@ -641,8 +459,7 @@ Actions:
               if (moods.length > 0) {
                 text += '## Mood\n';
                 for (const m of moods) {
-                  const tagsStr = formatMoodTags(m.mood_tags);
-                  text += `- ${m.mood_value}/10${tagsStr}`;
+                  text += `- ${m.mood_value}/10`;
                   if (m.notes) text += ` — ${m.notes}`;
                   text += '\n';
                 }
@@ -732,34 +549,29 @@ Actions:
                 args.start_date,
                 args.end_date
               );
-              return formatList(
-                history,
-                'Biometrics History',
-                (h: BiometricsRow) => {
-                  const hw = h.weight_unit || 'kg';
-                  let text = `**${h.entry_date}**: `;
-                  if (h.weight) text += `Weight: ${h.weight}${hw} `;
-                  if (h.body_fat_percentage)
-                    text += `| BF: ${h.body_fat_percentage}% `;
-                  if (h.steps) text += `| Steps: ${h.steps}`;
-                  return text;
-                }
-              );
+              return formatList(history, 'Biometrics History', (h: any) => {
+                const hw = h.weight_unit || 'kg';
+                let text = `**${h.entry_date}**: `;
+                if (h.weight) text += `Weight: ${h.weight}${hw} `;
+                if (h.body_fat_percentage)
+                  text += `| BF: ${h.body_fat_percentage}% `;
+                if (h.steps) text += `| Steps: ${h.steps}`;
+                return text;
+              });
             }
 
-            default: {
-              const actionStr = String(
-                (args as Record<string, unknown>).action || 'unknown'
+            default:
+              return ERRORS.INVALID_ACTION(
+                String((args as any).action),
+                VALID_ACTIONS
               );
-              return ERRORS.INVALID_ACTION(actionStr, VALID_ACTIONS);
-            }
           }
         } catch (error) {
           log('error', '[Checkin Tool] Error:', error);
           if (error instanceof Error && error.message.includes('not found')) {
             return ERRORS.VALIDATION(error.message);
           }
-          return ERRORS.DB_ERROR(error);
+          return ERRORS.DB_ERROR();
         }
       },
     }),

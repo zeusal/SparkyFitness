@@ -2,6 +2,7 @@
   "expo": {
     "name": "SparkyFitnessMobile",
     "slug": "sparkyfitnessmobile",
+    "version": "1.4.4",
     "scheme": "sparkyfitnessmobile",
     "orientation": "portrait",
     "icon": "./assets/icons/appstore.png",
@@ -55,12 +56,6 @@
         "expo-notifications"
       ],
       [
-        "expo-navigation-bar",
-        {
-          "enforceContrast": false
-        }
-      ],
-      [
         "@bacons/apple-targets"
       ]
     ],
@@ -73,7 +68,6 @@
         "projectId": "498a86c5-344f-4d2c-9033-dfd720e4a383"
       },
       "APP_VARIANT": "production"
-    },
-    "version": "1.6.3"
+    }
   }
 }

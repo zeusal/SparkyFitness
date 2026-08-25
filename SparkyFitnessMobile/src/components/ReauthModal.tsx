@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   Modal,
+  TouchableOpacity,
   KeyboardAvoidingView,
   ScrollView,
   Platform,
@@ -12,7 +12,7 @@ import Button from './ui/Button';
 import { useCSSVariable } from 'uniwind';
 import Icon from './Icon';
 import FormInput from './FormInput';
-import MfaForm, { ErrorBanner, OidcProviderLogo, PrimaryButton } from './MfaForm';
+import MfaForm, { ErrorBanner, PrimaryButton } from './auth/MfaForm';
 import {
   login,
   LoginError,
@@ -23,12 +23,7 @@ import {
   verifyEmailOtp,
   setPendingProxyHeaders,
   clearPendingProxyHeaders,
-  fetchAuthSettings,
-  loginWithOidc,
-  loginWithPasskey,
   type MfaFactors,
-  type AuthSettings,
-  type OidcProvider,
 } from '../services/api/authService';
 import {
   getAllServerConfigs,
@@ -54,17 +49,14 @@ const ReauthModal: React.FC<ReauthModalProps> = ({
   onSwitchToApiKey,
   onDismiss,
 }) => {
-  const { t } = useTranslation();
-  const [textMuted, textSecondary, accentPrimary] = useCSSVariable([
+  const [textMuted, accentPrimary] = useCSSVariable([
     '--color-text-muted',
-    '--color-text-secondary',
     '--color-accent-primary',
-  ]) as [string, string, string];
+  ]) as [string, string];
 
   // Config state
-  const scrollViewRef = useRef<ScrollView>(null);
-  const [config, setConfig] = useState<ServerConfig | null>(null);
-  const [authSettings, setAuthSettings] = useState<AuthSettings | null>(null);
+  const [configs, setConfigs] = useState<ServerConfig[]>([]);
+  const [selectedConfigId, setSelectedConfigId] = useState<string | null>(null);
 
   // Form state
   const [email, setEmail] = useState('');
@@ -91,90 +83,52 @@ const ReauthModal: React.FC<ReauthModalProps> = ({
     setMfaCode('');
     setEmailOtpSent(false);
 
-    const loadConfig = async () => {
+    const loadConfigs = async () => {
       const allConfigs = await getAllServerConfigs();
-      // Only session-auth configs can have an expired session; the fallback
-      // covers callers without a real config id (e.g. dev tools).
+      // Only show session-auth configs (API key configs don't have session expiry)
       const sessionConfigs = allConfigs.filter((c) => c.authType === 'session');
-      const resolved =
+      setConfigs(sessionConfigs);
+
+      const preferred =
         (expiredConfigId && sessionConfigs.find((c) => c.id === expiredConfigId)) ||
-        sessionConfigs[0] ||
-        null;
-      setConfig(resolved);
-      if (resolved) {
-        setPendingProxyHeaders(proxyHeadersToRecord(resolved.proxyHeaders));
+        sessionConfigs[0];
+      if (preferred) {
+        setSelectedConfigId(preferred.id);
+        setPendingProxyHeaders(proxyHeadersToRecord(preferred.proxyHeaders));
       }
     };
-    loadConfig();
+    loadConfigs();
   }, [visible, expiredConfigId]);
 
-  // On small screens the error banner can push the primary action below the
-  // fold; scroll the bottom of the card back into view once the banner has
-  // laid out.
-  useEffect(() => {
-    if (!error) return;
-    const timer = setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({ animated: true });
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [error]);
+  const selectedConfig = configs.find((c) => c.id === selectedConfigId);
+  const currentUrl = selectedConfig?.url ?? '';
 
-  const currentUrl = config?.url ?? '';
-
-  // The server's auth settings decide which sign-in methods to offer
-  // (email fields, OIDC providers). A failed fetch falls back to email-only so
-  // the user can always attempt credentials.
-  useEffect(() => {
-    if (!visible || !config) {
-      setAuthSettings(null);
-      return;
+  const handleSelectConfig = (configId: string) => {
+    setSelectedConfigId(configId);
+    const config = configs.find((c) => c.id === configId);
+    if (config) {
+      setPendingProxyHeaders(proxyHeadersToRecord(config.proxyHeaders));
     }
-
-    let isMounted = true;
-    const fetchSettings = async () => {
-      try {
-        const settings = await fetchAuthSettings(
-          config.url,
-          proxyHeadersToRecord(config.proxyHeaders),
-        );
-        if (isMounted) {
-          setAuthSettings(settings);
-        }
-      } catch {
-        if (isMounted) {
-          setAuthSettings({
-            trusted_origin: null,
-            email: { enabled: true },
-            oidc: { enabled: false, providers: [] },
-            signup_disabled: false,
-          });
-        }
-      }
-    };
-    fetchSettings();
-    return () => {
-      isMounted = false;
-    };
-  }, [visible, config]);
+  };
 
   const saveSessionConfig = async (sessionToken: string) => {
-    if (!config) return;
+    if (!selectedConfig) return;
     await saveServerConfig({
-      id: config.id,
-      url: config.url,
-      apiKey: config.apiKey,
+      id: selectedConfig.id,
+      url: selectedConfig.url,
+      apiKey: selectedConfig.apiKey,
       authType: 'session',
       sessionToken,
-      proxyHeaders: config.proxyHeaders,
+      proxyHeaders: selectedConfig.proxyHeaders,
     });
   };
 
   // --- Sign In ---
 
   const handleSignIn = async () => {
-    if (!currentUrl) { setError(t('auth.errors.noServerSelected', { defaultValue: 'No server selected.' })); return; }
-    if (!email.trim()) { setError(t('auth.errors.emailRequired', { defaultValue: 'Please enter your email.' })); return; }
-    if (!password) { setError(t('auth.errors.passwordRequired', { defaultValue: 'Please enter your password.' })); return; }
+    if (!currentUrl) { setError('No server selected.'); return; }
+    if (!email.trim()) { setError('Please enter your email.'); return; }
+    if (!password) { setError('Please enter your password.'); return; }
 
     setLoading(true);
     setError('');
@@ -206,62 +160,7 @@ const ReauthModal: React.FC<ReauthModalProps> = ({
       if (err instanceof LoginError) {
         setError(err.message);
       } else {
-        setError(t('auth.errors.connectionRetry', { defaultValue: 'Could not connect to server. Please try again.' }));
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePasskeySignIn = async () => {
-    if (!currentUrl) { setError(t('auth.errors.noServerSelected', { defaultValue: 'No server selected.' })); return; }
-    if (!__DEV__ && currentUrl.toLowerCase().startsWith('http://')) {
-      setError(t('auth.errors.httpsRequired', { defaultValue: 'HTTPS is required for server connections.' }));
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-
-    try {
-      const result = await loginWithPasskey(currentUrl);
-      await saveSessionConfig(result.sessionToken);
-      clearPendingProxyHeaders();
-      onLoginSuccess();
-    } catch (err) {
-      if (err instanceof Error) {
-        setError(t('auth.errors.generic', { defaultValue: 'Authentication failed. Please try again.' }));
-      } else {
-        setError(t('auth.errors.generic', { defaultValue: 'Authentication failed. Please try again.' }));
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleOidcLogin = async (providerId: string) => {
-    if (!currentUrl) { setError(t('auth.errors.noServerSelected', { defaultValue: 'No server selected.' })); return; }
-    if (!__DEV__ && currentUrl.toLowerCase().startsWith('http://')) {
-      setError(t('auth.errors.httpsRequired', { defaultValue: 'HTTPS is required for server connections.' }));
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-
-    try {
-      const result = await loginWithOidc(currentUrl, providerId);
-
-      if (result.type === 'success') {
-        await saveSessionConfig(result.sessionToken);
-        clearPendingProxyHeaders();
-        onLoginSuccess();
-      }
-    } catch (err) {
-      if (err instanceof Error) {
-        setError(t('auth.errors.generic', { defaultValue: 'Authentication failed. Please try again.' }));
-      } else {
-        setError(t('auth.errors.generic', { defaultValue: 'Authentication failed. Please try again.' }));
+        setError('Could not connect to server. Please try again.');
       }
     } finally {
       setLoading(false);
@@ -272,7 +171,7 @@ const ReauthModal: React.FC<ReauthModalProps> = ({
 
   const handleVerifyMfa = async () => {
     const code = mfaCode.trim();
-    if (!code) { setError(t('auth.errors.verificationCodeRequired', { defaultValue: 'Please enter the verification code.' })); return; }
+    if (!code) { setError('Please enter the verification code.'); return; }
 
     setLoading(true);
     setError('');
@@ -289,24 +188,24 @@ const ReauthModal: React.FC<ReauthModalProps> = ({
     } catch (err) {
       if (err instanceof LoginError) {
         if (err.statusCode === 429) {
-          setError(t('auth.errors.tooManyAttempts', { defaultValue: 'Too many attempts. Please wait a moment and try again.' }));
+          setError('Too many attempts. Please wait a moment and try again.');
         } else if (err.message.toLowerCase().includes('invalid code')) {
-          setError(t('auth.errors.invalidVerificationCode', { defaultValue: 'Invalid verification code. Please try again.' }));
+          setError('Invalid verification code. Please try again.');
         } else if (err.statusCode === undefined) {
-          setError(t('auth.errors.generic', { defaultValue: 'Authentication failed. Please try again.' }));
+          setError(err.message);
         } else if (
           err.message.includes('INVALID_TWO_FACTOR_COOKIE') ||
           err.message.toLowerCase().includes('invalid two factor cookie') ||
           err.message.includes('expired')
         ) {
           await clearAuthCookies();
-          setError(t('auth.errors.sessionExpired', { defaultValue: 'Your session has expired. Please sign in again.' }));
+          setError('Your session has expired. Please sign in again.');
           setStep('credentials');
         } else {
-          setError(t('auth.errors.generic', { defaultValue: 'Authentication failed. Please try again.' }));
+          setError(err.message);
         }
       } else {
-        setError(t('auth.errors.verificationFailed', { defaultValue: 'Verification failed. Please try again.' }));
+        setError('Verification failed. Please try again.');
       }
     } finally {
       setLoading(false);
@@ -324,7 +223,7 @@ const ReauthModal: React.FC<ReauthModalProps> = ({
       if (err instanceof LoginError) {
         setError(err.message);
       } else {
-        setError(t('auth.errors.sendEmailCodeFailed', { defaultValue: 'Failed to send email code. Please try again.' }));
+        setError('Failed to send email code. Please try again.');
       }
     } finally {
       setLoading(false);
@@ -346,19 +245,15 @@ const ReauthModal: React.FC<ReauthModalProps> = ({
   };
 
   const handleSwitchToApiKey = () => {
-    if (!config || !onSwitchToApiKey) return;
+    if (!selectedConfig || !onSwitchToApiKey) return;
     clearPendingProxyHeaders();
-    onSwitchToApiKey(config);
+    onSwitchToApiKey(selectedConfig);
   };
 
   const handleDismiss = () => {
     clearPendingProxyHeaders();
     onDismiss();
   };
-
-  // Email defaults on while settings load so the form doesn't flash empty.
-  const hasEmail = !authSettings || authSettings.email.enabled;
-  const oidcProviders = authSettings?.oidc.enabled ? authSettings.oidc.providers : [];
 
   return (
     <Modal
@@ -372,7 +267,6 @@ const ReauthModal: React.FC<ReauthModalProps> = ({
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView
-          ref={scrollViewRef}
           contentContainerClassName="justify-center items-center p-6"
           contentContainerStyle={{ flexGrow: 1 }}
           keyboardShouldPersistTaps="handled"
@@ -383,121 +277,108 @@ const ReauthModal: React.FC<ReauthModalProps> = ({
             {/* Header */}
             <View className="items-center mb-5">
               <Text className="text-[22px] font-bold text-center text-text-primary">
-                {step === 'credentials' ? t('auth.sessionExpiredTitle', { defaultValue: 'Session Expired' }) : t('auth.twoFactorTitle', { defaultValue: 'Two-Factor Authentication' })}
+                {step === 'credentials' ? 'Session Expired' : 'Two-Factor Authentication'}
               </Text>
-              <Button
-                variant="ghost"
-                onPress={handleDismiss}
-                accessibilityLabel={t('common.close', { defaultValue: 'Close' })}
-                className="absolute p-2 py-2 px-2 rounded-lg"
-                // Sits in the card's corner padding, clear of long titles.
-                style={{ right: -12, top: -12 }}
-              >
-                <Icon name="close" size={22} color={textSecondary} />
-              </Button>
             </View>
 
             {step === 'credentials' ? (
               <>
-                {/* Server label */}
-                {config && (
+                {/* Server picker (only if multiple session configs) */}
+                {configs.length > 1 && (
+                  <View className="mb-3">
+                    <Text className="text-sm mb-2 text-text-secondary">Server</Text>
+                    {configs.map((config) => (
+                      <TouchableOpacity
+                        key={config.id}
+                        className={`flex-row items-center p-3 rounded-lg mb-1.5 border ${
+                          selectedConfigId === config.id
+                            ? 'border-accent-primary bg-raised'
+                            : 'border-border-subtle bg-raised'
+                        }`}
+                        onPress={() => handleSelectConfig(config.id)}
+                      >
+                        <Icon
+                          name={
+                            selectedConfigId === config.id
+                              ? 'radio-button-on'
+                              : 'radio-button-off'
+                          }
+                          size={20}
+                          color={
+                            selectedConfigId === config.id
+                              ? accentPrimary
+                              : textMuted
+                          }
+                          style={{ marginRight: 8 }}
+                        />
+                        <Text
+                          className="flex-1 text-base text-text-primary"
+                          numberOfLines={1}
+                        >
+                          {config.url}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                {/* Server label (single config) */}
+                {configs.length === 1 && (
                   <View className="mb-3">
                     <Text className="text-sm text-text-muted text-center" numberOfLines={1}>
-                      {config.url}
+                      {configs[0].url}
                     </Text>
                   </View>
                 )}
 
-                {/* Email + Password (hidden when the server disables email auth) */}
-                {hasEmail && (
-                  <>
-                    <View className="mb-3">
-                      <Text className="text-sm mb-2 text-text-secondary">{t('auth.email', { defaultValue: 'Email' })}</Text>
-                      <FormInput
-                        // i18n-audit-ignore-next-line hardcoded-ui-text -- email format example is language-neutral technical input guidance.
-                        placeholder="email@example.com"
-                        value={email}
-                        onChangeText={setEmail}
-                        autoCapitalize="none"
-                        keyboardType="email-address"
-                        autoComplete="email"
-                      />
-                    </View>
-                    <View className="mb-4">
-                      <Text className="text-sm mb-2 text-text-secondary">{t('auth.password', { defaultValue: 'Password' })}</Text>
-                      <FormInput
-                        placeholder={t('auth.passwordPlaceholder', { defaultValue: 'Password' })}
-                        value={password}
-                        onChangeText={setPassword}
-                        secureTextEntry
-                        autoComplete="password"
-                      />
-                    </View>
-                  </>
-                )}
-
-                {oidcProviders.length > 0 && hasEmail && (
-                  <View className="flex-row items-center mb-4">
-                    <View className="flex-1 h-px bg-border-subtle" />
-                    <Text className="mx-3 text-xs text-text-muted uppercase">{t('auth.orSignInWith', { defaultValue: 'Or sign in with' })}</Text>
-                    <View className="flex-1 h-px bg-border-subtle" />
-                  </View>
-                )}
-
-                <View className="gap-4">
-                  {oidcProviders.map((provider: OidcProvider) => (
-                    <Button
-                      key={provider.id}
-                      variant="outline"
-                      onPress={() => handleOidcLogin(provider.id)}
-                      disabled={loading}
-                      className="w-full flex-row items-center justify-center p-2.5 rounded-lg border border-border-subtle bg-raised"
-                    >
-                      <View className="flex-row items-center">
-                        <OidcProviderLogo logoUrl={provider.logo_url} serverUrl={currentUrl} />
-                        <Text className="text-base font-semibold text-text-primary">
-                          {provider.display_name || t('auth.signInWithProvider', { defaultValue: 'Sign in with {{provider}}', provider: provider.id })}
-                        </Text>
-                      </View>
-                    </Button>
-                  ))}
-                  <Button
-                    variant="outline"
-                    onPress={handlePasskeySignIn}
-                    disabled={loading}
-                    className="w-full flex-row items-center justify-center p-2.5 rounded-lg border border-border-subtle bg-raised"
-                  >
-                    <View className="flex-row items-center">
-                      <View className="mr-2">
-                        <Icon name="fingerprint" size={20} color={accentPrimary} />
-                      </View>
-                      <Text className="text-base font-semibold text-text-primary">
-                        {t('auth.signInWithPasskey', { defaultValue: 'Sign in with Passkey' })}
-                      </Text>
-                    </View>
-                  </Button>
+                {/* Email */}
+                <View className="mb-3">
+                  <Text className="text-sm mb-2 text-text-secondary">Email</Text>
+                  <FormInput
+                    placeholder="email@example.com"
+                    value={email}
+                    onChangeText={setEmail}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    autoComplete="email"
+                  />
                 </View>
 
-                {(hasEmail || !!error) && (
-                  <View className="mt-4">
-                    {/* ErrorBanner's own mb-4 is the banner→button gap. */}
-                    <ErrorBanner message={error} />
-                    {hasEmail && (
-                      <PrimaryButton label={t('auth.signIn', { defaultValue: 'Sign In' })} onPress={handleSignIn} loading={loading} />
-                    )}
-                  </View>
-                )}
+                {/* Password */}
+                <View className="mb-4">
+                  <Text className="text-sm mb-2 text-text-secondary">Password</Text>
+                  <FormInput
+                    placeholder="Password"
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry
+                    autoComplete="password"
+                  />
+                </View>
+
+                <ErrorBanner message={error} />
+
+                <PrimaryButton label="Sign In" onPress={handleSignIn} loading={loading} />
 
                 {onSwitchToApiKey && (
                   <Button
                     variant="ghost"
                     onPress={handleSwitchToApiKey}
                     className="mt-2 py-2"
-                    textClassName="text-sm"
+                    textClassName="text-sm text-text-muted"
                   >
-                    {t('auth.useApiKeyInstead', { defaultValue: 'Use API Key Instead' })}
+                    Use API Key Instead
                   </Button>
                 )}
+
+                <Button
+                  variant="ghost"
+                  onPress={handleDismiss}
+                  className="mt-2 py-2.5"
+                  textClassName="text-base text-text-muted"
+                >
+                  Later
+                </Button>
               </>
             ) : (
               <MfaForm

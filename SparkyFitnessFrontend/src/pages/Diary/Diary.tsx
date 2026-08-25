@@ -11,16 +11,7 @@ import MealCard from './MealCard';
 import ExerciseCard from './ExerciseCard';
 import DiaryWidgetGrid, { type DiaryWidget } from './DiaryWidgetGrid';
 import { mealWidgetKey } from '@/utils/dashboardLayout';
-import {
-  Flame,
-  Salad,
-  Droplet,
-  UtensilsCrossed,
-  Dumbbell,
-  HeartPulse,
-} from 'lucide-react';
-import { DailyHealthMetricsCard } from '@/components/Health/DailyHealthMetricsCard';
-import { useDailyHealthMetrics } from '@/hooks/useGenericHealth';
+import { Flame, Salad, Droplet, UtensilsCrossed, Dumbbell } from 'lucide-react';
 import EditFoodEntryDialog from './EditFoodEntryDialog';
 import FoodUnitSelector from '@/components/FoodUnitSelector';
 import CopyFoodEntryDialog from '@/pages/Diary/CopyFoodEntryDialog';
@@ -31,7 +22,6 @@ import LogMealDialog from '@/pages/Diary/LogMealDialog';
 import { debug, info, error } from '@/utils/logging';
 import {
   calculateDayTotals,
-  addSupplementTotals,
   getEntryNutrition,
   getMealData,
   getMealTotals,
@@ -53,7 +43,7 @@ import {
   useFoodEntries,
   useFoodEntryMeals,
 } from '@/hooks/Diary/useFoodEntries';
-import { todayInZone, prefillEntryTime } from '@workspace/shared';
+import { todayInZone } from '@workspace/shared';
 import { useDailySummary } from '@/hooks/Diary/useDailyProgress';
 
 const Diary = () => {
@@ -96,8 +86,6 @@ const Diary = () => {
   const [openFoodSearchForMealType, setOpenFoodSearchForMealType] = useState<
     string | null
   >(null);
-  const [toolbarContainer, setToolbarContainer] =
-    useState<HTMLDivElement | null>(null);
 
   const currentUserId = activeUserId;
   const { data: customNutrients, isLoading: customNutrientsLoading } =
@@ -105,8 +93,6 @@ const Diary = () => {
   const { data: availableMealTypes, isLoading: mealTypesLoading } =
     useMealTypes();
   const { data: goals, isLoading: goalsLoading } = useDiaryGoals(selectedDate);
-  const { data: healthMetricsData, isLoading: loadingHealthMetrics } =
-    useDailyHealthMetrics(selectedDate);
   const { data: summaryData, isLoading: summaryLoading } =
     useDailySummary(selectedDate);
   const { data: fetchedFoodEntries, isLoading: foodEntriesLoading } =
@@ -143,12 +129,7 @@ const Diary = () => {
     ? fetchedFoodEntries.filter((entry) => !entry.food_entry_meal_id)
     : [];
 
-  // Logged supplement doses contribute to the day's intake, so the nutrition summary has
-  // to account for them or it disagrees with the calorie ring above it, which already does.
-  const dayTotals = addSupplementTotals(
-    calculateDayTotals(foodEntries, foodEntryMeals),
-    summaryData?.supplementTotals
-  );
+  const dayTotals = calculateDayTotals(foodEntries, foodEntryMeals);
 
   // Handle navigation for opening food search dialog
   useEffect(() => {
@@ -250,8 +231,7 @@ const Diary = () => {
     food: Food,
     quantity: number,
     unit: string,
-    selectedVariant: FoodVariant,
-    entryTime?: string | null
+    selectedVariant: FoodVariant
   ) => {
     if (!currentUserId) {
       return;
@@ -261,7 +241,6 @@ const Diary = () => {
       quantity,
       unit,
       selectedVariant,
-      entryTime,
     });
     try {
       await createFoodEntry({
@@ -273,7 +252,6 @@ const Diary = () => {
         unit: unit,
         variant_id: selectedVariant.id,
         entry_date: selectedDate,
-        entry_time: entryTime || null,
       });
       info(loggingLevel, 'Food entry added successfully.');
     } catch (err) {
@@ -343,21 +321,6 @@ const Diary = () => {
     [availableMealTypes]
   );
 
-  // Some Garmin sync fields (e.g. lactate_threshold, fitness_age) can create a
-  // daily_health_metrics row for a date even when none of the metrics this
-  // card actually displays came back populated (no real wearable, FIT-only
-  // import, etc.). Only show the widget when there's something real to show,
-  // rather than an empty shell.
-  const todaysHealthMetrics = healthMetricsData?.[0];
-  const hasDisplayableHealthMetrics = Boolean(
-    todaysHealthMetrics &&
-    (todaysHealthMetrics.body_battery_highest != null ||
-      todaysHealthMetrics.avg_stress_level != null ||
-      todaysHealthMetrics.resting_heart_rate != null ||
-      todaysHealthMetrics.vo2_max != null ||
-      todaysHealthMetrics.training_readiness_score != null)
-  );
-
   // Build the ordered widget registry: energy, nutrition, water, one card per
   // visible meal type, then exercise. Keys match buildWidgetKeys() so the saved
   // grid layout reconciles cleanly against the user's current meal types.
@@ -392,23 +355,6 @@ const Diary = () => {
         render: () => <WaterIntake selectedDate={selectedDate} />,
       },
     ];
-
-    if (hasDisplayableHealthMetrics) {
-      list.push({
-        key: 'healthMetrics',
-        title: t(
-          'diary.wearableHealthSummary',
-          'Daily Wearable Health Summary'
-        ),
-        icon: HeartPulse,
-        render: () => (
-          <DailyHealthMetricsCard
-            metrics={todaysHealthMetrics}
-            isLoading={loadingHealthMetrics}
-          />
-        ),
-      });
-    }
 
     for (const mealTypeObj of visibleMealTypes) {
       list.push({
@@ -480,39 +426,21 @@ const Diary = () => {
     customNutrients,
     exercisesToLogFromPreset,
     openFoodSearchForMealType,
-    hasDisplayableHealthMetrics,
-    todaysHealthMetrics,
-    loadingHealthMetrics,
     t,
   ]);
 
   if (loading) return <div>Loading...</div>;
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b">
-        <div />
-        <div className="flex min-w-0 flex-wrap items-center gap-2 sm:ml-auto">
-          <div
-            ref={setToolbarContainer}
-            className="flex min-w-0 flex-wrap items-center gap-2"
-          />
-          <DayNavigator
-            selectedDate={selectedDate}
-            onDateChange={(dateString) => {
-              setSelectedDate(dateString);
-              setSearchParams({ date: dateString });
-            }}
-            className="grid-cols-none flex mb-0 items-center gap-2"
-          />
-        </div>
-      </div>
+      <DayNavigator
+        selectedDate={selectedDate}
+        onDateChange={(dateString) => {
+          setSelectedDate(dateString);
+          setSearchParams({ date: dateString });
+        }}
+      />
 
-      {effectiveGoals && (
-        <DiaryWidgetGrid
-          widgets={widgets}
-          toolbarContainer={toolbarContainer}
-        />
-      )}
+      {effectiveGoals && <DiaryWidgetGrid widgets={widgets} />}
 
       {/* Food Unit Selector Dialog */}
       {selectedFood && (
@@ -522,19 +450,6 @@ const Diary = () => {
           onOpenChange={setIsUnitSelectorOpen}
           onSelect={handleFoodUnitSelect}
           showUnitSelector={true}
-          showTimeInput={true}
-          defaultMealTime={
-            availableMealTypes?.find(
-              (t) => t.name.toLowerCase() === selectedMealType.toLowerCase()
-            )?.default_time
-          }
-          initialTime={prefillEntryTime({
-            defaultTime: availableMealTypes?.find(
-              (t) => t.name.toLowerCase() === selectedMealType.toLowerCase()
-            )?.default_time,
-            isToday: selectedDate === todayInZone(timezone),
-            tz: timezone,
-          })}
         />
       )}
 
@@ -574,13 +489,6 @@ const Diary = () => {
         onOpenChange={setIsLogMealDialogOpen}
         date={selectedDate}
         mealType={selectedMealType}
-        initialEntryTime={prefillEntryTime({
-          defaultTime: availableMealTypes?.find(
-            (t) => t.name.toLowerCase() === selectedMealType.toLowerCase()
-          )?.default_time,
-          isToday: selectedDate === todayInZone(timezone),
-          tz: timezone,
-        })}
       />
 
       {/* Convert to Meal Dialog */}

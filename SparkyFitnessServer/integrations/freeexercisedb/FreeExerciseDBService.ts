@@ -1,8 +1,6 @@
 import axios from 'axios';
 import NodeCache from 'node-cache';
 import { log } from '../../config/logging.js';
-import { filterAndSortByTerms } from '@workspace/shared';
-
 const GITHUB_RAW_BASE_URL =
   'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main';
 const EXERCISES_PATH = 'exercises'; // No leading slash for API
@@ -52,9 +50,10 @@ class FreeExerciseDBService {
     }
   }
   async searchExercises(
-    query: string | null | undefined,
-    equipmentFilter: string[] = [],
-    muscleGroupFilter: string[] = [],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    query: any,
+    equipmentFilter = [],
+    muscleGroupFilter = [],
     limit = 50,
     offset = 0
   ) {
@@ -76,10 +75,10 @@ class FreeExerciseDBService {
         headers: { Accept: 'application/vnd.github.raw+json' },
       });
       const allExercises = response.data;
-
-      // 1. Filter by equipment and muscle group first
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const preFiltered = allExercises.filter((exercise: any) => {
+      const filteredExercises = allExercises.filter((exercise: any) => {
+        const matchesQuery =
+          !query || exercise.name.toLowerCase().includes(query.toLowerCase());
         const matchesEquipment =
           equipmentFilter.length === 0 ||
           (exercise.equipment &&
@@ -96,16 +95,8 @@ class FreeExerciseDBService {
             muscleGroupFilter.some((filter) =>
               exercise.secondaryMuscles.includes(filter)
             ));
-        return matchesEquipment && matchesMuscleGroup;
+        return matchesQuery && matchesEquipment && matchesMuscleGroup;
       });
-
-      // 2. Filter and sort by search query using the shared utility
-      const filteredExercises = filterAndSortByTerms(
-        preFiltered,
-        (ex: any) => ex.name,
-        query || ''
-      );
-
       const totalCount = filteredExercises.length;
       const paginatedExercises = filteredExercises.slice(
         offset,

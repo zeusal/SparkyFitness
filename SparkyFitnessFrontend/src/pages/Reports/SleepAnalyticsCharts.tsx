@@ -9,8 +9,7 @@ import {
   type SleepChartData,
   type SleepEntry,
 } from '@/types';
-import { formatSecondsToHHMM, sleepEntryZone } from '@/utils/timeFormatters';
-import { instantHourMinuteInZone } from '@workspace/shared';
+import { formatSecondsToHHMM } from '@/utils/timeFormatters';
 import {
   DEBT_ZONE_COLOR,
   SURPLUS_ZONE_COLOR,
@@ -91,7 +90,7 @@ const SleepAnalyticsCharts = ({
   heartRateData,
   latestSleepEntry,
 }: SleepAnalyticsChartsProps) => {
-  const { formatDateInUserTimezone, dateFormat, timezone } = usePreferences();
+  const { formatDateInUserTimezone, dateFormat } = usePreferences();
   const { resolvedTheme } = useTheme();
   const { t } = useTranslation();
   const { data: sleepDebtData } = useSleepDebtQuery();
@@ -122,34 +121,19 @@ const SleepAnalyticsCharts = ({
         (data.stagePercentages.light || 0) +
         (data.stagePercentages.awake || 0);
 
-      // Consistency hours derive from the day's recording zone (profile
-      // timezone when absent) so travel weeks chart the wall clock the user
-      // actually slept by. Missing instants stay null so recharts skips the
-      // point instead of charting the 1970 epoch.
-      const zone = sleepEntryZone(data, timezone);
-      let bedtimeHours: number | null = null;
-      if (data.earliestBedtime) {
-        const { hour, minute } = instantHourMinuteInZone(
-          data.earliestBedtime,
-          zone
-        );
-        bedtimeHours = hour + minute / 60;
-        // CROSS-MIDNIGHT FIX:
-        // If bedtime is between 00:00 and 12:00 (midday), treat it as 24:00+
-        // This keeps the trend line continuous (e.g. 23:00 -> 01:00 becomes 23:00 -> 25:00)
-        if (bedtimeHours >= 0 && bedtimeHours < 12) {
-          bedtimeHours += 24;
-        }
+      const bedtimeDate = new Date(data.earliestBedtime || 0);
+      let bedtimeHours = bedtimeDate.getHours() + bedtimeDate.getMinutes() / 60;
+
+      // CROSS-MIDNIGHT FIX:
+      // If bedtime is between 00:00 and 12:00 (midday), treat it as 24:00+
+      // This keeps the trend line continuous (e.g. 23:00 -> 01:00 becomes 23:00 -> 25:00)
+      if (bedtimeHours >= 0 && bedtimeHours < 12) {
+        bedtimeHours += 24;
       }
 
-      let wakeTimeHours: number | null = null;
-      if (data.latestWakeTime) {
-        const { hour, minute } = instantHourMinuteInZone(
-          data.latestWakeTime,
-          zone
-        );
-        wakeTimeHours = hour + minute / 60;
-      }
+      const wakeTimeDate = new Date(data.latestWakeTime || 0);
+      const wakeTimeHours =
+        wakeTimeDate.getHours() + wakeTimeDate.getMinutes() / 60;
 
       return {
         date: data.date,

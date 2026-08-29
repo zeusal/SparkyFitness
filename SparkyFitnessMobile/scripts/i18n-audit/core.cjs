@@ -68,9 +68,14 @@ function runAudit(options = {}) {
     dynamicI18nFindings: [],
     unsafeNumberFormatFindings: [],
     manualPluralizationFindings: [],
+    // Weblate creates a catalog long before anyone ships it, so defects in an
+    // unregistered one are reported but never block. Registered locales do.
+    unregisteredLocaleFindings: [],
     translationCoverage: {},
     summary: {},
   };
+
+  const isShipped = (locale) => Object.hasOwn(manifest.locales ?? {}, locale);
 
   const sourceLocaleDir = path.dirname(enLocalePath);
   const localeRoot = path.dirname(sourceLocaleDir);
@@ -82,7 +87,11 @@ function runAudit(options = {}) {
       .filter((entry) => {
         if (!fs.existsSync(entry.path)) return false;
         try { new Intl.PluralRules(entry.intlLocale || manifest.locales[entry.locale]?.intlLocale || entry.locale); return true; }
-        catch { report.localeStructuralErrors.push({ rule: 'invalid-locale-tag', locale: entry.locale, message: `Invalid locale tag "${entry.intlLocale}" discovered in locale root; skipping` }); return false; }
+        catch {
+          const finding = { rule: 'invalid-locale-tag', locale: entry.locale, message: `Invalid locale tag "${entry.intlLocale}" discovered in locale root; skipping` };
+          (isShipped(entry.locale) ? report.localeStructuralErrors : report.unregisteredLocaleFindings).push(finding);
+          return false;
+        }
       });
   }
   const validator = new LocaleValidator(enLocalePath, null, { localePaths, sourceLocale: SOURCE_LOCALE, fallbackLocale: FALLBACK_LOCALE, sourceIntlLocale: SOURCE_INTL_LOCALE });
@@ -101,7 +110,10 @@ function runAudit(options = {}) {
   report.translationCoverage = localeResult.coverage || {};
 
   for (const error of localeResult.errors) {
-    if (error.rule === 'missing-plural-form') {
+    // Errors without a locale belong to the source catalog.
+    if (error.locale !== undefined && error.locale !== SOURCE_LOCALE && !isShipped(error.locale)) {
+      report.unregisteredLocaleFindings.push(error);
+    } else if (error.rule === 'missing-plural-form') {
       report.pluralErrors.push(error);
     } else if (error.rule === 'placeholder-mismatch') {
       report.placeholderErrors.push(error);
@@ -232,6 +244,7 @@ function buildSummary(report) {
     dynamicI18nFindings: report.dynamicI18nFindings.length,
     unsafeNumberFormatFindings: report.unsafeNumberFormatFindings.length,
     manualPluralizationFindings: report.manualPluralizationFindings.length,
+    unregisteredLocaleFindings: (report.unregisteredLocaleFindings ?? []).length,
     sourceScanErrors: report.localeStructuralErrors.filter(
       (e) => e.rule === SOURCE_SCAN_ERROR_RULE,
     ).length,

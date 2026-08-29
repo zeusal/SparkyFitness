@@ -546,21 +546,28 @@ async function ensureUserInitialization(
   const client = existingClient || (await getSystemClient());
   try {
     if (!existingClient) await client.query('BEGIN');
+    // Each insert relies on a unique index rather than a prior existence check:
+    // WHERE NOT EXISTS is a read-then-write that two concurrent calls can both
+    // pass before either commits, which duplicated profiles rows (profiles had
+    // no primary key until 20260828000000_add_profiles_primary_key.sql) and
+    // made the other two fail on a unique violation instead of no-opping.
     await client.query(
       'INSERT INTO profiles (id, full_name, avatar_url, created_at, updated_at) ' +
-        'SELECT $1, $2, $3, now(), now() WHERE NOT EXISTS (SELECT 1 FROM profiles WHERE id = $1)',
+        'VALUES ($1, $2, $3, now(), now()) ON CONFLICT (id) DO NOTHING',
       [userId, fullName, avatarUrl]
     );
-    // Ensure user_goals exists (the base goal with NULL date)
+    // Ensure user_goals exists (the base goal with NULL date).
+    // No conflict target: the guard is the expression index
+    // idx_user_goals_unique_user_date on (user_id, COALESCE(goal_date, '1900-01-01')).
     await client.query(
       'INSERT INTO user_goals (user_id, created_at, updated_at) ' +
-        'SELECT $1, now(), now() WHERE NOT EXISTS (SELECT 1 FROM user_goals WHERE user_id = $1 AND goal_date IS NULL)',
+        'VALUES ($1, now(), now()) ON CONFLICT DO NOTHING',
       [userId]
     );
     // Ensure onboarding_status exists
     await client.query(
       'INSERT INTO onboarding_status (user_id, onboarding_complete, created_at, updated_at) ' +
-        'SELECT $1, FALSE, now(), now() WHERE NOT EXISTS (SELECT 1 FROM onboarding_status WHERE user_id = $1)',
+        'VALUES ($1, FALSE, now(), now()) ON CONFLICT (user_id) DO NOTHING',
       [userId]
     );
     if (!existingClient) await client.query('COMMIT');

@@ -8,7 +8,7 @@ async function getGoalByDate(userId: any, selectedDate: any) {
                saturated_fat, polyunsaturated_fat, monounsaturated_fat, trans_fat,
                cholesterol, sodium, potassium, dietary_fiber, sugars,
                vitamin_a, vitamin_c, calcium, iron,
-               target_exercise_calories_burned, target_exercise_duration_minutes,
+               target_exercise_calories_burned, target_exercise_duration_minutes, steps_goal,
                protein_percentage, carbs_percentage, fat_percentage,
                breakfast_percentage, lunch_percentage, dinner_percentage, snacks_percentage,
                custom_meal_percentages, custom_nutrients
@@ -34,7 +34,7 @@ async function getAllHistoricalGoals(userId: string) {
               saturated_fat, polyunsaturated_fat, monounsaturated_fat, trans_fat,
               cholesterol, sodium, potassium, dietary_fiber, sugars,
               vitamin_a, vitamin_c, calcium, iron,
-              target_exercise_calories_burned, target_exercise_duration_minutes,
+              target_exercise_calories_burned, target_exercise_duration_minutes, steps_goal,
               protein_percentage, carbs_percentage, fat_percentage,
               breakfast_percentage, lunch_percentage, dinner_percentage, snacks_percentage,
               custom_meal_percentages, custom_nutrients
@@ -63,7 +63,7 @@ async function getGoalsInRange(
               saturated_fat, polyunsaturated_fat, monounsaturated_fat, trans_fat,
               cholesterol, sodium, potassium, dietary_fiber, sugars,
               vitamin_a, vitamin_c, calcium, iron,
-              target_exercise_calories_burned, target_exercise_duration_minutes,
+              target_exercise_calories_burned, target_exercise_duration_minutes, steps_goal,
               protein_percentage, carbs_percentage, fat_percentage,
               breakfast_percentage, lunch_percentage, dinner_percentage, snacks_percentage,
               custom_meal_percentages, custom_nutrients
@@ -88,7 +88,7 @@ async function getMostRecentGoalBeforeDate(userId: any, selectedDate: any) {
                saturated_fat, polyunsaturated_fat, monounsaturated_fat, trans_fat,
                cholesterol, sodium, potassium, dietary_fiber, sugars,
                vitamin_a, vitamin_c, calcium, iron,
-               target_exercise_calories_burned, target_exercise_duration_minutes,
+               target_exercise_calories_burned, target_exercise_duration_minutes, steps_goal,
                protein_percentage, carbs_percentage, fat_percentage,
                breakfast_percentage, lunch_percentage, dinner_percentage, snacks_percentage,
                custom_meal_percentages, custom_nutrients
@@ -113,12 +113,12 @@ async function upsertGoal(goalData: any) {
         saturated_fat, polyunsaturated_fat, monounsaturated_fat, trans_fat,
         cholesterol, sodium, potassium, dietary_fiber, sugars,
         vitamin_a, vitamin_c, calcium, iron,
-        target_exercise_calories_burned, target_exercise_duration_minutes,
+        target_exercise_calories_burned, target_exercise_duration_minutes, steps_goal,
         protein_percentage, carbs_percentage, fat_percentage,
         breakfast_percentage, lunch_percentage, dinner_percentage, snacks_percentage,
         custom_meal_percentages, custom_nutrients, created_at, updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34)
       ON CONFLICT (user_id, COALESCE(goal_date, '1900-01-01'::date))
       DO UPDATE SET
         calories = EXCLUDED.calories,
@@ -141,6 +141,7 @@ async function upsertGoal(goalData: any) {
         iron = EXCLUDED.iron,
         target_exercise_calories_burned = EXCLUDED.target_exercise_calories_burned,
         target_exercise_duration_minutes = EXCLUDED.target_exercise_duration_minutes,
+        steps_goal = EXCLUDED.steps_goal,
         protein_percentage = EXCLUDED.protein_percentage,
         carbs_percentage = EXCLUDED.carbs_percentage,
         fat_percentage = EXCLUDED.fat_percentage,
@@ -175,6 +176,7 @@ async function upsertGoal(goalData: any) {
         goalData.iron,
         goalData.target_exercise_calories_burned,
         goalData.target_exercise_duration_minutes,
+        goalData.steps_goal,
         goalData.protein_percentage,
         goalData.carbs_percentage,
         goalData.fat_percentage,
@@ -230,7 +232,7 @@ async function getGoalTimeline(userId: string) {
   const client = await getClient(userId);
   try {
     const result = await client.query(
-      `SELECT id, goal_date, calories, protein, carbs, fat, water_goal_ml
+      `SELECT id, goal_date, calories, protein, carbs, fat, water_goal_ml, steps_goal
        FROM user_goals
        WHERE user_id = $1
        ORDER BY goal_date DESC`,

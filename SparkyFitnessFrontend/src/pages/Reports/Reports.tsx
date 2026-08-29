@@ -168,6 +168,7 @@ const Reports = () => {
     // `measurementData` above defaults to a fresh `[]` each render, which
     // would defeat that and re-compute every widget.
     measurementData: reportsData?.measurementData,
+    goalsByDate: goalData,
   });
 
   const handleStartDateChange = (date: string) => {

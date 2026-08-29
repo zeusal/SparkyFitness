@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import goalService from '../services/goalService.js';
 import goalRepository from '../models/goalRepository.js';
+import { getWearableStepGoalsForDateRange } from '../models/genericHealthRepository.js';
 import weeklyGoalPlanRepository from '../models/weeklyGoalPlanRepository.js';
 import preferenceRepository from '../models/preferenceRepository.js';
 import userRepository from '../models/userRepository.js';
@@ -11,6 +12,7 @@ import adaptiveTdeeService from '../services/AdaptiveTdeeService.js';
 vi.mock('../models/goalRepository.js');
 vi.mock('../models/weeklyGoalPlanRepository.js');
 vi.mock('../models/goalPresetRepository.js');
+vi.mock('../models/genericHealthRepository.js');
 vi.mock('../models/userRepository.js');
 vi.mock('../models/preferenceRepository.js');
 vi.mock('../models/measurementRepository.js');
@@ -24,6 +26,8 @@ const date = '2026-08-21';
 describe('goalService calorie safety floor preference', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+
+    vi.mocked(getWearableStepGoalsForDateRange).mockResolvedValue({});
     vi.mocked(
       weeklyGoalPlanRepository.getActiveWeeklyGoalPlan
     ).mockResolvedValue(null);

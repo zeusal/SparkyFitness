@@ -19,6 +19,7 @@ export interface ExpandedGoals {
   iron: number;
   target_exercise_calories_burned: number;
   target_exercise_duration_minutes: number;
+  steps_goal: number;
   protein_percentage: number | null;
   carbs_percentage: number | null;
   fat_percentage: number | null;
@@ -54,6 +55,7 @@ export interface GoalPreset {
   iron: number;
   target_exercise_calories_burned: number;
   target_exercise_duration_minutes: number;
+  steps_goal: number;
   protein_percentage: number | null;
   carbs_percentage: number | null;
   fat_percentage: number | null;

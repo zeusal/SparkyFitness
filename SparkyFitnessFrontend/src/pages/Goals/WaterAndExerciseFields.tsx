@@ -21,6 +21,7 @@ type WaterExerciseBase = Pick<
   | 'water_goal_ml'
   | 'target_exercise_calories_burned'
   | 'target_exercise_duration_minutes'
+  | 'steps_goal'
 >;
 
 export const WaterAndExerciseFields = <T extends WaterExerciseBase>({
@@ -125,6 +126,20 @@ export const WaterAndExerciseFields = <T extends WaterExerciseBase>({
               ...state,
               target_exercise_duration_minutes: Number(e.target.value),
             })
+          }
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs">
+          {t('goals.goalsSettings.stepsGoal', 'Daily Steps')}
+        </Label>
+        <Input
+          type="number"
+          min={0}
+          step={500}
+          value={state.steps_goal}
+          onChange={(e) =>
+            setState({ ...state, steps_goal: Number(e.target.value) })
           }
         />
       </div>

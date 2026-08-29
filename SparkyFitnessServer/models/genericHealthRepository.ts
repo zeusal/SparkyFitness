@@ -362,3 +362,45 @@ export async function getDailyHealthMetrics(
     client.release();
   }
 }
+
+/**
+ * Wearable-reported step goals per day, keyed by 'YYYY-MM-DD'.
+ *
+ * Feeds the fallback in goalService for users who have never set their own step
+ * goal: a device that already knows the user wants 12000 steps is a better guess
+ * than the built-in default. A user's own `user_goals.steps_goal` always wins.
+ *
+ * daily_health_metrics is unique per (user_id, entry_date, source_provider), so a
+ * user syncing two devices has two rows for the same day. MAX picks one without
+ * depending on which provider happened to sync last, which keeps the goal stable
+ * across syncs instead of flip-flopping between devices.
+ */
+export async function getWearableStepGoalsForDateRange(
+  userId: string,
+  actingUserId: string,
+  startDate: string,
+  endDate: string
+): Promise<Record<string, number>> {
+  const client = await getClient(actingUserId);
+  try {
+    const res = (await client.query(
+      `SELECT to_char(entry_date, 'YYYY-MM-DD') AS day, MAX(step_goal) AS step_goal
+       FROM daily_health_metrics
+       WHERE user_id = $1
+         AND entry_date BETWEEN $2 AND $3
+         AND step_goal IS NOT NULL
+         AND step_goal > 0
+       GROUP BY entry_date`,
+      [userId, startDate, endDate]
+    )) as { rows: Array<{ day: string; step_goal: string | number }> };
+
+    const byDate: Record<string, number> = {};
+    for (const row of res.rows) {
+      const goal = Number(row.step_goal);
+      if (Number.isFinite(goal) && goal > 0) byDate[row.day] = goal;
+    }
+    return byDate;
+  } finally {
+    client.release();
+  }
+}

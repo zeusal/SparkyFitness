@@ -289,6 +289,7 @@ export function buildWidgetKeys(
     'energy',
     'nutrition',
     'water',
+    'steps',
     ...(hasDisplayableHealthMetrics ? ['healthMetrics'] : []),
     ...visibleMealTypeIds.map(mealWidgetKey),
     'exercise',
@@ -307,7 +308,8 @@ export function generateDefaultLayouts(mealKeys: string[]): DashboardLayouts {
     { i: 'energy', x: 0, y: 0, w: 3, h: 10, minW: 2, minH: 6 },
     { i: 'nutrition', x: 3, y: 0, w: 6, h: 10, minW: 3, minH: 6 },
     { i: 'water', x: 9, y: 0, w: 3, h: 10, minW: 2, minH: 6 },
-    { i: 'healthMetrics', x: 0, y: 10, w: 12, h: 6, minW: 3, minH: 4 },
+    { i: 'steps', x: 0, y: 10, w: 3, h: 6, minW: 2, minH: 4 },
+    { i: 'healthMetrics', x: 3, y: 10, w: 9, h: 6, minW: 3, minH: 4 },
   ];
   let lgY = 16;
   for (const key of mealKeys) {
@@ -320,7 +322,8 @@ export function generateDefaultLayouts(mealKeys: string[]): DashboardLayouts {
   const md: WidgetLayout[] = [
     { i: 'energy', x: 0, y: 0, w: 4, h: 10, minW: 2, minH: 6 },
     { i: 'nutrition', x: 4, y: 0, w: 6, h: 10, minW: 3, minH: 6 },
-    { i: 'water', x: 0, y: 10, w: 10, h: 6, minW: 2, minH: 4 },
+    { i: 'water', x: 0, y: 10, w: 5, h: 6, minW: 2, minH: 4 },
+    { i: 'steps', x: 5, y: 10, w: 5, h: 6, minW: 2, minH: 4 },
     { i: 'healthMetrics', x: 0, y: 16, w: 10, h: 6, minW: 3, minH: 4 },
   ];
   let mdY = 22;
@@ -342,6 +345,7 @@ export function generateDefaultLayouts(mealKeys: string[]): DashboardLayouts {
     push('energy', 10, 6);
     push('nutrition', 10, 6);
     push('water', 8, 5);
+    push('steps', 6, 4);
     push('healthMetrics', 6, 4);
     for (const key of mealKeys) push(key, 4, 3);
     push('exercise', 4, 3);

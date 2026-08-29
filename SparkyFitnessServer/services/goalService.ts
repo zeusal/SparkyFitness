@@ -5,6 +5,7 @@ import userRepository from '../models/userRepository.js';
 import preferenceRepository from '../models/preferenceRepository.js';
 import measurementRepository from '../models/measurementRepository.js';
 import exerciseEntryRepository from '../models/exerciseEntry.js';
+import { getWearableStepGoalsForDateRange } from '../models/genericHealthRepository.js';
 import bmrService from './bmrService.js';
 import adaptiveTdeeService from './AdaptiveTdeeService.js';
 import { userAge } from '../utils/dateHelpers.js';
@@ -83,6 +84,28 @@ async function getUserGoalsForRange(
     userId,
     startDate
   );
+
+  // Seeds the step goal from the user's wearable for days they never set one of
+  // their own: daily_health_metrics.step_goal is what the device is configured
+  // for, a far better guess than DEFAULT_GOALS for someone who already told their
+  // watch what they are aiming for.
+  //
+  // Loaded lazily and once: a user with their own goal on every day in range --
+  // the common case on the Diary -- never pays for the query, and a user who
+  // needs it pays for one range query rather than one per day. Uses the same
+  // single-user client convention as goalRepository above.
+  let wearableStepGoals: Record<string, number> | null = null;
+  const loadWearableStepGoals = async () => {
+    if (wearableStepGoals === null) {
+      wearableStepGoals = await getWearableStepGoalsForDateRange(
+        userId,
+        userId,
+        startDate,
+        endDate
+      );
+    }
+    return wearableStepGoals;
+  };
 
   const DAY_PRESETS = [
     'sunday_preset_id',
@@ -197,6 +220,18 @@ async function getUserGoalsForRange(
 
     // Clone to avoid mutating the source in the cache or repository
     let processedGoals = { ...goals };
+
+    // Resolve the step goal: what the user set wins, then what their watch is set
+    // to, then the built-in default. A stored 0 counts as unset -- the goal has no
+    // meaning at zero and older rows predate the column entirely.
+    const storedStepsGoal = Number(processedGoals.steps_goal);
+    if (!Number.isFinite(storedStepsGoal) || storedStepsGoal <= 0) {
+      const wearableGoals = await loadWearableStepGoals();
+      processedGoals = {
+        ...processedGoals,
+        steps_goal: wearableGoals[dateStr] ?? DEFAULT_GOALS.steps_goal,
+      };
+    }
 
     if (adjust) {
       let goalCalories =
@@ -451,6 +486,7 @@ async function manageGoalTimeline(authenticatedUserId: string, goalData: any) {
       p_iron,
       p_target_exercise_calories_burned,
       p_target_exercise_duration_minutes,
+      p_steps_goal,
       p_protein_percentage,
       p_carbs_percentage,
       p_fat_percentage,
@@ -542,6 +578,7 @@ async function manageGoalTimeline(authenticatedUserId: string, goalData: any) {
         }
       });
     }
+    const stepsGoalToStore = cleanNumber(p_steps_goal, true);
     const goalPayload = {
       user_id: authenticatedUserId,
       goal_date: p_start_date,
@@ -569,6 +606,11 @@ async function manageGoalTimeline(authenticatedUserId: string, goalData: any) {
       target_exercise_duration_minutes: cleanNumber(
         p_target_exercise_duration_minutes
       ),
+      // NULL rather than 0 when unset, so getUserGoalsForRange can tell "no
+      // preference" from a deliberate value and fall back to the wearable goal.
+      // Rounded because the column is INTEGER and would reject a fractional value.
+      steps_goal:
+        stepsGoalToStore === null ? null : Math.round(stepsGoalToStore),
       protein_percentage: cleanNumber(p_protein_percentage, true),
       carbs_percentage: cleanNumber(p_carbs_percentage, true),
       fat_percentage: cleanNumber(p_fat_percentage, true),

@@ -4,6 +4,7 @@ import { DailyHealthMetrics } from '@workspace/shared';
 import {
   Activity,
   BatteryCharging,
+  Footprints,
   Heart,
   ShieldAlert,
   Zap,
@@ -119,6 +120,28 @@ export const DailyHealthMetricsCard: React.FC<DailyHealthMetricsCardProps> = ({
             </div>
           )}
         </div>
+
+        {/* Steps. total_steps has been arriving in this payload since the table
+            was created and was never rendered anywhere. Shown without a goal on
+            purpose: this card reports what the device measured, and the target the
+            user is actually working towards lives in the Diary's Steps widget, so
+            a second goal here would just compete with it. */}
+        {metrics.total_steps != null && (
+          <div className="col-span-2 p-3.5 rounded-xl bg-muted/50 border flex flex-col justify-between">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-1">
+              <Footprints className="h-4 w-4 text-teal-500 shrink-0" />
+              <span>{t('dailyHealthMetrics.steps', 'Steps')}</span>
+            </div>
+            <div className="flex items-baseline gap-1">
+              <span className="text-2xl font-black text-teal-500 tabular-nums">
+                {metrics.total_steps.toLocaleString()}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {t('dailyHealthMetrics.stepsUnit', 'steps')}
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Stress Level */}
         <div className="p-3.5 rounded-xl bg-muted/50 border flex flex-col justify-between">

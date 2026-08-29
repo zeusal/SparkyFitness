@@ -1137,6 +1137,12 @@ const options = {
               type: 'integer',
               nullable: true,
             },
+            steps_goal: {
+              type: 'integer',
+              nullable: true,
+              description:
+                "Daily step target. Reads resolve it as the user's own value, then the wearable-reported goal for that day, then the built-in default; null on write means the user has no preference.",
+            },
           },
         },
         GoalPreset: {
@@ -1150,6 +1156,7 @@ const options = {
             carbs: { type: 'number' },
             fat: { type: 'number' },
             water_goal: { type: 'number' },
+            steps_goal: { type: 'integer', nullable: true },
             protein_percentage: { type: 'number' },
             carbs_percentage: { type: 'number' },
             fat_percentage: { type: 'number' },

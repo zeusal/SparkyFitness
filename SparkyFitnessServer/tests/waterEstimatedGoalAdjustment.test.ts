@@ -1,6 +1,7 @@
 import { vi, beforeEach, describe, expect, it } from 'vitest';
 import goalService from '../services/goalService.js';
 import goalRepository from '../models/goalRepository.js';
+import { getWearableStepGoalsForDateRange } from '../models/genericHealthRepository.js';
 import weeklyGoalPlanRepository from '../models/weeklyGoalPlanRepository.js';
 import preferenceRepository from '../models/preferenceRepository.js';
 import userRepository from '../models/userRepository.js';
@@ -10,6 +11,7 @@ import exerciseEntryRepository from '../models/exerciseEntry.js';
 vi.mock('../models/goalRepository');
 vi.mock('../models/weeklyGoalPlanRepository');
 vi.mock('../models/goalPresetRepository');
+vi.mock('../models/genericHealthRepository');
 vi.mock('../models/userRepository');
 vi.mock('../models/preferenceRepository');
 vi.mock('../models/measurementRepository');
@@ -24,6 +26,8 @@ const testDate = '2026-06-22';
 describe('Water goal adjustment by exercise water loss', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+
+    vi.mocked(getWearableStepGoalsForDateRange).mockResolvedValue({});
 
     vi.mocked(
       weeklyGoalPlanRepository.getActiveWeeklyGoalPlan

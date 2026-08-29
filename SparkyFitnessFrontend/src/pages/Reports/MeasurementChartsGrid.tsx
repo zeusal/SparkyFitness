@@ -8,8 +8,8 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  BarChart,
   Bar,
+  ComposedChart,
 } from 'recharts';
 import { Scale, Ruler, Percent, Activity, Flame, Droplet } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -26,6 +26,7 @@ import {
 } from '@/utils/chartUtils';
 import { CheckInMeasurementsResponse } from '@workspace/shared';
 import type { Widget } from '@/components/widgets/WidgetGrid';
+import type { ExpandedGoals } from '@/types/goals';
 import type {
   DashboardLayouts,
   WidgetLayout,
@@ -102,6 +103,12 @@ const EMPTY_MEASUREMENTS: CheckInMeasurementsResponse[] = [];
 
 interface UseMeasurementChartWidgetsArgs {
   measurementData?: CheckInMeasurementsResponse[];
+  /**
+   * Per-date goals, keyed 'YYYY-MM-DD'. Only the step goal is used here, to draw
+   * the target line on the steps chart. Optional so the charts still render for
+   * callers that have no goals loaded.
+   */
+  goalsByDate?: Record<string, ExpandedGoals>;
 }
 
 /**
@@ -112,6 +119,7 @@ interface UseMeasurementChartWidgetsArgs {
  */
 export function useMeasurementChartWidgets({
   measurementData = EMPTY_MEASUREMENTS,
+  goalsByDate,
 }: UseMeasurementChartWidgetsArgs): Widget[] {
   const { t } = useTranslation();
   const {
@@ -130,6 +138,11 @@ export function useMeasurementChartWidgets({
     return measurementData.map((d) => ({
       ...d,
       date: d.entry_date,
+      // entry_date can arrive as 'YYYY-MM-DD' or as a full UTC-midnight ISO
+      // string; slicing keys correctly against the goal map either way.
+      stepsGoal:
+        Number(goalsByDate?.[String(d.entry_date).slice(0, 10)]?.steps_goal) ||
+        null,
       rawWeight: d.weight,
       rawNeck: d.neck,
       rawWaist: d.waist,
@@ -197,6 +210,7 @@ export function useMeasurementChartWidgets({
     }));
   }, [
     measurementData,
+    goalsByDate,
     weightUnit,
     measurementUnit,
     energyUnit,
@@ -237,6 +251,33 @@ export function useMeasurementChartWidgets({
     },
     []
   );
+
+  const stepsChartData = React.useMemo(
+    () => chartData.filter((d) => d.steps !== undefined && d.steps !== null),
+    [chartData]
+  );
+
+  // The smart domain only sees the bars, so a goal the user never came close to
+  // would be drawn off the top of the chart. Widen the ceiling to keep the goal
+  // line visible -- an unreachable goal you cannot see is worse than no line.
+  const stepsYAxisDomain = React.useMemo(() => {
+    const base = getYAxisDomain(stepsChartData, 'steps');
+    const maxGoal = stepsChartData.reduce(
+      (max, d) =>
+        typeof d.stepsGoal === 'number' && d.stepsGoal > max
+          ? d.stepsGoal
+          : max,
+      0
+    );
+    if (maxGoal <= 0) return base;
+    if (!base) return [0, Math.ceil(maxGoal * 1.05)] as [number, number];
+    const [min, max] = base;
+    // A string upper bound ('dataMax', 'auto') is recharts' own directive; leave it be.
+    if (typeof max !== 'number') return base;
+    return maxGoal > max
+      ? ([min, Math.ceil(maxGoal * 1.05)] as [number, number])
+      : base;
+  }, [stepsChartData, getYAxisDomain]);
 
   const [isMounted, setIsMounted] = React.useState(false);
 
@@ -559,10 +600,8 @@ export function useMeasurementChartWidgets({
                     minHeight={0}
                     debounce={100}
                   >
-                    <BarChart
-                      data={chartData.filter(
-                        (d) => d.steps !== undefined && d.steps !== null
-                      )}
+                    <ComposedChart
+                      data={stepsChartData}
                       syncId="nutrition-charts"
                     >
                       <CartesianGrid strokeDasharray="3 3" />
@@ -576,14 +615,7 @@ export function useMeasurementChartWidgets({
                         }
                       />
                       <YAxis
-                        domain={
-                          getYAxisDomain(
-                            chartData.filter(
-                              (d) => d.steps !== undefined && d.steps !== null
-                            ),
-                            'steps'
-                          ) || undefined
-                        }
+                        domain={stepsYAxisDomain}
                         tickFormatter={(value) => Math.round(value).toString()}
                       />
                       <Tooltip
@@ -599,7 +631,21 @@ export function useMeasurementChartWidgets({
                         fill="#2ecc71"
                         isAnimationActive={false}
                       />
-                    </BarChart>
+                      {/* Drawn as a line rather than a ReferenceLine so it tracks
+                          the goal timeline: a goal changed mid-range steps at the
+                          date it changed instead of flattening the whole chart. */}
+                      <Line
+                        type="stepAfter"
+                        dataKey="stepsGoal"
+                        name={t('reports.stepsGoal', 'Step goal')}
+                        stroke="#e67e22"
+                        strokeDasharray="5 5"
+                        strokeWidth={2}
+                        dot={false}
+                        connectNulls
+                        isAnimationActive={false}
+                      />
+                    </ComposedChart>
                   </ResponsiveContainer>
                 </div>
               </CardContent>
@@ -610,5 +656,14 @@ export function useMeasurementChartWidgets({
     };
 
     return [...metricWidgets, stepsWidget];
-  }, [isMounted, metrics, chartData, t, formatDateForChart, getYAxisDomain]);
+  }, [
+    isMounted,
+    metrics,
+    chartData,
+    stepsChartData,
+    stepsYAxisDomain,
+    t,
+    formatDateForChart,
+    getYAxisDomain,
+  ]);
 }

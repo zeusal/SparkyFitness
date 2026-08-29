@@ -20,6 +20,7 @@ describe('buildWidgetKeys', () => {
       'energy',
       'nutrition',
       'water',
+      'steps',
       'healthMetrics',
       'meal:a',
       'meal:b',

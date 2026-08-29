@@ -50,7 +50,9 @@
     "vo2Max": "VO2 Max",
     "fitnessAge": "Fit Age: {{val}}",
     "readiness": "Readiness",
-    "recHours": "Rec: {{val}}"
+    "recHours": "Rec: {{val}}",
+    "steps": "Steps",
+    "stepsUnit": "steps"
   },
   "foodCsvImport": {
     "title": "Import Food Data",
@@ -2217,7 +2219,8 @@
       "changesApplyToDate": "Changes will only apply to this specific date.",
       "applyPreset": "Apply Preset",
       "selectGoalPreset": "Select a goal preset to apply",
-      "errorLoading": "Failed to load nutrition goals. Please try again later."
+      "errorLoading": "Failed to load nutrition goals. Please try again later.",
+      "stepsGoal": "Daily Steps"
     },
     "mealDistribution": {
       "selectTemplate": "Select a Distribution Template",
@@ -2426,7 +2429,16 @@
     "entryImageRemoveFailedTitle": "Remove failed",
     "entryImageRemoveFailed": "Could not remove the photo for this entry.",
     "inheritedPhotoAlt": "Inherited image {{number}}",
-    "savingPhotos": "Saving photos…"
+    "savingPhotos": "Saving photos…",
+    "steps": {
+      "title": "Steps",
+      "unit": "steps",
+      "goalReached": "Goal reached",
+      "remaining": "{{formattedCount}} to go",
+      "remaining_other": "{{formattedCount}} to go",
+      "fromWorkouts": "{{formattedCount}} from logged workouts",
+      "fromWorkouts_other": "{{formattedCount}} from logged workouts"
+    }
   },
   "nutrientGoalDirection": {
     "min": "Min",
@@ -3329,7 +3341,8 @@
     "stressTab": "Stress",
     "totalEaten": "Total Eaten",
     "totalGoal": "Total Goal",
-    "uniqueExercises": "Unique Exercises"
+    "uniqueExercises": "Unique Exercises",
+    "stepsGoal": "Step goal"
   },
   "sleepHealth": {
     "hrvStatus": "HRV Status",

@@ -472,7 +472,8 @@
     },
     "progressPhotos": "Progress Photos",
     "progressPhotoCapture": "Add Photos",
-    "progressPhotoCompare": "Compare"
+    "progressPhotoCompare": "Compare",
+    "progressPhotoTimelapse": "Time-lapse"
   },
   "healthMetrics": {
     "steps": "Steps",
@@ -4825,6 +4826,17 @@
     "before": "Before",
     "after": "After",
     "weightChange": "Weight change",
-    "pickWhich": "Tap a date to set the selected side"
+    "pickWhich": "Tap a date to set the selected side",
+    "timelapse": "Time-lapse",
+    "timelapseTitle": "Time-lapse",
+    "timelapseEmpty": "Add at least two photos of this angle to play a time-lapse.",
+    "frameCount": "{{current}} of {{total}}",
+    "previousFrame": "Previous photo",
+    "nextFrame": "Next photo",
+    "play": "Play",
+    "pause": "Pause",
+    "speedSlow": "Slow",
+    "speedNormal": "Normal",
+    "speedFast": "Fast"
   }
 }

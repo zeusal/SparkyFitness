@@ -287,6 +287,8 @@ export type RootStackParamList = {
   ProgressPhotoCapture: { date?: string } | undefined;
   /** Side-by-side comparison of two days for one angle. */
   ProgressPhotoCompare: { angle?: PhotoType } | undefined;
+  /** Cross-fading time-lapse of every photo for one angle, oldest to newest. */
+  ProgressPhotoTimelapse: { angle?: PhotoType } | undefined;
   CalorieSettings: undefined;
   MealTypeSettings: undefined;
   FoodSettings: undefined;

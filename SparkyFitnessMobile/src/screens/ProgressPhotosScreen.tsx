@@ -262,6 +262,25 @@ const ProgressPhotosScreen: React.FC<Props> = ({ navigation }) => {
               {t('progressPhotos.compare', { defaultValue: 'Compare' })}
             </Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() =>
+              navigation.navigate('ProgressPhotoTimelapse', { angle })
+            }
+            disabled={!canCompare}
+            className="flex-1 flex-row items-center justify-center bg-surface rounded-lg py-2.5 shadow-sm"
+            style={!canCompare ? { opacity: 0.4 } : undefined}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !canCompare }}
+          >
+            <Icon name="play" size={16} color={accentPrimary} />
+            <Text
+              className="text-sm font-semibold ml-1.5"
+              style={{ color: accentPrimary }}
+            >
+              {t('progressPhotos.timelapse', { defaultValue: 'Time-lapse' })}
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
 

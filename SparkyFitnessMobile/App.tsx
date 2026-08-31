@@ -77,6 +77,7 @@ import {
   SafeProgressPhotos,
   SafeProgressPhotoCapture,
   SafeProgressPhotoCompare,
+  SafeProgressPhotoTimelapse,
   SafeChat,
   SafeCalorieSettings,
   SafeMealTypeSettings,
@@ -962,6 +963,18 @@ function AppContent() {
               component={SafeProgressPhotoCompare}
               options={createStackScreenOptions(
                 t('screens.progressPhotoCompare', { defaultValue: 'Compare' }),
+                {
+                  headerBackButtonDisplayMode: 'minimal',
+                }
+              )}
+            />
+            <Stack.Screen
+              name="ProgressPhotoTimelapse"
+              component={SafeProgressPhotoTimelapse}
+              options={createStackScreenOptions(
+                t('screens.progressPhotoTimelapse', {
+                  defaultValue: 'Time-lapse',
+                }),
                 {
                   headerBackButtonDisplayMode: 'minimal',
                 }

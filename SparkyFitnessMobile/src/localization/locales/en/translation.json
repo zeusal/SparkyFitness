@@ -469,7 +469,9 @@
       "failedRecentItems": "Failed to load recent items.",
       "noRecentItems": "No recent items yet",
       "recentItemsHint": "Foods, meals, and exercises you log will appear here for quick access."
-    }
+    },
+    "progressPhotos": "Progress Photos",
+    "progressPhotoCapture": "Add Photos"
   },
   "healthMetrics": {
     "steps": "Steps",
@@ -4788,5 +4790,34 @@
   "foodProvenance": {
     "aiEstimate": "AI estimate",
     "aiEstimateAccessibility": "Nutrition estimated by AI"
+  },
+  "progressPhotos": {
+    "title": "Progress Photos",
+    "captureTitle": "Add Photos",
+    "add": "Add photos",
+    "angle": {
+      "front": "Front",
+      "back": "Back",
+      "side": "Side"
+    },
+    "noWeight": "No weight logged",
+    "sincePrevious": "{{delta}} since previous",
+    "emptyTitle": "No {{angle}} photos yet",
+    "emptyBody": "Add a photo on a check-in day and it will show up here with that day’s weight.",
+    "loadError": "Couldn't load your progress photos.",
+    "changeDate": "Change date",
+    "captureHint": "Same spot, same light, same pose each time — it makes the comparison and time-lapse far clearer.",
+    "addAngle": "Add {{angle}} photo",
+    "replaceAngle": "Replace {{angle}} photo",
+    "removeAngle": "Remove {{angle}} photo",
+    "takePhoto": "Take Photo",
+    "chooseLibrary": "Choose from Library",
+    "remove": "Remove Photo",
+    "uploadSuccess": "Photo saved",
+    "uploadError": "Could not save photo",
+    "deleteSuccess": "Photo removed",
+    "deleteError": "Could not remove photo",
+    "cameraPermission": "Camera permission is required",
+    "cameraPermissionHint": "Enable camera access for SparkyFitness in Settings."
   }
 }

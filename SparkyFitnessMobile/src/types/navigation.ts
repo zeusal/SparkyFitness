@@ -280,6 +280,10 @@ export type RootStackParamList = {
   Sync: undefined;
   ImportHistory: undefined;
   MeasurementsAdd: { date?: string } | undefined;
+  /** Progress-photo gallery: timeline of check-in photos with that day's weight. */
+  ProgressPhotos: undefined;
+  /** Capture/replace the front, back and side photos for one day. */
+  ProgressPhotoCapture: { date?: string } | undefined;
   CalorieSettings: undefined;
   MealTypeSettings: undefined;
   FoodSettings: undefined;

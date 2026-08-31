@@ -25,8 +25,11 @@ import {
   weightFromKg,
   type WeightDisplayMode,
 } from '../utils/unitConversions';
-import { PHOTO_TYPES, type PhotoType } from '../types/checkInPhotos';
-import type { ProgressPhotoDay } from '../types/checkInPhotos';
+import {
+  PHOTO_TYPES,
+  type PhotoType,
+  type ProgressPhotoDay,
+} from '../types/checkInPhotos';
 import type { RootStackScreenProps } from '../types/navigation';
 
 type Props = RootStackScreenProps<'ProgressPhotos'>;

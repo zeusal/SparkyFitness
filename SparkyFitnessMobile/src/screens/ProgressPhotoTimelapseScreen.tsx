@@ -1,10 +1,4 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -83,7 +77,6 @@ const ProgressPhotoTimelapseScreen: React.FC<Props> = ({ route }) => {
   const [index, setIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState<Speed>('normal');
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { holdMs, fadeMs } = SPEEDS[speed];
 
@@ -94,10 +87,14 @@ const ProgressPhotoTimelapseScreen: React.FC<Props> = ({ route }) => {
 
   // Reset when the frame set changes (angle switch, or a photo deleted while
   // this screen was backgrounded) so the index can never point past the end.
-  useEffect(() => {
+  // Adjusted during render rather than in an effect, so the first paint after
+  // the change already shows frame 0 instead of flashing a stale one.
+  const [prevFrameCount, setPrevFrameCount] = useState(frames.length);
+  if (prevFrameCount !== frames.length) {
+    setPrevFrameCount(frames.length);
     setIndex(0);
     setIsPlaying(false);
-  }, [frames.length]);
+  }
 
   // Warm the next few frames. expo-image dedupes by URL, so re-prefetching an
   // already-cached frame is cheap. Failures are silent by design: a cold frame
@@ -115,27 +112,31 @@ const ProgressPhotoTimelapseScreen: React.FC<Props> = ({ route }) => {
     }
   }, [frames, index, angle, getPhotoSource]);
 
-  // The playback clock. Each tick advances one frame and stops on the last one
-  // rather than looping, so the final (current) shot stays on screen.
+  // Playback stops on the last frame rather than looping, so the current shot
+  // stays on screen. That end state is derived, not written back into
+  // isPlaying: the clock simply stops scheduling, which keeps the effect free
+  // of setState and leaves one source of truth for what the button shows.
+  const atEnd = frames.length === 0 || index >= frames.length - 1;
+  const isRunning = isPlaying && !atEnd;
+
+  // The playback clock: each tick advances exactly one frame.
   useEffect(() => {
-    if (!isPlaying || frames.length === 0) return;
-    if (index >= frames.length - 1) {
-      setIsPlaying(false);
-      return;
-    }
-    timerRef.current = setTimeout(() => setIndex((i) => i + 1), holdMs);
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = null;
-    };
-  }, [isPlaying, index, frames.length, holdMs]);
+    if (!isRunning) return;
+    const timer = setTimeout(() => setIndex((i) => i + 1), holdMs);
+    return () => clearTimeout(timer);
+  }, [isRunning, index, holdMs]);
 
   const togglePlay = useCallback(() => {
     if (frames.length === 0) return;
-    // Replaying from the end restarts rather than doing nothing.
-    if (!isPlaying && index >= frames.length - 1) setIndex(0);
-    setIsPlaying((playing) => !playing);
-  }, [frames.length, index, isPlaying]);
+    // Pressing play at the end replays from the start rather than doing
+    // nothing, so a finished run is one tap from being watched again.
+    if (!isRunning) {
+      if (atEnd) setIndex(0);
+      setIsPlaying(true);
+      return;
+    }
+    setIsPlaying(false);
+  }, [frames.length, isRunning, atEnd]);
 
   const step = (delta: number) => {
     setIsPlaying(false);
@@ -251,12 +252,12 @@ const ProgressPhotoTimelapseScreen: React.FC<Props> = ({ route }) => {
             style={{ backgroundColor: accentPrimary }}
             accessibilityRole="button"
             accessibilityLabel={
-              isPlaying
+              isRunning
                 ? t('progressPhotos.pause', { defaultValue: 'Pause' })
                 : t('progressPhotos.play', { defaultValue: 'Play' })
             }
           >
-            <Icon name={isPlaying ? 'pause' : 'play'} size={24} color="#fff" />
+            <Icon name={isRunning ? 'pause' : 'play'} size={24} color="#fff" />
           </TouchableOpacity>
 
           <TouchableOpacity

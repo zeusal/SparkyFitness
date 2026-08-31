@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -61,24 +61,24 @@ const ProgressPhotoCompareScreen: React.FC<Props> = ({ route }) => {
   );
 
   const [side, setSide] = useState<Side>('after');
-  const [beforeDate, setBeforeDate] = useState<string | null>(null);
-  const [afterDate, setAfterDate] = useState<string | null>(null);
+  const [pickedBefore, setPickedBefore] = useState<string | null>(null);
+  const [pickedAfter, setPickedAfter] = useState<string | null>(null);
 
-  // Default to the widest span available: first shoot vs latest one. Runs once
-  // the gallery arrives, and again if the set changes underneath (a delete).
-  useEffect(() => {
-    if (timeline.length === 0) return;
-    const first = timeline[0].entry_date;
-    const last = timeline[timeline.length - 1].entry_date;
-    setBeforeDate((current) =>
-      current && timeline.some((d) => d.entry_date === current)
-        ? current
-        : first
-    );
-    setAfterDate((current) =>
-      current && timeline.some((d) => d.entry_date === current) ? current : last
-    );
-  }, [timeline]);
+  // The two panes default to the widest span available (first shoot vs latest),
+  // which already says something useful before the user picks anything. That
+  // default is derived during render rather than synced into state by an
+  // effect, so it is correct on the first paint the gallery arrives, and a day
+  // that disappears underneath (a delete elsewhere) silently falls back
+  // instead of leaving a pane pointing at a photo that no longer exists.
+  const hasDay = (date: string | null): date is string =>
+    date != null && timeline.some((day) => day.entry_date === date);
+
+  const beforeDate = hasDay(pickedBefore)
+    ? pickedBefore
+    : (timeline[0]?.entry_date ?? null);
+  const afterDate = hasDay(pickedAfter)
+    ? pickedAfter
+    : (timeline[timeline.length - 1]?.entry_date ?? null);
 
   const header = useScreenHeader({
     title: t('progressPhotos.compareTitle', { defaultValue: 'Compare' }),
@@ -109,8 +109,8 @@ const ProgressPhotoCompareScreen: React.FC<Props> = ({ route }) => {
   );
 
   const selectDay = (date: string) => {
-    if (side === 'before') setBeforeDate(date);
-    else setAfterDate(date);
+    if (side === 'before') setPickedBefore(date);
+    else setPickedAfter(date);
   };
 
   const deltaKg =

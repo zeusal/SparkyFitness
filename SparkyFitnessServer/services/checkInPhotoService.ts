@@ -143,7 +143,8 @@ export const getAllPhotosWithWeight = async (
       photo_type: r.photo_type,
       // numeric columns come back parsed by the pool's global type parser, but
       // stay defensive: a null weight must remain null, never NaN.
-      weight: r.weight == null ? null : Number(r.weight),
+      weight:
+        r.weight === null || r.weight === undefined ? null : Number(r.weight),
     }));
   } finally {
     client.release();

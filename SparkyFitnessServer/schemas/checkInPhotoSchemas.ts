@@ -25,5 +25,22 @@ export const CheckInPhotoResponseSchema = z.object({
   created_at: z.string(),
 });
 
+/**
+ * One photo in the progress gallery, paired with the weight recorded on the
+ * same day. `file_path` is deliberately omitted: clients fetch the image bytes
+ * through the authenticated /file/{id} route, so the on-disk layout stays a
+ * server detail. `weight` is null when no check-in measurement exists for that
+ * day, or when one exists without a weight.
+ */
+export const CheckInPhotoWithWeightSchema = z.object({
+  id: z.string().uuid(),
+  entry_date: z.string(),
+  photo_type: PhotoTypeSchema,
+  weight: z.number().nullable(),
+});
+
 export type CheckInPhotoResponse = z.infer<typeof CheckInPhotoResponseSchema>;
 export type PhotoType = z.infer<typeof PhotoTypeSchema>;
+export type CheckInPhotoWithWeight = z.infer<
+  typeof CheckInPhotoWithWeightSchema
+>;

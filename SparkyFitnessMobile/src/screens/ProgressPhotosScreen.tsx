@@ -93,6 +93,8 @@ const ProgressPhotosScreen: React.FC<Props> = ({ navigation }) => {
     });
   }, [days, angle]);
 
+  const canCompare = rows.length >= 2;
+
   const header = useScreenHeader({
     title: t('progressPhotos.title', { defaultValue: 'Progress Photos' }),
     left: { kind: 'back' },
@@ -240,6 +242,27 @@ const ProgressPhotosScreen: React.FC<Props> = ({ navigation }) => {
           activeKey={angle}
           onSelect={setAngle}
         />
+
+        <View className="flex-row gap-3 mt-3">
+          <TouchableOpacity
+            onPress={() =>
+              navigation.navigate('ProgressPhotoCompare', { angle })
+            }
+            disabled={!canCompare}
+            className="flex-1 flex-row items-center justify-center bg-surface rounded-lg py-2.5 shadow-sm"
+            style={!canCompare ? { opacity: 0.4 } : undefined}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !canCompare }}
+          >
+            <Icon name="copy" size={16} color={accentPrimary} />
+            <Text
+              className="text-sm font-semibold ml-1.5"
+              style={{ color: accentPrimary }}
+            >
+              {t('progressPhotos.compare', { defaultValue: 'Compare' })}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {renderBody()}

@@ -47,6 +47,7 @@ import WhatsNewScreen from '../screens/WhatsNewScreen';
 import MeasurementsAddScreen from '../screens/MeasurementsAddScreen';
 import ProgressPhotosScreen from '../screens/ProgressPhotosScreen';
 import ProgressPhotoCaptureScreen from '../screens/ProgressPhotoCaptureScreen';
+import ProgressPhotoCompareScreen from '../screens/ProgressPhotoCompareScreen';
 import ChatScreen from '../screens/ChatScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
 import CycleSettingsScreen from '../screens/CycleSettingsScreen';
@@ -241,6 +242,11 @@ export const SafeProgressPhotos = withErrorBoundary(
 export const SafeProgressPhotoCapture = withErrorBoundary(
   ProgressPhotoCaptureScreen,
   'ProgressPhotoCapture',
+  { canGoBack: true }
+);
+export const SafeProgressPhotoCompare = withErrorBoundary(
+  ProgressPhotoCompareScreen,
+  'ProgressPhotoCompare',
   { canGoBack: true }
 );
 export const SafeChat = withErrorBoundary(ChatScreen, 'Chat', {

@@ -471,7 +471,8 @@
       "recentItemsHint": "Foods, meals, and exercises you log will appear here for quick access."
     },
     "progressPhotos": "Progress Photos",
-    "progressPhotoCapture": "Add Photos"
+    "progressPhotoCapture": "Add Photos",
+    "progressPhotoCompare": "Compare"
   },
   "healthMetrics": {
     "steps": "Steps",
@@ -4818,6 +4819,12 @@
     "deleteSuccess": "Photo removed",
     "deleteError": "Could not remove photo",
     "cameraPermission": "Camera permission is required",
-    "cameraPermissionHint": "Enable camera access for SparkyFitness in Settings."
+    "cameraPermissionHint": "Enable camera access for SparkyFitness in Settings.",
+    "compare": "Compare",
+    "compareTitle": "Compare",
+    "before": "Before",
+    "after": "After",
+    "weightChange": "Weight change",
+    "pickWhich": "Tap a date to set the selected side"
   }
 }

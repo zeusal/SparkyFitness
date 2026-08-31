@@ -8,6 +8,7 @@ import type {
   SharedPregnancy,
 } from '@workspace/shared';
 import type { FoodInfoItem } from './foodInfo';
+import type { PhotoType } from './checkInPhotos';
 import type { FoodEntry } from './foodEntries';
 import type { FoodFormData } from '../components/FoodForm';
 import type { Exercise } from './exercise';
@@ -284,6 +285,8 @@ export type RootStackParamList = {
   ProgressPhotos: undefined;
   /** Capture/replace the front, back and side photos for one day. */
   ProgressPhotoCapture: { date?: string } | undefined;
+  /** Side-by-side comparison of two days for one angle. */
+  ProgressPhotoCompare: { angle?: PhotoType } | undefined;
   CalorieSettings: undefined;
   MealTypeSettings: undefined;
   FoodSettings: undefined;

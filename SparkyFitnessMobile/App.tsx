@@ -76,6 +76,7 @@ import {
   SafeMeasurementsAdd,
   SafeProgressPhotos,
   SafeProgressPhotoCapture,
+  SafeProgressPhotoCompare,
   SafeChat,
   SafeCalorieSettings,
   SafeMealTypeSettings,
@@ -953,6 +954,16 @@ function AppContent() {
                   presentation: 'modal',
                   headerBackButtonDisplayMode: 'minimal',
                   ...(Platform.OS === 'android' ? androidModalAnimation : {}),
+                }
+              )}
+            />
+            <Stack.Screen
+              name="ProgressPhotoCompare"
+              component={SafeProgressPhotoCompare}
+              options={createStackScreenOptions(
+                t('screens.progressPhotoCompare', { defaultValue: 'Compare' }),
+                {
+                  headerBackButtonDisplayMode: 'minimal',
                 }
               )}
             />

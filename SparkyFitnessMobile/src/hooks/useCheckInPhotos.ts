@@ -1,0 +1,110 @@
+import { useMemo } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  deletePhoto,
+  fetchPhotoGallery,
+  fetchPhotosByDate,
+  uploadPhoto,
+} from '../services/api/checkInPhotosApi';
+import {
+  checkInPhotoGalleryQueryKey,
+  checkInPhotosByDateQueryKey,
+  checkInPhotosRootQueryKey,
+} from './queryKeys';
+import { useRefetchOnFocus } from './useRefetchOnFocus';
+import type {
+  CheckInPhotoWithWeight,
+  ProgressPhotoDay,
+} from '../types/checkInPhotos';
+
+/**
+ * Folds the flat gallery response into one entry per calendar day, newest
+ * first. The server already orders by entry_date DESC, so this keeps insertion
+ * order rather than re-sorting.
+ */
+export function groupPhotosByDay(
+  photos: CheckInPhotoWithWeight[]
+): ProgressPhotoDay[] {
+  const days = new Map<string, ProgressPhotoDay>();
+  for (const photo of photos) {
+    let day = days.get(photo.entry_date);
+    if (!day) {
+      day = { entry_date: photo.entry_date, weight: photo.weight, photos: {} };
+      days.set(photo.entry_date, day);
+    }
+    // Every row for a day carries the same joined weight, but a day whose first
+    // row happened to be null should still pick up a later non-null one.
+    if (day.weight == null) day.weight = photo.weight;
+    day.photos[photo.photo_type] = photo;
+  }
+  return [...days.values()];
+}
+
+/** The whole progress gallery, grouped by day (newest first). */
+export function useCheckInPhotoGallery(enabled = true) {
+  const query = useQuery({
+    queryKey: checkInPhotoGalleryQueryKey,
+    queryFn: fetchPhotoGallery,
+    enabled,
+  });
+
+  useRefetchOnFocus(query.refetch, enabled);
+
+  const days = useMemo(() => groupPhotosByDay(query.data ?? []), [query.data]);
+
+  return {
+    days,
+    isLoading: query.isLoading,
+    isError: query.isError,
+    error: query.error,
+    refetch: query.refetch,
+  };
+}
+
+/** The photos taken on one specific day, for the capture screen. */
+export function useCheckInPhotosByDate(date: string, enabled = true) {
+  const query = useQuery({
+    queryKey: checkInPhotosByDateQueryKey(date),
+    queryFn: () => fetchPhotosByDate(date),
+    enabled,
+  });
+
+  useRefetchOnFocus(query.refetch, enabled);
+
+  return {
+    photos: query.data ?? [],
+    isLoading: query.isLoading,
+    isError: query.isError,
+    refetch: query.refetch,
+  };
+}
+
+export function useCheckInPhotoMutations() {
+  const queryClient = useQueryClient();
+
+  // Default staleTime is Infinity, so every mutation must invalidate what it
+  // touched. The photo weight comes from the measurements join, so the
+  // measurements range caches that feed the weight chart stay untouched — only
+  // photo caches change here.
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: checkInPhotosRootQueryKey });
+  };
+
+  const uploadMutation = useMutation({
+    mutationFn: uploadPhoto,
+    onSuccess: invalidate,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deletePhoto(id),
+    onSuccess: invalidate,
+  });
+
+  return {
+    uploadAsync: uploadMutation.mutateAsync,
+    isUploading: uploadMutation.isPending,
+    uploadingType: uploadMutation.variables?.type,
+    deleteAsync: deleteMutation.mutateAsync,
+    isDeleting: deleteMutation.isPending,
+  };
+}

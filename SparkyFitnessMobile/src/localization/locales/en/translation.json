@@ -890,6 +890,8 @@
     "cyclePregnancySubtitle": "Show the wellness card on the Dashboard",
     "medications": "Medications",
     "medicationsSubtitle": "Show the medications card on the Dashboard",
+    "progressPhotos": "Progress Photos",
+    "progressPhotosSubtitle": "Show the progress photos card on the Dashboard",
     "customNutrientDisplay": "Custom Nutrient Display"
   },
   "diarySettings": {
@@ -4795,6 +4797,11 @@
     "aiEstimateAccessibility": "Nutrition estimated by AI"
   },
   "progressPhotos": {
+    "card": {
+      "title": "Progress",
+      "viewAll": "View all",
+      "openA11y": "View progress photos"
+    },
     "title": "Progress Photos",
     "captureTitle": "Add Photos",
     "add": "Add photos",

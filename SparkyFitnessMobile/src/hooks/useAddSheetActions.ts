@@ -301,6 +301,11 @@ export function useAddSheetActions({ syncMutation }: AddSheetActionsArgs) {
     navigateFromSheet('MeasurementsAdd', { date });
   }, [getActiveDiaryDate, navigateFromSheet]);
 
+  const handleAddProgressPhotos = useCallback(() => {
+    const date = getActiveDiaryDate();
+    navigateFromSheet('ProgressPhotoCapture', { date });
+  }, [getActiveDiaryDate, navigateFromSheet]);
+
   const handleAskSparky = useCallback(() => {
     navigateFromSheet('Chat');
   }, [navigateFromSheet]);
@@ -377,6 +382,7 @@ export function useAddSheetActions({ syncMutation }: AddSheetActionsArgs) {
     handleLogWorkout,
     handleAddActivity,
     handleAddMeasurements,
+    handleAddProgressPhotos,
     handleAskSparky,
     handleOpenCycle,
     handleSyncHealthData,

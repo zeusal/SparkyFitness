@@ -4800,7 +4800,9 @@
     "card": {
       "title": "Progress",
       "viewAll": "View all",
-      "openA11y": "View progress photos"
+      "openA11y": "View progress photos",
+      "empty": "Tap to add check-in photos",
+      "addA11y": "Add your first progress photos"
     },
     "title": "Progress Photos",
     "captureTitle": "Add Photos",
@@ -4811,6 +4813,8 @@
       "side": "Side"
     },
     "noWeight": "No weight logged",
+    "logWeight": "Log weight",
+    "logWeightA11y": "Log your weight for this day",
     "openPhotoA11y": "View this photo full screen",
     "sincePrevious": "{{delta}} since previous",
     "emptyTitle": "No {{angle}} photos yet",

@@ -40,6 +40,7 @@ import DateNavigator from '../components/DateNavigator';
 import CalendarSheet, {
   type CalendarSheetRef,
 } from '../components/CalendarSheet';
+import { useCheckInPhotoDates } from '../hooks/useCheckInPhotos';
 import { useDiaryDateStore } from '../stores/diaryDateStore';
 import {
   setNativeHeaderDatePickerOptions,
@@ -114,7 +115,14 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) => {
       }
     });
   }, [navigation, goToToday]);
-  const openCalendar = useCallback(() => calendarRef.current?.present(), []);
+  // The photo-day markers are fetched on first calendar open rather than at
+  // mount: a user who never opens the picker should not pay a request for it.
+  const [calendarOpened, setCalendarOpened] = useState(false);
+  const { dates: photoDates } = useCheckInPhotoDates(calendarOpened);
+  const openCalendar = useCallback(() => {
+    setCalendarOpened(true);
+    calendarRef.current?.present();
+  }, []);
   const handleCalendarSelect = useCallback(
     (date: string) => setSelectedDate(date),
     [setSelectedDate]
@@ -653,6 +661,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) => {
           ref={calendarRef}
           selectedDate={selectedDate}
           onSelectDate={handleCalendarSelect}
+          markedDates={photoDates}
         />
       </>
     );
@@ -676,6 +685,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) => {
         ref={calendarRef}
         selectedDate={selectedDate}
         onSelectDate={handleCalendarSelect}
+        markedDates={photoDates}
       />
     </View>
   );

@@ -14,6 +14,7 @@ import i18n from '../localization/i18n';
 import Icon from '../components/Icon';
 import ProgressPhotoViewer from '../components/ProgressPhotoViewer';
 import SafeImage from '../components/SafeImage';
+import PhotoDayWeight from '../components/PhotoDayWeight';
 import SegmentedControl, { type Segment } from '../components/SegmentedControl';
 import { useScreenHeader } from '../hooks/useScreenHeader';
 import { useCheckInPhotoGallery } from '../hooks/useCheckInPhotos';
@@ -33,7 +34,7 @@ type Props = RootStackScreenProps<'ProgressPhotoCompare'>;
 /** Which of the two panes the thumbnail strip is currently assigning to. */
 type Side = 'before' | 'after';
 
-const ProgressPhotoCompareScreen: React.FC<Props> = ({ route }) => {
+const ProgressPhotoCompareScreen: React.FC<Props> = ({ navigation, route }) => {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const dateLocale = i18n.language.startsWith('pl') ? 'pl-PL' : 'en-US';
@@ -86,6 +87,13 @@ const ProgressPhotoCompareScreen: React.FC<Props> = ({ route }) => {
     title: t('progressPhotos.compareTitle', { defaultValue: 'Compare' }),
     left: { kind: 'back' },
   });
+
+  // Weight entry lives in Measurements; hand the day over rather than
+  // duplicating the form here.
+  const openWeightEntry = useCallback(
+    (date: string) => navigation.navigate('MeasurementsAdd', { date }),
+    [navigation]
+  );
 
   const dayFor = useCallback(
     (date: string | null) =>
@@ -162,13 +170,14 @@ const ProgressPhotoCompareScreen: React.FC<Props> = ({ route }) => {
         <Text className="text-text-primary text-sm font-semibold mt-1.5 text-center">
           {day ? formatShortDate(day.entry_date, dateLocale) : '—'}
         </Text>
-        <Text className="text-text-secondary text-xs text-center">
-          {day?.weight != null
-            ? formatWeightDisplay(day.weight, weightMode)
-            : t('progressPhotos.noWeight', {
-                defaultValue: 'No weight logged',
-              })}
-        </Text>
+        <View className="items-center">
+          <PhotoDayWeight
+            weight={day?.weight ?? null}
+            mode={weightMode}
+            onLogWeight={() => day && openWeightEntry(day.entry_date)}
+            className="text-text-secondary text-xs"
+          />
+        </View>
       </View>
     );
   };

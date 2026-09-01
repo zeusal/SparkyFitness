@@ -1,30 +1,16 @@
-/** The three angles the server accepts for a check-in progress photo. */
-export const PHOTO_TYPES = ['front', 'back', 'side'] as const;
+import type {
+  CheckInPhotoResponse,
+  CheckInPhotoWithWeight,
+  PhotoType,
+} from '@workspace/shared';
 
-export type PhotoType = (typeof PHOTO_TYPES)[number];
+// The photo contract is owned by @workspace/shared and shared with the server.
+// Re-exported here so screens and hooks keep importing from one place.
+export { PHOTO_TYPES } from '@workspace/shared';
+export type { CheckInPhotoWithWeight, PhotoType };
 
 /** A photo row as returned by GET /measurements/check-in-photos/:date. */
-export interface CheckInPhoto {
-  id: string;
-  user_id: string;
-  check_in_measurement_id: string | null;
-  entry_date: string;
-  photo_type: PhotoType;
-  file_path: string;
-  created_at: string;
-}
-
-/**
- * A gallery entry from GET /measurements/check-in-photos: one photo plus the
- * weight (kg, as stored) logged on the same day. `weight` is null when that day
- * has no check-in measurement or the measurement has no weight.
- */
-export interface CheckInPhotoWithWeight {
-  id: string;
-  entry_date: string;
-  photo_type: PhotoType;
-  weight: number | null;
-}
+export type CheckInPhoto = CheckInPhotoResponse;
 
 /**
  * One calendar day of the progress gallery: the photos taken that day, keyed by

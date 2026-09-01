@@ -4850,6 +4850,13 @@
     "pause": "Pause",
     "speedSlow": "Slow",
     "speedNormal": "Normal",
-    "speedFast": "Fast"
+    "speedFast": "Fast",
+    "save": "Save Photos",
+    "saveSuccess": "Photos saved",
+    "saveError": "Could not save every photo",
+    "pendingSave": "Not saved yet",
+    "discard": "Discard",
+    "discardTitle": "Discard unsaved photos?",
+    "discardMessage": "You have photos that have not been saved yet. Discard them?"
   }
 }

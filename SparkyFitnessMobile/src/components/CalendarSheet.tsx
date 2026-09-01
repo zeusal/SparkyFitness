@@ -105,6 +105,7 @@ const CalendarContent = ({
             {day.text}
           </Text>
           <View
+            testID={marked ? 'calendar-day-marked' : 'calendar-day-unmarked'}
             style={{
               width: 4,
               height: 4,

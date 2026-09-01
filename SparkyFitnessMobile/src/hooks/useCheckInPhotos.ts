@@ -2,11 +2,13 @@ import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   deletePhoto,
+  fetchPhotoDates,
   fetchPhotoGallery,
   fetchPhotosByDate,
   uploadPhoto,
 } from '../services/api/checkInPhotosApi';
 import {
+  checkInPhotoDatesQueryKey,
   checkInPhotoGalleryQueryKey,
   checkInPhotosByDateQueryKey,
   checkInPhotosRootQueryKey,
@@ -76,6 +78,27 @@ export function useCheckInPhotosByDate(date: string, enabled = true) {
     isLoading: query.isLoading,
     isError: query.isError,
     refetch: query.refetch,
+  };
+}
+
+/**
+ * The days that already have a photo, for marking the capture screen's date
+ * picker. Deliberately its own endpoint rather than deriving from the gallery:
+ * the dates list is a handful of strings, while the gallery carries every photo
+ * the user has.
+ */
+export function useCheckInPhotoDates(enabled = true) {
+  const query = useQuery({
+    queryKey: checkInPhotoDatesQueryKey,
+    queryFn: fetchPhotoDates,
+    enabled,
+  });
+
+  useRefetchOnFocus(query.refetch, enabled);
+
+  return {
+    dates: query.data ?? [],
+    isLoading: query.isLoading,
   };
 }
 

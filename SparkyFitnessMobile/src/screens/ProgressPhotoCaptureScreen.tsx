@@ -23,6 +23,7 @@ import CalendarSheet, {
 } from '../components/CalendarSheet';
 import { useScreenHeader } from '../hooks/useScreenHeader';
 import {
+  useCheckInPhotoDates,
   useCheckInPhotosByDate,
   useCheckInPhotoMutations,
 } from '../hooks/useCheckInPhotos';
@@ -58,6 +59,7 @@ const ProgressPhotoCaptureScreen: React.FC<Props> = ({ route }) => {
   const pickerLock = useRef(false);
 
   const { photos, isLoading } = useCheckInPhotosByDate(selectedDate);
+  const { dates: photoDates } = useCheckInPhotoDates();
   const { uploadAsync, isUploading, uploadingType, deleteAsync } =
     useCheckInPhotoMutations();
   const { getPhotoSource } = useCheckInPhotoSource();
@@ -335,6 +337,7 @@ const ProgressPhotoCaptureScreen: React.FC<Props> = ({ route }) => {
 
       <CalendarSheet
         ref={calendarRef}
+        markedDates={photoDates}
         selectedDate={selectedDate}
         onSelectDate={setSelectedDate}
       />

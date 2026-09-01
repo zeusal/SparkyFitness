@@ -27,6 +27,19 @@ export const fetchPhotoGallery = async (): Promise<
   });
 };
 
+/**
+ * The calendar days that have at least one photo, newest first. Used to mark
+ * those days in the capture screen's date picker, so finding an existing shoot
+ * does not mean opening days one at a time.
+ */
+export const fetchPhotoDates = async (): Promise<string[]> => {
+  return apiFetch<string[]>({
+    endpoint: '/api/measurements/check-in-photos/dates',
+    serviceName: SERVICE,
+    operation: 'fetch photo dates',
+  });
+};
+
 /** The photos taken on one calendar day. */
 export const fetchPhotosByDate = async (
   date: string

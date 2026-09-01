@@ -111,6 +111,11 @@ export const checkInPhotoGalleryQueryKey = [
 export const checkInPhotosByDateQueryKey = (date: string) =>
   [...checkInPhotosRootQueryKey, 'byDate', date] as const;
 
+export const checkInPhotoDatesQueryKey = [
+  ...checkInPhotosRootQueryKey,
+  'dates',
+] as const;
+
 export const customCategoriesQueryKey = ['customCategories'] as const;
 export const customMeasurementsByDateQueryKey = (date: string) =>
   ['customMeasurements', date] as const;

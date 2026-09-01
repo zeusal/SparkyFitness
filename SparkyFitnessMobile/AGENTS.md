@@ -1,6 +1,6 @@
 # AGENTS.md
 
-_Last updated: 2026-08-29_
+_Last updated: 2026-09-01_
 
 SparkyFitness Mobile is a React Native 0.85 + Expo SDK 56 app for syncing Apple Health / Health Connect data with the SparkyFitness backend, tracking nutrition, hydration, fasting, measurements, exercise, saved foods, meal templates, custom exercises, workout presets, iOS / Android widgets, the active workout HUD, and the Sparky AI chat.
 
@@ -78,8 +78,8 @@ npx expo prebuild --clean
 - Screens intentionally off the hook (e.g. `FoodSearchScreen`'s bespoke anchored-menu bar) must mirror custom actions with `unstable_header{Left,Right}Items` themselves, hide the screen-owned React header behind `useNativeIOSHeadersActive()` with a guard such as `{!usesNativeHeader && <Header />}`, and gate the `useLayoutEffect` that sets native header items on the same flag; otherwise iOS renders both headers.
 - When adding a tab, update `TabParamList`, `NativeTab.Screen`, and `FallbackTab.Screen`; for content tabs also add a tab-local native stack screen using `createIOSNativeHeaderOptions(...)`.
 - `__tests__/navigation/nativeHeaderContract.test.ts` enforces this native-header wiring. If it fails, fix the route/type/navigator alignment instead of weakening the test.
-- Current stack screens include onboarding/tabs, library/detail/form flows for foods/meals/meal plans/exercises/presets, food entry view/edit, meal type detail and copy, the family diary flows (`FamilyMembers`, `FamilyDiary`, `FamilyMealDetail`, and `FamilyCopyReview`), `EditBarcode`, food search/entry/scan/photo flow, workout/activity add/detail, exercise/preset search, settings subscreens, logs, sync, measurements, fasting, and `WhatsNew`.
-- `AddSheet` offers Food, Workout, Activity, Preset, Measurements, Scan Food, Ask Sparky, and Sync Health Data. Keep its present/dismiss refs intact to avoid Android re-present loops.
+- Current stack screens include onboarding/tabs, library/detail/form flows for foods/meals/meal plans/exercises/presets, food entry view/edit, meal type detail and copy, the family diary flows (`FamilyMembers`, `FamilyDiary`, `FamilyMealDetail`, and `FamilyCopyReview`), `EditBarcode`, food search/entry/scan/photo flow, workout/activity add/detail, exercise/preset search, settings subscreens, logs, sync, measurements, the progress photo flow (`ProgressPhotos`, `ProgressPhotoCapture`, `ProgressPhotoCompare`, and `ProgressPhotoTimelapse`), fasting, and `WhatsNew`.
+- `AddSheet` offers Food, Workout, Activity, Preset, Measurements, Scan Food, Progress Photos, Ask Sparky, and Sync Health Data. Keep its present/dismiss refs intact to avoid Android re-present loops.
 - `useNavigationActionGuard` locks navigation-triggering actions while a native-stack transition is running (idle-callback unlock on re-focus, 5s safety release) so double-taps cannot queue duplicate screens; Library create actions use it.
 - `ActiveWorkoutBar` is mounted outside normal screen trees, uses the root navigation ref, and hides itself on modal/editor routes such as food search/forms/scan/photo, exercise search, workout/activity add, measurements, and barcode edit.
 - Most screens are wrapped with `withErrorBoundary(...)`; `SettingsScreen` also uses section-level recovery so settings remain reachable.
@@ -114,7 +114,7 @@ npx expo prebuild --clean
 - `useWaterIntakeMutation` fetches `waterContainersQueryKey`, persists the selected container, and optimistically updates `dailySummaryQueryKey(date)`.
 - Active-server switches clear React Query state before refetching connection state.
 - Error-boundary retry flows call `queryClient.resetQueries()`.
-- App-local toggles live in `stores/appPreferencesStore.ts` (Zustand `persist`, single AsyncStorage key `@SparkyFitness/app-preferences`): haptics, sounds, notifications, hydration/fasting card visibility, Ask Sparky card visibility, the Liquid Glass tab bar opt-in, the active-workout metric column, and the default rest period (`defaultRestSec`, edited in `WorkoutSettingsScreen`). Consume via selectors (`useAppPreferencesStore((s) => s.hapticsEnabled)`) plus generated setters; non-React code reads current values through helpers like `getDefaultRestSec()`. A legacy-aware storage adapter migrates the old per-key `@HealthConnect:*` values once. These preferences never sync to the server.
+- App-local toggles live in `stores/appPreferencesStore.ts` (Zustand `persist`, single AsyncStorage key `@SparkyFitness/app-preferences`): haptics, sounds, notifications, hydration/fasting card visibility, Ask Sparky and progress photos card visibility, the Liquid Glass tab bar opt-in, the active-workout metric column, and the default rest period (`defaultRestSec`, edited in `WorkoutSettingsScreen`). Consume via selectors (`useAppPreferencesStore((s) => s.hapticsEnabled)`) plus generated setters; non-React code reads current values through helpers like `getDefaultRestSec()`. A legacy-aware storage adapter migrates the old per-key `@HealthConnect:*` values once. These preferences never sync to the server.
 
 ## Health Sync
 
@@ -195,6 +195,7 @@ npx expo prebuild --clean
 - `DashboardScreen` drives hydration quick-add, card visibility, fasting summary, health trends, and widget sync.
 - `DiaryScreen` owns meal type sections, measurement summaries, serving quick-adjust, swipe/long-press deletes, and AddSheet date propagation.
 - `DashboardSettingsScreen` controls dashboard card visibility and custom nutrient display preferences.
+- Progress photos live in `ProgressPhotosScreen` (timeline by angle, each row carrying that day's weight and the delta against the previous shoot), `ProgressPhotoCaptureScreen` (one day, a slot per angle), `ProgressPhotoCompareScreen` (two days side by side) and `ProgressPhotoTimelapseScreen` (cross-faded playback). They are reached from the `AddSheet` row (capture) and `ProgressPhotosCard` on the Dashboard (gallery). `ProgressPhotoViewer` is their full-screen pinch-zoom viewer - deliberately not `ImageLightbox`, which resolves URIs through the food image source context and takes plain string URLs.
 - Custom nutrients are fetched via `useCustomNutrients` from `GET /api/custom-nutrients`; nutrient display preferences use full-array replace through `preferencesApi.ts`.
 - Nutrient metadata and defaults live in `constants/nutrients.ts`; aggregation and visibility toggling live in `utils/nutrientUtils.ts`.
 - Measurements and water routes are in `measurementsApi.ts`; date-sensitive flows should preserve calendar-day strings and shared timezone helpers.
@@ -266,6 +267,7 @@ All endpoints require auth headers, and proxy headers are injected before auth h
 
 - `healthDataApi.ts` - `POST /api/health-data`, identity checks, chunking, timeout, retry, session-expiry handling.
 - `dailySummaryApi.ts`, `goalsApi.ts`, `measurementsApi.ts`, `preferencesApi.ts` - daily summary, goals, check-ins, water, timezone bootstrap, nutrient display preferences.
+- `checkInPhotosApi.ts` - progress photos: the gallery (every photo with that day's weight, in one request), a day's photos, the days that have any, multipart upload and delete. Image bytes come from the authenticated `/file/{id}` route, so `useCheckInPhotoSource` attaches auth and proxy headers and memoizes each source by photo id.
 - `foodEntriesApi.ts`, `foodEntryMealsApi.ts`, `foodsApi.ts`, `mealsApi.ts`, `mealTypesApi.ts`, `mealPlansApi.ts` - diary food entries, grouped logged meals, saved foods/variants/barcodes, saved meals, meal types, and recurring meal plans.
 - `externalFoodSearchApi.ts`, `aiSettingsApi.ts`, `aiConversionApi.ts` - provider-agnostic food search/details/barcode, label/photo estimate, AI availability, unit conversion.
 - `exerciseApi.ts`, `externalExerciseSearchApi.ts`, `workoutPresetsApi.ts` - exercise history, suggested/search/import flows, preset/individual exercise sessions, workout presets.

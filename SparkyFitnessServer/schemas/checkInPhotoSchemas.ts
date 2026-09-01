@@ -1,6 +1,13 @@
 import { z } from 'zod/v4';
+import {
+  checkInPhotoGalleryResponseSchema,
+  checkInPhotoWithWeightSchema,
+  photoTypeSchema,
+} from '@workspace/shared';
 
-export const PhotoTypeSchema = z.enum(['front', 'back', 'side']);
+// The photo contract is shared with mobile: re-export it rather than
+// redeclaring the shapes here, so the two cannot drift apart.
+export const PhotoTypeSchema = photoTypeSchema;
 
 export const CheckInPhotoDateParamSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD'),
@@ -32,12 +39,11 @@ export const CheckInPhotoResponseSchema = z.object({
  * server detail. `weight` is null when no check-in measurement exists for that
  * day, or when one exists without a weight.
  */
-export const CheckInPhotoWithWeightSchema = z.object({
-  id: z.string().uuid(),
-  entry_date: z.string(),
-  photo_type: PhotoTypeSchema,
-  weight: z.number().nullable(),
-});
+export const CheckInPhotoWithWeightSchema = checkInPhotoWithWeightSchema;
+
+/** The gallery endpoint's full response: every photo, newest day first. */
+export const CheckInPhotoGalleryResponseSchema =
+  checkInPhotoGalleryResponseSchema;
 
 export type CheckInPhotoResponse = z.infer<typeof CheckInPhotoResponseSchema>;
 export type PhotoType = z.infer<typeof PhotoTypeSchema>;

@@ -194,11 +194,34 @@ describe('ProgressPhotosScreen', () => {
     expect(getByText("Couldn't load your progress photos.")).toBeTruthy();
   });
 
-  it('says when a day has no weight rather than showing a blank', () => {
+  it('offers to log the weight on a day that has none', () => {
+    // A photo taken before the day's weigh-in would otherwise read as missing
+    // forever, since the only way back was Measurements.
+    setGallery([dayWith('2026-03-20', null)]);
+
+    const { getByText, queryByText } = renderScreen();
+
+    expect(getByText('Log weight')).toBeTruthy();
+    expect(queryByText('No weight logged')).toBeNull();
+  });
+
+  it('opens weight entry for that specific day, not today', () => {
     setGallery([dayWith('2026-03-20', null)]);
 
     const { getByText } = renderScreen();
+    fireEvent.press(getByText('Log weight'));
 
-    expect(getByText('No weight logged')).toBeTruthy();
+    expect(navigation.navigate).toHaveBeenCalledWith('MeasurementsAdd', {
+      date: '2026-03-20',
+    });
+  });
+
+  it('shows the weight plainly when the day has one', () => {
+    setGallery([dayWith('2026-03-20', 81)]);
+
+    const { getByText, queryByText } = renderScreen();
+
+    expect(getByText('81 kg')).toBeTruthy();
+    expect(queryByText('Log weight')).toBeNull();
   });
 });

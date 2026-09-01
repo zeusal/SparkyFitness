@@ -15,16 +15,14 @@ import { useCSSVariable } from 'uniwind';
 import i18n from '../localization/i18n';
 import Icon from '../components/Icon';
 import SafeImage from '../components/SafeImage';
+import PhotoDayWeight from '../components/PhotoDayWeight';
 import SegmentedControl, { type Segment } from '../components/SegmentedControl';
 import { useScreenHeader } from '../hooks/useScreenHeader';
 import { useCheckInPhotoGallery } from '../hooks/useCheckInPhotos';
 import { useCheckInPhotoSource } from '../hooks/useCheckInPhotoSource';
 import { usePreferences } from '../hooks/usePreferences';
 import { formatShortDate } from '../utils/dateUtils';
-import {
-  formatWeightDisplay,
-  type WeightDisplayMode,
-} from '../utils/unitConversions';
+import { type WeightDisplayMode } from '../utils/unitConversions';
 import type { PhotoType, ProgressPhotoDay } from '../types/checkInPhotos';
 import type { RootStackScreenProps } from '../types/navigation';
 
@@ -47,7 +45,10 @@ const SPEEDS: Record<Speed, { holdMs: number; fadeMs: number }> = {
 /** How many frames ahead to warm the image cache, so a fade never starts on a blank. */
 const PREFETCH_AHEAD = 3;
 
-const ProgressPhotoTimelapseScreen: React.FC<Props> = ({ route }) => {
+const ProgressPhotoTimelapseScreen: React.FC<Props> = ({
+  navigation,
+  route,
+}) => {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const dateLocale = i18n.language.startsWith('pl') ? 'pl-PL' : 'en-US';
@@ -215,13 +216,16 @@ const ProgressPhotoTimelapseScreen: React.FC<Props> = ({ route }) => {
           <Text className="text-text-primary text-base font-semibold">
             {formatShortDate(current.entry_date, dateLocale)}
           </Text>
-          <Text className="text-text-secondary text-sm">
-            {current.weight != null
-              ? formatWeightDisplay(current.weight, weightMode)
-              : t('progressPhotos.noWeight', {
-                  defaultValue: 'No weight logged',
-                })}
-          </Text>
+          <PhotoDayWeight
+            weight={current.weight}
+            mode={weightMode}
+            onLogWeight={() =>
+              navigation.navigate('MeasurementsAdd', {
+                date: current.entry_date,
+              })
+            }
+            className="text-text-secondary text-sm"
+          />
           <Text className="text-text-muted text-xs mt-0.5">
             {t('progressPhotos.frameCount', {
               defaultValue: '{{current}} of {{total}}',

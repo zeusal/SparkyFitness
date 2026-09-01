@@ -21,6 +21,9 @@ jest.mock('../../src/hooks/useMeasurements', () => ({
   useMeasurements: () => ({ measurements: null, customMeasurements: [] }),
 }));
 
+jest.mock('../../src/hooks/useCheckInPhotos', () => ({
+  useCheckInPhotoDates: () => ({ dates: [], isLoading: false }),
+}));
 jest.mock('../../src/hooks/usePreferences', () => ({
   usePreferences: () => ({ preferences: null }),
 }));

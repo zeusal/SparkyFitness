@@ -13,6 +13,7 @@ import { useCSSVariable } from 'uniwind';
 import i18n from '../localization/i18n';
 import Icon from '../components/Icon';
 import SafeImage from '../components/SafeImage';
+import ProgressPhotoViewer from '../components/ProgressPhotoViewer';
 import SegmentedControl, { type Segment } from '../components/SegmentedControl';
 import StatusView from '../components/StatusView';
 import { useScreenHeader } from '../hooks/useScreenHeader';
@@ -56,6 +57,7 @@ const ProgressPhotosScreen: React.FC<Props> = ({ navigation }) => {
   ]) as [string, string];
 
   const [angle, setAngle] = useState<PhotoType>('front');
+  const [zoomedRow, setZoomedRow] = useState<TimelineRow | null>(null);
 
   const { days, isLoading, isError, refetch } = useCheckInPhotoGallery();
   const { getPhotoSource } = useCheckInPhotoSource();
@@ -127,7 +129,14 @@ const ProgressPhotosScreen: React.FC<Props> = ({ navigation }) => {
   const renderRow = ({ item }: { item: TimelineRow }) => {
     const source = getPhotoSource(item.photoId);
     return (
-      <View className="flex-row items-center bg-surface rounded-xl p-3 mb-3 shadow-sm">
+      <TouchableOpacity
+        onPress={() => setZoomedRow(item)}
+        accessibilityRole="button"
+        accessibilityLabel={t('progressPhotos.openPhotoA11y', {
+          defaultValue: 'View this photo full screen',
+        })}
+        className="flex-row items-center bg-surface rounded-xl p-3 mb-3 shadow-sm"
+      >
         <SafeImage
           source={source}
           style={{ width: 72, height: 96, borderRadius: 12 }}
@@ -162,7 +171,7 @@ const ProgressPhotosScreen: React.FC<Props> = ({ navigation }) => {
             </Text>
           )}
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -288,6 +297,22 @@ const ProgressPhotosScreen: React.FC<Props> = ({ navigation }) => {
       </View>
 
       {renderBody()}
+
+      <ProgressPhotoViewer
+        visible={zoomedRow != null}
+        source={zoomedRow ? getPhotoSource(zoomedRow.photoId) : null}
+        title={
+          zoomedRow
+            ? formatDateLabel(zoomedRow.day.entry_date, t, dateLocale)
+            : undefined
+        }
+        subtitle={
+          zoomedRow?.day.weight != null
+            ? formatWeightDisplay(zoomedRow.day.weight, weightMode)
+            : undefined
+        }
+        onClose={() => setZoomedRow(null)}
+      />
     </View>
   );
 };

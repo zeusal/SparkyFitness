@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCSSVariable } from 'uniwind';
 import i18n from '../localization/i18n';
 import Icon from '../components/Icon';
+import ProgressPhotoViewer from '../components/ProgressPhotoViewer';
 import SafeImage from '../components/SafeImage';
 import SegmentedControl, { type Segment } from '../components/SegmentedControl';
 import { useScreenHeader } from '../hooks/useScreenHeader';
@@ -45,6 +46,7 @@ const ProgressPhotoCompareScreen: React.FC<Props> = ({ route }) => {
 
   const { days, isLoading } = useCheckInPhotoGallery();
   const { getPhotoSource } = useCheckInPhotoSource();
+  const [zoomedDay, setZoomedDay] = useState<ProgressPhotoDay | null>(null);
   const { preferences } = usePreferences();
   const weightMode: WeightDisplayMode =
     preferences?.default_weight_unit ?? 'kg';
@@ -136,7 +138,13 @@ const ProgressPhotoCompareScreen: React.FC<Props> = ({ route }) => {
         <Text className="text-text-secondary text-xs mb-1 text-center">
           {label}
         </Text>
-        <View
+        <TouchableOpacity
+          onPress={() => day && setZoomedDay(day)}
+          disabled={!photo}
+          accessibilityRole="button"
+          accessibilityLabel={t('progressPhotos.openPhotoA11y', {
+            defaultValue: 'View this photo full screen',
+          })}
           className="bg-surface rounded-xl overflow-hidden"
           style={{ aspectRatio: 3 / 4 }}
         >
@@ -150,7 +158,7 @@ const ProgressPhotoCompareScreen: React.FC<Props> = ({ route }) => {
               </View>
             }
           />
-        </View>
+        </TouchableOpacity>
         <Text className="text-text-primary text-sm font-semibold mt-1.5 text-center">
           {day ? formatShortDate(day.entry_date, dateLocale) : '—'}
         </Text>
@@ -275,6 +283,26 @@ const ProgressPhotoCompareScreen: React.FC<Props> = ({ route }) => {
 
         <View style={{ height: 32 }} />
       </ScrollView>
+
+      <ProgressPhotoViewer
+        visible={zoomedDay != null}
+        source={
+          zoomedDay?.photos[angle]
+            ? getPhotoSource(zoomedDay.photos[angle]!.id)
+            : null
+        }
+        title={
+          zoomedDay
+            ? formatShortDate(zoomedDay.entry_date, dateLocale)
+            : undefined
+        }
+        subtitle={
+          zoomedDay?.weight != null
+            ? formatWeightDisplay(zoomedDay.weight, weightMode)
+            : undefined
+        }
+        onClose={() => setZoomedDay(null)}
+      />
     </View>
   );
 };

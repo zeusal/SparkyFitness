@@ -58,6 +58,7 @@ import FastingCard from '../components/FastingCard';
 import CycleCard from '../components/CycleCard';
 import FastingGoalReconciler from '../components/FastingGoalReconciler';
 import MedicationsCard from '../components/MedicationsCard';
+import ProgressPhotosCard from '../components/ProgressPhotosCard';
 import { useActiveWorkoutBarPadding } from '../components/ActiveWorkoutBar';
 import { useAppPreferencesStore } from '../stores/appPreferencesStore';
 import type { CompositeScreenProps } from '@react-navigation/native';
@@ -250,6 +251,9 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) => {
   const askSparkyVisible = useAppPreferencesStore((s) => s.askSparkyVisible);
   const medicationsCardVisible = useAppPreferencesStore(
     (s) => s.medicationsCardVisible
+  );
+  const progressPhotosCardVisible = useAppPreferencesStore(
+    (s) => s.progressPhotosCardVisible
   );
 
   useLayoutEffect(() => {
@@ -611,6 +615,10 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ navigation }) => {
         {cycleCardVisible && <CycleCard navigation={navigation} />}
 
         {medicationsCardVisible && <MedicationsCard navigation={navigation} />}
+
+        {progressPhotosCardVisible && (
+          <ProgressPhotosCard navigation={navigation} />
+        )}
 
         <Text className="text-text-primary text-xl font-bold mb-2">
           {t('dashboard.healthTrends', { defaultValue: 'Health Trends' })}

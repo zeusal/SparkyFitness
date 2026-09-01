@@ -63,6 +63,27 @@ jobs:
           echo "Keystore created at: $(pwd)/SparkyFitnessMobile/android/app/sparky-fitness-release-key.keystore"
           ls -la SparkyFitnessMobile/android/app/sparky-fitness-release-key.keystore
 
+      # D8 merges dex archives inside the Gradle daemon (AGP dispatches
+      # DexMergingWorkAction through NoIsolationWorkerFactory), so the release
+      # dex step is bounded by org.gradle.jvmargs rather than by any D8 setting.
+      # The prebuild template's default has been low enough for
+      # :app:mergeDexRelease to die intermittently with
+      # "java.lang.OutOfMemoryError: Java heap space" — it killed the v1.6.4-2
+      # tag build while the same sources built fine on other runs.
+      #
+      # Written to GRADLE_USER_HOME rather than exported as GRADLE_OPTS: the
+      # value has a space in it, and GRADLE_OPTS is word-split, so the metaspace
+      # flag would reach the launcher as a separate argument instead of staying
+      # part of jvmargs. The user-level file also outranks the project one and
+      # is not rewritten by `expo prebuild`.
+      #
+      # Runners have 16 GB; 6 GB leaves room for the Kotlin and Metro workers.
+      - name: Raise Gradle daemon heap
+        run: |
+          mkdir -p ~/.gradle
+          printf 'org.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g\n' >> ~/.gradle/gradle.properties
+          cat ~/.gradle/gradle.properties
+
       - name: Run Gradle to generate codegen (will fail but generates files)
         run: |
           cd SparkyFitnessMobile/android

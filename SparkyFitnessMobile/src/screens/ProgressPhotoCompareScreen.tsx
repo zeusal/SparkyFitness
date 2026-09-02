@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -8,6 +8,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
+import { daysBetween } from '@workspace/shared';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCSSVariable } from 'uniwind';
 import i18n from '../localization/i18n';
@@ -15,7 +17,9 @@ import Icon from '../components/Icon';
 import ProgressPhotoViewer from '../components/ProgressPhotoViewer';
 import SafeImage from '../components/SafeImage';
 import PhotoDayWeight from '../components/PhotoDayWeight';
-import SegmentedControl, { type Segment } from '../components/SegmentedControl';
+import CalendarSheet, {
+  type CalendarSheetRef,
+} from '../components/CalendarSheet';
 import { useScreenHeader } from '../hooks/useScreenHeader';
 import { useCheckInPhotoGallery } from '../hooks/useCheckInPhotos';
 import { useCheckInPhotoSource } from '../hooks/useCheckInPhotoSource';
@@ -31,7 +35,7 @@ import type { RootStackScreenProps } from '../types/navigation';
 
 type Props = RootStackScreenProps<'ProgressPhotoCompare'>;
 
-/** Which of the two panes the thumbnail strip is currently assigning to. */
+/** Which of the two panes the date picker is currently assigning to. */
 type Side = 'before' | 'after';
 
 const ProgressPhotoCompareScreen: React.FC<Props> = ({ navigation, route }) => {
@@ -63,7 +67,8 @@ const ProgressPhotoCompareScreen: React.FC<Props> = ({ navigation, route }) => {
     [days, angle]
   );
 
-  const [side, setSide] = useState<Side>('after');
+  const [pickingSide, setPickingSide] = useState<Side>('before');
+  const calendarRef = useRef<CalendarSheetRef>(null);
   const [pickedBefore, setPickedBefore] = useState<string | null>(null);
   const [pickedAfter, setPickedAfter] = useState<string | null>(null);
 
@@ -104,24 +109,37 @@ const ProgressPhotoCompareScreen: React.FC<Props> = ({ navigation, route }) => {
   const beforeDay = dayFor(beforeDate);
   const afterDay = dayFor(afterDate);
 
-  const sideSegments = useMemo<Segment<Side>[]>(
-    () => [
-      {
-        key: 'before',
-        label: t('progressPhotos.before', { defaultValue: 'Before' }),
-      },
-      {
-        key: 'after',
-        label: t('progressPhotos.after', { defaultValue: 'After' }),
-      },
-    ],
-    [t]
+  /** The days that actually have this angle, for marking the picker. */
+  const availableDates = useMemo(
+    () => timeline.map((day) => day.entry_date),
+    [timeline]
   );
 
+  const openPicker = (which: Side) => {
+    setPickingSide(which);
+    calendarRef.current?.present();
+  };
+
   const selectDay = (date: string) => {
-    if (side === 'before') setPickedBefore(date);
+    // The calendar can offer any day; only the ones with a photo for this
+    // angle mean anything here, and they are the marked ones.
+    if (!availableDates.includes(date)) {
+      Toast.show({
+        type: 'error',
+        text1: t('progressPhotos.noPhotoOnDay', {
+          defaultValue: 'No photo for this angle on that day',
+        }),
+      });
+      return;
+    }
+    if (pickingSide === 'before') setPickedBefore(date);
     else setPickedAfter(date);
   };
+
+  const spanDays =
+    beforeDate && afterDate
+      ? Math.abs(daysBetween(beforeDate, afterDate))
+      : null;
 
   const deltaKg =
     beforeDay?.weight != null && afterDay?.weight != null
@@ -138,7 +156,11 @@ const ProgressPhotoCompareScreen: React.FC<Props> = ({ navigation, route }) => {
     return `${rounded > 0 ? '+' : ''}${rounded} ${unit}`;
   };
 
-  const renderPane = (day: ProgressPhotoDay | undefined, label: string) => {
+  const renderPane = (
+    day: ProgressPhotoDay | undefined,
+    label: string,
+    which: Side
+  ) => {
     const photo = day?.photos[angle];
     const source = photo ? getPhotoSource(photo.id) : null;
     return (
@@ -167,9 +189,26 @@ const ProgressPhotoCompareScreen: React.FC<Props> = ({ navigation, route }) => {
             }
           />
         </TouchableOpacity>
-        <Text className="text-text-primary text-sm font-semibold mt-1.5 text-center">
-          {day ? formatShortDate(day.entry_date, dateLocale) : '—'}
-        </Text>
+        <TouchableOpacity
+          onPress={() => openPicker(which)}
+          activeOpacity={0.7}
+          className="flex-row items-center justify-center mt-1.5"
+          accessibilityRole="button"
+          accessibilityLabel={t('progressPhotos.pickDayA11y', {
+            defaultValue: 'Choose the {{side}} day',
+            side: label,
+          })}
+        >
+          <Text className="text-text-primary text-sm font-semibold">
+            {day ? formatShortDate(day.entry_date, dateLocale) : '—'}
+          </Text>
+          <Icon
+            name="chevron-down"
+            size={11}
+            color={accentPrimary}
+            style={{ marginLeft: 4 }}
+          />
+        </TouchableOpacity>
         <View className="items-center">
           <PhotoDayWeight
             weight={day?.weight ?? null}
@@ -206,92 +245,63 @@ const ProgressPhotoCompareScreen: React.FC<Props> = ({ navigation, route }) => {
       {header}
 
       <ScrollView contentContainerClassName="px-4 py-3">
-        <View className="flex-row gap-3">
+        <View className="flex-row items-center gap-2">
           {renderPane(
             beforeDay,
-            t('progressPhotos.before', { defaultValue: 'Before' })
+            t('progressPhotos.before', { defaultValue: 'Before' }),
+            'before'
           )}
+
+          {/* The span between the two shoots, sitting where the eye already
+              travels from one photo to the other. */}
+          <View className="items-center" style={{ width: 64 }}>
+            {deltaKg != null && (
+              <Text
+                className="text-base font-bold text-center"
+                style={{ color: accentPrimary }}
+              >
+                {t('progressPhotos.deltaBadge', {
+                  defaultValue: 'Δ {{value}}',
+                  value: formatDelta(deltaKg),
+                })}
+              </Text>
+            )}
+            {spanDays != null && spanDays > 0 && (
+              <Text className="text-text-muted text-[10px] text-center mt-0.5">
+                {t('progressPhotos.daysApart', {
+                  defaultValue: '{{count}} days apart',
+                  count: spanDays,
+                })}
+              </Text>
+            )}
+          </View>
+
           {renderPane(
             afterDay,
-            t('progressPhotos.after', { defaultValue: 'After' })
+            t('progressPhotos.after', { defaultValue: 'After' }),
+            'after'
           )}
         </View>
 
-        {deltaKg != null && (
-          <View className="bg-surface rounded-xl p-3 mt-3 items-center shadow-sm">
-            <Text className="text-text-secondary text-xs">
-              {t('progressPhotos.weightChange', {
-                defaultValue: 'Weight change',
-              })}
-            </Text>
-            <Text className="text-text-primary text-xl font-bold mt-0.5">
-              {formatDelta(deltaKg)}
-            </Text>
-          </View>
-        )}
-
-        <Text className="text-text-secondary text-sm mt-5 mb-2">
+        <Text className="text-text-secondary text-xs mt-5 text-center">
           {t('progressPhotos.pickWhich', {
-            defaultValue: 'Tap a date to set the selected side',
+            defaultValue: 'Tap either date to compare a different day',
           })}
         </Text>
-        <SegmentedControl
-          segments={sideSegments}
-          activeKey={side}
-          onSelect={setSide}
-        />
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          className="mt-3"
-        >
-          <View className="flex-row gap-2">
-            {timeline.map((day) => {
-              const photo = day.photos[angle];
-              if (!photo) return null;
-              const isSelected =
-                (side === 'before' ? beforeDate : afterDate) === day.entry_date;
-              return (
-                <TouchableOpacity
-                  key={day.entry_date}
-                  onPress={() => selectDay(day.entry_date)}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: isSelected }}
-                  accessibilityLabel={formatShortDate(
-                    day.entry_date,
-                    dateLocale
-                  )}
-                  className="items-center"
-                >
-                  <View
-                    className="rounded-lg overflow-hidden"
-                    style={{
-                      width: 56,
-                      height: 74,
-                      borderWidth: 2,
-                      borderColor: isSelected ? accentPrimary : 'transparent',
-                    }}
-                  >
-                    <SafeImage
-                      source={getPhotoSource(photo.id)}
-                      style={{ width: '100%', height: '100%' }}
-                      contentFit="cover"
-                      fallback={<View className="flex-1 bg-raised" />}
-                    />
-                  </View>
-                  <Text className="text-text-secondary text-[10px] mt-1">
-                    {formatShortDate(day.entry_date, dateLocale)}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </ScrollView>
 
         <View style={{ height: 32 }} />
       </ScrollView>
+
+      <CalendarSheet
+        ref={calendarRef}
+        markedDates={availableDates}
+        selectedDate={
+          (pickingSide === 'before' ? beforeDate : afterDate) ??
+          availableDates[availableDates.length - 1] ??
+          ''
+        }
+        onSelectDate={selectDay}
+      />
 
       <ProgressPhotoViewer
         visible={zoomedDay != null}

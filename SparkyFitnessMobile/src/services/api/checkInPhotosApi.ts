@@ -28,9 +28,8 @@ export const fetchPhotoGallery = async (): Promise<
 };
 
 /**
- * The calendar days that have at least one photo, newest first. Used to mark
- * those days in the capture screen's date picker, so finding an existing shoot
- * does not mean opening days one at a time.
+ * The calendar days that have at least one photo, newest first. Marks those
+ * days in the date pickers without pulling the whole gallery.
  */
 export const fetchPhotoDates = async (): Promise<string[]> => {
   return apiFetch<string[]>({

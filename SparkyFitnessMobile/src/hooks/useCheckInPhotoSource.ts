@@ -16,16 +16,13 @@ export type CheckInPhotoSource = {
 /**
  * Builds `<SafeImage>` sources for progress photos.
  *
- * Unlike exercise images, these are not public uploads: the bytes come from
- * `GET /api/measurements/check-in-photos/file/:id`, which is behind
- * `authenticate` + the `checkin` permission, so every request needs the auth
- * header (and any reverse-proxy headers) attached — a bare URI renders as a
- * broken image.
+ * These bytes are not public uploads: `/check-in-photos/file/:id` sits behind
+ * `authenticate` plus the `checkin` permission, so a bare URI renders as a
+ * broken image and every source carries the auth and proxy headers.
  *
- * Sources are memoized per photo id so repeated renders hand `<Image>` the same
- * object identity; a fresh `{uri, headers}` literal each render would make
- * expo-image treat it as a new source and reload the picture, which is very
- * visible in a scrolling gallery and would restart the time-lapse.
+ * Each source is memoized by photo id to keep its object identity stable: a
+ * fresh `{uri, headers}` literal per render reads as a new source to
+ * expo-image, which reloads the picture mid-scroll and restarts the time-lapse.
  */
 export function useCheckInPhotoSource() {
   const [config, setConfig] = useState<ServerConfig | null>(null);

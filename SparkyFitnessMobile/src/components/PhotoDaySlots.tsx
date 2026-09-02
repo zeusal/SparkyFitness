@@ -13,7 +13,6 @@ import {
 } from '../types/checkInPhotos';
 
 interface PhotoDaySlotsProps {
-  /** The day's stored photos, keyed by angle. */
   photos: Map<PhotoType, CheckInPhoto>;
   /** Angle currently uploading, so only its slot shows a spinner. */
   uploadingType?: PhotoType;
@@ -27,7 +26,7 @@ interface PhotoDaySlotsProps {
 
 /**
  * One day's three angles side by side, so what the day is missing reads at a
- * glance rather than one tab at a time.
+ * glance.
  *
  * Viewing and managing are separate targets on purpose: the photo opens the
  * viewer, the corner button opens the actions. A long-press would hide the

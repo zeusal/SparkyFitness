@@ -126,7 +126,12 @@ export function useCheckInPhotoMutations() {
   return {
     uploadAsync: uploadMutation.mutateAsync,
     isUploading: uploadMutation.isPending,
-    uploadingType: uploadMutation.variables?.type,
+    // Gated on isPending: `variables` holds the last call's arguments until the
+    // mutation is reset, so an ungated read leaves the slot that just finished
+    // reporting itself as still uploading.
+    uploadingType: uploadMutation.isPending
+      ? uploadMutation.variables?.type
+      : undefined,
     deleteAsync: deleteMutation.mutateAsync,
     isDeleting: deleteMutation.isPending,
   };

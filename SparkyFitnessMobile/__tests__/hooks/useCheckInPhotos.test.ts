@@ -1,5 +1,15 @@
-import { groupPhotosByDay } from '../../src/hooks/useCheckInPhotos';
+import { renderHook, waitFor } from '@testing-library/react-native';
+import {
+  groupPhotosByDay,
+  useCheckInPhotoMutations,
+} from '../../src/hooks/useCheckInPhotos';
+import { createQueryWrapper, createTestQueryClient } from './queryTestUtils';
 import type { CheckInPhotoWithWeight } from '../../src/types/checkInPhotos';
+
+jest.mock('../../src/services/api/checkInPhotosApi', () => ({
+  uploadPhoto: jest.fn(async () => ({ id: 'p1' })),
+  deletePhoto: jest.fn(async () => undefined),
+}));
 
 const photo = (
   overrides: Partial<CheckInPhotoWithWeight> & { id: string }
@@ -84,5 +94,25 @@ describe('groupPhotosByDay', () => {
 
   it('returns nothing for an empty gallery', () => {
     expect(groupPhotosByDay([])).toEqual([]);
+  });
+});
+
+describe('useCheckInPhotoMutations', () => {
+  it('stops reporting an angle as uploading once it finishes', async () => {
+    // `variables` keeps the last call's arguments after the mutation settles,
+    // so reading it unguarded pins a spinner on the slot that just succeeded.
+    const wrapper = createQueryWrapper(createTestQueryClient());
+    const { result } = renderHook(() => useCheckInPhotoMutations(), {
+      wrapper,
+    });
+
+    await result.current.uploadAsync({
+      date: '2026-03-20',
+      type: 'front',
+      uri: 'file:///a.jpg',
+    });
+
+    await waitFor(() => expect(result.current.isUploading).toBe(false));
+    expect(result.current.uploadingType).toBeUndefined();
   });
 });

@@ -1,12 +1,12 @@
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { act, render } from '@testing-library/react-native';
 import { Image } from 'expo-image';
 import ProgressPhotoTimelapseScreen from '../../src/screens/ProgressPhotoTimelapseScreen';
 import { useCheckInPhotoGallery } from '../../src/hooks/useCheckInPhotos';
 import { useCheckInPhotoSource } from '../../src/hooks/useCheckInPhotoSource';
 import { usePreferences } from '../../src/hooks/usePreferences';
 import { useScreenHeader } from '../../src/hooks/useScreenHeader';
-import { getTodayDate } from '../../src/utils/dateUtils';
+import { formatShortDate, getTodayDate } from '../../src/utils/dateUtils';
 import type { ProgressPhotoDay } from '../../src/types/checkInPhotos';
 
 jest.mock('../../src/hooks/useCheckInPhotos', () => ({
@@ -24,6 +24,40 @@ jest.mock('../../src/hooks/useScreenHeader', () => ({
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
+
+// The real sheet needs a BottomSheetModalProvider. Record its props on each
+// render instead, so a test can present it and confirm a range the way a tap
+// would. Recorded through a mock call rather than an assignment: the compiler
+// lint forbids writing to an outer variable from a component body.
+type SheetProps = {
+  onConfirm: (from: string, to: string) => void;
+  title?: string;
+  confirmLabel?: string;
+};
+const mockSheetRender = jest.fn<void, [SheetProps]>();
+const mockPresentSheet = jest.fn();
+jest.mock('../../src/components/DateRangeSheet', () => {
+  const { forwardRef, useImperativeHandle } =
+    jest.requireActual<typeof import('react')>('react');
+  return {
+    __esModule: true,
+    default: forwardRef<
+      { present: () => void; dismiss: () => void },
+      SheetProps
+    >((props, ref) => {
+      mockSheetRender(props);
+      useImperativeHandle(ref, () => ({
+        present: mockPresentSheet,
+        dismiss: jest.fn(),
+      }));
+      return null;
+    }),
+  };
+});
+
+/** Props from the sheet's latest render. */
+const sheetProps = (): SheetProps | undefined =>
+  mockSheetRender.mock.calls.at(-1)?.[0];
 
 const mockUseGallery = useCheckInPhotoGallery as jest.MockedFunction<
   typeof useCheckInPhotoGallery
@@ -49,6 +83,10 @@ const daysAgo = (n: number): string => {
   const dayOfMonth = String(today.getDate()).padStart(2, '0');
   return `${today.getFullYear()}-${month}-${dayOfMonth}`;
 };
+
+/** Same formatting the screen uses for the range label. */
+const shortDate = (isoDay: string): string =>
+  formatShortDate(isoDay, 'en-US').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const day = (entry_date: string): ProgressPhotoDay => ({
   entry_date,
@@ -81,7 +119,13 @@ const rangeMenu = () =>
     ][0] as unknown as {
       right?: {
         showsBadge?: boolean;
-        items?: { items: { label: string; selected?: boolean }[] }[];
+        items?: {
+          items: {
+            label: string;
+            selected?: boolean;
+            onPress: () => void;
+          }[];
+        }[];
       };
     }
   ).right;
@@ -150,7 +194,7 @@ describe('ProgressPhotoTimelapseScreen', () => {
     expect(prefetchSpy.mock.calls.length).toBeLessThanOrEqual(3);
   });
 
-  it('offers the three windows and marks the active one', () => {
+  it('offers the windows and marks the active one', () => {
     setGallery([day(daysAgo(2)), day(daysAgo(1))].reverse());
 
     renderScreen();
@@ -160,6 +204,7 @@ describe('ProgressPhotoTimelapseScreen', () => {
       'Last 30 days',
       'Last 3 months',
       'All time',
+      'Custom range…',
     ]);
     expect(section?.items.find((item) => item.selected)?.label).toBe(
       'Last 3 months'
@@ -177,6 +222,62 @@ describe('ProgressPhotoTimelapseScreen', () => {
     expect(
       queryByText('Add at least two photos of this angle to play a time-lapse.')
     ).toBeNull();
+  });
+
+  it('plays exactly the days a custom range covers', () => {
+    setGallery(
+      [day(daysAgo(400)), day(daysAgo(10)), day(daysAgo(5)), day(daysAgo(1))]
+        .slice()
+        .reverse()
+    );
+
+    const { getByText } = renderScreen();
+
+    act(() => {
+      sheetProps()?.onConfirm(daysAgo(12), daysAgo(4));
+    });
+
+    // The 400-day-old and yesterday's shoots fall outside the picked window.
+    expect(
+      getByText(
+        new RegExp(
+          `of 2 · ${shortDate(daysAgo(12))} – ${shortDate(daysAgo(4))}`
+        )
+      )
+    ).toBeTruthy();
+  });
+
+  it('respects an empty custom range instead of falling back to everything', () => {
+    // The preset windows fall back to all-time so an old history is not a dead
+    // screen, but dates picked by hand must not be quietly widened.
+    setGallery([day(daysAgo(400)), day(daysAgo(390))].reverse());
+
+    const { getByText } = renderScreen();
+
+    act(() => {
+      sheetProps()?.onConfirm(daysAgo(20), daysAgo(10));
+    });
+
+    expect(
+      getByText('Add at least two photos of this angle to play a time-lapse.')
+    ).toBeTruthy();
+  });
+
+  it('opens the picker rather than selecting a range straight from the menu', () => {
+    setGallery([day(daysAgo(2)), day(daysAgo(1))].reverse());
+
+    renderScreen();
+
+    const custom = rangeMenu()?.items?.[0].items.find(
+      (item) => item.label === 'Custom range…'
+    );
+    act(() => custom?.onPress());
+
+    expect(mockPresentSheet).toHaveBeenCalled();
+    // Nothing is picked yet, so the active window must not have moved.
+    expect(
+      rangeMenu()?.items?.[0].items.find((item) => item.selected)?.label
+    ).toBe('Last 3 months');
   });
 
   it('says there is nothing to play when the angle has no photos', () => {

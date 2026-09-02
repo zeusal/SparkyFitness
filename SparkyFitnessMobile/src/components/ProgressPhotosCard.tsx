@@ -34,14 +34,10 @@ interface ProgressPhotosCardProps {
  * Dashboard entry point into the progress gallery: the most recent shoot, with
  * the date and the weight logged that day.
  *
- * The gallery query is gated on the card's own visibility preference so a user
- * who has hidden the card costs no request at app open.
- *
- * With no photos yet the card stays and prompts instead of hiding: unlike
- * medications or cycle, nothing else on the dashboard hints the feature exists,
- * so a card that only appears once you already have photos can never be the
- * thing that gets you to take the first one. Users who don't want it have the
- * Dashboard Settings toggle.
+ * The gallery query is gated on the card's visibility preference, so a hidden
+ * card costs no request at app open. Unlike the medications and cycle cards
+ * this one stays and prompts when empty rather than returning null - nothing
+ * else on the Dashboard advertises the feature.
  */
 const ProgressPhotosCard: React.FC<ProgressPhotosCardProps> = ({
   navigation,

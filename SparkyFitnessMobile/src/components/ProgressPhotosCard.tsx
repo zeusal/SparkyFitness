@@ -35,9 +35,13 @@ interface ProgressPhotosCardProps {
  * the date and the weight logged that day.
  *
  * The gallery query is gated on the card's own visibility preference so a user
- * who has hidden the card costs no request at app open. With the card shown but
- * no photos yet, it renders nothing rather than a permanently empty tile —
- * same as the medications and cycle cards.
+ * who has hidden the card costs no request at app open.
+ *
+ * With no photos yet the card stays and prompts instead of hiding: unlike
+ * medications or cycle, nothing else on the dashboard hints the feature exists,
+ * so a card that only appears once you already have photos can never be the
+ * thing that gets you to take the first one. Users who don't want it have the
+ * Dashboard Settings toggle.
  */
 const ProgressPhotosCard: React.FC<ProgressPhotosCardProps> = ({
   navigation,
@@ -67,13 +71,39 @@ const ProgressPhotosCard: React.FC<ProgressPhotosCardProps> = ({
     return { day, photoId: day.photos[angle]!.id };
   }, [days]);
 
-  if (!visible || isLoading || !latest) return null;
+  if (!visible || isLoading) return null;
+
+  // No photos yet: prompt straight into capture for today rather than the
+  // gallery, which would only show its own empty state.
+  if (!latest) {
+    return (
+      <TouchableOpacity
+        onPress={() => navigation.navigate('ProgressPhotoCapture', {})}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel={t('progressPhotos.card.addA11y', {
+          defaultValue: 'Add your first progress photos',
+        })}
+        className="bg-surface rounded-xl p-4 mb-3 shadow-sm"
+      >
+        <Text className="text-md font-bold text-text-primary mb-4">
+          {t('progressPhotos.card.title', { defaultValue: 'Progress' })}
+        </Text>
+        <Text className="text-text-muted text-sm text-center mb-4">
+          {t('progressPhotos.card.empty', {
+            defaultValue: 'Tap to add check-in photos',
+          })}
+        </Text>
+      </TouchableOpacity>
+    );
+  }
 
   const source = getPhotoSource(latest.photoId);
 
   return (
     <TouchableOpacity
       onPress={() => navigation.navigate('ProgressPhotos')}
+      activeOpacity={0.7}
       accessibilityRole="button"
       accessibilityLabel={t('progressPhotos.card.openA11y', {
         defaultValue: 'View progress photos',

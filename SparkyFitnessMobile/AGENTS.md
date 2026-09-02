@@ -1,6 +1,6 @@
 # AGENTS.md
 
-_Last updated: 2026-09-01_
+_Last updated: 2026-09-02_
 
 SparkyFitness Mobile is a React Native 0.85 + Expo SDK 56 app for syncing Apple Health / Health Connect data with the SparkyFitness backend, tracking nutrition, hydration, fasting, measurements, exercise, saved foods, meal templates, custom exercises, workout presets, iOS / Android widgets, the active workout HUD, and the Sparky AI chat.
 
@@ -195,7 +195,12 @@ npx expo prebuild --clean
 - `DashboardScreen` drives hydration quick-add, card visibility, fasting summary, health trends, and widget sync.
 - `DiaryScreen` owns meal type sections, measurement summaries, serving quick-adjust, swipe/long-press deletes, and AddSheet date propagation.
 - `DashboardSettingsScreen` controls dashboard card visibility and custom nutrient display preferences.
-- Progress photos live in `ProgressPhotosScreen` (timeline by angle, each row carrying that day's weight and the delta against the previous shoot), `ProgressPhotoCaptureScreen` (one day, a slot per angle), `ProgressPhotoCompareScreen` (two days side by side) and `ProgressPhotoTimelapseScreen` (cross-faded playback). They are reached from the `AddSheet` row (capture) and `ProgressPhotosCard` on the Dashboard (gallery). `ProgressPhotoViewer` is their full-screen pinch-zoom viewer - deliberately not `ImageLightbox`, which resolves URIs through the food image source context and takes plain string URLs.
+- Progress photos live in `ProgressPhotosScreen` (timeline by angle, each row carrying that day's weight and the delta against the previous shoot), `ProgressPhotoCaptureScreen` (one day, a tab per angle), `ProgressPhotoCompareScreen` (two days side by side) and `ProgressPhotoTimelapseScreen` (cross-faded playback). They are reached from the `AddSheet` row (capture) and `ProgressPhotosCard` on the Dashboard (gallery). `ProgressPhotoViewer` is their full-screen pinch-zoom viewer - deliberately not `ImageLightbox`, which resolves URIs through the food image source context and takes plain string URLs.
+- `ProgressPhotosCard` gates its gallery query on `progressPhotosCardVisible`, so a hidden card costs no request at app open, and prompts into capture when there are no photos rather than hiding itself - nothing else on the Dashboard advertises the feature.
+- Capture stages picks in local state and sends them on one explicit Save; uploads run sequentially, and anything that fails stays staged. Replacing needs no delete first because the server upserts on `(user_id, entry_date, photo_type)`; removing a stored photo queues its delete for Save while removing a staged pick just drops it. Leaving the screen or changing the date with staged photos prompts first.
+- The comparison loads only the two photos on screen: each pane picks its day through `CalendarSheet` (marked with the days that have that angle) rather than a thumbnail strip, which used to mount one image per shoot. The time-lapse mounts one frame and prefetches `PREFETCH_AHEAD` (3) beyond it, and its header menu windows playback to 30 days / 3 months / all time, falling back to all when the default window is empty.
+- `PhotoDayWeight` renders the weight under a photo and, when the day has none, a prompt into `MeasurementsAdd` for that date. Used by the gallery, comparison and time-lapse; the Dashboard card keeps plain text because the card is already a touchable.
+- `CalendarSheet` takes an optional `markedDates`; Dashboard and Diary pass the photo days, fetched on first open of the picker rather than at mount (`useCheckInPhotoDates(calendarOpened)`).
 - Custom nutrients are fetched via `useCustomNutrients` from `GET /api/custom-nutrients`; nutrient display preferences use full-array replace through `preferencesApi.ts`.
 - Nutrient metadata and defaults live in `constants/nutrients.ts`; aggregation and visibility toggling live in `utils/nutrientUtils.ts`.
 - Measurements and water routes are in `measurementsApi.ts`; date-sensitive flows should preserve calendar-day strings and shared timezone helpers.

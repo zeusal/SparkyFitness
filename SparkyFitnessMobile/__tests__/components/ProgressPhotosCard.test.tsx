@@ -101,14 +101,29 @@ describe('ProgressPhotosCard', () => {
     expect(navigation.navigate).toHaveBeenCalledWith('ProgressPhotos');
   });
 
-  it('renders nothing when the user has no photos yet', () => {
-    // A permanently empty tile on the dashboard for everyone who never takes
-    // progress photos is worse than no tile at all.
+  it('prompts for a first shoot when the user has no photos yet', () => {
+    // Nothing else on the dashboard hints the feature exists, so a card that
+    // only appears once you already have photos can never be what gets you to
+    // take the first one.
     setGallery([]);
 
-    const { queryByText } = renderCard();
+    const { getByText } = renderCard();
 
-    expect(queryByText('Progress')).toBeNull();
+    expect(getByText('Progress')).toBeTruthy();
+    expect(getByText('Tap to add check-in photos')).toBeTruthy();
+  });
+
+  it('sends the empty card straight to capture rather than the gallery', () => {
+    // The gallery would only show its own empty state, costing a hop.
+    setGallery([]);
+
+    const { getByText } = renderCard();
+    fireEvent.press(getByText('Tap to add check-in photos'));
+
+    expect(navigation.navigate).toHaveBeenCalledWith(
+      'ProgressPhotoCapture',
+      {}
+    );
   });
 
   it('renders nothing while the gallery is still loading', () => {

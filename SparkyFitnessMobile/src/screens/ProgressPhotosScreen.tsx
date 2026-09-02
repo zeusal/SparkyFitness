@@ -14,6 +14,7 @@ import i18n from '../localization/i18n';
 import Icon from '../components/Icon';
 import SafeImage from '../components/SafeImage';
 import ProgressPhotoViewer from '../components/ProgressPhotoViewer';
+import PhotoDayWeight from '../components/PhotoDayWeight';
 import SegmentedControl, { type Segment } from '../components/SegmentedControl';
 import StatusView from '../components/StatusView';
 import { useScreenHeader } from '../hooks/useScreenHeader';
@@ -114,6 +115,13 @@ const ProgressPhotosScreen: React.FC<Props> = ({ navigation }) => {
     },
   });
 
+  // Measurements owns weight entry, so the prompt hands the day over rather
+  // than duplicating the form. Both are root-stack routes, so this is a push.
+  const openWeightEntry = useCallback(
+    (date: string) => navigation.navigate('MeasurementsAdd', { date }),
+    [navigation]
+  );
+
   const formatDelta = (deltaKg: number): string => {
     // Convert the difference itself, not each end, so rounding happens once.
     const converted =
@@ -131,6 +139,7 @@ const ProgressPhotosScreen: React.FC<Props> = ({ navigation }) => {
     return (
       <TouchableOpacity
         onPress={() => setZoomedRow(item)}
+        activeOpacity={0.7}
         accessibilityRole="button"
         accessibilityLabel={t('progressPhotos.openPhotoA11y', {
           defaultValue: 'View this photo full screen',
@@ -151,17 +160,12 @@ const ProgressPhotosScreen: React.FC<Props> = ({ navigation }) => {
           <Text className="text-text-primary text-base font-semibold">
             {formatDateLabel(item.day.entry_date, t, dateLocale)}
           </Text>
-          {item.day.weight != null ? (
-            <Text className="text-text-secondary text-sm mt-0.5">
-              {formatWeightDisplay(item.day.weight, weightMode)}
-            </Text>
-          ) : (
-            <Text className="text-text-muted text-sm mt-0.5 italic">
-              {t('progressPhotos.noWeight', {
-                defaultValue: 'No weight logged',
-              })}
-            </Text>
-          )}
+          <PhotoDayWeight
+            weight={item.day.weight}
+            mode={weightMode}
+            onLogWeight={() => openWeightEntry(item.day.entry_date)}
+            className="text-text-secondary text-sm mt-0.5"
+          />
           {item.deltaKg != null && item.deltaKg !== 0 && (
             <Text className="text-text-muted text-xs mt-0.5">
               {t('progressPhotos.sincePrevious', {

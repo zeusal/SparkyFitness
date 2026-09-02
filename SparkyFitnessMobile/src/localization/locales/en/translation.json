@@ -4800,7 +4800,9 @@
     "card": {
       "title": "Progress",
       "viewAll": "View all",
-      "openA11y": "View progress photos"
+      "openA11y": "View progress photos",
+      "empty": "Tap to add check-in photos",
+      "addA11y": "Add your first progress photos"
     },
     "title": "Progress Photos",
     "captureTitle": "Add Photos",
@@ -4811,6 +4813,8 @@
       "side": "Side"
     },
     "noWeight": "No weight logged",
+    "logWeight": "Log weight",
+    "logWeightA11y": "Log your weight for this day",
     "openPhotoA11y": "View this photo full screen",
     "sincePrevious": "{{delta}} since previous",
     "emptyTitle": "No {{angle}} photos yet",
@@ -4835,7 +4839,7 @@
     "before": "Before",
     "after": "After",
     "weightChange": "Weight change",
-    "pickWhich": "Tap a date to set the selected side",
+    "pickWhich": "Tap either date to compare a different day",
     "timelapse": "Time-lapse",
     "timelapseTitle": "Time-lapse",
     "timelapseEmpty": "Add at least two photos of this angle to play a time-lapse.",
@@ -4846,6 +4850,24 @@
     "pause": "Pause",
     "speedSlow": "Slow",
     "speedNormal": "Normal",
-    "speedFast": "Fast"
+    "speedFast": "Fast",
+    "save": "Save Photos",
+    "saveSuccess": "Photos saved",
+    "saveError": "Could not save every photo",
+    "pendingSave": "Not saved yet",
+    "discard": "Discard",
+    "discardTitle": "Discard unsaved photos?",
+    "discardMessage": "You have photos that have not been saved yet. Discard them?",
+    "daysApart_one": "{{count}} day apart",
+    "daysApart_other": "{{count}} days apart",
+    "noPhotoOnDay": "No photo for this angle on that day",
+    "pickDayA11y": "Choose the {{side}} day",
+    "range30d": "Last 30 days",
+    "range3m": "Last 3 months",
+    "rangeAll": "All time",
+    "rangeSection": "Play back",
+    "rangeA11y": "Choose how far back to play",
+    "deltaBadge": "Δ {{value}}",
+    "frameCountRanged": "{{current}} of {{total}} · {{range}}"
   }
 }

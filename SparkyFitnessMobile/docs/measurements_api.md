@@ -94,6 +94,14 @@ Ordered by `entry_date DESC, photo_type ASC`. Note that `photo_type` orders
 alphabetically (`back`, `front`, `side`), not front/side/back — clients that
 care about angle order should impose their own.
 
+The response is not paginated and carries the caller's whole history. Each row
+is small (an id, a day string, an angle and a number), so the payload stays
+modest even at hundreds of shoots — but it is a list of *photo references*, and
+a client that mounts an image per row will decode every photo the user has ever
+taken. Fetch the list in one go; window what you render. The mobile comparison
+loads exactly the two photos on screen, and the time-lapse mounts one frame
+with a small prefetch buffer ahead of it.
+
 ### `GET /api/measurements/check-in-photos/dates`
 
 The calendar days (`YYYY-MM-DD`, newest first) that have at least one photo.

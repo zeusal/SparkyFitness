@@ -281,10 +281,12 @@ export type RootStackParamList = {
   Sync: undefined;
   ImportHistory: undefined;
   MeasurementsAdd: { date?: string } | undefined;
-  /** Progress-photo gallery: timeline of check-in photos with that day's weight. */
-  ProgressPhotos: undefined;
-  /** Capture/replace the front, back and side photos for one day. */
-  ProgressPhotoCapture: { date?: string } | undefined;
+  /**
+   * Progress photos: one day's three angles with their management, over a
+   * timeline of every check-in photo with that day's weight. `date` picks the
+   * day the screen opens on.
+   */
+  ProgressPhotos: { date?: string } | undefined;
   /** Side-by-side comparison of two days for one angle. */
   ProgressPhotoCompare: { angle?: PhotoType } | undefined;
   /** Cross-fading time-lapse of every photo for one angle, oldest to newest. */

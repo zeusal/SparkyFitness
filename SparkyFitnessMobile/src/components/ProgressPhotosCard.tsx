@@ -74,7 +74,7 @@ const ProgressPhotosCard: React.FC<ProgressPhotosCardProps> = ({
   if (!latest) {
     return (
       <TouchableOpacity
-        onPress={() => navigation.navigate('ProgressPhotoCapture', {})}
+        onPress={() => navigation.navigate('ProgressPhotos', {})}
         activeOpacity={0.7}
         accessibilityRole="button"
         accessibilityLabel={t('progressPhotos.card.addA11y', {

@@ -96,6 +96,22 @@ describe('GET / (gallery)', () => {
     );
   });
 
+  it('strips file_path so the on-disk layout stays a server detail', async () => {
+    // @ts-expect-error mock
+    checkInPhotoService.getAllPhotosWithWeight.mockResolvedValue([
+      {
+        id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+        entry_date: '2026-06-14',
+        photo_type: 'front',
+        weight: 82.5,
+        file_path: 'uploads/check-in/user/front.jpg',
+      },
+    ]);
+    const res = await request(app).get('/');
+    expect(res.status).toBe(200);
+    expect(res.body[0]).not.toHaveProperty('file_path');
+  });
+
   it('does not fall through to the /:date route', async () => {
     // @ts-expect-error mock
     checkInPhotoService.getAllPhotosWithWeight.mockResolvedValue([]);

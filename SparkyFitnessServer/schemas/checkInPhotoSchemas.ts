@@ -1,6 +1,7 @@
 import { z } from 'zod/v4';
 import {
   checkInPhotoGalleryResponseSchema,
+  checkInPhotoResponseSchema,
   checkInPhotoWithWeightSchema,
   photoTypeSchema,
 } from '@workspace/shared';
@@ -22,15 +23,7 @@ export const CheckInPhotoIdParamSchema = z.object({
   id: z.string().uuid('id must be a valid UUID'),
 });
 
-export const CheckInPhotoResponseSchema = z.object({
-  id: z.string().uuid(),
-  user_id: z.string().uuid(),
-  check_in_measurement_id: z.string().uuid().nullable(),
-  entry_date: z.string(),
-  photo_type: PhotoTypeSchema,
-  file_path: z.string(),
-  created_at: z.string(),
-});
+export const CheckInPhotoResponseSchema = checkInPhotoResponseSchema;
 
 /**
  * One photo in the progress gallery, paired with the weight recorded on the

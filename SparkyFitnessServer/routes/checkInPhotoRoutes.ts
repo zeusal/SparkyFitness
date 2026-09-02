@@ -10,6 +10,7 @@ import {
   CheckInPhotoDateParamSchema,
   CheckInPhotoUploadParamSchema,
   CheckInPhotoIdParamSchema,
+  CheckInPhotoGalleryResponseSchema,
 } from '../schemas/checkInPhotoSchemas.js';
 
 const router = express.Router();
@@ -61,7 +62,7 @@ router.get(
       const photos = await checkInPhotoService.getAllPhotosWithWeight(
         req.userId
       );
-      res.json(photos);
+      res.json(CheckInPhotoGalleryResponseSchema.parse(photos));
     } catch (err) {
       log('error', 'Failed to fetch check-in photo gallery', err);
       res.status(500).json({ error: 'Failed to fetch check-in photo gallery' });

@@ -1,4 +1,8 @@
 import { vi, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import {
+  createMockDbClient,
+  type MockDbClient,
+} from './helpers/mockDbClient.js';
 import checkInPhotoService from '../services/checkInPhotoService.js';
 import { getClient } from '../db/poolManager.js';
 
@@ -7,18 +11,14 @@ vi.mock('../db/poolManager', () => ({
 }));
 
 describe('checkInPhotoService.getAllPhotosWithWeight', () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let mockClient: any;
+  let mockClient: MockDbClient;
 
   const withRows = (rows: unknown[]) => {
     mockClient.query.mockResolvedValue({ rows });
   };
 
   beforeEach(() => {
-    mockClient = {
-      query: vi.fn().mockResolvedValue({ rows: [] }),
-      release: vi.fn(),
-    };
+    mockClient = createMockDbClient([]);
     // @ts-expect-error mock typing
     getClient.mockResolvedValue(mockClient);
   });

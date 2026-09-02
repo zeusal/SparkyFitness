@@ -119,6 +119,14 @@ export const getPhotoDates = async (userId: string): Promise<string[]> => {
  * RLS-scoped through getClient, so a family member only sees what they may
  * access.
  */
+/** One row of the gallery join; `pg` types the columns loosely. */
+interface GalleryRow {
+  id: string;
+  entry_date: string | Date;
+  photo_type: PhotoType;
+  weight: number | string | null;
+}
+
 export const getAllPhotosWithWeight = async (
   userId: string
 ): Promise<CheckInPhotoWithWeight[]> => {
@@ -133,8 +141,7 @@ export const getAllPhotosWithWeight = async (
        ORDER BY p.entry_date DESC, p.photo_type ASC`,
       [userId]
     );
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return result.rows.map((r: any) => ({
+    return (result.rows as GalleryRow[]).map((r) => ({
       id: r.id,
       entry_date:
         r.entry_date instanceof Date

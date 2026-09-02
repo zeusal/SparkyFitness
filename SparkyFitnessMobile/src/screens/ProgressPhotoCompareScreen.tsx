@@ -245,19 +245,27 @@ const ProgressPhotoCompareScreen: React.FC<Props> = ({ navigation, route }) => {
       {header}
 
       <ScrollView contentContainerClassName="px-4 py-3">
-        <View className="flex-row items-center gap-2">
+        <View className="flex-row gap-3">
           {renderPane(
             beforeDay,
             t('progressPhotos.before', { defaultValue: 'Before' }),
             'before'
           )}
+          {renderPane(
+            afterDay,
+            t('progressPhotos.after', { defaultValue: 'After' }),
+            'after'
+          )}
+        </View>
 
-          {/* The span between the two shoots, sitting where the eye already
-              travels from one photo to the other. */}
-          <View className="items-center" style={{ width: 64 }}>
+        {/* The span between the two shoots, below the pair rather than
+            between it: a middle column would take ~64pt off photos that are
+            the whole point of this screen. */}
+        {(deltaKg != null || (spanDays != null && spanDays > 0)) && (
+          <View className="bg-surface rounded-xl px-4 py-3 mt-3 flex-row items-center justify-center gap-3 shadow-sm">
             {deltaKg != null && (
               <Text
-                className="text-base font-bold text-center"
+                className="text-lg font-bold"
                 style={{ color: accentPrimary }}
               >
                 {t('progressPhotos.deltaBadge', {
@@ -267,7 +275,7 @@ const ProgressPhotoCompareScreen: React.FC<Props> = ({ navigation, route }) => {
               </Text>
             )}
             {spanDays != null && spanDays > 0 && (
-              <Text className="text-text-muted text-[10px] text-center mt-0.5">
+              <Text className="text-text-muted text-xs">
                 {t('progressPhotos.daysApart', {
                   defaultValue: '{{count}} days apart',
                   count: spanDays,
@@ -275,13 +283,7 @@ const ProgressPhotoCompareScreen: React.FC<Props> = ({ navigation, route }) => {
               </Text>
             )}
           </View>
-
-          {renderPane(
-            afterDay,
-            t('progressPhotos.after', { defaultValue: 'After' }),
-            'after'
-          )}
-        </View>
+        )}
 
         <Text className="text-text-secondary text-xs mt-5 text-center">
           {t('progressPhotos.pickWhich', {

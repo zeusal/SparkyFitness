@@ -1,13 +1,15 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Platform,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCSSVariable } from 'uniwind';
 import i18n from '../localization/i18n';
@@ -15,13 +17,28 @@ import Icon from '../components/Icon';
 import SafeImage from '../components/SafeImage';
 import ProgressPhotoViewer from '../components/ProgressPhotoViewer';
 import PhotoDayWeight from '../components/PhotoDayWeight';
+import PhotoDaySlots from '../components/PhotoDaySlots';
+import ActionSheet, {
+  type ActionSheetItem,
+  type ActionSheetRef,
+} from '../components/ActionSheet';
+import CalendarSheet, {
+  type CalendarSheetRef,
+} from '../components/CalendarSheet';
 import SegmentedControl, { type Segment } from '../components/SegmentedControl';
 import StatusView from '../components/StatusView';
 import { useScreenHeader } from '../hooks/useScreenHeader';
-import { useCheckInPhotoGallery } from '../hooks/useCheckInPhotos';
+import {
+  useCheckInPhotoGallery,
+  useCheckInPhotoDates,
+  useCheckInPhotosByDate,
+  useCheckInPhotoMutations,
+} from '../hooks/useCheckInPhotos';
 import { useCheckInPhotoSource } from '../hooks/useCheckInPhotoSource';
 import { usePreferences } from '../hooks/usePreferences';
-import { formatDateLabel } from '../utils/dateUtils';
+import { getApiErrorMessage } from '../services/api/errors';
+import { pickImageFromCamera, pickImagesFromLibrary } from '../utils/pickImage';
+import { formatDateLabel, getTodayDate } from '../utils/dateUtils';
 import {
   formatWeightDisplay,
   weightFromKg,
@@ -29,12 +46,38 @@ import {
 } from '../utils/unitConversions';
 import {
   PHOTO_TYPES,
+  type CheckInPhoto,
   type PhotoType,
   type ProgressPhotoDay,
 } from '../types/checkInPhotos';
 import type { RootStackScreenProps } from '../types/navigation';
 
 type Props = RootStackScreenProps<'ProgressPhotos'>;
+
+function confirmRemovePhoto(): Promise<boolean> {
+  return new Promise((resolve) => {
+    Alert.alert(
+      i18n.t('progressPhotos.removeTitle', { defaultValue: 'Remove photo?' }),
+      i18n.t('progressPhotos.removeMessage', {
+        defaultValue: 'This deletes the photo from this day.',
+      }),
+      [
+        {
+          text: i18n.t('common.cancel', { defaultValue: 'Cancel' }),
+          style: 'cancel',
+          onPress: () => resolve(false),
+        },
+        {
+          text: i18n.t('progressPhotos.remove', {
+            defaultValue: 'Remove Photo',
+          }),
+          style: 'destructive',
+          onPress: () => resolve(true),
+        },
+      ]
+    );
+  });
+}
 
 /**
  * A day paired with how its weight moved against the previous (older) day that
@@ -48,7 +91,7 @@ interface TimelineRow {
   deltaKg: number | null;
 }
 
-const ProgressPhotosScreen: React.FC<Props> = ({ navigation }) => {
+const ProgressPhotosScreen: React.FC<Props> = ({ navigation, route }) => {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const dateLocale = i18n.language.startsWith('pl') ? 'pl-PL' : 'en-US';
@@ -58,9 +101,45 @@ const ProgressPhotosScreen: React.FC<Props> = ({ navigation }) => {
   ]) as [string, string];
 
   const [angle, setAngle] = useState<PhotoType>('front');
-  const [zoomedRow, setZoomedRow] = useState<TimelineRow | null>(null);
+  /**
+   * The photo on show full screen, from either the day block or a timeline
+   * row. One piece of state, so one viewer is mounted rather than two modals
+   * differing only in where they read the caption from.
+   */
+  const [zoomed, setZoomed] = useState<{
+    photoId: string;
+    date: string;
+    weight: number | null;
+  } | null>(null);
+
+  // The day on show at the top. Opening from the add sheet lands on the
+  // diary's active date; otherwise today.
+  const [selectedDate, setSelectedDate] = useState(
+    route.params?.date ?? getTodayDate()
+  );
+  /** Angle whose action sheet is open; also the target of a pick. */
+  const [sheetAngle, setSheetAngle] = useState<PhotoType>('front');
+  const actionSheetRef = useRef<ActionSheetRef>(null);
+  const calendarRef = useRef<CalendarSheetRef>(null);
+  // The picker is a native modal; without this a double tap opens two.
+  const pickerLock = useRef(false);
 
   const { days, isLoading, isError, refetch } = useCheckInPhotoGallery();
+  const { photos: dayPhotos } = useCheckInPhotosByDate(selectedDate);
+  const { dates: photoDates } = useCheckInPhotoDates();
+  const { uploadAsync, uploadingType, deleteAsync } =
+    useCheckInPhotoMutations();
+
+  const byType = useMemo(() => {
+    const map = new Map<PhotoType, CheckInPhoto>();
+    for (const photo of dayPhotos) map.set(photo.photo_type, photo);
+    return map;
+  }, [dayPhotos]);
+
+  const selectedDay = useMemo(
+    () => days.find((day) => day.entry_date === selectedDate),
+    [days, selectedDate]
+  );
   const { getPhotoSource } = useCheckInPhotoSource();
   const { preferences } = usePreferences();
   const weightMode: WeightDisplayMode =
@@ -101,18 +180,10 @@ const ProgressPhotosScreen: React.FC<Props> = ({ navigation }) => {
 
   const canCompare = rows.length >= 2;
 
+  // No "+" any more: adding is the day block below, in place.
   const header = useScreenHeader({
     title: t('progressPhotos.title', { defaultValue: 'Progress Photos' }),
     left: { kind: 'back' },
-    right: {
-      kind: 'icon',
-      sfSymbol: 'plus',
-      ionicon: 'add',
-      accessibilityLabel: t('progressPhotos.add', {
-        defaultValue: 'Add photos',
-      }),
-      onPress: () => navigation.navigate('ProgressPhotoCapture', {}),
-    },
   });
 
   // Measurements owns weight entry, so the prompt hands the day over rather
@@ -121,6 +192,105 @@ const ProgressPhotosScreen: React.FC<Props> = ({ navigation }) => {
     (date: string) => navigation.navigate('MeasurementsAdd', { date }),
     [navigation]
   );
+
+  // Uploads land immediately rather than staging behind a Save: this screen is
+  // somewhere you browse, and unsaved state plus a back-guard does not belong
+  // on it. One pick is one request, so the uploads stay serial anyway.
+  const uploadFrom = useCallback(
+    async (source: 'camera' | 'library', type: PhotoType) => {
+      if (pickerLock.current) return;
+      pickerLock.current = true;
+      try {
+        let uri: string | undefined;
+        if (source === 'camera') {
+          const result = await pickImageFromCamera();
+          if (result.status === 'denied') {
+            Toast.show({
+              type: 'error',
+              text1: t('progressPhotos.cameraPermission', {
+                defaultValue: 'Camera permission is required',
+              }),
+              text2: t('progressPhotos.cameraPermissionHint', {
+                defaultValue:
+                  'Enable camera access for SparkyFitness in Settings.',
+              }),
+            });
+            return;
+          }
+          if (result.status === 'cancelled') return;
+          uri = result.image.uri;
+        } else {
+          uri = (await pickImagesFromLibrary(1))[0]?.uri;
+        }
+        if (!uri) return;
+        // The server upserts on (user_id, entry_date, photo_type), so an
+        // upload over an existing angle replaces it with no delete first.
+        await uploadAsync({ date: selectedDate, type, uri });
+      } catch (err) {
+        Toast.show({
+          type: 'error',
+          text1: t('progressPhotos.uploadError', {
+            defaultValue: 'Could not save that photo',
+          }),
+          text2: getApiErrorMessage(err) ?? undefined,
+        });
+      } finally {
+        pickerLock.current = false;
+      }
+    },
+    [t, uploadAsync, selectedDate]
+  );
+
+  const removePhoto = useCallback(
+    async (type: PhotoType) => {
+      const photo = byType.get(type);
+      if (!photo) return;
+      if (!(await confirmRemovePhoto())) return;
+      try {
+        await deleteAsync(photo.id);
+      } catch (err) {
+        Toast.show({
+          type: 'error',
+          text1: t('progressPhotos.deleteError', {
+            defaultValue: 'Could not remove that photo',
+          }),
+          text2: getApiErrorMessage(err) ?? undefined,
+        });
+      }
+    },
+    [byType, deleteAsync, t]
+  );
+
+  const openSheetFor = (type: PhotoType) => {
+    setSheetAngle(type);
+    actionSheetRef.current?.present();
+  };
+
+  const sheetItems = useMemo<ActionSheetItem[]>(() => {
+    const items: ActionSheetItem[] = [
+      {
+        key: 'camera',
+        label: t('progressPhotos.takePhoto', { defaultValue: 'Take Photo' }),
+        onPress: () => void uploadFrom('camera', sheetAngle),
+      },
+      {
+        key: 'library',
+        label: t('progressPhotos.chooseLibrary', {
+          defaultValue: 'Choose from Library',
+        }),
+        onPress: () => void uploadFrom('library', sheetAngle),
+      },
+    ];
+    if (byType.has(sheetAngle)) {
+      items.push({
+        key: 'remove',
+        label: t('progressPhotos.remove', { defaultValue: 'Remove Photo' }),
+        destructive: true,
+        onPress: () => void removePhoto(sheetAngle),
+      });
+    }
+    return items;
+  }, [t, uploadFrom, removePhoto, sheetAngle, byType]);
 
   const formatDelta = (deltaKg: number): string => {
     // Convert the difference itself, not each end, so rounding happens once.
@@ -138,7 +308,13 @@ const ProgressPhotosScreen: React.FC<Props> = ({ navigation }) => {
     const source = getPhotoSource(item.photoId);
     return (
       <TouchableOpacity
-        onPress={() => setZoomedRow(item)}
+        onPress={() =>
+          setZoomed({
+            photoId: item.photoId,
+            date: item.day.entry_date,
+            weight: item.day.weight,
+          })
+        }
         activeOpacity={0.7}
         accessibilityRole="button"
         accessibilityLabel={t('progressPhotos.openPhotoA11y', {
@@ -217,19 +393,9 @@ const ProgressPhotosScreen: React.FC<Props> = ({ navigation }) => {
           <Text className="text-text-secondary text-sm mt-1 text-center">
             {t('progressPhotos.emptyBody', {
               defaultValue:
-                'Add a photo on a check-in day and it will show up here with that day’s weight.',
+                'Add one above and it will show up here with that day’s weight.',
             })}
           </Text>
-          <TouchableOpacity
-            onPress={() => navigation.navigate('ProgressPhotoCapture', {})}
-            className="mt-4 px-5 py-2.5 rounded-lg"
-            style={{ backgroundColor: accentPrimary }}
-            accessibilityRole="button"
-          >
-            <Text className="text-white font-semibold text-sm">
-              {t('progressPhotos.add', { defaultValue: 'Add photos' })}
-            </Text>
-          </TouchableOpacity>
         </View>
       );
     }
@@ -252,7 +418,56 @@ const ProgressPhotosScreen: React.FC<Props> = ({ navigation }) => {
     >
       {header}
 
-      <View className="px-4 pt-2 pb-3">
+      {/* The day on show, with its own management. Its own card, and angle
+          agnostic: the selector further down scopes the history, not this. */}
+      <View className="mx-4 mt-2 bg-surface rounded-xl p-3 shadow-sm">
+        <View className="flex-row items-center justify-between mb-2">
+          <TouchableOpacity
+            onPress={() => calendarRef.current?.present()}
+            activeOpacity={0.7}
+            className="flex-row items-center"
+            accessibilityRole="button"
+            accessibilityLabel={t('progressPhotos.chooseDayA11y', {
+              defaultValue: 'Choose the day',
+            })}
+          >
+            <Text className="text-text-primary text-base font-semibold">
+              {formatDateLabel(selectedDate, t, dateLocale)}
+            </Text>
+            <Icon
+              name="chevron-down"
+              size={12}
+              color={accentPrimary}
+              style={{ marginLeft: 4 }}
+            />
+          </TouchableOpacity>
+          <PhotoDayWeight
+            weight={selectedDay?.weight ?? null}
+            mode={weightMode}
+            onLogWeight={() => openWeightEntry(selectedDate)}
+            className="text-text-secondary text-sm"
+          />
+        </View>
+
+        <PhotoDaySlots
+          photos={byType}
+          uploadingType={uploadingType}
+          onPick={openSheetFor}
+          onView={(photo) =>
+            setZoomed({
+              photoId: photo.id,
+              date: selectedDate,
+              weight: selectedDay?.weight ?? null,
+            })
+          }
+          onManage={openSheetFor}
+        />
+      </View>
+
+      <View className="px-4 pt-4 pb-3">
+        <Text className="text-text-secondary text-xs font-semibold mb-2 uppercase">
+          {t('progressPhotos.historySection', { defaultValue: 'History' })}
+        </Text>
         <SegmentedControl
           segments={segments}
           activeKey={angle}
@@ -302,20 +517,31 @@ const ProgressPhotosScreen: React.FC<Props> = ({ navigation }) => {
 
       {renderBody()}
 
+      <CalendarSheet
+        ref={calendarRef}
+        markedDates={photoDates}
+        selectedDate={selectedDate}
+        onSelectDate={setSelectedDate}
+      />
+
+      <ActionSheet
+        ref={actionSheetRef}
+        title={t('progressPhotos.slotSheetTitle', {
+          defaultValue: 'Progress photo',
+        })}
+        items={sheetItems}
+      />
+
       <ProgressPhotoViewer
-        visible={zoomedRow != null}
-        source={zoomedRow ? getPhotoSource(zoomedRow.photoId) : null}
-        title={
-          zoomedRow
-            ? formatDateLabel(zoomedRow.day.entry_date, t, dateLocale)
-            : undefined
-        }
+        visible={zoomed != null}
+        source={zoomed ? getPhotoSource(zoomed.photoId) : null}
+        title={zoomed ? formatDateLabel(zoomed.date, t, dateLocale) : undefined}
         subtitle={
-          zoomedRow?.day.weight != null
-            ? formatWeightDisplay(zoomedRow.day.weight, weightMode)
+          zoomed?.weight != null
+            ? formatWeightDisplay(zoomed.weight, weightMode)
             : undefined
         }
-        onClose={() => setZoomedRow(null)}
+        onClose={() => setZoomed(null)}
       />
     </View>
   );

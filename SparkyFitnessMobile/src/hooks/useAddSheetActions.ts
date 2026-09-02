@@ -303,7 +303,7 @@ export function useAddSheetActions({ syncMutation }: AddSheetActionsArgs) {
 
   const handleAddProgressPhotos = useCallback(() => {
     const date = getActiveDiaryDate();
-    navigateFromSheet('ProgressPhotoCapture', { date });
+    navigateFromSheet('ProgressPhotos', { date });
   }, [getActiveDiaryDate, navigateFromSheet]);
 
   const handleAskSparky = useCallback(() => {

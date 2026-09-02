@@ -1,7 +1,12 @@
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
 import ProgressPhotosScreen from '../../src/screens/ProgressPhotosScreen';
-import { useCheckInPhotoGallery } from '../../src/hooks/useCheckInPhotos';
+import {
+  useCheckInPhotoGallery,
+  useCheckInPhotoDates,
+  useCheckInPhotosByDate,
+  useCheckInPhotoMutations,
+} from '../../src/hooks/useCheckInPhotos';
 import { useCheckInPhotoSource } from '../../src/hooks/useCheckInPhotoSource';
 import { usePreferences } from '../../src/hooks/usePreferences';
 import { useScreenHeader } from '../../src/hooks/useScreenHeader';
@@ -9,6 +14,9 @@ import type { ProgressPhotoDay } from '../../src/types/checkInPhotos';
 
 jest.mock('../../src/hooks/useCheckInPhotos', () => ({
   useCheckInPhotoGallery: jest.fn(),
+  useCheckInPhotoDates: jest.fn(),
+  useCheckInPhotosByDate: jest.fn(),
+  useCheckInPhotoMutations: jest.fn(),
 }));
 jest.mock('../../src/hooks/useCheckInPhotoSource', () => ({
   useCheckInPhotoSource: jest.fn(),
@@ -22,6 +30,44 @@ jest.mock('../../src/hooks/useScreenHeader', () => ({
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
+jest.mock('../../src/utils/pickImage', () => ({
+  pickImageFromCamera: jest.fn(async () => ({
+    status: 'picked',
+    image: { uri: 'file:///picked.jpg' },
+  })),
+  pickImagesFromLibrary: jest.fn(async () => [{ uri: 'file:///picked.jpg' }]),
+}));
+
+// The sheets need a BottomSheetModalProvider. Record the action sheet's items
+// on each render so a test can invoke one the way a tap would.
+type SheetItem = { key: string; onPress?: () => void; destructive?: boolean };
+const mockActionSheetRender = jest.fn<void, [{ items: SheetItem[] }]>();
+jest.mock('../../src/components/ActionSheet', () => {
+  const { forwardRef, useImperativeHandle } =
+    jest.requireActual<typeof import('react')>('react');
+  return {
+    __esModule: true,
+    default: forwardRef<
+      { present: () => void; dismiss: () => void },
+      { items: SheetItem[] }
+    >((props, ref) => {
+      mockActionSheetRender(props);
+      useImperativeHandle(ref, () => ({
+        present: jest.fn(),
+        dismiss: jest.fn(),
+      }));
+      return null;
+    }),
+  };
+});
+jest.mock('../../src/components/CalendarSheet', () => ({
+  __esModule: true,
+  default: () => null,
+}));
+
+/** Items on the action sheet's latest render. */
+const sheetItems = (): SheetItem[] | undefined =>
+  mockActionSheetRender.mock.calls.at(-1)?.[0].items;
 
 const mockUseGallery = useCheckInPhotoGallery as jest.MockedFunction<
   typeof useCheckInPhotoGallery
@@ -35,6 +81,33 @@ const mockUsePreferences = usePreferences as jest.MockedFunction<
 const mockUseScreenHeader = useScreenHeader as jest.MockedFunction<
   typeof useScreenHeader
 >;
+const mockUseDates = useCheckInPhotoDates as jest.MockedFunction<
+  typeof useCheckInPhotoDates
+>;
+const mockUseByDate = useCheckInPhotosByDate as jest.MockedFunction<
+  typeof useCheckInPhotosByDate
+>;
+const mockUseMutations = useCheckInPhotoMutations as jest.MockedFunction<
+  typeof useCheckInPhotoMutations
+>;
+const uploadAsync = jest.fn();
+const deleteAsync = jest.fn();
+
+/** The day block's stored photos for the selected day. */
+const setDayPhotos = (angles: ('front' | 'back' | 'side')[]) => {
+  mockUseByDate.mockReturnValue({
+    photos: angles.map((angle) => ({
+      id: `today-${angle}`,
+      user_id: 'u1',
+      check_in_measurement_id: null,
+      entry_date: '2026-03-20',
+      photo_type: angle,
+      file_path: `uploads/${angle}.jpg`,
+      created_at: '2026-03-20T00:00:00Z',
+    })),
+    isLoading: false,
+  } as unknown as ReturnType<typeof useCheckInPhotosByDate>);
+};
 
 const navigation = { navigate: jest.fn(), goBack: jest.fn() };
 const route = { key: 'ProgressPhotos-key', name: 'ProgressPhotos' as const };
@@ -96,6 +169,17 @@ describe('ProgressPhotosScreen', () => {
     mockUsePreferences.mockReturnValue({
       preferences: { default_weight_unit: 'kg' },
     } as unknown as ReturnType<typeof usePreferences>);
+    mockUseDates.mockReturnValue({ dates: [] } as unknown as ReturnType<
+      typeof useCheckInPhotoDates
+    >);
+    mockUseMutations.mockReturnValue({
+      uploadAsync,
+      deleteAsync,
+      uploadingType: undefined,
+      isUploading: false,
+      isDeleting: false,
+    } as unknown as ReturnType<typeof useCheckInPhotoMutations>);
+    setDayPhotos([]);
     setGallery([dayWith('2026-03-20', 80), dayWith('2026-03-01', 84)]);
   });
 
@@ -114,19 +198,19 @@ describe('ProgressPhotosScreen', () => {
     expect(getByText('-4 kg since previous')).toBeTruthy();
   });
 
-  it('shows only the selected angle and switches with the control', () => {
+  it('shows only the selected angle and switches with the history control', () => {
     setGallery([
       dayWith('2026-03-20', 80, ['front']),
       dayWith('2026-03-01', 84, ['back']),
     ]);
 
-    const { getByText, queryByText } = renderScreen();
+    const { getByText, getByRole, queryByText } = renderScreen();
 
     // Front is the default, so only the front day has a row.
     expect(getByText('80 kg')).toBeTruthy();
     expect(queryByText('84 kg')).toBeNull();
 
-    fireEvent.press(getByText('Back'));
+    fireEvent.press(getByRole('tab', { name: 'Back' }));
 
     expect(getByText('84 kg')).toBeTruthy();
     expect(queryByText('80 kg')).toBeNull();
@@ -164,18 +248,14 @@ describe('ProgressPhotosScreen', () => {
     expect(navigation.navigate).not.toHaveBeenCalled();
   });
 
-  it('offers capture from the header', () => {
+  it('keeps the header free of a capture action now the day block owns adding', () => {
     renderScreen();
 
     const config = mockUseScreenHeader.mock.calls[0][0] as unknown as {
-      right?: { onPress?: () => void };
+      right?: unknown;
     };
-    config.right?.onPress?.();
 
-    expect(navigation.navigate).toHaveBeenCalledWith(
-      'ProgressPhotoCapture',
-      {}
-    );
+    expect(config.right).toBeUndefined();
   });
 
   it('prompts to add photos when the angle has none', () => {
@@ -199,29 +279,100 @@ describe('ProgressPhotosScreen', () => {
     // forever, since the only way back was Measurements.
     setGallery([dayWith('2026-03-20', null)]);
 
-    const { getByText, queryByText } = renderScreen();
+    const { getAllByText, queryByText } = renderScreen();
 
-    expect(getByText('Log weight')).toBeTruthy();
+    // Once in the day block, once on the timeline row for the same day.
+    expect(getAllByText('Log weight')).toHaveLength(2);
     expect(queryByText('No weight logged')).toBeNull();
   });
 
-  it('opens weight entry for that specific day, not today', () => {
+  it('opens weight entry for the row’s own day, not the selected one', () => {
+    // The day block sits on today; a timeline row must still hand over its own
+    // date rather than whatever the block happens to be showing.
     setGallery([dayWith('2026-03-20', null)]);
 
-    const { getByText } = renderScreen();
-    fireEvent.press(getByText('Log weight'));
+    const { getAllByText } = renderScreen();
+    fireEvent.press(getAllByText('Log weight')[1]);
 
     expect(navigation.navigate).toHaveBeenCalledWith('MeasurementsAdd', {
       date: '2026-03-20',
     });
   });
 
-  it('shows the weight plainly when the day has one', () => {
+  it('shows the weight plainly on a row that has one', () => {
     setGallery([dayWith('2026-03-20', 81)]);
 
-    const { getByText, queryByText } = renderScreen();
+    const { getAllByText } = renderScreen();
 
-    expect(getByText('81 kg')).toBeTruthy();
-    expect(queryByText('Log weight')).toBeNull();
+    // Once, on its row. The day block is on today, which has no photos.
+    expect(getAllByText('81 kg')).toHaveLength(1);
+  });
+
+  describe('the day block', () => {
+    it('offers a slot per angle so the day’s gaps read at a glance', () => {
+      setDayPhotos(['front']);
+
+      const { getByLabelText } = renderScreen();
+
+      // Front is filled, so it is a view target; the other two invite a photo.
+      expect(getByLabelText('View the front photo full screen')).toBeTruthy();
+      expect(getByLabelText('Add the back photo')).toBeTruthy();
+      expect(getByLabelText('Add the side photo')).toBeTruthy();
+    });
+
+    it('uploads straight away rather than staging behind a Save', async () => {
+      setDayPhotos([]);
+
+      const { getByLabelText } = renderScreen();
+      fireEvent.press(getByLabelText('Add the front photo'));
+
+      const camera = sheetItems()?.find((item) => item.key === 'camera');
+      await act(async () => {
+        camera?.onPress?.();
+      });
+
+      expect(uploadAsync).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'front', uri: 'file:///picked.jpg' })
+      );
+    });
+
+    it('offers removal only on a slot that has a photo', () => {
+      setDayPhotos([]);
+
+      const { getByLabelText } = renderScreen();
+      fireEvent.press(getByLabelText('Add the front photo'));
+
+      expect(sheetItems()?.map((item) => item.key)).toEqual([
+        'camera',
+        'library',
+      ]);
+    });
+
+    it('keeps viewing and managing on separate targets', () => {
+      setDayPhotos(['front']);
+
+      const { getByLabelText } = renderScreen();
+
+      // A filled slot has both: the photo opens the viewer, the corner button
+      // opens replace/remove. Neither is hidden behind a long press.
+      expect(getByLabelText('View the front photo full screen')).toBeTruthy();
+      expect(getByLabelText('Replace or remove the front photo')).toBeTruthy();
+    });
+
+    it('does not follow the history angle control', () => {
+      // The control below scopes the timeline; the day block always shows all
+      // three angles, which is the one ambiguity this layout has to get right.
+      setDayPhotos(['back']);
+      setGallery([
+        dayWith('2026-03-20', 80, ['front']),
+        dayWith('2026-03-01', 84, ['back']),
+      ]);
+
+      const { getByRole, getByLabelText } = renderScreen();
+      fireEvent.press(getByRole('tab', { name: 'Back' }));
+
+      expect(getByLabelText('Add the front photo')).toBeTruthy();
+      expect(getByLabelText('View the back photo full screen')).toBeTruthy();
+    });
   });
 });

@@ -113,17 +113,13 @@ describe('ProgressPhotosCard', () => {
     expect(getByText('Tap to add check-in photos')).toBeTruthy();
   });
 
-  it('sends the empty card straight to capture rather than the gallery', () => {
-    // The gallery would only show its own empty state, costing a hop.
+  it('sends the empty card to the gallery, where the day block takes over', () => {
     setGallery([]);
 
     const { getByText } = renderCard();
     fireEvent.press(getByText('Tap to add check-in photos'));
 
-    expect(navigation.navigate).toHaveBeenCalledWith(
-      'ProgressPhotoCapture',
-      {}
-    );
+    expect(navigation.navigate).toHaveBeenCalledWith('ProgressPhotos', {});
   });
 
   it('renders nothing while the gallery is still loading', () => {

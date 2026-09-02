@@ -96,7 +96,6 @@ function confirmRemovePhoto(): Promise<boolean> {
 interface TimelineRow {
   day: ProgressPhotoDay;
   photoId: string;
-  /** kg difference vs the next-older row; null when there is nothing to compare. */
   deltaKg: number | null;
 }
 
@@ -121,8 +120,7 @@ const ProgressPhotosScreen: React.FC<Props> = ({ navigation, route }) => {
     weight: number | null;
   } | null>(null);
 
-  // The day on show at the top. Opening from the add sheet lands on the
-  // diary's active date; otherwise today.
+  // The add sheet passes the diary's active date; everything else starts today.
   const [selectedDate, setSelectedDate] = useState(
     route.params?.date ?? getTodayDate()
   );
@@ -196,7 +194,6 @@ const ProgressPhotosScreen: React.FC<Props> = ({ navigation, route }) => {
   // these two for anything older, so they must not be off when it does.
   const canCompare = allRows.length >= 2;
 
-  // No "+" any more: adding is the day block below, in place.
   const header = useScreenHeader({
     title: t('progressPhotos.title', { defaultValue: 'Progress Photos' }),
     left: { kind: 'back' },

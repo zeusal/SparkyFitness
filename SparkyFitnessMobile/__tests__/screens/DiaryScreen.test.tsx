@@ -75,6 +75,7 @@ const mockUseCheckInPhotoDates = jest.fn(() => ({
 jest.mock('../../src/hooks/useCheckInPhotos', () => ({
   useCheckInPhotoDates: (enabled?: boolean) =>
     mockUseCheckInPhotoDates(enabled as never),
+  useCheckInPhotosByDate: () => ({ photos: [], isLoading: false }),
 }));
 jest.mock('../../src/hooks/usePreferences', () => ({
   usePreferences: jest.fn(() => ({

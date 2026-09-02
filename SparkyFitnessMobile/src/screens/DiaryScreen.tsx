@@ -21,6 +21,7 @@ import DateNavigator from '../components/DateNavigator';
 import FoodSummary from '../components/FoodSummary';
 import ExerciseSummary from '../components/ExerciseSummary';
 import MeasurementsSummary from '../components/MeasurementsSummary';
+import CheckInPhotosSummary from '../components/CheckInPhotosSummary';
 import { addSheetRef } from '../components/AddSheet';
 import CalendarSheet, {
   type CalendarSheetRef,
@@ -466,6 +467,14 @@ const DiaryScreen: React.FC<DiaryScreenProps> = ({ navigation }) => {
               heightMode={heightMode}
               onPress={() =>
                 navigation.navigate('MeasurementsAdd', { date: selectedDate })
+              }
+            />
+            {/* Below the measurements: both are the same check-in, keyed on
+                (user_id, entry_date) server-side. */}
+            <CheckInPhotosSummary
+              date={selectedDate}
+              onPress={() =>
+                navigation.navigate('ProgressPhotos', { date: selectedDate })
               }
             />
           </>

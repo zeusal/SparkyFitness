@@ -54,6 +54,15 @@ import type { RootStackScreenProps } from '../types/navigation';
 
 type Props = RootStackScreenProps<'ProgressPhotos'>;
 
+/**
+ * How many shoots the History preview lists.
+ *
+ * Counted in shoots rather than calendar days on purpose: someone who shoots
+ * weekly would see a single row under a seven-day window, with no delta and so
+ * no progress at all - the opposite of what the preview is for.
+ */
+const HISTORY_PREVIEW_LIMIT = 7;
+
 function confirmRemovePhoto(): Promise<boolean> {
   return new Promise((resolve) => {
     Alert.alert(
@@ -166,7 +175,7 @@ const ProgressPhotosScreen: React.FC<Props> = ({ navigation, route }) => {
 
   // Only days that actually have this angle. `days` arrives newest-first, and
   // the delta compares against the next entry, which is the previous shoot.
-  const rows = useMemo<TimelineRow[]>(() => {
+  const allRows = useMemo<TimelineRow[]>(() => {
     const withAngle = days.filter((day) => day.photos[angle]);
     return withAngle.map((day, index) => {
       const older = withAngle[index + 1];
@@ -178,7 +187,14 @@ const ProgressPhotosScreen: React.FC<Props> = ({ navigation, route }) => {
     });
   }, [days, angle]);
 
-  const canCompare = rows.length >= 2;
+  // Cut after the deltas, never before: the oldest visible row still compares
+  // against the shoot before it, even though that one falls off the list.
+  const rows = allRows.slice(0, HISTORY_PREVIEW_LIMIT);
+  const isCapped = allRows.length > HISTORY_PREVIEW_LIMIT;
+
+  // Gated on the whole history, not the preview: the description points at
+  // these two for anything older, so they must not be off when it does.
+  const canCompare = allRows.length >= 2;
 
   // No "+" any more: adding is the day block below, in place.
   const header = useScreenHeader({
@@ -465,8 +481,19 @@ const ProgressPhotosScreen: React.FC<Props> = ({ navigation, route }) => {
       </View>
 
       <View className="px-4 pt-4 pb-3">
-        <Text className="text-text-secondary text-xs font-semibold mb-2 uppercase">
+        <Text className="text-text-secondary text-xs font-semibold mb-1 uppercase">
           {t('progressPhotos.historySection', { defaultValue: 'History' })}
+        </Text>
+        <Text className="text-text-muted text-xs mb-2">
+          {isCapped
+            ? t('progressPhotos.historyDescriptionCapped', {
+                defaultValue:
+                  'Your {{limit}} most recent. Compare or Time-lapse look further back.',
+                limit: HISTORY_PREVIEW_LIMIT,
+              })
+            : t('progressPhotos.historyDescription', {
+                defaultValue: 'Your photos for this angle, newest first.',
+              })}
         </Text>
         <SegmentedControl
           segments={segments}

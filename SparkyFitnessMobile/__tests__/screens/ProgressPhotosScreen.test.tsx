@@ -308,6 +308,71 @@ describe('ProgressPhotosScreen', () => {
     expect(getAllByText('81 kg')).toHaveLength(1);
   });
 
+  describe('the history preview', () => {
+    /** `n` shoots, newest first, one kilo apart so every delta is -1 kg. */
+    const shoots = (n: number) =>
+      Array.from({ length: n }, (_, i) =>
+        dayWith(`2026-03-${String(28 - i).padStart(2, '0')}`, 100 + i)
+      );
+
+    it('lists only the seven most recent shoots', () => {
+      setGallery(shoots(10));
+
+      const { getByText, queryByText } = renderScreen();
+
+      // Newest is 100 kg, so the seventh back is 106 and the eighth 107.
+      expect(getByText('106 kg')).toBeTruthy();
+      expect(queryByText('107 kg')).toBeNull();
+    });
+
+    it('still shows a delta on the oldest visible row', () => {
+      // The shoot it compares against sits outside the preview, so this only
+      // holds if the cut happens after the deltas are worked out.
+      setGallery(shoots(10));
+
+      const { getAllByText } = renderScreen();
+
+      expect(getAllByText('-1 kg since previous')).toHaveLength(7);
+    });
+
+    it('says it is capped only when there is more history than fits', () => {
+      setGallery(shoots(10));
+
+      const { getByText } = renderScreen();
+
+      expect(
+        getByText(
+          'Your 7 most recent. Compare or Time-lapse look further back.'
+        )
+      ).toBeTruthy();
+    });
+
+    it('describes the section plainly when nothing is cut', () => {
+      setGallery(shoots(3));
+
+      const { getByText, queryByText } = renderScreen();
+
+      expect(
+        getByText('Your photos for this angle, newest first.')
+      ).toBeTruthy();
+      expect(queryByText(/most recent/)).toBeNull();
+    });
+
+    it('keeps compare and time-lapse live on a long history', () => {
+      // They are what the description sends you to for anything older, so
+      // gating them on the preview rather than the whole history would switch
+      // them off for exactly the people who need them.
+      setGallery(shoots(10));
+
+      const { getByText } = renderScreen();
+      fireEvent.press(getByText('Compare'));
+
+      expect(navigation.navigate).toHaveBeenCalledWith('ProgressPhotoCompare', {
+        angle: 'front',
+      });
+    });
+  });
+
   describe('the day block', () => {
     it('offers a slot per angle so the day’s gaps read at a glance', () => {
       setDayPhotos(['front']);

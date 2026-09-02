@@ -4839,7 +4839,7 @@
     "before": "Before",
     "after": "After",
     "weightChange": "Weight change",
-    "pickWhich": "Tap a date to set the selected side",
+    "pickWhich": "Tap either date to compare a different day",
     "timelapse": "Time-lapse",
     "timelapseTitle": "Time-lapse",
     "timelapseEmpty": "Add at least two photos of this angle to play a time-lapse.",
@@ -4857,6 +4857,17 @@
     "pendingSave": "Not saved yet",
     "discard": "Discard",
     "discardTitle": "Discard unsaved photos?",
-    "discardMessage": "You have photos that have not been saved yet. Discard them?"
+    "discardMessage": "You have photos that have not been saved yet. Discard them?",
+    "daysApart_one": "{{count}} day apart",
+    "daysApart_other": "{{count}} days apart",
+    "noPhotoOnDay": "No photo for this angle on that day",
+    "pickDayA11y": "Choose the {{side}} day",
+    "range30d": "Last 30 days",
+    "range3m": "Last 3 months",
+    "rangeAll": "All time",
+    "rangeSection": "Play back",
+    "rangeA11y": "Choose how far back to play",
+    "deltaBadge": "Δ {{value}}",
+    "frameCountRanged": "{{current}} of {{total}} · {{range}}"
   }
 }

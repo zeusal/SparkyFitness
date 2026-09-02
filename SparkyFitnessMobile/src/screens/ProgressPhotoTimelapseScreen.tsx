@@ -21,7 +21,8 @@ import { useScreenHeader } from '../hooks/useScreenHeader';
 import { useCheckInPhotoGallery } from '../hooks/useCheckInPhotos';
 import { useCheckInPhotoSource } from '../hooks/useCheckInPhotoSource';
 import { usePreferences } from '../hooks/usePreferences';
-import { formatShortDate } from '../utils/dateUtils';
+import { daysBetween } from '@workspace/shared';
+import { formatShortDate, getTodayDate } from '../utils/dateUtils';
 import { type WeightDisplayMode } from '../utils/unitConversions';
 import type { PhotoType, ProgressPhotoDay } from '../types/checkInPhotos';
 import type { RootStackScreenProps } from '../types/navigation';
@@ -29,6 +30,15 @@ import type { RootStackScreenProps } from '../types/navigation';
 type Props = RootStackScreenProps<'ProgressPhotoTimelapse'>;
 
 type Speed = 'slow' | 'normal' | 'fast';
+
+/** How far back the playback reaches. */
+type Range = '30d' | '3m' | 'all';
+
+const RANGE_DAYS: Record<Range, number | null> = {
+  '30d': 30,
+  '3m': 92,
+  all: null,
+};
 
 /**
  * How long each frame is held, and how long the cross-fade between two frames
@@ -65,8 +75,10 @@ const ProgressPhotoTimelapseScreen: React.FC<Props> = ({
   const weightMode: WeightDisplayMode =
     preferences?.default_weight_unit ?? 'kg';
 
+  const [range, setRange] = useState<Range>('3m');
+
   // Oldest → newest: the whole point is watching the change accumulate.
-  const frames = useMemo<ProgressPhotoDay[]>(
+  const allFrames = useMemo<ProgressPhotoDay[]>(
     () =>
       days
         .filter((day) => day.photos[angle])
@@ -75,15 +87,71 @@ const ProgressPhotoTimelapseScreen: React.FC<Props> = ({
     [days, angle]
   );
 
+  const framesIn = useCallback(
+    (window: Range): ProgressPhotoDay[] => {
+      const span = RANGE_DAYS[window];
+      if (span == null) return allFrames;
+      const today = getTodayDate();
+      return allFrames.filter(
+        (day) => Math.abs(daysBetween(day.entry_date, today)) <= span
+      );
+    },
+    [allFrames]
+  );
+
+  // A default window that happens to be empty would show "add two photos" to
+  // someone whose whole history is older than it, so fall back to everything
+  // rather than to a dead screen. Derived, so a later pick still wins.
+  const windowed = framesIn(range);
+  const frames = windowed.length >= 2 || range === 'all' ? windowed : allFrames;
+
   const [index, setIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState<Speed>('normal');
 
   const { holdMs, fadeMs } = SPEEDS[speed];
 
+  const rangeLabel = useCallback(
+    (window: Range): string => {
+      switch (window) {
+        case '30d':
+          return t('progressPhotos.range30d', {
+            defaultValue: 'Last 30 days',
+          });
+        case '3m':
+          return t('progressPhotos.range3m', {
+            defaultValue: 'Last 3 months',
+          });
+        case 'all':
+          return t('progressPhotos.rangeAll', { defaultValue: 'All time' });
+      }
+    },
+    [t]
+  );
+
   const header = useScreenHeader({
     title: t('progressPhotos.timelapseTitle', { defaultValue: 'Time-lapse' }),
     left: { kind: 'back' },
+    right: {
+      kind: 'menu',
+      accessibilityLabel: t('progressPhotos.rangeA11y', {
+        defaultValue: 'Choose how far back to play',
+      }),
+      showsBadge: range !== 'all',
+      items: [
+        {
+          label: t('progressPhotos.rangeSection', {
+            defaultValue: 'Play back',
+          }),
+          items: (['30d', '3m', 'all'] as Range[]).map((window) => ({
+            label: rangeLabel(window),
+            selected: range === window,
+            onPress: () => setRange(window),
+          })),
+        },
+      ],
+      identifier: 'timelapse-range',
+    },
   });
 
   // Reset when the frame set changes (angle switch, or a photo deleted while
@@ -227,10 +295,11 @@ const ProgressPhotoTimelapseScreen: React.FC<Props> = ({
             className="text-text-secondary text-sm"
           />
           <Text className="text-text-muted text-xs mt-0.5">
-            {t('progressPhotos.frameCount', {
-              defaultValue: '{{current}} of {{total}}',
+            {t('progressPhotos.frameCountRanged', {
+              defaultValue: '{{current}} of {{total}} · {{range}}',
               current: index + 1,
               total: frames.length,
+              range: rangeLabel(range),
             })}
           </Text>
         </View>

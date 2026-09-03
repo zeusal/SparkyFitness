@@ -39,6 +39,22 @@ jest.mock('../../src/services/LogService', () => ({
   addLog: jest.fn(),
 }));
 
+// The modal is mounted inside the app's QueryClientProvider; here the client is
+// stubbed so a test can assert the cache is dropped when a session is replaced.
+const mockQueryClientClear = jest.fn();
+jest.mock('@tanstack/react-query', () => ({
+  useQueryClient: () => ({ clear: mockQueryClientClear }),
+}));
+
+const mockClearMemoryCache = jest.fn().mockResolvedValue(true);
+const mockClearDiskCache = jest.fn().mockResolvedValue(true);
+jest.mock('expo-image', () => ({
+  Image: {
+    clearMemoryCache: () => mockClearMemoryCache(),
+    clearDiskCache: () => mockClearDiskCache(),
+  },
+}));
+
 jest.mock('../../src/components/Icon', () => {
   const { View } = require('react-native');
   return {
@@ -178,6 +194,43 @@ describe('ReauthModal', () => {
       expect.objectContaining({ id: 'config-1', sessionToken: 'fresh-token' })
     );
     expect(onLoginSuccess).toHaveBeenCalled();
+  });
+
+  /**
+   * The modal takes an email, so the session it installs need not belong to the account
+   * the expired one did. Anything cached under the previous identity would otherwise be
+   * readable by the new one — and for authenticated images, expo-image resolves by URI
+   * with no knowledge of the Authorization header, so private bytes render with no
+   * request at all.
+   */
+  describe('cache hygiene on a replaced session', () => {
+    it('drops the query cache and the image caches', async () => {
+      mockFetchAuthSettings.mockResolvedValue(oidcAuthSettings);
+      mockLoginWithOidc.mockResolvedValue({
+        type: 'success',
+        sessionToken: 'fresh-token',
+      });
+
+      const result = renderModal();
+      await flushAsync();
+      await act(async () => {
+        fireEvent.press(result.getByText('Sign in with Google'));
+      });
+
+      expect(mockQueryClientClear).toHaveBeenCalled();
+      expect(mockClearMemoryCache).toHaveBeenCalled();
+      expect(mockClearDiskCache).toHaveBeenCalled();
+    });
+
+    it('leaves the caches alone while no new session has been installed', async () => {
+      // Opening the modal must not cost the user their cache; only a completed
+      // sign-in replaces the identity.
+      renderModal();
+      await flushAsync();
+
+      expect(mockQueryClientClear).not.toHaveBeenCalled();
+      expect(mockClearDiskCache).not.toHaveBeenCalled();
+    });
   });
 
   it('hides email fields and Sign In when the server disables email auth', async () => {

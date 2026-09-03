@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useQueryClient } from '@tanstack/react-query';
+import { Image } from 'expo-image';
 import {
   View,
   Text,
@@ -59,6 +61,7 @@ const ReauthModal: React.FC<ReauthModalProps> = ({
   onDismiss,
 }) => {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const [textMuted, textSecondary, accentPrimary] = useCSSVariable([
     '--color-text-muted',
     '--color-text-secondary',
@@ -175,6 +178,21 @@ const ReauthModal: React.FC<ReauthModalProps> = ({
       sessionToken,
       proxyHeaders: config.proxyHeaders,
     });
+
+    // Nothing here says the session that just started belongs to the account
+    // the expired one did: this modal takes an email, so the same config can be
+    // re-authenticated as somebody else. Everything cached under the previous
+    // identity has to go, exactly as switching the active server already does
+    // in ServerSettingsScreen.
+    //
+    // React Query is the one that matters: while it holds the old rows, the new
+    // identity renders them, and authenticated image URLs resolve straight out
+    // of expo-image's cache, which is keyed by URI and knows nothing about the
+    // Authorization header. Clearing the queries removes the references; the
+    // image caches are dropped too so the bytes do not outlive the session on
+    // a shared device.
+    queryClient.clear();
+    await Promise.all([Image.clearMemoryCache(), Image.clearDiskCache()]);
   };
 
   // --- Sign In ---

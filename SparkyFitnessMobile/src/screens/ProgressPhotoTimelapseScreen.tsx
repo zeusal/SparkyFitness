@@ -147,10 +147,18 @@ const ProgressPhotoTimelapseScreen: React.FC<Props> = ({
   // effect below lists `frames` as a dependency, and an inline filter would
   // hand it a fresh array on every render.
   const keepsEmptyWindow = range === 'all' || range === 'custom';
-  const frames = useMemo(() => {
+  const { frames, widened } = useMemo(() => {
     const windowed = framesIn(range);
-    return windowed.length >= 2 || keepsEmptyWindow ? windowed : allFrames;
+    if (windowed.length >= 2 || keepsEmptyWindow) {
+      return { frames: windowed, widened: false };
+    }
+    return { frames: allFrames, widened: true };
   }, [framesIn, range, keepsEmptyWindow, allFrames]);
+
+  // What is actually playing, which is not always what the menu has selected.
+  // The counter reads from this: labelling a widened run with the preset the
+  // user picked would claim their whole history fits in the last 30 days.
+  const playingRange: Range = widened ? 'all' : range;
 
   const [index, setIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -302,7 +310,10 @@ const ProgressPhotoTimelapseScreen: React.FC<Props> = ({
       );
     }
 
-    if (frames.length === 0 || !current || !currentPhoto) {
+    // Fewer than two frames is the empty state, not a playable one: a lone
+    // frame is already `atEnd`, so the controls would render with a Play button
+    // that sets state and never schedules a tick.
+    if (frames.length < 2 || !current || !currentPhoto) {
       return (
         <View className="py-16 items-center px-6">
           <Icon name="camera" size={40} color={mutedColor} />
@@ -359,7 +370,7 @@ const ProgressPhotoTimelapseScreen: React.FC<Props> = ({
               defaultValue: '{{current}} of {{total}} · {{range}}',
               current: index + 1,
               total: frames.length,
-              range: rangeLabel(range),
+              range: rangeLabel(playingRange),
             })}
           </Text>
         </View>

@@ -1,19 +1,19 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View, Text } from 'react-native';
-import { CartesianChart, Line } from 'victory-native';
+import { CartesianChart } from 'victory-native';
 import { useCSSVariable } from 'uniwind';
 import { formatLocalizedNumber } from '../localization/i18n';
 import {
   makeChartFont,
+  CHART_LABEL_FONT_SIZE,
   formatXLabel7d,
   formatXLabel30d90d,
   formatTooltipDate,
 } from './charts/chartFormatting';
-import type {
-  WeightDataPoint,
-  StepsRange,
-} from '../hooks/useMeasurementsRange';
+import LineSeriesMark from './charts/LineSeriesMark';
+import type { WeightDataPoint } from '../hooks/useMeasurementsRange';
+import type { HealthTrendDateRange } from '../types/healthTrends';
 import ChartTouchOverlay, {
   ChartLayoutReporter,
   EMPTY_CHART_TOUCH_LAYOUT,
@@ -25,17 +25,17 @@ type WeightLineChartProps = {
   data: WeightDataPoint[];
   isLoading: boolean;
   isError: boolean;
-  range: StepsRange;
+  range: HealthTrendDateRange;
   unit: string;
 };
 
-const X_TICK_COUNT: Record<StepsRange, number> = {
+const X_TICK_COUNT: Record<HealthTrendDateRange, number> = {
   '7d': 7,
   '30d': 6,
   '90d': 5,
 };
 
-const font = makeChartFont(12);
+const font = makeChartFont(CHART_LABEL_FONT_SIZE);
 
 const DEFAULT_TOOLTIP = '';
 
@@ -189,7 +189,7 @@ const WeightLineChart: React.FC<WeightLineChartProps> = ({
                   points={points.weight}
                   onChange={handleTouchLayoutChange}
                 />
-                <Line
+                <LineSeriesMark
                   points={points.weight}
                   color={accentColor}
                   strokeWidth={2}

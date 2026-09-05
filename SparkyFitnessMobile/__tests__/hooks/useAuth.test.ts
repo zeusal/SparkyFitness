@@ -8,6 +8,7 @@ import {
   suppressSessionExpired,
 } from '../../src/services/api/authService';
 import { clearServerConfigCache } from '../../src/services/storage';
+import { addLog } from '../../src/services/LogService';
 import type { ServerConfig } from '../../src/services/storage';
 import { createTestQueryClient, createQueryWrapper } from './queryTestUtils';
 import type { QueryClient } from './queryTestUtils';
@@ -30,6 +31,10 @@ jest.mock('expo-image', () => ({
   },
 }));
 
+jest.mock('../../src/services/LogService', () => ({
+  addLog: jest.fn(),
+}));
+
 const mockSetOnSessionExpired = setOnSessionExpired as jest.MockedFunction<
   typeof setOnSessionExpired
 >;
@@ -46,6 +51,7 @@ const mockSuppressSessionExpired =
 const mockClearMemoryCache = Image.clearMemoryCache as jest.MockedFunction<
   typeof Image.clearMemoryCache
 >;
+const mockAddLog = addLog as jest.MockedFunction<typeof addLog>;
 const mockClearDiskCache = Image.clearDiskCache as jest.MockedFunction<
   typeof Image.clearDiskCache
 >;
@@ -120,23 +126,36 @@ describe('useAuth', () => {
       identityChangedCb();
     });
 
-    // expo-image keys on the URI, which carries no account, so a query-cache
-    // clear on its own still leaves the previous account's photos on screen.
+    // Dropping the queries leaves the bytes themselves in expo-image's caches,
+    // so a departed account's progress photos would stay on the device.
     expect(mockClearMemoryCache).toHaveBeenCalledTimes(1);
     expect(mockClearDiskCache).toHaveBeenCalledTimes(1);
   });
 
-  test('a rejected image cache clear does not escape the callback', async () => {
+  test('a rejected image cache clear is reported, not swallowed', async () => {
     mockClearMemoryCache.mockRejectedValueOnce(new Error('no activity'));
     mockClearDiskCache.mockRejectedValueOnce(new Error('no activity'));
 
     renderUseAuth();
     await act(async () => {});
+    mockAddLog.mockClear();
 
     const identityChangedCb = mockSetOnIdentityChanged.mock.calls[0][0];
     await act(async () => {
+      // The sign-in that triggered this must not fail because a cache sweep did.
       expect(() => identityChangedCb()).not.toThrow();
     });
+
+    // A failure leaves the previous account's images on disk, so it has to be
+    // visible in the logs rather than disappearing into an empty catch.
+    expect(mockAddLog).toHaveBeenCalledWith(
+      expect.stringContaining('image memory cache'),
+      'WARNING'
+    );
+    expect(mockAddLog).toHaveBeenCalledWith(
+      expect.stringContaining('image disk cache'),
+      'WARNING'
+    );
   });
 
   test('session expired callback shows reauth modal with config ID', async () => {

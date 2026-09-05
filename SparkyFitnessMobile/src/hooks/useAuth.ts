@@ -9,6 +9,7 @@ import {
 } from '../services/api/authService';
 import { clearServerConfigCache } from '../services/storage';
 import type { ServerConfig } from '../services/storage';
+import { addLog } from '../services/LogService';
 
 export type AuthModalReason = 'session_expired' | 'no_configs' | null;
 
@@ -39,14 +40,21 @@ export function useAuth() {
     // reads it until each query happens to refetch.
     setOnIdentityChanged(() => {
       queryClient.clear();
-      // expo-image keys on the URI alone, so it ignores the Authorization
-      // header that made the request account-specific. Check-in photos and
-      // exercise images are served from per-server paths that two accounts can
-      // both produce, which is enough for the previous account's picture to be
-      // painted for the new one. Fire and forget: nothing waits on the result,
-      // and a rejection here must not take down the sign-in that caused it.
-      void Image.clearMemoryCache().catch(() => {});
-      void Image.clearDiskCache().catch(() => {});
+      // The image caches go too, but for data at rest rather than for what the
+      // next account can see: every server-backed image URI carries a uuid --
+      // `check-in-photos/file/{uuid}` and `/uploads/{domain}/{id}/{uuid}-name`
+      // -- so the new account cannot request a path that resolves to the
+      // previous one's bytes. What it can do is leave a departed account's
+      // progress photos sitting in the app's disk cache indefinitely, which is
+      // why this is deliberately not awaited: nothing on screen depends on it,
+      // and blocking a sign-in on a disk sweep would buy nothing. A failure is
+      // logged rather than swallowed, since it leaves those files behind.
+      void Image.clearMemoryCache().catch((err: unknown) => {
+        addLog(`Failed to clear the image memory cache: ${err}`, 'WARNING');
+      });
+      void Image.clearDiskCache().catch((err: unknown) => {
+        addLog(`Failed to clear the image disk cache: ${err}`, 'WARNING');
+      });
     });
   }, [queryClient]);
 

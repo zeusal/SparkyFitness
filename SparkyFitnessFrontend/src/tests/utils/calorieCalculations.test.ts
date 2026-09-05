@@ -12,6 +12,8 @@ import {
   isAdaptiveTdeeMature,
   ADAPTIVE_TDEE_GOAL_MIN_DAYS,
   convertEnergyValue,
+  servesStoredCalorieGoalVerbatim,
+  EXPLICIT_CALORIE_TARGET_PREFERENCES,
 } from '@workspace/shared';
 import {
   computeCalorieTarget,
@@ -855,5 +857,93 @@ describe('normalizeCalorieGoalAdjustmentMode', () => {
     expect(computeCaloriesRemaining({ ...params, mode: 'smart' })).toBe(
       computeCaloriesRemaining({ ...params, mode: 'tdee' })
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Explicit calorie targets (issues #2373 and #2283)
+// ---------------------------------------------------------------------------
+describe('servesStoredCalorieGoalVerbatim', () => {
+  it('rejects the adaptive method, which rebuilds the goal from the TDEE baseline', () => {
+    expect(servesStoredCalorieGoalVerbatim('maintain', 'adaptive', 0)).toBe(
+      false
+    );
+  });
+
+  it('rejects a manual method carrying a goal-mode percentage', () => {
+    expect(servesStoredCalorieGoalVerbatim('cut', 'manual', 0)).toBe(false);
+    expect(servesStoredCalorieGoalVerbatim('bulk', 'manual', 0)).toBe(false);
+  });
+
+  it('accepts a manual method whose adjustment works out to zero', () => {
+    expect(servesStoredCalorieGoalVerbatim('maintain', 'manual', 0)).toBe(true);
+    expect(servesStoredCalorieGoalVerbatim('manual', 'manual', 0)).toBe(true);
+  });
+
+  it('defaults a missing goal mode to maintain rather than assuming an adjustment', () => {
+    expect(servesStoredCalorieGoalVerbatim(null, 'manual', null)).toBe(true);
+    expect(
+      servesStoredCalorieGoalVerbatim(undefined, undefined, undefined)
+    ).toBe(true);
+  });
+});
+
+describe('EXPLICIT_CALORIE_TARGET_PREFERENCES', () => {
+  it('describes settings that pass a stored goal through untouched', () => {
+    expect(
+      servesStoredCalorieGoalVerbatim(
+        EXPLICIT_CALORIE_TARGET_PREFERENCES.goalMode,
+        EXPLICIT_CALORIE_TARGET_PREFERENCES.goalModeCalculationMethod,
+        EXPLICIT_CALORIE_TARGET_PREFERENCES.goalModeCustomPercentage
+      )
+    ).toBe(true);
+  });
+
+  /**
+   * The regression behind both issues: onboarding pinned 'adaptive', so a
+   * figure the user typed was saved and then rebuilt from BMR on every read.
+   */
+  it('serves the typed figure where adaptive and a bare manual method do not', () => {
+    const profile = {
+      customPercentage: 0,
+      bmr: 1700,
+      activityLevelMultiplier: 1.375,
+      adaptiveTdee: null,
+      adaptiveTdeeFallback: true,
+      adaptiveTdeeDaysOfData: 0,
+      weightKg: 80,
+      heightCm: 178,
+      age: 35,
+      gender: 'male' as const,
+      currentGoalCalories: 1600,
+      calorieSafetyFloorMode: 'disabled' as const,
+    };
+
+    expect(
+      computeCalorieTarget({
+        ...profile,
+        goalMode: 'cut',
+        calculationMethod: 'adaptive',
+      }).finalTarget
+    ).not.toBe(1600);
+
+    expect(
+      computeCalorieTarget({
+        ...profile,
+        goalMode: 'cut',
+        calculationMethod: 'manual',
+      }).finalTarget
+    ).not.toBe(1600);
+
+    expect(
+      computeCalorieTarget({
+        ...profile,
+        goalMode: EXPLICIT_CALORIE_TARGET_PREFERENCES.goalMode,
+        calculationMethod:
+          EXPLICIT_CALORIE_TARGET_PREFERENCES.goalModeCalculationMethod,
+        customPercentage:
+          EXPLICIT_CALORIE_TARGET_PREFERENCES.goalModeCustomPercentage,
+      }).finalTarget
+    ).toBe(1600);
   });
 });

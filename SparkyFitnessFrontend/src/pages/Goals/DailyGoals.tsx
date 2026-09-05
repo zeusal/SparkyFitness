@@ -9,8 +9,12 @@ import { NUTRIENT_CONFIG } from '@/constants/goals';
 import { NutrientInput } from './NutrientInput';
 import { usePreferences } from '@/contexts/PreferencesContext';
 import { useTranslation } from 'react-i18next';
-import { useSaveGoalsMutation } from '@/hooks/Goals/useGoals';
+import { useDailyGoals, useSaveGoalsMutation } from '@/hooks/Goals/useGoals';
 import { useAuth } from '@/hooks/useAuth';
+import {
+  EXPLICIT_CALORIE_TARGET_PREFERENCES,
+  servesStoredCalorieGoalVerbatim,
+} from '@workspace/shared';
 import { useCallback, useMemo, useState } from 'react';
 import { ExpandedGoals } from '@/types/goals';
 import { WaterAndExerciseFields } from './WaterAndExerciseFields';
@@ -46,7 +50,15 @@ export const DailyGoals = ({
   visibleNutrients,
   today,
 }: DailyGoalsProps) => {
-  const { energyUnit, convertEnergy, getEnergyUnitString } = usePreferences();
+  const {
+    energyUnit,
+    convertEnergy,
+    getEnergyUnitString,
+    goalMode,
+    goalModeCalculationMethod,
+    goalModeCustomPercentage,
+    saveAllPreferences,
+  } = usePreferences();
   const { t } = useTranslation();
   const { user } = useAuth();
   const { data: customNutrients } = useCustomNutrients();
@@ -114,6 +126,22 @@ export const DailyGoals = ({
   const { mutateAsync: saveGoalsService, isPending: saving } =
     useSaveGoalsMutation();
 
+  // This page edits the raw stored goal, while the diary budgets against what
+  // the calorie engine derives from it. Under an adaptive method, or any
+  // goal-mode percentage, those are different numbers -- so a figure typed here
+  // is saved and then never shown, which is what #2283 reported.
+  const { data: storedGoals } = useDailyGoals(today);
+  const calorieTargetEdited =
+    storedGoals != null &&
+    Math.round(goals.calories) !== Math.round(storedGoals.calories);
+  const willPinCalorieTarget =
+    calorieTargetEdited &&
+    !servesStoredCalorieGoalVerbatim(
+      goalMode,
+      goalModeCalculationMethod,
+      goalModeCustomPercentage
+    );
+
   const handleSaveGoals = async () => {
     if (!user) return;
     const finalGoals = { ...goals };
@@ -136,6 +164,12 @@ export const DailyGoals = ({
       finalGoals.fat_percentage = null;
     }
     await saveGoalsService({ date: today, goals: finalGoals, cascade: true });
+    // Order matters only in that the goal must exist before it is pinned; a
+    // failure here leaves the goal saved and the engine still overriding it,
+    // which is the state the user was already in.
+    if (willPinCalorieTarget) {
+      await saveAllPreferences(EXPLICIT_CALORIE_TARGET_PREFERENCES);
+    }
   };
 
   const handleGoalsPercentagesChange = useCallback(
@@ -196,6 +230,14 @@ export const DailyGoals = ({
                   }))
                 }
               />
+              {willPinCalorieTarget && (
+                <p className="text-sm text-muted-foreground">
+                  {t(
+                    'goals.goalsSettings.calorieTargetWillBePinned',
+                    'Your calculation method currently derives this number, so saving will switch your goal mode to Manual and use the figure above exactly as entered. Change it back in Settings to let the calculator take over again.'
+                  )}
+                </p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>{t('goals.goalsSettings.macrosBy', 'Macros By')}</Label>

@@ -2578,7 +2578,8 @@
       "selectGoalPreset": "Select a goal preset to apply",
       "errorLoading": "Failed to load nutrition goals. Please try again later.",
       "saveForDate": "Save for this Date",
-      "loadingDailyGoals": "Loading daily goals..."
+      "loadingDailyGoals": "Loading daily goals...",
+      "calorieTargetWillBePinned": "Your calculation method currently derives this number, so saving will switch your goal mode to Manual and use the figure above exactly as entered. Change it back in Settings to let the calculator take over again."
     },
     "mealDistribution": {
       "selectTemplate": "Select a Distribution Template",
@@ -4552,7 +4553,8 @@
     "planReady": "Your personalized plan is ready to go.",
     "skipFailed": "Could not skip onboarding. Please try again.",
     "submissionFailed": "Could not save your plan. Please try again.",
-    "setupShort": "Setup"
+    "setupShort": "Setup",
+    "customCalorieTarget": "You changed this from the suggested budget, so it will be used exactly as entered. Your goal mode switches to Manual — you can hand it back to the calculator later in Settings."
   },
   "cycle": {
     "hub": "Cycle & Pregnancy Hub",

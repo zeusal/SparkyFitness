@@ -361,6 +361,49 @@ export type GoalModeCalculationMethod = "adaptive" | "manual";
 export const MAX_GOAL_MODE_PERCENTAGE = 40;
 
 /**
+ * The preference combination under which a stored calorie goal is served as-is.
+ *
+ * Neither calculation method means "this number is my target" on its own:
+ * `adaptive` throws the stored goal away and rebuilds one from the TDEE
+ * baseline, and `manual` keeps it but treats it as the baseline the goal-mode
+ * percentage is applied to — the UI names it "Baseline (Manual Goal)". Only a
+ * zero adjustment on top of `manual` leaves the number untouched, and the
+ * goal-mode/percentage pair below is the way to ask for one.
+ *
+ * Apply this wherever someone types an explicit calorie figure, so what they
+ * entered is what the diary budgets against.
+ */
+export const EXPLICIT_CALORIE_TARGET_PREFERENCES = {
+  goalMode: "manual",
+  goalModeCalculationMethod: "manual",
+  goalModeCustomPercentage: 0,
+} as const satisfies {
+  goalMode: GoalMode;
+  goalModeCalculationMethod: GoalModeCalculationMethod;
+  goalModeCustomPercentage: number;
+};
+
+/**
+ * Whether these settings hand the stored calorie goal through unchanged.
+ *
+ * Deliberately broader than an equality check against
+ * `EXPLICIT_CALORIE_TARGET_PREFERENCES`: `manual` paired with `maintain` also
+ * adjusts by nothing, and telling that user their goal is about to be
+ * overridden would be a lie. Callers use this to decide whether an explicit
+ * figure needs pinning at all.
+ */
+export function servesStoredCalorieGoalVerbatim(
+  goalMode: string | null | undefined,
+  calculationMethod: string | null | undefined,
+  customPercentage: number | null | undefined,
+): boolean {
+  if (calculationMethod === "adaptive") return false;
+  return (
+    getGoalModeAdjustment(goalMode ?? "maintain", customPercentage ?? 0) === 0
+  );
+}
+
+/**
  * Signed adjustment applied to the baseline TDEE, as a fraction.
  *
  * **Return value: positive means a deficit, negative means a surplus.** That is

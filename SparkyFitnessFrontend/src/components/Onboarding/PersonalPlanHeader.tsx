@@ -13,6 +13,8 @@ export interface PersonalPlanHeaderProps {
   ) => number;
   editedPlan: ExpandedGoals | null;
   getEnergyUnitString: (unit: 'kcal' | 'kJ') => string;
+  /** The user typed over the suggested budget, so it will be saved as-is. */
+  hasExplicitCalorieTarget: boolean;
   localEnergyUnit: 'kcal' | 'kJ';
   plan: BasePlan | null;
   setEditedPlan: React.Dispatch<React.SetStateAction<ExpandedGoals | null>>;
@@ -22,6 +24,7 @@ export const PersonalPlanHeader = ({
   convertEnergy,
   editedPlan,
   getEnergyUnitString,
+  hasExplicitCalorieTarget,
   localEnergyUnit,
   plan,
   setEditedPlan,
@@ -75,13 +78,17 @@ export const PersonalPlanHeader = ({
           </button>
         </div>
 
-        <p className="text-muted-foreground uppercase text-sm font-bold tracking-wider mb-2">
+        <p
+          className="text-muted-foreground uppercase text-sm font-bold tracking-wider mb-2"
+          id="daily-calorie-budget-label"
+        >
           Daily Calorie Budget
         </p>
         <div className="text-6xl font-extrabold text-green-500 flex justify-center">
           <Input
             type="number"
             step={1}
+            aria-labelledby="daily-calorie-budget-label"
             value={editedPlan?.calories ? editedPlan.calories.toFixed(0) : ''}
             onChange={(e) =>
               setEditedPlan((prev) =>
@@ -94,6 +101,15 @@ export const PersonalPlanHeader = ({
         <p className="text-xl text-foreground font-medium mt-1">
           {getEnergyUnitString(localEnergyUnit)} / day
         </p>
+
+        {hasExplicitCalorieTarget && (
+          <p className="text-sm text-muted-foreground mt-3 max-w-md mx-auto">
+            {t(
+              'onboarding.customCalorieTarget',
+              'You changed this from the suggested budget, so it will be used exactly as entered. Your goal mode switches to Manual — you can hand it back to the calculator later in Settings.'
+            )}
+          </p>
+        )}
 
         <div className="mt-6 pt-6 border-t border-border flex justify-between text-sm text-muted-foreground">
           <span>

@@ -14,7 +14,10 @@ import { useSaveGoalsMutation } from '@/hooks/Goals/useGoals';
 import { calculateBasePlan } from '@/utils/nutritionCalculations';
 import { usePreferences } from '@/contexts/PreferencesContext';
 import type { ActivityLevel } from '@/contexts/PreferencesContext';
-import { goalModeFromPrimaryGoal } from '@workspace/shared';
+import {
+  EXPLICIT_CALORIE_TARGET_PREFERENCES,
+  goalModeFromPrimaryGoal,
+} from '@workspace/shared';
 import { useTranslation } from 'react-i18next';
 import { useSubmitOnboarding } from '@/hooks/Onboarding/useOnboarding';
 import { format } from 'date-fns';
@@ -171,6 +174,27 @@ const PersonalPlan = ({
     calorieSafetyFloorValue,
   ]);
 
+  // What the calorie field was seeded with, in the unit it is displayed in --
+  // createInitialPlan rounds the same conversion, so a field the user has not
+  // touched compares equal without a tolerance.
+  const autoCalculatedCalories = useMemo(
+    () =>
+      plan
+        ? Math.round(
+            convertEnergy(plan.finalDailyCalories, 'kcal', localEnergyUnit)
+          )
+        : null,
+    [plan, convertEnergy, localEnergyUnit]
+  );
+
+  // Typing over the suggested figure is a statement about the target itself,
+  // not about the plan that produced it, so the goal is pinned below instead of
+  // being recomputed away on the first dashboard load.
+  const hasExplicitCalorieTarget =
+    editedPlan != null &&
+    autoCalculatedCalories != null &&
+    Math.round(editedPlan.calories) !== autoCalculatedCalories;
+
   const handleMacroValueChange = (
     changedMacro: keyof typeof customPercentages,
     newValue: number
@@ -274,13 +298,19 @@ const PersonalPlan = ({
     // reads user_preferences, not onboarding_data, so without these a user who
     // answered "heavy" is silently treated as sedentary forever.
     //
-    // goalModeCalculationMethod must be persisted ALONGSIDE goalMode, and must
-    // be 'adaptive'. The goal saved below is calculateBasePlan's finalTarget,
-    // which already has the goal-mode adjustment applied. Under the 'manual'
-    // method (the column default) the engine treats the stored goal as the
-    // baseline and applies the adjustment a second time -- a 'cut' would serve
-    // TDEE x 0.85 x 0.85. 'adaptive' makes the engine derive its own baseline
-    // instead, which is exactly what calculateBasePlan modelled.
+    // goalModeCalculationMethod must be persisted ALONGSIDE goalMode. When the
+    // user accepts the suggested figure it must be 'adaptive': the goal saved
+    // below is calculateBasePlan's finalTarget, which already has the goal-mode
+    // adjustment applied. Under the 'manual' method (the column default) the
+    // engine treats the stored goal as the baseline and applies the adjustment
+    // a second time -- a 'cut' would serve TDEE x 0.85 x 0.85. 'adaptive' makes
+    // the engine derive its own baseline instead, which is exactly what
+    // calculateBasePlan modelled.
+    //
+    // A figure the user typed themselves is the opposite case: 'adaptive'
+    // discards the stored goal outright and rebuilds one from the TDEE
+    // baseline, so their number never survived to the dashboard. Pin it
+    // instead, which is the only combination that budgets against it as-is.
     await saveAllPreferences({
       weightUnit: weightUnit,
       measurementUnit: heightUnit,
@@ -294,8 +324,12 @@ const PersonalPlan = ({
       // Empty when the step was skipped; the column is a plain string, so guard
       // here rather than persisting '' and relying on every read site's default.
       activityLevel: (formData.activityLevel || 'not_much') as ActivityLevel,
-      goalMode: goalModeFromPrimaryGoal(formData.primaryGoal),
-      goalModeCalculationMethod: 'adaptive',
+      ...(hasExplicitCalorieTarget
+        ? EXPLICIT_CALORIE_TARGET_PREFERENCES
+        : {
+            goalMode: goalModeFromPrimaryGoal(formData.primaryGoal),
+            goalModeCalculationMethod: 'adaptive' as const,
+          }),
     });
 
     const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -431,6 +465,7 @@ const PersonalPlan = ({
         convertEnergy={convertEnergy}
         editedPlan={editedPlan}
         getEnergyUnitString={getEnergyUnitString}
+        hasExplicitCalorieTarget={hasExplicitCalorieTarget}
         localEnergyUnit={localEnergyUnit}
         plan={plan}
         setEditedPlan={setEditedPlan}

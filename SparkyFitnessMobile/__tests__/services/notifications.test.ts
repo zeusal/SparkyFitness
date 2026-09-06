@@ -292,7 +292,11 @@ describe('notifications service', () => {
         content: expect.objectContaining({
           title: 'Rest complete',
           body: 'Bench Press',
+          sound: true,
           categoryIdentifier: 'rest-complete',
+          // Breaks through Focus modes and the Scheduled Summary, which
+          // otherwise deliver the alert silently.
+          interruptionLevel: 'timeSensitive',
         }),
         trigger: expect.objectContaining({
           type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,

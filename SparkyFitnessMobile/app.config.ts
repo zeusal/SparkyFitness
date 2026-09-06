@@ -164,6 +164,12 @@ export default ({ config }: ConfigContext): Partial<ExpoConfig> => {
       },
       entitlements: {
         'com.apple.security.application-groups': [getIosAppGroup()],
+        // Required for the `timeSensitive` interruption level the rest-complete
+        // alert is scheduled with (see `scheduleRestNotification`). Without the
+        // capability iOS silently downgrades the alert to `active`, which any
+        // Focus mode delivers without a sound — a rest timer that only chimes
+        // while the app is open on screen.
+        'com.apple.developer.usernotifications.time-sensitive': true,
       },
       icon: './assets/icons/appicon.icon',
     },

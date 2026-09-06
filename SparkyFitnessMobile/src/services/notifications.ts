@@ -358,6 +358,15 @@ export async function scheduleRestNotification(
         body: content?.body ?? exerciseName,
         sound: true,
         categoryIdentifier: REST_COMPLETE_CATEGORY,
+        // A rest alert is worthless once the moment has passed, so it is the
+        // textbook time-sensitive notification: at the default `active` level
+        // iOS delivers it silently under any Focus (and holds it for the
+        // Scheduled Summary), which is the "notification shows up but makes no
+        // sound while the phone is in my pocket" report. Honoured only because
+        // the app carries the matching entitlement in app.config.ts; iOS
+        // quietly falls back to `active` without it, and Android ignores the
+        // field.
+        interruptionLevel: 'timeSensitive',
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,

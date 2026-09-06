@@ -353,6 +353,10 @@ export async function scheduleRestNotification(
         body: content?.body ?? exerciseName,
         sound: true,
         categoryIdentifier: REST_COMPLETE_CATEGORY,
+        // At the default `active` level a Focus mode delivers the alert
+        // silently, which defeats the point of a rest timer. Needs the
+        // entitlement in app.config.ts; iOS falls back to `active` without it.
+        interruptionLevel: 'timeSensitive',
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,

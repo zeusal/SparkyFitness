@@ -290,7 +290,9 @@ describe('notifications service', () => {
         content: expect.objectContaining({
           title: 'Rest complete',
           body: 'Bench Press',
+          sound: true,
           categoryIdentifier: 'rest-complete',
+          interruptionLevel: 'timeSensitive',
         }),
         trigger: expect.objectContaining({
           type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,

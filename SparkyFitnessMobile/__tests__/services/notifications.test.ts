@@ -77,6 +77,13 @@ const mockDismiss =
   >;
 const mockToastShow = Toast.show as jest.MockedFunction<typeof Toast.show>;
 
+function setAppState(state: string): void {
+  Object.defineProperty(AppState, 'currentState', {
+    get: () => state,
+    configurable: true,
+  });
+}
+
 describe('notifications service', () => {
   beforeEach(async () => {
     await initializeI18n('en');
@@ -96,6 +103,7 @@ describe('notifications service', () => {
     mockGetPresented.mockReset().mockResolvedValue([]);
     mockDismiss.mockReset().mockResolvedValue(undefined as any);
     mockToastShow.mockClear();
+    setAppState('active');
     Object.defineProperty(Platform, 'OS', {
       get: () => 'ios',
       configurable: true,
@@ -208,6 +216,25 @@ describe('notifications service', () => {
       const handler = await getHandler();
       const result = await handler(notificationWith('rest-complete'));
       expect(result.shouldPlaySound).toBe(true);
+    });
+
+    it('hides the rest ping while the app is on screen', async () => {
+      const handler = await getHandler();
+      const result = await handler(notificationWith('rest-complete'));
+      expect(result.shouldShowBanner).toBe(false);
+      expect(result.shouldShowList).toBe(false);
+    });
+
+    it('sounds and shows the rest ping when the app is only inactive', async () => {
+      // iOS still routes the ping through this handler while the app is
+      // frontmost-but-inactive (screen locking, app switcher). The chime does
+      // not play there, so muting the ping left the rest with no cue at all.
+      setAppState('inactive');
+      const handler = await getHandler();
+      const result = await handler(notificationWith('rest-complete'));
+      expect(result.shouldPlaySound).toBe(true);
+      expect(result.shouldShowBanner).toBe(true);
+      expect(result.shouldShowList).toBe(true);
     });
 
     it('keeps sound for non-rest notifications regardless of the chime preference', async () => {

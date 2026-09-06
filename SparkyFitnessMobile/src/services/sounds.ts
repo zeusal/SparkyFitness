@@ -23,13 +23,24 @@ export function isRestTimerSoundEnabled(): boolean {
 }
 
 /**
+ * Whether the chime would actually play if the rest completed right now.
+ * `playRestCompleteSound` is foreground-only, so anything that stands down in
+ * favour of the chime — chiefly the notification handler, which mutes the
+ * rest-complete ping — has to ask this rather than the preference alone.
+ * Testing only the preference silenced both cues for a rest that landed while
+ * the app was merely inactive (screen locking, app switcher, Control Center).
+ */
+export function willPlayRestCompleteSound(): boolean {
+  return isRestTimerSoundEnabled() && AppState.currentState === 'active';
+}
+
+/**
  * Plays the rest-complete chime. Foreground-only by design — in the background
  * the scheduled notification's sound is the cue. Fire-and-forget: playback
  * failures log but never propagate into rest-state transitions.
  */
 export function playRestCompleteSound(): void {
-  if (!isRestTimerSoundEnabled()) return;
-  if (AppState.currentState !== 'active') return;
+  if (!willPlayRestCompleteSound()) return;
   void (async () => {
     try {
       if (!audioModeConfigured) {

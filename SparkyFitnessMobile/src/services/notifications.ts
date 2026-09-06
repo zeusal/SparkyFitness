@@ -1,11 +1,11 @@
-import { Alert, Linking, Platform } from 'react-native';
+import { Alert, AppState, Linking, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import Toast from 'react-native-toast-message';
 import { addLog } from './LogService';
 import i18n from '../localization/i18n';
 import { fireSuccessHaptic } from './haptics';
-import { isRestTimerSoundEnabled, playRestCompleteSound } from './sounds';
+import { playRestCompleteSound, willPlayRestCompleteSound } from './sounds';
 import { ExactAlarmBridge } from './ExactAlarmBridge';
 import {
   useAppPreferencesStore,
@@ -170,15 +170,22 @@ export async function initNotifications(): Promise<void> {
       handleNotification: async (notification) => {
         const category = notification.request.content.categoryIdentifier;
         const isMedReminder = category === MEDICATION_REMINDER_CATEGORY;
-        // While the in-app chime owns the foreground rest cue, the rest ping's
-        // notification sound is muted so the two never double up; turning the
-        // chime off restores it.
-        const restPingMuted =
-          category === REST_COMPLETE_CATEGORY && isRestTimerSoundEnabled();
+        const isRestPing = category === REST_COMPLETE_CATEGORY;
+        // iOS runs this handler for every notification delivered while the app
+        // is frontmost, which includes states where the app is only *inactive*
+        // — screen locking, the app switcher, Control Center, an incoming call.
+        // The in-app rest UI is not on screen there and the chime does not
+        // play, so the ping has to carry the cue itself instead of being
+        // swallowed as a duplicate.
+        const restPingOwnsCue =
+          isRestPing && AppState.currentState !== 'active';
         return {
-          shouldShowBanner: isMedReminder,
-          shouldShowList: isMedReminder,
-          shouldPlaySound: !restPingMuted,
+          shouldShowBanner: isMedReminder || restPingOwnsCue,
+          shouldShowList: isMedReminder || restPingOwnsCue,
+          // While the in-app chime owns the rest cue, the ping's notification
+          // sound is muted so the two never double up; turning the chime off
+          // restores it.
+          shouldPlaySound: !(isRestPing && willPlayRestCompleteSound()),
           shouldSetBadge: false,
         };
       },

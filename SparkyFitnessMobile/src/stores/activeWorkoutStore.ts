@@ -1425,7 +1425,15 @@ export const useActiveWorkoutStore = create<ActiveWorkoutState>()(
         ) {
           return;
         }
-        cancelCurrentRestNotification(rest);
+        // The ping is due this very instant, so cancelling it is only safe
+        // while the app is active and the chime/haptic own the cue. Off-screen
+        // (the deadline timer still runs whenever the app is merely inactive)
+        // the cancel races the OS delivery and can swallow the only cue the
+        // user gets; a ping that already fired is cancelled harmlessly on the
+        // next foreground pass through here.
+        if (AppState.currentState === 'active') {
+          cancelCurrentRestNotification(rest);
+        }
         set({ rest: READY_REST });
         fireRestCompleteCue();
       },

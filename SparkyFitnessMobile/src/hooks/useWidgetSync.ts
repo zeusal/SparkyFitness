@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 
 import { ExtensionStorage } from '@bacons/apple-targets';
-import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 import {
@@ -10,17 +9,15 @@ import {
   pushAndroidMacroSnapshot,
 } from '../services/androidWidgetSyncService';
 import { addLog } from '../services/LogService';
+import {
+  CALORIE_SNAPSHOT_KEY,
+  MACRO_SNAPSHOT_KEY,
+  MACRO_WIDGET_KIND,
+  WIDGET_KIND,
+  iosAppGroup,
+} from '../services/widgetSnapshots';
 import type { DailySummary } from '../types/dailySummary';
 import { getTodayDate } from '../utils/dateUtils';
-
-const WIDGET_KIND = 'widget';
-const CALORIE_SNAPSHOT_KEY = 'calorieSnapshot';
-const MACRO_WIDGET_KIND = 'macroWidget';
-const MACRO_SNAPSHOT_KEY = 'macroSnapshot';
-
-const iosAppGroup = (
-  Constants.expoConfig?.extra as { iosAppGroup?: string } | undefined
-)?.iosAppGroup;
 
 export function useWidgetSync(summary: DailySummary | undefined): void {
   const date = summary?.date;

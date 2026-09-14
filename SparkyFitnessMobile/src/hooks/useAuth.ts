@@ -11,6 +11,7 @@ import {
 import { clearServerConfigCache } from '../services/storage';
 import type { ServerConfig } from '../services/storage';
 import { addLog } from '../services/LogService';
+import { clearWidgetSnapshots } from '../services/widgetSnapshots';
 
 export type AuthModalReason = 'session_expired' | 'no_configs' | null;
 
@@ -74,6 +75,14 @@ export function useAuth() {
       void Image.clearDiskCache().catch((err: unknown) => {
         addLog(`Failed to clear the image disk cache: ${err}`, 'WARNING');
       });
+      // The home-screen widgets read their own copy of the day's figures, kept
+      // in an App Group on iOS and SharedPreferences on Android, which no cache
+      // clear reaches. Nothing rewrites it until the Dashboard next opens on
+      // today, so the previous account's calories and macros stay on the home
+      // screen — visible without opening the app at all. Awaited, unlike the
+      // image sweep: the Dashboard starts writing a fresh snapshot as soon as
+      // the refetch lands, and a late clear would wipe that one instead.
+      await clearWidgetSnapshots();
     });
   }, [queryClient]);
 

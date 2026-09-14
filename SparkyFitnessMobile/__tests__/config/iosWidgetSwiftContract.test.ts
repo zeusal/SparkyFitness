@@ -124,12 +124,22 @@ describe('iOS WidgetKit Swift contract', () => {
       expect(js).toContain("const WIDGET_KIND = 'widget'");
       expect(js).toContain("const MACRO_WIDGET_KIND = 'macroWidget'");
 
-      const sync = fs.readFileSync(
-        path.join(__dirname, '../../src/hooks/useWidgetSync.ts'),
+      // The kinds the snapshot writer and the identity-change sweep share, so
+      // one cannot reload a widget the other never wrote or cleared.
+      const snapshots = fs.readFileSync(
+        path.join(__dirname, '../../src/services/widgetSnapshots.ts'),
         'utf8'
       );
-      expect(sync).toContain("const WIDGET_KIND = 'widget'");
-      expect(sync).toContain("const MACRO_WIDGET_KIND = 'macroWidget'");
+      expect(snapshots).toContain("export const WIDGET_KIND = 'widget'");
+      expect(snapshots).toContain(
+        "export const MACRO_WIDGET_KIND = 'macroWidget'"
+      );
+      expect(snapshots).toContain(
+        "export const CALORIE_SNAPSHOT_KEY = 'calorieSnapshot'"
+      );
+      expect(snapshots).toContain(
+        "export const MACRO_SNAPSHOT_KEY = 'macroSnapshot'"
+      );
     });
 
     it('keeps the timeline refresh cadence (15 minutes and midnight)', () => {

@@ -10,6 +10,7 @@ import {
 } from '../../src/services/api/authService';
 import { clearServerConfigCache } from '../../src/services/storage';
 import { addLog } from '../../src/services/LogService';
+import { clearWidgetSnapshots } from '../../src/services/widgetSnapshots';
 import type { ServerConfig } from '../../src/services/storage';
 import { createTestQueryClient, createQueryWrapper } from './queryTestUtils';
 import type { QueryClient } from './queryTestUtils';
@@ -37,6 +38,10 @@ jest.mock('../../src/services/LogService', () => ({
   addLog: jest.fn(),
 }));
 
+jest.mock('../../src/services/widgetSnapshots', () => ({
+  clearWidgetSnapshots: jest.fn().mockResolvedValue(undefined),
+}));
+
 const mockSetOnSessionExpired = setOnSessionExpired as jest.MockedFunction<
   typeof setOnSessionExpired
 >;
@@ -59,6 +64,9 @@ const mockClearDiskCache = Image.clearDiskCache as jest.MockedFunction<
 >;
 const mockClearAuthCookies = clearAuthCookies as jest.MockedFunction<
   typeof clearAuthCookies
+>;
+const mockClearWidgetSnapshots = clearWidgetSnapshots as jest.MockedFunction<
+  typeof clearWidgetSnapshots
 >;
 
 describe('useAuth', () => {
@@ -135,6 +143,51 @@ describe('useAuth', () => {
     // so a departed account's progress photos would stay on the device.
     expect(mockClearMemoryCache).toHaveBeenCalledTimes(1);
     expect(mockClearDiskCache).toHaveBeenCalledTimes(1);
+  });
+
+  test('identity changed callback drops the home-screen widget snapshots', async () => {
+    renderUseAuth();
+    await act(async () => {});
+
+    expect(mockClearWidgetSnapshots).not.toHaveBeenCalled();
+
+    const identityChangedCb = mockSetOnIdentityChanged.mock.calls[0][0];
+    await act(async () => {
+      await identityChangedCb();
+    });
+
+    // The widgets keep their own copy of the day's figures outside every cache
+    // the app clears, on the one surface visible without opening the app.
+    expect(mockClearWidgetSnapshots).toHaveBeenCalledTimes(1);
+  });
+
+  test('identity change does not settle until the widgets are cleared', async () => {
+    let releaseWidgetClear: () => void = () => {};
+    mockClearWidgetSnapshots.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        releaseWidgetClear = resolve;
+      })
+    );
+
+    renderUseAuth();
+    await act(async () => {});
+
+    const identityChangedCb = mockSetOnIdentityChanged.mock.calls[0][0];
+    let settled = false;
+    const pending = Promise.resolve(identityChangedCb()).then(() => {
+      settled = true;
+    });
+
+    // The Dashboard writes a fresh snapshot as soon as the refetch callers run
+    // after this lands; settling early would let a late clear wipe that one.
+    await act(async () => {});
+    expect(settled).toBe(false);
+
+    releaseWidgetClear();
+    await act(async () => {
+      await pending;
+    });
+    expect(settled).toBe(true);
   });
 
   test('identity changed callback drops the cookie jar', async () => {

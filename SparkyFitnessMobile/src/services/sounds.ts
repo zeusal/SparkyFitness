@@ -8,7 +8,7 @@ import { useAppPreferencesStore } from '../stores/appPreferencesStore';
 import { addLog } from './LogService';
 
 let restChimePlayer: AudioPlayer | null = null;
-let audioModeConfigured = false;
+let configuredSilentModePlayback: boolean | null = null;
 
 /**
  * Whether the rest-timer chime should play. Also consulted by the foreground
@@ -32,6 +32,15 @@ export function willPlayRestCompleteSound(): boolean {
 }
 
 /**
+ * Whether the chime may play while the ringer is switched to silent. Off by
+ * default, so the phone's mute switch wins and only the haptic fires; users who
+ * keep the phone permanently muted can opt in from Workout Settings.
+ */
+function isRestTimerSoundInSilentModeEnabled(): boolean {
+  return useAppPreferencesStore.getState().restTimerSoundInSilentMode;
+}
+
+/**
  * Plays the rest-complete chime. Foreground-only by design — in the background
  * the scheduled notification's sound is the cue. Fire-and-forget: playback
  * failures log but never propagate into rest-state transitions.
@@ -40,15 +49,17 @@ export function playRestCompleteSound(): void {
   if (!willPlayRestCompleteSound()) return;
   void (async () => {
     try {
-      if (!audioModeConfigured) {
+      const playsInSilentMode = isRestTimerSoundInSilentModeEnabled();
+      // Keyed on the preference, not a one-shot flag, so flipping the toggle
+      // reaches the next rest instead of waiting for an app restart.
+      if (configuredSilentModePlayback !== playsInSilentMode) {
         try {
-          // Short UI cue: mix with (never duck) the user's music, and stay
-          // silent when the ringer/silent switch is off — the haptic still fires.
+          // Short UI cue: mix with (never duck) the user's music.
           await setAudioModeAsync({
-            playsInSilentMode: false,
+            playsInSilentMode,
             interruptionMode: 'mixWithOthers',
           });
-          audioModeConfigured = true;
+          configuredSilentModePlayback = playsInSilentMode;
         } catch (err) {
           // Retry on the next chime; a config failure must not mute the cue.
           addLog(
@@ -73,8 +84,8 @@ export function playRestCompleteSound(): void {
   })();
 }
 
-/** Test-only helper — drops the cached player and audio-mode flag. */
+/** Test-only helper — drops the cached player and audio-mode state. */
 export function __resetSoundsForTests(): void {
   restChimePlayer = null;
-  audioModeConfigured = false;
+  configuredSilentModePlayback = null;
 }

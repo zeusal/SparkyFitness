@@ -35,7 +35,11 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
-const mockNavigation = { goBack: jest.fn(), setOptions: jest.fn() } as any;
+const mockNavigation = {
+  goBack: jest.fn(),
+  setOptions: jest.fn(),
+  navigate: jest.fn(),
+} as any;
 jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),
   useNavigation: () => mockNavigation,
@@ -110,12 +114,26 @@ describe('WorkoutSettingsScreen', () => {
     );
   });
 
-  it('disables the silent-mode switch while the chime itself is off', () => {
+  it('keeps the silent-mode switch usable while the chime itself is off', () => {
+    // The preference also routes the Android rest ping to the alarm channel,
+    // so "no chime on screen, but wake me in my pocket" is a valid setup.
     useAppPreferencesStore.getState().setRestTimerSoundEnabled(false);
     const { getByLabelText } = renderScreen();
-    expect(
-      getByLabelText('Play rest timer sound in silent mode').props.disabled
-    ).toBe(true);
+    const silentToggle = getByLabelText('Play rest timer sound in silent mode');
+    expect(silentToggle.props.disabled).toBeFalsy();
+
+    fireEvent(silentToggle, 'valueChange', true);
+    expect(useAppPreferencesStore.getState().restTimerSoundInSilentMode).toBe(
+      true
+    );
+  });
+
+  it('sends the user to notification settings for the background alert', () => {
+    // The chime and the background alert are configured on separate screens;
+    // this row is what makes the second one findable from the first.
+    const { getByText } = renderScreen();
+    fireEvent.press(getByText('Rest timer notifications'));
+    expect(navigation.navigate).toHaveBeenCalledWith('NotificationSettings');
   });
 
   it('toggles the keep screen awake preference from the switch', () => {

@@ -74,6 +74,12 @@ const WorkoutSettingsScreen: React.FC<WorkoutSettingsScreenProps> = ({
   const setRestTimerSoundEnabled = useAppPreferencesStore(
     (s) => s.setRestTimerSoundEnabled
   );
+  const restTimerSoundInSilentMode = useAppPreferencesStore(
+    (s) => s.restTimerSoundInSilentMode
+  );
+  const setRestTimerSoundInSilentMode = useAppPreferencesStore(
+    (s) => s.setRestTimerSoundInSilentMode
+  );
   const workoutKeepAwakeEnabled = useAppPreferencesStore(
     (s) => s.workoutKeepAwakeEnabled
   );
@@ -199,6 +205,49 @@ const WorkoutSettingsScreen: React.FC<WorkoutSettingsScreenProps> = ({
               })}
             />
           }
+        />
+
+        <SettingsRow
+          title={t('workoutSettings.restSoundSilent', {
+            defaultValue: 'Play in silent mode',
+          })}
+          subtitle={
+            Platform.OS === 'android'
+              ? t('workoutSettings.restSoundSilentSubtitleAndroid', {
+                  defaultValue:
+                    'Sound the rest timer even with the ringer muted, including while the app is closed. It uses the alarm channel, so it plays at alarm volume.',
+                })
+              : t('workoutSettings.restSoundSilentSubtitleIos', {
+                  defaultValue:
+                    'Let the rest chime sound while the app is open even with the ringer muted. Alerts that arrive with the app closed still follow your silent mode.',
+                })
+          }
+          subtitleNumberOfLines={0}
+          rightAccessory={
+            <Switch
+              value={restTimerSoundInSilentMode}
+              onValueChange={setRestTimerSoundInSilentMode}
+              accessibilityLabel={t(
+                'workoutSettings.restSoundSilentAccessibility',
+                { defaultValue: 'Play rest timer sound in silent mode' }
+              )}
+            />
+          }
+        />
+
+        {/* The background alert lives on the notification screen, so the two
+            halves of "tell me when rest is over" sit in different places.
+            Point at the other half rather than duplicating the toggle. */}
+        <SettingsRow
+          title={t('workoutSettings.restNotifications', {
+            defaultValue: 'Rest timer notifications',
+          })}
+          subtitle={t('workoutSettings.restNotificationsSubtitle', {
+            defaultValue:
+              'Alerts when a rest period ends while the app is closed are set up in Notifications.',
+          })}
+          subtitleNumberOfLines={0}
+          onPress={() => navigation.navigate('NotificationSettings')}
         />
 
         <SettingsRow

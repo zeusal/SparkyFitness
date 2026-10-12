@@ -168,6 +168,23 @@ describe('notifications service', () => {
       );
     });
 
+    it('creates an alarm-stream Android channel for silent-mode rests', async () => {
+      Object.defineProperty(Platform, 'OS', {
+        get: () => 'android',
+        configurable: true,
+      });
+      await initNotifications();
+      expect(mockSetChannel).toHaveBeenCalledWith(
+        'workout-timer-alarm',
+        expect.objectContaining({
+          importance: Notifications.AndroidImportance.HIGH,
+          audioAttributes: {
+            usage: Notifications.AndroidAudioUsage.ALARM,
+          },
+        })
+      );
+    });
+
     it('creates a dedicated fasting Android channel', async () => {
       Object.defineProperty(Platform, 'OS', {
         get: () => 'android',

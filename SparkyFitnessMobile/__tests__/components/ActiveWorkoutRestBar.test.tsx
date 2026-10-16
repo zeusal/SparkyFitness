@@ -1,11 +1,23 @@
 import React from 'react';
 import { AppState, StyleSheet } from 'react-native';
-import { render, fireEvent } from '@testing-library/react-native';
+import {
+  act,
+  render,
+  renderHook,
+  fireEvent,
+} from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useCSSVariable } from 'uniwind';
-import ActiveWorkoutRestBar from '../../src/components/ActiveWorkoutRestBar';
+import ActiveWorkoutRestBar, {
+  LiveActiveWorkoutRestBar,
+} from '../../src/components/ActiveWorkoutRestBar';
+import { useClockTick } from '../../src/hooks/useClockTick';
 import { useNativeIOSTabsActive } from '../../src/services/nativeTabBarPreference';
 import { playIntervalCue } from '../../src/services/sounds';
+import {
+  __resetActiveWorkoutStoreForTests,
+  useActiveWorkoutStore,
+} from '../../src/stores/activeWorkoutStore';
 
 jest.mock('../../src/services/nativeTabBarPreference', () => ({
   useNativeIOSTabsActive: jest.fn(() => false),
@@ -13,6 +25,13 @@ jest.mock('../../src/services/nativeTabBarPreference', () => ({
 
 jest.mock('../../src/services/sounds', () => ({
   playIntervalCue: jest.fn(),
+  setRestKeepAlive: jest.fn(),
+}));
+
+jest.mock('../../src/services/notifications', () => ({
+  scheduleRestNotification: jest.fn(async () => 'notif-abc'),
+  cancelScheduledNotification: jest.fn(async () => undefined),
+  fireRestCompleteCue: jest.fn(),
 }));
 
 const mockPlayIntervalCue = playIntervalCue as jest.MockedFunction<
@@ -245,6 +264,108 @@ describe('ActiveWorkoutRestBar', () => {
       setAppState('background');
       renderBar({ remainingMs: 2_500 });
       expect(mockPlayIntervalCue).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('LiveActiveWorkoutRestBar', () => {
+    const NOW = 1_700_000_000_000;
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+      jest.setSystemTime(NOW);
+      __resetActiveWorkoutStoreForTests();
+      mockPlayIntervalCue.mockClear();
+      setAppState('active');
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('counts the rest down on its own and beeps once for each of 3, 2, 1', () => {
+      useActiveWorkoutStore.setState({
+        rest: {
+          state: 'resting',
+          durationSec: 60,
+          endsAt: NOW + 3_500,
+          pausedRemainingMs: null,
+          scheduledNotificationId: null,
+          instanceToken: 1,
+        },
+      });
+      const { getByText } = render(
+        <SafeAreaProvider initialMetrics={{ insets, frame }}>
+          <LiveActiveWorkoutRestBar
+            label="Bench Press · Set 2"
+            onAdjust={jest.fn()}
+            onSkip={jest.fn()}
+            onPause={jest.fn()}
+            onResume={jest.fn()}
+            onCompleteSet={jest.fn()}
+          />
+        </SafeAreaProvider>
+      );
+      expect(getByText('0:04')).toBeTruthy();
+      expect(mockPlayIntervalCue).not.toHaveBeenCalled();
+
+      for (const shown of ['0:03', '0:02', '0:01']) {
+        act(() => {
+          jest.advanceTimersByTime(1_000);
+        });
+        expect(getByText(shown)).toBeTruthy();
+      }
+      expect(mockPlayIntervalCue).toHaveBeenCalledTimes(3);
+      expect(mockPlayIntervalCue).toHaveBeenCalledWith('countdown');
+    });
+
+    it('ticks with the clock already running, not from when the rest started', () => {
+      // The header's elapsed time, ticking since before the rest began.
+      const clock = renderHook(() => useClockTick());
+      act(() => {
+        jest.advanceTimersByTime(600);
+      });
+      useActiveWorkoutStore.setState({
+        rest: {
+          state: 'resting',
+          durationSec: 60,
+          endsAt: NOW + 600 + 3_000,
+          pausedRemainingMs: null,
+          scheduledNotificationId: null,
+          instanceToken: 1,
+        },
+      });
+      const { getByText } = render(
+        <SafeAreaProvider initialMetrics={{ insets, frame }}>
+          <LiveActiveWorkoutRestBar
+            label="Bench Press · Set 2"
+            onAdjust={jest.fn()}
+            onSkip={jest.fn()}
+            onPause={jest.fn()}
+            onResume={jest.fn()}
+            onCompleteSet={jest.fn()}
+          />
+        </SafeAreaProvider>
+      );
+      expect(getByText('0:03')).toBeTruthy();
+
+      // The shared tick: 2.6s left still reads 0:03.
+      act(() => {
+        jest.advanceTimersByTime(400);
+      });
+      expect(getByText('0:03')).toBeTruthy();
+
+      // A second into the rest, between two ticks: nothing re-renders.
+      act(() => {
+        jest.advanceTimersByTime(600);
+      });
+      expect(getByText('0:03')).toBeTruthy();
+
+      // The next shared tick moves both clocks together.
+      act(() => {
+        jest.advanceTimersByTime(400);
+      });
+      expect(getByText('0:02')).toBeTruthy();
+      expect(clock.result.current).toBe(NOW + 2_000);
     });
   });
 });

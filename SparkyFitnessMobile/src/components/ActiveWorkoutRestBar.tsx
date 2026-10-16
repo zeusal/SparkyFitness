@@ -8,6 +8,8 @@ import Icon from './Icon';
 import LiquidGlassSurface, {
   createLiquidGlassPillStyle,
 } from './LiquidGlassSurface';
+import { useClockTick } from '../hooks/useClockTick';
+import { useRestCountdown } from '../hooks/useRestCountdown';
 import { fireSelectionHaptic } from '../services/haptics';
 import { useNativeIOSTabsActive } from '../services/nativeTabBarPreference';
 import { playIntervalCue } from '../services/sounds';
@@ -337,5 +339,33 @@ function ActiveWorkoutRestBar({
     </View>
   );
 }
+
+type LiveActiveWorkoutRestBarProps = Omit<
+  ActiveWorkoutRestBarProps,
+  'remainingMs' | 'progress' | 'state'
+>;
+
+/**
+ * The rest bar fed straight from the store's countdown. While a rest runs it
+ * re-renders on the shared 1s clock (`useClockTick`), in step with the
+ * header's elapsed time; that tick also drives the 3-2-1 lead-in above, so
+ * the screen hosting the bar needs no clock of its own.
+ */
+export const LiveActiveWorkoutRestBar = React.memo(
+  function LiveActiveWorkoutRestBar(props: LiveActiveWorkoutRestBarProps) {
+    const { state, remainingMs, progress } = useRestCountdown({
+      selfTick: false,
+    });
+    useClockTick(state === 'resting');
+    return (
+      <ActiveWorkoutRestBar
+        {...props}
+        state={state}
+        remainingMs={remainingMs}
+        progress={progress}
+      />
+    );
+  }
+);
 
 export default React.memo(ActiveWorkoutRestBar);

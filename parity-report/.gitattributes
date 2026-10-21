@@ -1,0 +1,2 @@
+# The CSVs use CRLF line endings; keep them byte for byte.
+*.csv -text

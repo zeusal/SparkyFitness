@@ -40,7 +40,7 @@ async function buildCover(): Promise<FrameNode> {
 async function run(): Promise<void> {
   core.notify('Building the SparkyFitness design system…');
   await core.loadFonts();
-  const theme = core.createColorVariables();
+  core.createColorVariables();
   core.createDimensionVariables();
   core.createTextStyles();
   core.createEffectStyles();
@@ -68,11 +68,11 @@ async function run(): Promise<void> {
   const screens = await core.usePage('Screens');
   core.layoutGrid(screens, buildScreens(), 100000);
 
+  core.applyThemeFallback();
   const linked = await core.linkStyles();
   await figma.setCurrentPageAsync(cover);
   figma.viewport.scrollAndZoomIntoView(cover.children);
-  const modes = theme.hasModes ? 'Light/Dark/AMOLED' : 'Light only (this plan allows one mode)';
-  figma.closePlugin(`SparkyFitness design system ready · ${boards.length} component boards · themes: ${modes} · ${linked} style links`);
+  figma.closePlugin(`SparkyFitness design system ready · ${boards.length} component boards · themes: ${core.themeSummary()} · ${linked} style links`);
 }
 
 run().catch((e: unknown) => {

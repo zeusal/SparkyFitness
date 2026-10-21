@@ -263,7 +263,7 @@ function buildButtons(): FrameNode {
   const themes = section(
     body,
     'Themes',
-    'The same instances inside frames set to the Light, Dark and AMOLED variable modes. Only token values change; white labels stay white on the accent fill.',
+    'The same instances inside frames rendered in Light, Dark and AMOLED. Only token values change; white labels stay white on the accent fill.',
     'H',
     24,
     true

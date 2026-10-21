@@ -34,7 +34,13 @@ interface ThemeState {
   modeIds: Partial<Record<ThemeName, string>>;
   vars: Map<string, Variable>;
   hasModes: boolean;
+  /** Plans with one mode per collection: one single-mode collection per extra theme, same variable names. */
+  themeVars: Partial<Record<ThemeName, Map<string, Variable>>>;
+  /** Variable id → token key, across every color collection. */
+  keyById: Map<string, string>;
 }
+
+const THEME_LABELS: Record<ThemeName, string> = { light: 'Light', dark: 'Dark', amoled: 'AMOLED' };
 
 let theme: ThemeState | null = null;
 
@@ -58,21 +64,47 @@ export function tokenKey(token: string): string {
 
 /**
  * Creates the "SparkyFitness / Color" collection with Light, Dark and AMOLED modes and one
- * COLOR variable per token, named "<Group>/<token>". If the Figma plan does not allow more
- * than one mode, the collection keeps Light only and hasModes is false.
+ * COLOR variable per token, named "<Group>/<token>". If the Figma plan allows a single mode per
+ * collection, the collection keeps Light only (hasModes is false) and each missing theme gets its
+ * own collection, "SparkyFitness / Color (Dark)" and "(AMOLED)", with the same variable names.
  */
 export function createColorVariables(): ThemeState {
   const collection = figma.variables.createVariableCollection('SparkyFitness / Color');
   const lightId = collection.modes[0].modeId;
   collection.renameMode(lightId, 'Light');
   const modeIds: Partial<Record<ThemeName, string>> = { light: lightId };
-  let hasModes = true;
-  try {
-    modeIds.dark = collection.addMode('Dark');
-    modeIds.amoled = collection.addMode('AMOLED');
-  } catch (e) {
-    hasModes = false;
+  for (const mode of ['dark', 'amoled'] as const) {
+    try {
+      modeIds[mode] = collection.addMode(THEME_LABELS[mode]);
+    } catch (e) {
+      break;
+    }
   }
+  const keyById = new Map<string, string>();
+  const vars = colorVariables(collection, (t) => {
+    const values: [string, RGBA][] = [[lightId, toRgba(t.light)]];
+    if (modeIds.dark) values.push([modeIds.dark, toRgba(t.dark)]);
+    if (modeIds.amoled) values.push([modeIds.amoled, toRgba(t.amoled)]);
+    return values;
+  }, keyById);
+  const themeVars: ThemeState['themeVars'] = {};
+  for (const mode of ['dark', 'amoled'] as const) {
+    if (modeIds[mode]) continue;
+    const c = figma.variables.createVariableCollection(`SparkyFitness / Color (${THEME_LABELS[mode]})`);
+    const id = c.modes[0].modeId;
+    c.renameMode(id, THEME_LABELS[mode]);
+    themeVars[mode] = colorVariables(c, (t) => [[id, toRgba(t[mode])]], keyById);
+  }
+  theme = { collection, modeIds, vars, hasModes: !!(modeIds.dark && modeIds.amoled), themeVars, keyById };
+  return theme;
+}
+
+/** One COLOR variable per token in collection, with values per mode from valuesFor. */
+function colorVariables(
+  collection: VariableCollection,
+  valuesFor: (t: (typeof COLOR_TOKENS)[number]) => [string, RGBA][],
+  keyById: Map<string, string>
+): Map<string, Variable> {
   const vars = new Map<string, Variable>();
   for (const t of COLOR_TOKENS) {
     const key = tokenKey(t.token);
@@ -80,13 +112,11 @@ export function createColorVariables(): ThemeState {
     v.description = `${t.name}. ${t.usage}`.trim();
     v.scopes = scopesFor(key);
     v.setVariableCodeSyntax('WEB', `var(${t.token})`);
-    v.setValueForMode(lightId, toRgba(t.light));
-    if (modeIds.dark) v.setValueForMode(modeIds.dark, toRgba(t.dark));
-    if (modeIds.amoled) v.setValueForMode(modeIds.amoled, toRgba(t.amoled));
+    for (const [modeId, value] of valuesFor(t)) v.setValueForMode(modeId, value);
     vars.set(key, v);
+    keyById.set(v.id, key);
   }
-  theme = { collection, modeIds, vars, hasModes };
-  return theme;
+  return vars;
 }
 
 /** Variable scopes by token role, so each color only shows up in the pickers it belongs to. */
@@ -162,11 +192,71 @@ export function bindStroke(
   node.strokeAlign = align;
 }
 
-/** Sets the theme a frame (and its children) renders in. No-op when the plan has a single mode. */
+const pendingThemes: [FrameNode | ComponentNode | InstanceNode, ThemeName][] = [];
+
+/**
+ * Sets the theme a frame (and its children) renders in. With variable modes this is the frame's
+ * explicit mode. Without them the frame is queued, and applyThemeFallback() rebinds its colors to
+ * that theme's collection once its content is built.
+ */
 export function setFrameTheme(node: FrameNode | ComponentNode | InstanceNode, mode: ThemeName): void {
   const t = getTheme();
   const id = t.modeIds[mode];
   if (id) node.setExplicitVariableModeForCollection(t.collection, id);
+  else if (t.themeVars[mode]) pendingThemes.push([node, mode]);
+}
+
+/**
+ * Rebinds every fill and stroke under the frames queued by setFrameTheme() to the same token in
+ * their theme's collection (instance layers become overrides). Main components are skipped so
+ * their definitions stay in Light. Run once, after every board is built. Returns the frame count.
+ */
+export function applyThemeFallback(): number {
+  const t = getTheme();
+  const rebind = (paints: ReadonlyArray<Paint>, vars: Map<string, Variable>): Paint[] | null => {
+    let changed = false;
+    const out = paints.map((p) => {
+      const id = p.type === 'SOLID' ? p.boundVariables?.color?.id : undefined;
+      const key = id ? t.keyById.get(id) : undefined;
+      const v = key ? vars.get(key) : undefined;
+      if (p.type !== 'SOLID' || !v || v.id === id) return p;
+      changed = true;
+      return figma.variables.setBoundVariableForPaint(p, 'color', v);
+    });
+    return changed ? out : null;
+  };
+  const walk = (n: SceneNode, vars: Map<string, Variable>): void => {
+    if (n.type === 'COMPONENT' || n.type === 'COMPONENT_SET') return;
+    if ('fills' in n && Array.isArray(n.fills)) {
+      const fills = rebind(n.fills as Paint[], vars);
+      if (fills) n.fills = fills;
+    }
+    if ('strokes' in n && Array.isArray(n.strokes)) {
+      const strokes = rebind(n.strokes, vars);
+      if (strokes) n.strokes = strokes;
+    }
+    if ('children' in n) for (const c of n.children) walk(c, vars);
+  };
+  for (const [node, mode] of pendingThemes) {
+    const vars = t.themeVars[mode];
+    if (!vars || node.removed) continue;
+    // The frame itself may be a component (a themed variant); its own paints still switch.
+    if ('fills' in node && Array.isArray(node.fills)) {
+      const fills = rebind(node.fills as Paint[], vars);
+      if (fills) node.fills = fills;
+    }
+    for (const c of node.children) walk(c, vars);
+  }
+  const count = pendingThemes.length;
+  pendingThemes.length = 0;
+  return count;
+}
+
+/** Closing-message summary of how themes were built. */
+export function themeSummary(): string {
+  const t = getTheme();
+  if (t.hasModes) return 'Light/Dark/AMOLED as variable modes';
+  return 'Light mode + Dark and AMOLED collections (this plan allows one mode per collection)';
 }
 
 // ---------------------------------------------------------------- typography
@@ -508,14 +598,38 @@ export function ellipse(size: number, token: string | null, opacity = 1): Ellips
 
 // ---------------------------------------------------------------- icons
 
-const iconComponents = new Map<string, ComponentNode>();
+const iconComponents = new Map<string, Map<IconState, ComponentNode>>();
+const iconSets = new Map<string, ComponentSetNode>();
 
 /** Names of every icon glyph available (the app's semantic Icon names). */
 export const ICON_NAMES = Object.keys(ICONS);
 
 /**
- * Builds one 24px component per app icon on the given parent ("Icon/<name>"), each glyph
- * bound to text-primary so instances can recolor through their fill override.
+ * The State variant every icon has. DESIGN.md: Sparky Blue marks the selected state and action
+ * glyphs, unselected selection glyphs are Muted Slate (FoodResultRow, the cycle options), and
+ * disabled header actions sit at 40% opacity.
+ */
+export const ICON_STATES = [
+  { state: 'Default', token: 'text-primary', opacity: 1, use: 'Ink Navy. Header actions, back and close glyphs, neutral glyphs.' },
+  { state: 'Active', token: 'accent-primary', opacity: 1, use: 'Sparky Blue. Selected, checked or focused (focused tab, menu check, picked food), and action glyphs.' },
+  { state: 'Inactive', token: 'text-muted', opacity: 1, use: 'Muted Slate. Unselected check circles and radios, muted glyphs.' },
+  { state: 'Disabled', token: 'text-primary', opacity: 0.4, use: 'Ink Navy at 40%. Disabled header actions.' },
+] as const;
+export type IconState = (typeof ICON_STATES)[number]['state'];
+
+/** Tokens that are an icon state: icon() picks that variant instead of a color override. */
+const STATE_BY_TOKEN: Record<string, IconState> = {
+  'text-primary': 'Default',
+  'accent-primary': 'Active',
+  'tab-active': 'Active',
+  'text-muted': 'Inactive',
+  'tab-inactive': 'Inactive',
+};
+
+/**
+ * Builds one 24px component set per app icon on the given parent ("Icon/<name>"), with a State
+ * variant (Default, Active, Inactive, Disabled) whose glyph is bound to that state's token.
+ * Other colors are fill overrides on an instance.
  */
 export function createIconComponents(parent: FrameNode): void {
   for (const name of ICON_NAMES) {
@@ -523,24 +637,42 @@ export function createIconComponents(parent: FrameNode): void {
     const svgFrame = figma.createNodeFromSvg(g.svg);
     // Ionicons use a 512 viewBox; rescale scales geometry and stroke widths together.
     svgFrame.rescale(24 / svgFrame.width);
-    const c = figma.createComponent();
-    c.name = `Icon/${name}`;
-    c.description = `iOS: SF Symbol ${g.sf} · Android: Ionicons ${g.ion}`;
-    c.resize(24, 24);
-    c.fills = [];
-    c.clipsContent = false;
+    const base = figma.createComponent();
+    base.resize(24, 24);
+    base.fills = [];
+    base.clipsContent = false;
     for (const child of [...svgFrame.children]) {
       const x = child.x;
       const y = child.y;
-      c.appendChild(child);
+      base.appendChild(child);
       child.x = x;
       child.y = y;
       if ('constraints' in child) child.constraints = { horizontal: 'SCALE', vertical: 'SCALE' };
     }
     svgFrame.remove();
-    recolorGlyph(c, paint('text-primary'));
-    parent.appendChild(c);
-    iconComponents.set(name, c);
+    parent.appendChild(base);
+    const variants = new Map<IconState, ComponentNode>();
+    for (const s of ICON_STATES) {
+      const c = variants.size === 0 ? base : base.clone();
+      c.name = `State=${s.state}`;
+      recolorGlyph(c, paint(s.token, s.opacity));
+      variants.set(s.state, c);
+    }
+    const set = figma.combineAsVariants([...variants.values()], parent);
+    set.name = `Icon/${name}`;
+    set.description = `iOS: SF Symbol ${g.sf} · Android: Ionicons ${g.ion}`;
+    set.layoutMode = 'HORIZONTAL';
+    set.primaryAxisSizingMode = 'AUTO';
+    set.counterAxisSizingMode = 'AUTO';
+    set.itemSpacing = 8;
+    set.paddingTop = set.paddingBottom = set.paddingLeft = set.paddingRight = 6;
+    set.fills = [];
+    set.strokes = [paint('border-subtle')];
+    set.dashPattern = [4, 3];
+    set.strokeWeight = 1;
+    set.cornerRadius = 6;
+    iconComponents.set(name, variants);
+    iconSets.set(name, set);
   }
 }
 
@@ -553,19 +685,33 @@ function recolorGlyph(root: ComponentNode | InstanceNode, p: SolidPaint): void {
   }
 }
 
-/** The icon component for a name, for INSTANCE_SWAP defaults. */
-export function iconComponent(name: string): ComponentNode {
-  const c = iconComponents.get(name);
+/** The icon variant for a name (Default unless asked), for INSTANCE_SWAP values and instances. */
+export function iconComponent(name: string, state: IconState = 'Default'): ComponentNode {
+  const c = iconComponents.get(name)?.get(state);
   if (!c) throw new Error(`Unknown icon: ${name}`);
   return c;
 }
 
-/** Instance of an app icon at size px, colored with a token (or a fixed hex via solidHex). */
+/** The component set holding an icon's state variants (for documentation boards). */
+export function iconSet(name: string): ComponentSetNode {
+  const s = iconSets.get(name);
+  if (!s) throw new Error(`Unknown icon: ${name}`);
+  return s;
+}
+
+/**
+ * Instance of an app icon at size px. A state token (text-primary, accent-primary, text-muted and
+ * their tab twins) picks that State variant; any other token, or a fixed hex via solidHex, is a
+ * fill override on the Default variant.
+ */
 export function icon(name: string, size: number, colorToken: string | null, solidHex?: string): InstanceNode {
-  const i = iconComponent(name).createInstance();
+  const key = colorToken ? tokenKey(colorToken) : null;
+  const state: IconState = (!solidHex && key && STATE_BY_TOKEN[key]) || 'Default';
+  const i = iconComponent(name, state).createInstance();
   i.name = 'Icon';
   i.resize(size, size);
-  const p = solidHex ? solid(solidHex) : colorToken ? paint(colorToken) : null;
+  const stateToken = ICON_STATES.find((s) => s.state === state)?.token;
+  const p = solidHex ? solid(solidHex) : key && key !== stateToken ? paint(key) : null;
   if (p) recolorGlyph(i, p);
   return i;
 }

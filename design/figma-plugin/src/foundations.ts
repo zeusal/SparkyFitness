@@ -534,21 +534,54 @@ const ICON_SIZES: { px: number; icon: string; color: string; use: string }[] = [
   { px: 32, icon: 'food', color: 'accent-primary', use: 'AddSheet tile glyphs' },
 ];
 
+/** Selection swaps the glyph as well as its color (DESIGN.md sections 4 and 7). */
+const ICON_PAIRS: { label: string; px: number; off: [string, string]; on: [string, string]; use: string }[] = [
+  { label: 'Check circle', px: 22, off: ['checkmark-circle', 'text-muted'], on: ['checkmark-circle-filled', 'accent-primary'], use: 'Multi-select food results (FoodResultRow)' },
+  { label: 'Radio', px: 24, off: ['radio-button-off', 'form-disabled'], on: ['radio-button-on', 'accent-primary'], use: 'Single-choice settings rows (cycle mode)' },
+  { label: 'Tab', px: 24, off: ['tab-dashboard', 'tab-inactive'], on: ['tab-dashboard', 'tab-active'], use: 'Custom tab bar: same glyph, color only on Android' },
+];
+
 function buildIconographyBoard(temp: FrameNode): FrameNode {
   const width = 1600;
   const { root, body } = core.board(
     'Iconography',
-    `${core.ICON_NAMES.length} semantic icons from Icon.tsx. The app draws SF Symbols on iOS and Ionicons on Android; these components use the Ionicons glyphs (the Android set) at 24px, bound to Ink Navy so instances recolor through their fill. Every icon takes an explicit token color: action glyphs default to Sparky Blue, navigation chrome stays neutral (Ink Navy, Slate Secondary, Muted Slate).`,
+    `${core.ICON_NAMES.length} semantic icons from Icon.tsx. The app draws SF Symbols on iOS and Ionicons on Android; these components use the Ionicons glyphs (the Android set) at 24px. Each icon is a component set with a State property, so selected and inactive glyphs are a property change rather than a recolor. Every icon takes an explicit token color: action glyphs default to Sparky Blue, navigation chrome stays neutral (Ink Navy, Slate Secondary, Muted Slate); other colors are a fill override on the instance.`,
     width
   );
-  const grid = core.section(body, 'Icon set', 'Icon/<name> components. Swap them through the Icon property on any component instance.', 'H', 12, true);
+
+  const states = core.section(body, 'States', 'Pick the State on any icon instance, including icons nested in other components. Sparky Blue is the only selected color in the app.', 'H', 24, true);
+  for (const s of core.ICON_STATES) {
+    const cell = box({ name: s.state, dir: 'V', gap: 12, width: 248 });
+    const stage = box({ name: 'Stage', dir: 'H', gap: 20, align: 'CENTER', cross: 'CENTER', width: 248, height: 72, fill: 'surface', radius: 12 });
+    for (const n of ['tab-dashboard', 'bookmark', 'checkmark-circle', 'settings']) {
+      const i = core.iconComponent(n, s.state).createInstance();
+      i.name = 'Icon';
+      core.add(stage, i);
+    }
+    core.add(cell, stage, { h: 'FILL' });
+    core.add(cell, note(s.state, `${s.token}${s.opacity < 1 ? ` at ${Math.round(s.opacity * 100)}%` : ''}`, s.use, 248), { h: 'FILL' });
+    core.add(states, cell);
+  }
+
+  const pairs = core.section(body, 'Selected glyphs', 'Check circles and radios switch to the filled glyph when selected; tabs keep the glyph and change color.', 'H', 24, true);
+  for (const pair of ICON_PAIRS) {
+    const cell = box({ name: pair.label, dir: 'V', gap: 12, width: 248 });
+    const stage = box({ name: 'Stage', dir: 'H', gap: 16, align: 'CENTER', cross: 'CENTER', width: 248, height: 72, fill: 'surface', radius: 12 });
+    core.add(stage, core.icon(pair.off[0], pair.px, pair.off[1]));
+    core.add(stage, core.icon('chevron-forward', 16, 'text-muted'));
+    core.add(stage, core.icon(pair.on[0], pair.px, pair.on[1]));
+    core.add(cell, stage, { h: 'FILL' });
+    core.add(cell, note(pair.label, `${pair.off[0]} (${pair.off[1]}) → ${pair.on[0]} (${pair.on[1]}) · ${pair.px}px`, pair.use, 248), { h: 'FILL' });
+    core.add(pairs, cell);
+  }
+
+  const grid = core.section(body, 'Icon set', 'Icon/<name> component sets: Default, Active, Inactive and Disabled. Swap the glyph through the Icon property on any component instance.', 'H', 12, true);
   for (const name of core.ICON_NAMES) {
     const glyph = ICONS[name];
-    const comp = core.iconComponent(name);
-    const cell = box({ name, dir: 'V', gap: 6, pad: 12, width: 136, fill: 'surface', radius: 12, cross: 'CENTER' });
-    core.add(cell, comp);
-    core.add(cell, core.text(name, { role: 'Caption/Default', width: 112, align: 'CENTER', name: 'Name' }));
-    core.add(cell, core.text(`SF: ${glyph.sf} · Ion: ${glyph.ion}`, { role: 'Caption/Micro', color: 'text-muted', width: 112, align: 'CENTER', name: 'Platform names' }));
+    const cell = box({ name, dir: 'V', gap: 6, pad: 12, width: 160, fill: 'surface', radius: 12, cross: 'CENTER' });
+    core.add(cell, core.iconSet(name));
+    core.add(cell, core.text(name, { role: 'Caption/Default', width: 136, align: 'CENTER', name: 'Name' }));
+    core.add(cell, core.text(`SF: ${glyph.sf} · Ion: ${glyph.ion}`, { role: 'Caption/Micro', color: 'text-muted', width: 136, align: 'CENTER', name: 'Platform names' }));
     core.add(grid, cell);
   }
   temp.remove();
@@ -614,7 +647,7 @@ function themeCard(mode: Mode, label: string): FrameNode {
 function buildThemesBoard(): FrameNode {
   const { root, body } = core.board(
     'Themes',
-    'Light, Dark and AMOLED, plus System (follows the OS light/dark setting only, so AMOLED must be picked explicitly). The same card is rendered three times; each frame sets the color collection’s mode, so every bound token switches together. Light is near-white cards on a pale cool-gray canvas with a soft shadow; Dark is charcoal blue-gray with depth from lighter surfaces; AMOLED is Dark with a pure black canvas, near-black cards and darker borders.'
+    'Light, Dark and AMOLED, plus System (follows the OS light/dark setting only, so AMOLED must be picked explicitly). The same card is rendered three times; each frame takes its theme’s values (the color collection’s mode, or the theme’s own collection on plans with one mode per collection), so every bound token switches together. Light is near-white cards on a pale cool-gray canvas with a soft shadow; Dark is charcoal blue-gray with depth from lighter surfaces; AMOLED is Dark with a pure black canvas, near-black cards and darker borders.'
   );
   const content = core.section(body, 'Same card, three themes', 'Check every screen in all three before shipping (DESIGN.md section 9, Theming).', 'H', 24, true);
   for (const m of MODES) core.add(content, themeCard(m.mode, m.label));

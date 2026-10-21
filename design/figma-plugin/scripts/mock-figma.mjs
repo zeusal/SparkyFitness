@@ -97,6 +97,7 @@ class BaseNode {
     c._overrides = this._overrides ? { ...this._overrides } : undefined;
     c.children = this.children ? this.children.map((k) => k._copy(c)) : this.children;
     stats.nodes[this.type] = (stats.nodes[this.type] || 0) + 1;
+    nodes.set(c.id, c);
     return c;
   }
   // Figma: the duplicate is placed next to the original, in the same parent.
@@ -246,6 +247,8 @@ class InstanceNode extends FrameLike {
     this.mainComponent = main;
     this._overrides = {};
     this._w = main.width; this._h = main.height;
+    // The instance root shows the main component's paints until overridden.
+    this._fills = main._fills; this._strokes = main._strokes;
     this.children = (main.children || []).map((c) => c._copy(this));
   }
   get componentProperties() {
@@ -278,6 +281,7 @@ class InstanceNode extends FrameLike {
   swapComponent(c) { this.mainComponent = c; }
 }
 
+const MAX_MODES = Number(process.env.FIGMA_MAX_MODES || 4);
 const nodes = new Map();
 const collections = new Map();
 const variables = new Map();
@@ -369,7 +373,8 @@ export function install() {
       createVariableCollection(name) {
         const c = { id: `VC:${nextId++}`, name, modes: [{ modeId: `${nextId++}:0`, name: 'Mode 1' }], variableIds: [] };
         c.renameMode = (id, n) => { const m = c.modes.find((x) => x.modeId === id); if (!m) throw new Error('renameMode: unknown mode'); m.name = n; };
-        c.addMode = (n) => { if (c.modes.length >= 4) throw new Error('mode limit'); const m = { modeId: `${nextId++}:0`, name: n }; c.modes.push(m); return m.modeId; };
+        // FIGMA_MAX_MODES=1 simulates a plan with one mode per collection (Figma's message).
+        c.addMode = (n) => { if (c.modes.length >= MAX_MODES) throw new Error(`in addMode: Limited to ${MAX_MODES} modes only`); const m = { modeId: `${nextId++}:0`, name: n }; c.modes.push(m); return m.modeId; };
         collections.set(c.id, c);
         return c;
       },

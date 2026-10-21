@@ -1,6 +1,6 @@
 # AGENTS.md
 
-_Last updated: 2026-10-20_
+_Last updated: 2026-10-21_
 
 SparkyFitness Mobile is a React Native 0.86 + Expo SDK 57 app for syncing Apple Health / Health Connect data with the SparkyFitness backend, tracking nutrition, hydration, fasting, measurements, exercise, saved foods, meal templates, custom exercises, workout presets, iOS / Android widgets, the active workout HUD, and the Sparky AI chat.
 
@@ -291,6 +291,7 @@ npx expo prebuild --clean
 ## Styling And UI
 
 - Styling uses Uniwind with TailwindCSS v4 tokens in `global.css`.
+- `DESIGN.md` describes the current visual language (theme tokens with hex values per theme, typography roles, component styling, layout rules) in the five-section format AI UI design tools read, plus how to translate HTML/Tailwind mockups into this codebase. Read it before visual or redesign work, and update its color tables in the same change whenever a token in `global.css` is added, renamed, or retuned.
 - Themes are Light, Dark, AMOLED, and System. `themeService.ts` owns persistence; `App.tsx` syncs Android navigation bar style.
 - Many visual components read CSS variables with `useCSSVariable`, especially Skia charts and themed controls.
 - Animate Skia paths from Reanimated `useSharedValue` / `useDerivedValue`, not Skia's deprecated animation API.
@@ -420,6 +421,7 @@ const androidService = require('../../src/services/healthConnectService.ts');
 - Chat/voice settings bug: inspect `ChatScreen`, `ChatSettingsScreen`, `components/chat/`, `useVoicePreferencesRefresh`, `aiSettingsApi`, `preferencesApi`, and `voiceTranscriptionApi`; settings and contracts also have web/server consumers.
 - Shoe inventory bug: inspect `EquipmentScreen` (Library > Equipment, the hub a new kind of gear adds a row to), `ShoesScreen` / `ShoeFormScreen`, `components/ShoePickerCard.tsx` (the picker on `CardioSessionScreen` and, for cardio entries, `ActivityDetailScreen`), `hooks/useShoes.ts`, `services/api/shoesApi.ts`, and `assignDefaultShoe` in `services/gpsRecordingSave.ts` (a newly created recorded run, outdoor or indoor, is linked to the default pair, best effort and only on first create). When a run takes a pair to its retire-at distance, `services/shoeWear.ts` (`findShoeThatReachedLimit`) reports it: `saveRecordedActivity` returns it as `wornOutShoe` and `ShoePickerCard` checks after a pick, and both ask through `utils/retireShoePrompt.ts`. Distances are stored in km and edited in the app's distance unit; mileage is derived on the server from the linked entries, so every assignment invalidates `shoesQueryKey` and the cardio session caches.
 - Settings/diagnostics bug: inspect settings screens, `SettingsRow`, haptics/theme/sounds/notification services, diagnostics services, `DevTools`, and screen error boundaries.
+- Visual redesign or new screen from a mockup: start at `DESIGN.md` (tokens, type roles, component styling, and the mockup-to-React-Native mapping), then `global.css` and the shared primitives listed under Styling And UI.
 
 ## Priority Rule
 

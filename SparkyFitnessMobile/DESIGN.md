@@ -9,6 +9,7 @@ How to use:
 - Generate a screen: give sections 1–5 to a UI design or mockup tool together with a screenshot of the closest existing screen.
 - Implement a design: sections 6–7 explain how an HTML + web Tailwind mockup becomes React Native + Uniwind code in this repo.
 - Plan cleanup: section 8 lists known inconsistencies. They describe the current state, not rules to copy.
+- Build or extend a screen in code: section 9 picks the screen type and walks route wiring, header, layout, states, data, copy, theming, accessibility and tests, with templates and a pre-PR checklist.
 
 ## 1. Visual Theme & Atmosphere
 
@@ -420,7 +421,7 @@ Shared primitives to reuse (from the Styling And UI guide in `SparkyFitnessMobil
 - `AnchoredMenu` (`SparkyFitnessMobile/src/components/AnchoredMenu.tsx`): popover dropdown anchored to a trigger.
 - `FooterActionBar` (`SparkyFitnessMobile/src/components/FooterActionBar.tsx`): inset-safe action pinned under a list.
 - `FullScreenModalBody` (`SparkyFitnessMobile/src/components/FullScreenModalBody.tsx`): inset-safe body for full-screen RN modals.
-- `FormScreenChrome` (`SparkyFitnessMobile/src/components/FormScreenChrome.tsx`, 4 screens, e.g. `GoalsScreen`): a form shell with a dismiss (X) and a primary Save declared through `useScreenHeader` on every path (top bar on Android too), wrapping a `KeyboardAwareScrollView` (`px-4 pt-4 pb-20 gap-4`) and an optional `keyboardAccessory`. It has no footer; never put a `FooterSaveBar` inside it.
+- `FormScreenChrome` (`SparkyFitnessMobile/src/components/FormScreenChrome.tsx`, 4 screens, e.g. the modal `ExerciseFormScreen`): a form shell for `presentation: 'modal'` routes, with a dismiss (X) and a primary Save declared through `useScreenHeader` on every path (top bar on Android too), wrapping a `KeyboardAwareScrollView` (`px-4 pt-4 pb-20 gap-4`) and an optional `keyboardAccessory`. It has no footer; never put a `FooterSaveBar` inside it. The pushed `GoalsScreen` and `WeeklyGoalPlanEditScreen` also use it, which is drift (section 9.1).
 - `FooterSaveBar` (same file, 17 screens): a sticky primary CTA with the duplicate-press guard. Either mirror a header Save (mark the header item `placement: 'native-only'` and render `{!usesNativeHeader && <FooterSaveBar/>}`, as in `MeasurementsAddScreen`), or make it the screen's only primary action on every platform (`FoodEntryAddScreen`).
 
 Also reuse `Icon`, `StatusView`, `ActionSheet`, `SafeImage`, `FoodThumbnail`, `LiquidGlassSurface`, `FadeView`, `ProgressRing`, `charts/StatTile` and the sheet helpers in `components/ui/sheetChrome.tsx` (all under `SparkyFitnessMobile/src/components/`).
@@ -493,3 +494,277 @@ This is the backlog for the redesign phases. Counts are exact at the time of wri
 - The splash backgrounds (`#e2e2e2` light, `#232323` dark) do not match the canvas (#F2F4F7 / #0C0E12), so the color jumps when the splash hides.
 - Accessibility and motion: one `accessibilityRole="header"` in the app, reduce-motion handled in 5 files, and the two mindfulness modals call expo-haptics directly, bypassing the haptics preference. React Native's `LayoutAnimation` is still used in 7 files.
 - RTL: 293 physical-direction spacing classes and 0 logical ones; directional chevrons are not mirrored.
+
+## 9. Building a New Screen
+
+Sections 1–7 define the look; this section is the wiring. Start from the closest file named below instead of a blank file, and finish with 9.5. Paths are relative to `SparkyFitnessMobile/`. `__tests__/navigation/nativeHeaderContract.test.ts` enforces most of the route and header rules: when it fails, fix the route, type or registration, never the test.
+
+### 9.1 Pick the screen type
+
+| Type                      | Use when                                                                                | Copy this file                                                                                                                                                         | Header                                                                                                                                                      | Container                                                                                                                                                                                  | Primary action                                                                                                                            |
+| ------------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Tab root                  | Only for an agreed new tab; otherwise extend a tab (9.4)                                | `src/screens/SettingsScreen.tsx`                                                                                                                                       | Custom path: a `text-2xl font-bold` title as the first scroll child. Native tabs: large title from `createIOSNativeHeaderOptions` in `TabsLayout.tsx`       | `ScrollView className="flex-1 bg-background"`, top inset only when `!useNativeIOSTabsActive()`, bottom `80 + useActiveWorkoutBarPadding()`                                                 | None in the header; Add is the center tab                                                                                                 |
+| Pushed detail             | One record or a hub of rows, opened from a row or card                                  | `src/screens/DiarySettingsScreen.tsx` (minimal), `src/screens/SleepDetailScreen.tsx` (loading, error, not found), `src/screens/MealsLibraryScreen.tsx` (offline first) | `left: { kind: 'back' }` plus `headerBackTitle` in `App.tsx`; view/edit swap as in `WorkoutDetailScreen.tsx`                                                | `View className="flex-1 bg-background"`, `paddingTop: insets.top` only when `!usesNativeHeader`; `ScrollView` with `padding: 16` and bottom `insets.bottom + 80 + activeWorkoutBarPadding` | Usually none; at most one right `kind: 'primary'`                                                                                         |
+| List                      | A server collection, library or search result                                           | `src/screens/MealsLibraryScreen.tsx`; `src/screens/MealPlansScreen.tsx` (footer action)                                                                                | `back` plus an optional `kind: 'menu'` filter (`ownershipFilterHeaderMenu` in `src/utils/shareStatus.ts`) or a right `kind: 'primary'` Add                  | Pushed root; `FlatList` with `contentContainerStyle={{ paddingBottom: insets.bottom + activeWorkoutBarPadding + 16, flexGrow: 1 }}`                                                        | One create action: a right `kind: 'primary'` Add (`ShoesScreen.tsx`) or one `Button` in `FooterActionBar` (route in `HIDDEN_ROUTES`)      |
+| Form (modal)              | Create, edit or log one record; AddSheet targets                                        | The 9.3 template or `src/screens/MindfulnessLogScreen.tsx` (footer Save, wiring only); `src/screens/ExerciseFormScreen.tsx` (`FormScreenChrome`)                       | `left: { kind: 'dismiss', onPress }`, one right `kind: 'primary'` Save; route options `presentation: 'modal'`                                               | Root pads `insets.top` on Android only; `KeyboardAwareScrollView` with `contentContainerClassName="px-4 pt-4 pb-20 gap-4"`                                                                 | Header Save `placement: 'native-only'` plus `{!usesNativeHeader && <FooterSaveBar />}`, or `FormScreenChrome` (header Save on every path) |
+| Bottom sheet / picker     | Choose an option, an overflow menu or a short form over the current screen; not a route | Reuse `BottomSheetPicker`, `ActionSheet`, `CalendarSheet`; a new sheet copies `src/components/ActionSheet.tsx` (`src/components/RestPeriodSheet.tsx` for number entry) | Picker and menu sheets: `px-4 py-4 border-b border-border-subtle` row with a centered `text-lg font-semibold` title. Form sheets: borderless centered title | `BottomSheetModal` wired as in "New bottom sheet" below; content `pb-safe-or-5` (`pb-safe-or-8` for forms)                                                                                 | Tapping an option; a form sheet has one primary `Button`                                                                                  |
+| Full-screen modal overlay | Immersive timer, player or viewer on top of the current screen, with no route           | `src/components/mindfulness/MeditationTimerModal.tsx` (shell only)                                                                                                     | No navigator header: a title row inside the body with a labelled close button                                                                               | RN `Modal` (`animationType="slide"`, `transparent`, `onRequestClose`) wrapping `FullScreenModalBody` (`className` sets the layout)                                                         | One `<Button variant="primary">` in the body                                                                                              |
+
+A new tab also needs `TabParamList` in `src/types/navigation.ts`; in `src/components/TabsLayout.tsx`, a `NativeTab.Screen` with a `tabBarIcon` SF Symbol, a `FallbackTab.Screen`, the tab name in `NON_ADD_TABS`, and a `function <Tab>StackScreen()` built with `createIOSNativeHeaderOptions` whose `<Tab>Stack.Navigator` holds a `<Tab>Stack.Screen` with `title: t('navigation.<tab>', { defaultValue: '<Tab>' })`, the `defaultValue` exactly the tab name; and an entry in `TAB_ICONS` in `src/components/CustomTabBar.tsx`. `NON_ADD_TABS` is the list `rememberActiveTab` (`src/hooks/useAddSheetActions.ts`) records, so it decides where dismissing the AddSheet returns and which tab `initialRouteName={getLastActiveTab()}` remounts on when the Liquid Glass toggle swaps paths; the contract test's tab-local stack check also reads its tab list from it, so a tab left out compiles, is never returned to and is not checked. `TAB_ICONS` is a `Record<string, IconName>`, so a missing entry compiles and the custom tab bar draws the tab with no icon. Detail and form screens never go in those tab-local stacks.
+
+New bottom sheet (copy `src/components/ActionSheet.tsx`):
+
+- Props: `ref`, `enableDynamicSizing`, `containerComponent={sheetContainer}`, `backdropComponent={renderBackdrop}` with `const renderBackdrop = useSheetBackdrop();`, `backgroundStyle={{ backgroundColor: surfaceBg }}` and `handleIndicatorStyle={{ backgroundColor: textMuted }}` with `const [surfaceBg, textMuted] = useCSSVariable(['--color-surface', '--color-text-muted']) as [string, string];`. Without the last two the library draws a white sheet and a dark handle in every theme. `sheetContainer`, `useSheetBackdrop` and `useSheetHardwareBack` come from `src/components/ui/sheetChrome.tsx`.
+- Android Back: `useSheetHardwareBack(isOpen, dismiss)` with a stable `dismiss`. Set `isOpen` from `onAnimate` and `onChange` when the index is >= 0 and clear it only in `onDismiss` (`markOpen` and `handleDismiss` in `ActionSheet.tsx`).
+- Number entry: add `keyboardBehavior="interactive" keyboardBlurBehavior="restore" android_keyboardInputMode="adjustPan"` and pass `InputComponent={BottomSheetTextInput}` (from `@gorhom/bottom-sheet`) to `StepperInput`, as `RestPeriodSheet.tsx` does. `FormInput` renders a plain `TextInput` with no input override, and the sheet's keyboard handling only tracks `BottomSheetTextInput`, so a free-text form is a screen, not a sheet.
+
+Drift in the files to copy (section 8; copy the wiring, not these):
+
+- `MindfulnessLogScreen.tsx`: take the header, the Android-only inset, the `FooterSaveBar` and its `HIDDEN_ROUTES` entry. Its practice tiles and chips use palette classes (`bg-blue-500/10`, `border-purple-500/25`), `dark:` variants (`text-blue-600 dark:text-blue-400`), `bg-surface-elevated` (renders nothing), `text-[10px]` and `TouchableOpacity` without `activeOpacity`, and its scroll container is `px-4 pt-4` plus a style `paddingBottom` rather than the row's `px-4 pt-4 pb-20 gap-4`.
+- `MeditationTimerModal.tsx`: take only the shell, `<Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>` around `<FullScreenModalBody className="justify-between px-6">`, and the title row whose close button has `accessibilityRole="button"` and `accessibilityLabel={t('common.close', { defaultValue: 'Close' })}`. Its purple, amber and emerald palette classes, `dark:` variants, `text-white` on palette fills and hand-styled `TouchableOpacity` actions are drift: build the body from tokens, with one `<Button variant="primary">` for the main action and `activeOpacity={0.7}` on any `TouchableOpacity`.
+- `MealPlansScreen.tsx`: its header `+` (`kind: 'icon'`) duplicates the footer Create; a new list keeps one create action. `WorkoutPlansScreen.tsx` has the same layout but is missing from `HIDDEN_ROUTES` and reserves no `activeWorkoutBarPadding`, so the workout bar covers its footer.
+- `MealPlansScreen.tsx`, `WorkoutPlansScreen.tsx` and `CustomNutrientFormScreen.tsx` tint trash glyphs `#dc2626`; use `useCSSVariable('--color-icon-danger')`. `ShoesScreen.tsx` is a header example only: its retire badges use `text-red-500`, `bg-red-500` and `bg-red-500/10`.
+- `GoalsScreen.tsx` and `WeeklyGoalPlanEditScreen.tsx` are pushed routes on `FormScreenChrome`, a modal shell: they show an X instead of back and get no top inset on iOS 26+ with Liquid Glass off. Do not copy them for a pushed form (9.3 Variants).
+
+### 9.2 Step-by-step checklist
+
+1. **Route and params.** Add `NewRoute: <params>;` to `RootStackParamList` in `src/types/navigation.ts`: `undefined` for none, `{ date?: string } | undefined` when every param is optional, a `mode` union for create and edit (`ExerciseForm`). Default-export the screen from `src/screens/NewRouteScreen.tsx`, typed `RootStackScreenProps<'NewRoute'>`.
+2. **Registration and error boundary.** In `src/navigation/safeScreens.tsx` add `import NewRouteScreen from '../screens/NewRouteScreen';` next to the other screen imports and `export const SafeNewRoute = withErrorBoundary(NewRouteScreen, 'NewRoute', { canGoBack: true });` on one line. In `App.tsx`, import `SafeNewRoute` and add a `<Stack.Screen>` at the 10-space indent with `name`, `component`, then `options={createStackScreenOptions(t('screens.newRoute', { defaultValue: '…' }), { … })}`. Both files are excluded from Prettier because the contract test parses their text: copy a neighbouring block exactly. Add a `linking` entry only if a widget or URL must open the screen.
+   - Keep the screen import in exactly that form: the test matches `import X from '../screens/X';`, and an `@/` path or a named import fails with "its screen import was not found".
+3. **Header.** `const header = useScreenHeader({...})` from `src/hooks/useScreenHeader.tsx`, called in the routed screen file itself (or `<FormScreenChrome>` rendered there): the contract test only reads that file, so a header declared in a child component fails it. Pushed: `left: { kind: 'back' }`, with `headerBackTitle` or `headerBackButtonDisplayMode: 'minimal'` in the route options. Modal: `left: { kind: 'dismiss', onPress }`, with `presentation: 'modal', ...(Platform.OS === 'android' ? androidModalAnimation : {})`.
+   - `headerBackTitle` names the screen the user returns to: `t('navigation.settings', { defaultValue: 'Settings' })` (or `navigation.library`, `navigation.diary`, `navigation.dashboard`) for a tab root, otherwise the parent route's own title key (`screens.foodSettings`; `goals.title` for `WeeklyGoalPlanEdit`; `equipmentHub.title` for `Shoes`). The `navigation.*` group is for tab and library labels; do not invent a `navigation.<parent>` key.
+   - The native iOS title is the `createStackScreenOptions` title; the hook's `title` only draws the custom bar, so a title that changes at runtime also sets `nativeTitle`. A `back` item's `onPress` runs on the custom path only.
+   - At most one `kind: 'primary'` or `role: 'primary'` item (a second throws in `__DEV__`). Never set `headerShown: false` for a hook screen. Never add `unstable_header*Items`, a `renderHeader` or `renderHeaderBar` function (`ListHeaderComponent` included), a `{/* Header */}` comment or a `// --- Header ---` comment to it: the test reads each as a hand-rolled header.
+4. **Container and bottom clearance.** Root `<View className="flex-1 bg-background">` with `{header}` as its first child. Top inset: pushed `style={usesNativeHeader ? undefined : { paddingTop: insets.top }}` (`useNativeIOSHeadersActive()`, `useSafeAreaInsets()`), modal `style={Platform.OS === 'android' ? { paddingTop: insets.top } : undefined}`; pushed scroll views set `contentInsetAdjustmentBehavior={usesNativeHeader ? 'automatic' : 'never'}`.
+   - Bottom: add `useActiveWorkoutBarPadding('stack')` (`src/components/ActiveWorkoutBar.tsx`) to `insets.bottom + 80` for content or `insets.bottom + 16` for lists. A route with a sticky `FooterSaveBar` or `FooterActionBar` joins `HIDDEN_ROUTES` in the same file so the docked workout bar does not cover it. Do not infer membership from existing screens: `CustomNutrientForm` and `WorkoutPlans` are missing from it today.
+5. **Content from primitives.** Build from sections 4–6: `bg-surface rounded-xl p-4 shadow-sm` cards, `SettingsRow` / `SettingsRowGroup`, `FormInput` under a `text-sm font-medium text-text-secondary mb-1` label with errors in `text-sm text-icon-danger mt-1`, `StepperInput`, `SegmentedControl`, `BottomSheetPicker`, `Switch` from `components/ui/Switch`, `Button`, and `Icon` with a token `color`. Destructive confirms use `Alert.alert`. Lists use `keyExtractor={(item) => item.id}` and rows that draw their own divider from a `showDivider={index < data.length - 1}` prop, never `ItemSeparatorComponent`.
+   - `BottomSheetPicker`, `CalendarSheet`, `DateRangeSheet` and `TimeSheet` do not take Android Back yet (section 8): Back pops the screen under the open sheet and drops a form's edits. If the screen uses one, fix the primitive, not the screen (no screen `BackHandler`): track `isOpen` and call `useSheetHardwareBack(isOpen, dismiss)` as `ActionSheet.tsx` does, then press Back on Android with the sheet open.
+6. **States.** Branch in this order: offline, loading, error, not found or empty, content (`MealsLibraryScreen.tsx` `renderContent`).
+   - Offline: `const { isConnected, isLoading: isConnectionLoading } = useServerConnection();` (`src/hooks/useServerConnection.ts`; the hook returns `isLoading`, renamed here). When `!isConnectionLoading && !isConnected`, show `StatusView` with `icon="cloud-offline" iconTone="muted" iconSize={64}` and a `common.goToSettings` action that calls `navigation.navigate('Tabs', { screen: 'Settings' })`. Loading: `<StatusView loading />` while `isLoading || isConnectionLoading`.
+   - Error (`isError`): `icon="alert-circle" iconTone="danger"` with `action={{ label: t('common.retry', …), onPress: () => void refetch(), variant: 'primary' }}`; the action defaults to secondary. Not found (a detail whose record is gone): a muted icon and title with no Retry, kept apart from `isError` (`sleep.notFound` in `SleepDetailScreen.tsx`). Empty: a muted icon, title and subtitle, plus a primary create action when it helps.
+   - Inside a list or card use `<StatusView inline … />` (in `ListEmptyComponent`, with `flexGrow: 1` on the list); dashboard cards keep their shell and show a small accent `ActivityIndicator` in the title row.
+   - Pull to refresh: `<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={accent} colors={[accent]} progressBackgroundColor={surface} />` with `const [accent, surface] = useCSSVariable(['--color-accent-primary', '--color-surface']) as [string, string];` and a `try`/`finally` `onRefresh`. `tintColor` themes iOS; `colors` and `progressBackgroundColor` theme the Android spinner, which no existing screen does yet.
+   - Failed actions: `import Toast from 'react-native-toast-message';`, then `Toast.show({ type: 'error', text1: t('thing.saveFailed', { defaultValue: 'Could not save' }), text2: getApiErrorMessage(err) ?? t('common.tryAgain', { defaultValue: 'Please try again.' }) })`. `getApiErrorMessage` (`src/services/api/errors.ts`) returns `string | null` and `text2` takes `string | undefined`, so keep the `??`.
+7. **Data hooks and cache invalidation.** API calls live in `src/services/api/<feature>Api.ts` as `apiFetch<T>({ endpoint, method, body, serviceName, operation })` with types from `@workspace/shared`; keys are `as const` tuples in `src/hooks/queryKeys.ts`; the hook in `src/hooks/use<Feature>.ts` pairs `useQuery` with `useRefetchOnFocus(query.refetch, enabled)`. It takes an `enabled` option that the screen sets to `isConnected` (`useMeals({ enabled: isConnected })`) and returns `isError` with the data, so the screen can tell a failed load from a missing record.
+   - `staleTime` is `Infinity`, so every `useMutation` invalidates each affected key family in `onSuccess`: `dailySummaryRootQueryKey` when day totals change, and `invalidateFoodCache`, `invalidateExerciseCache` or `invalidateMedicationEntryCaches` where they apply. Buttons that push a form go through `useNavigationActionGuard(navigation).runNavigationAction(() => …)`.
+8. **Copy.** Every visible string, accessibility label, alert and toast is `t('feature.key', { defaultValue: 'English' })` from `useTranslation()`, with the identical text added to `src/localization/locales/en/translation.json` (the only locale edited by hand). Numbers use `formatLocalizedNumber`, days `formatDayLabel` (`src/utils/dayLabel.ts`) or `formatDateLabel(day, t, locale)` (`src/utils/dateUtils.ts`) with `locale = useAppLocale()`; `import { formatLocalizedNumber, useAppLocale } from '../localization';`.
+   - Plurals: `t('sleepGoals.nights', { count, formattedCount: formatLocalizedNumber(count), defaultValue: '{{formattedCount}} nights', defaultValue_one: '{{formattedCount}} night' })` with EN `nights_one` and `nights_other`. The plain `defaultValue` must equal the `_other` text and `defaultValue_one` the `_one` text, or the i18n audit fails with `default-value-mismatch`. Never branch on `count === 1` (blocking `manual-pluralization`).
+   - Reuse `common.save`, `common.saving` (`Saving…`), `common.cancel`, `common.close`, `common.retry` (`Retry`, the button label), `common.delete`, `common.edit`, `common.goToSettings` and `common.tryAgain` (`Please try again.`, a toast `text2` or subtitle, never a button).
+9. **Theming.** Token classes from section 2 only; `useCSSVariable('--color-…')` only for props that take no `className` (`Icon` `color`, Skia, `RefreshControl`), `withAlpha` for alpha, `useUniwind().theme` for theme branches; `import { useCSSVariable, useUniwind } from 'uniwind';`. No hex, palette classes or `dark:`. Check Light, Dark and AMOLED (Settings › App Settings › Theme) on both header paths: Android, and iOS 26+ with Liquid Glass navigation on and off.
+10. **Accessibility.** Custom tappables get `accessibilityRole="button"`, a translated `accessibilityLabel` and `activeOpacity={0.7}`; icon-only buttons add `hitSlop={8}` or more; selection controls set `accessibilityState` (`selected`, `checked`, `disabled`). Text scales without a cap, so use `numberOfLines` and flexible rows rather than fixed heights. Gate loops on `useReducedMotion` and fire haptics through `src/services/haptics.ts`.
+11. **Tests and validation.** Add `__tests__/screens/<Name>Screen.test.tsx` with `await initializeI18n('en')` (`src/localization/i18n`) in `beforeAll`. Pick the setup by header shape:
+    - Only a `back` item: copy `__tests__/screens/EquipmentScreen.test.tsx`, which mocks `useScreenHeader: () => null`, `nativeTabBarPreference`, `react-native-safe-area-context` and `ActiveWorkoutBar`. With the hook mocked there are no header items to press.
+    - A header Save, Add, menu or other action: keep `useScreenHeader` real (it reads `useNavigation()`, not the prop). Define `const mockNavigation = { setOptions: jest.fn(), goBack: jest.fn(), navigate: jest.fn(), dispatch: jest.fn() }`, add `jest.mock('@react-navigation/native', () => ({ ...jest.requireActual('@react-navigation/native'), useNavigation: () => mockNavigation }))` and pass the same object as the `navigation` prop. Declare `let mockNativeHeadersActive = true;` with `jest.mock('../../src/services/nativeTabBarPreference', () => ({ useNativeIOSHeadersActive: () => mockNativeHeadersActive, useNativeIOSTabsActive: () => false }))` and set it to `false` in a test to cover the custom bar. Mock `ActiveWorkoutBar` as above and render inside `<SafeAreaProvider initialMetrics={{ insets, frame }}>`. Then `pressAction(screen, mockNavigation, 'Save')` and `expectActionPresent(...)` from `__tests__/screens/helpers/nativeHeaderTestUtils.ts`, with `skipDuplicatePressWindow()` between two presses of the same primary action. Jest runs as iOS (`jest-expo`), so native-path items arrive through `mockNavigation.setOptions`; on the custom path `pressAction` finds the inline text. Canonical: `__tests__/screens/FoodsLibraryScreen.test.tsx`, `__tests__/screens/MeasurementsAddScreen.test.tsx`.
+    - Either setup: also mock every data hook the screen calls (`EquipmentScreen` has none). Unmocked, `useQuery` throws "No QueryClient set" and `useRefetchOnFocus`'s `useFocusEffect` needs a navigator. For the 9.3 templates, `jest.mock('../../src/hooks/useServerConnection', () => ({ useServerConnection: jest.fn() }))` and `jest.mock('../../src/hooks/useThing', () => ({ useThing: jest.fn(), useSaveThing: jest.fn() }))`, then per test `mockReturnValue` with `{ isConnected: true, isLoading: false, isError: false, refetch: jest.fn() }`, `{ thing, isLoading: false, isError: false, refetch }` and `{ mutate, isPending: false }`. Mock by the hook's own file: that also covers a screen importing from the `../hooks` barrel (`__tests__/screens/MealPlansScreen.test.tsx`), while a barrel mock (`jest.mock('../../src/hooks', …)`) misses per-file imports. Back-only screen with a data hook: `__tests__/screens/SleepDetailScreen.test.tsx` (`useSleepDetail`).
+    - Hook tests use `createTestQueryClient` and `createQueryWrapper` from `__tests__/hooks/queryTestUtils.ts` and mock the API module (`jest.mock('../../src/services/api/<feature>Api', …)`). `useRefetchOnFocus` calls `useFocusEffect`, which throws outside a navigator, so also add `jest.mock('@react-navigation/native', () => ({ useFocusEffect: jest.fn() }))` (`__tests__/hooks/useSleepDetail.test.ts`) or `jest.mock('../../src/hooks/useRefetchOnFocus', () => ({ useRefetchOnFocus: jest.fn() }))` (`__tests__/hooks/useActiveWorkoutPlan.test.ts`).
+    - Export only what a screen, hook or test imports: Knip (`knip.jsonc`, `exports: error`) fails `validate` on an unused export, such as an API function or query key added ahead of its caller. Then run the commands in 9.5.
+
+### 9.3 Templates
+
+Names marked NEW (`ThingDetail`, `ThingLog`, `useThing`, `useSaveThing`, the `thing.*` keys) are yours to create; every other import is real. Both files type-check against the package `tsconfig.json` once those exist.
+
+Pushed detail screen:
+
+```tsx
+import React from 'react';
+import { useTranslation } from 'react-i18next';
+import { ScrollView, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { useActiveWorkoutBarPadding } from '../components/ActiveWorkoutBar';
+import StatusView from '../components/StatusView';
+import { useScreenHeader } from '../hooks/useScreenHeader';
+import { useServerConnection } from '../hooks/useServerConnection';
+import { useThing } from '../hooks/useThing'; // NEW: useQuery + useRefetchOnFocus
+import { useNativeIOSHeadersActive } from '../services/nativeTabBarPreference';
+import type { RootStackScreenProps } from '../types/navigation';
+
+type Props = RootStackScreenProps<'ThingDetail'>; // NEW route
+
+const ThingDetailScreen: React.FC<Props> = ({ navigation, route }) => {
+  const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+  const usesNativeHeader = useNativeIOSHeadersActive();
+  const activeWorkoutBarPadding = useActiveWorkoutBarPadding('stack');
+  const { isConnected, isLoading: isConnectionLoading } = useServerConnection();
+  const { thing, isLoading, isError, refetch } = useThing(
+    route.params.thingId,
+    {
+      enabled: isConnected,
+    }
+  );
+  const header = useScreenHeader({
+    title: t('thing.title', { defaultValue: 'Thing' }),
+    left: { kind: 'back' }, // the Stack.Screen options need headerBackTitle
+  });
+
+  const renderContent = () => {
+    if (!isConnectionLoading && !isConnected) {
+      return (
+        <StatusView
+          icon="cloud-offline"
+          iconTone="muted"
+          iconSize={64}
+          title={t('thing.offline', { defaultValue: 'No server connection' })}
+          action={{
+            label: t('common.goToSettings', { defaultValue: 'Go to Settings' }),
+            onPress: () => navigation.navigate('Tabs', { screen: 'Settings' }),
+            variant: 'primary',
+          }}
+        />
+      );
+    }
+    if (isLoading || isConnectionLoading) return <StatusView loading />;
+    if (isError) {
+      return (
+        <StatusView
+          icon="alert-circle"
+          iconTone="danger"
+          iconSize={64}
+          title={t('thing.loadFailed', { defaultValue: 'Could not load' })}
+          action={{
+            label: t('common.retry', { defaultValue: 'Retry' }),
+            onPress: () => void refetch(),
+            variant: 'primary',
+          }}
+        />
+      );
+    }
+    if (!thing) {
+      return (
+        <StatusView
+          icon="help-circle"
+          iconTone="muted"
+          iconSize={64}
+          title={t('thing.notFound', { defaultValue: 'Not found' })}
+        />
+      );
+    }
+    return (
+      <ScrollView
+        contentContainerStyle={{
+          padding: 16,
+          paddingBottom: insets.bottom + 80 + activeWorkoutBarPadding,
+        }}
+        contentInsetAdjustmentBehavior={
+          usesNativeHeader ? 'automatic' : 'never'
+        }
+      >
+        {/* cards: bg-surface rounded-xl p-4 mb-3 shadow-sm (section 4) */}
+      </ScrollView>
+    );
+  };
+
+  return (
+    <View
+      className="flex-1 bg-background"
+      style={usesNativeHeader ? undefined : { paddingTop: insets.top }}
+    >
+      {header}
+      {renderContent()}
+    </View>
+  );
+};
+
+export default ThingDetailScreen;
+```
+
+Modal form with a footer Save (register with `presentation: 'modal'`, and add the route to `HIDDEN_ROUTES`):
+
+```tsx
+import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Platform, Text, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { FooterSaveBar } from '../components/FormScreenChrome';
+import FormInput from '../components/FormInput';
+import { useScreenHeader } from '../hooks/useScreenHeader';
+import { useSaveThing } from '../hooks/useThing'; // NEW: useMutation that invalidates
+import { useNativeIOSHeadersActive } from '../services/nativeTabBarPreference';
+import type { RootStackScreenProps } from '../types/navigation';
+
+type Props = RootStackScreenProps<'ThingLog'>; // NEW route, presentation: 'modal'
+
+const ThingLogScreen: React.FC<Props> = ({ navigation }) => {
+  const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+  const usesNativeHeader = useNativeIOSHeadersActive();
+  const { mutate, isPending } = useSaveThing();
+  const [name, setName] = useState('');
+  const save = () => mutate({ name }, { onSuccess: () => navigation.goBack() });
+  const header = useScreenHeader({
+    title: t('thing.logTitle', { defaultValue: 'Log thing' }),
+    left: {
+      kind: 'dismiss',
+      onPress: () => navigation.goBack(),
+      disabled: isPending,
+    },
+    // The one primary; native-only because FooterSaveBar is the custom-path Save
+    right: {
+      kind: 'primary',
+      placement: 'native-only',
+      busy: isPending,
+      onPress: save,
+    },
+  });
+
+  return (
+    <View
+      className="flex-1 bg-background"
+      // Modal: Android only, an iOS modal already starts below the status bar
+      style={Platform.OS === 'android' ? { paddingTop: insets.top } : undefined}
+    >
+      {header}
+      <KeyboardAwareScrollView
+        className="flex-1"
+        contentContainerClassName="px-4 pt-4 pb-20 gap-4"
+        keyboardShouldPersistTaps="handled"
+        bottomOffset={80}
+      >
+        <View>
+          <Text className="text-sm font-medium text-text-secondary mb-1">
+            {t('thing.name', { defaultValue: 'Name' })}
+          </Text>
+          <FormInput value={name} onChangeText={setName} />
+        </View>
+      </KeyboardAwareScrollView>
+      {!usesNativeHeader && <FooterSaveBar onPress={save} busy={isPending} />}
+    </View>
+  );
+};
+
+export default ThingLogScreen;
+```
+
+Variants:
+
+- Save in the top bar on every path: wrap the fields in `FormScreenChrome` (`src/components/FormScreenChrome.tsx`; props `title`, `saveLabel`, `savingLabel`, `isSaving`, `onSave`, `onCancel`, optional `headerAction` and `keyboardAccessory`). It supplies the header, the Android-only inset and the scroll view; never put a `FooterSaveBar` inside it. Use it only for `presentation: 'modal'` routes, because its left item is a dismiss X and it pads the top inset on Android only: copy `ExerciseFormScreen` or `WorkoutPresetFormScreen`, not the pushed `GoalsScreen` or `WeeklyGoalPlanEditScreen` (9.1 drift).
+- Pushed form (edit from a detail screen, or a goals or settings form): `left: { kind: 'back', disabled: isSaving }`, `right: { kind: 'primary', placement: 'native-only', busy: isSaving, onPress: save }`, the pushed top-inset rule, `{!usesNativeHeader && <FooterSaveBar onPress={save} busy={isSaving} />}`, `headerBackTitle` in the route options and the route in `HIDDEN_ROUTES`, as in `src/screens/CustomNutrientFormScreen.tsx` (which is itself missing from `HIDDEN_ROUTES`).
+- List: replace the `ScrollView` with a `FlatList` and move the empty state into `ListEmptyComponent` (`src/screens/MealsLibraryScreen.tsx`).
+
+### 9.4 Extending instead of creating
+
+- **Dashboard card.** Add the key to `DASHBOARD_CARD_KEYS` and entries to `DASHBOARD_CARD_TITLES` and `DASHBOARD_CARD_SUBTITLES` in `src/constants/dashboardCards.ts` (keys `dashboardSettings.<key>` and `dashboardSettings.<key>Subtitle`). Add a `<key>CardVisible` flag to `src/stores/appPreferencesStore.ts` in five places: `PREFERENCE_DEFAULTS`, `AppPreferencesData`, the setter type in `AppPreferencesState`, the setter inside `persist`, and `partialize` (forgetting `partialize` compiles but resets the toggle every launch).
+  - Wire it in `DashboardSettingsScreen.tsx` (selectors, `cardVisibilityMap`, a `case` in `setCardVisibility`) and `DashboardScreen.tsx` (a `case` in the `orderedDashboardCards` switch returning `<NewCard key="newCard" … />` when visible, and its root query key in `onRefresh`). Neither switch is exhaustive, so a missing `case` compiles and silently does nothing.
+  - The card: `bg-surface rounded-xl p-4 mb-3 shadow-sm`, a `font-bold text-text-secondary` title with no size class, an optional `text-accent-primary font-medium` "Details" link with a 14px `chevron-forward`, and its query gated on the visibility flag through `enabled`. Copy the shell, title row, `enabled` gating and hook from `src/components/TrainingLoadDashboardCard.tsx` and `src/hooks/useTrainingLoad.ts`, but not its `STATUS_COLOR`: it puts the ink tokens `text-text-success`, `text-text-warning` and `text-text-danger-subtle` on a card with no wash, where they read near-white in Dark and AMOLED. Standalone status text uses `text-icon-success`, `text-icon-warning` and `text-icon-danger`. A trend graph usually belongs in Health Trends instead (`HEALTH_TREND_KEYS` in `src/constants/healthTrends.ts`).
+- **Diary section.** There is no registry: insert the component at its place in the non-empty branch of `src/screens/DiaryScreen.tsx`, keep its query in `DiaryScreen` keyed on `selectedDate` and pass data as props, add its refetch to `onRefresh`, and add it to `isDayEmpty` (gated on its loading flag) when it holds something the user recorded. Layout: an `mb-2` wrapper, a `flex-row items-center gap-2 mb-2 px-1` title row with `text-base font-bold text-text-secondary flex-1`, then the card; with no data, return null or show the "Tap to add" prompt (`src/components/CheckInPhotosSummary.tsx`).
+- **Settings row or subscreen.** A row is a `SettingsRow` inside an existing `SettingsRowGroup` in `src/screens/SettingsScreen.tsx` (inside `SectionErrorBoundary`; server-backed rows inside `{isConnected && (...)}`), with `iconColor` from the screen's category-color variables and `onPress={() => navigation.navigate('NewSettings')}`. A toggle is `rightAccessory={<Switch value={…} onValueChange={…} accessibilityLabel={…} />}`. A subscreen copies `src/screens/DiarySettingsScreen.tsx` and is wired as a pushed screen (9.2 steps 1–3) with `headerBackTitle: t('navigation.settings', { defaultValue: 'Settings' })`.
+- **AddSheet entry.** Add `onAddX?: () => void` to `AddSheetProps` in `src/components/AddSheet.tsx` and render it as `{onAddX ? renderSecondaryRow(t('addSheet.x', { defaultValue: '…' }), 'icon-name', onAddX) : null}` before the Ask Sparky row, as the Mood and Mindfulness rows do (`renderSecondaryRow` takes a required `() => void`, so an unguarded optional prop fails typecheck). The row goes through `handleAction`, which closes the sheet first, so never call the handler directly. The 2x2 grid is fixed at four tiles. Add `handleAddX` to `src/hooks/useAddSheetActions.ts` (`navigateFromSheet('XLog', { date: getActiveDiaryDate() })`), pass it from `App.tsx`, and test it like the Mood row in `__tests__/components/AddSheet.test.tsx`.
+- **Icon.** Add `name: { sf: '…', ion: '…-outline' }` to `ICON_MAP` in `src/components/Icon.tsx` under its comment group, with `useIoniconOnIOS: true` when no SF Symbol fits. `sf` is type-checked; `ion` is not, so confirm the name exists in `node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/glyphmaps/Ionicons.json` (a wrong one renders "?" on Android). Update the icon counts in sections 1 and 6.
+- **Color token.** Add `--color-<name>: hsl(…);` to all three blocks in `global.css` (`@variant light`, `dark`, `amoled`; AMOLED does not inherit Dark). Use the generated class (`bg-<name>`, `text-<name>`, `border-<name>`) where `className` works, `useCSSVariable('--color-<name>')` elsewhere and `withAlpha` (`src/utils/colors.ts`) for alpha. In the same change, add a row to the matching section 2 table, bump the token count in the AMOLED differences line, and add an AMOLED row if that value differs from Dark.
+
+### 9.5 Pre-PR checklist
+
+- [ ] Light, Dark and AMOLED all read correctly, on Android and on iOS (on iOS 26+, with Liquid Glass navigation on and off).
+- [ ] Nothing clips or scrolls sideways at 360pt width or with a large OS text size; labels in rows, tiles and buttons stay on one line.
+- [ ] Content clears the home indicator, the keyboard and a live active-workout bar.
+- [ ] Offline, loading, error, not-found and empty states render, and pull to refresh works where offered.
+- [ ] On Android, hardware Back with any sheet open closes the sheet, not the screen.
+- [ ] At most one primary action, and Save appears once on each header path.
+- [ ] No hex, palette classes, `dark:`, `text-md` or other undefined classes; every `Icon` has a token color.
+- [ ] Every string goes through `t()` with a matching English entry; icon-only buttons have labels.
+- [ ] Mutations invalidate every affected query key.
+- [ ] From `SparkyFitnessMobile/`: `pnpm run format`, then `pnpm exec jest --watchman=false --runInBand __tests__/navigation/nativeHeaderContract.test.ts <your test files>`, then `pnpm run validate` (typecheck, lint, i18n audit, Knip, Prettier check), then the full `pnpm exec jest --watchman=false --runInBand`.
+- [ ] DESIGN.md is updated in the same change when a token, primitive or shared pattern changes; `AGENTS.md` when a route family or convention is added.

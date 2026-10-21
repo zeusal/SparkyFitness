@@ -1,0 +1,14 @@
+{
+  "name": "sparkyfitness-design-system-figma",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit -p .",
+    "build": "esbuild src/main.ts --bundle --outfile=code.js --target=es2017 --format=iife"
+  },
+  "dependencies": {
+    "@figma/plugin-typings": "^1.142.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
+  }
+}

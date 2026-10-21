@@ -1,0 +1,101 @@
+{
+ "en": {
+  "insert_after_line": 4,
+  "section": [
+   "## Updates since the analysis (2026-10-21)",
+   "",
+   "The analysis below reflects `main` @ `5364674f` and is left as it was. Rows that later work changes carry a note under them, labelled with the merged PR that changed them (**Updated in PR …** or **Partly covered by PR …**), or **Still open** for work that was planned and has not been done. In the CSV the same notes are in two extra columns, `update_status` and `update_notes`. The counts in sections 0 to 3 are not recalculated.",
+   "",
+   "The three PRs below are merged into `main` and ship in v1.9.0:",
+   "",
+   "- **[PR #2989](https://github.com/CodeWithCJ/SparkyFitness/pull/2989), Android quick access** (closes [#2988](https://github.com/CodeWithCJ/SparkyFitness/issues/2988)):",
+   "  - App icon quick actions: Scan food, Log food and Fasting join the native Log water shortcut, which is put back after the others register and no longer brings the app to the front. Its label now comes from the app's translatable strings. Only the quick actions the app registers run, so another app cannot trigger one through the app's main screen.",
+   "  - Quick Settings tiles, the counterpart of the iOS Control Center controls: Log water (in the background, also from the lock screen, with the result in the notification list), Scan barcode, Search food, and Calories left (opens the diary through the new `sparkyfitnessmobile://diary` link). Start fast, End fast and Remove water have no tile.",
+   "  - A shortcut or link no longer reopens its screen when Android restores a killed app.",
+   "  - The Android widgets follow the app language instead of falling back to English for every language but Polish.",
+   "- **[PR #3020](https://github.com/CodeWithCJ/SparkyFitness/pull/3020), Android water widget** (closes [#1815](https://github.com/CodeWithCJ/SparkyFitness/issues/1815)): a 2x2 home-screen widget with today's water against the goal and − / + buttons that remove or add a drink without opening the app, like the iOS water widget. It has no Lock Screen version.",
+   "- **[PR #3021](https://github.com/CodeWithCJ/SparkyFitness/pull/3021):** the calorie and macro widgets' midnight refresh keeps going after a failed redraw. Nothing visible changes.",
+   "- **Still open:** consumed and burned on the Android calories widget, and more sizes or resizing for the calories and macros widgets ([#2050](https://github.com/CodeWithCJ/SparkyFitness/issues/2050)). Lock-screen widgets, Siri/Shortcuts and the Remove water, Start fast and End fast controls stay iOS-only.",
+   ""
+  ],
+  "anchors": [
+   {
+    "line": "  - Water widget with +/−, lock-screen widgets, Control Center controls (iOS 18+) and Siri/Shortcuts (water, fasting, weight).",
+    "label": "Partly covered by PRs #2989 and #3020 (merged)",
+    "text": "Android now has the water widget with − / + (PR #3020) and four Quick Settings tiles as the counterpart of the Control Center controls: Log water, Scan barcode, Search food and Calories left (PR #2989). Still iOS-only: lock-screen widgets, Siri/Shortcuts, and the Remove water, Start fast and End fast controls.",
+    "html_anchor": "Control Center controls (iOS 18+) and Siri/Shortcuts (water, fasting, weight)."
+   },
+   {
+    "line": "  - Four home-screen quick actions, versus one on Android.",
+    "label": "Updated in PR #2989 (merged)",
+    "text": "Android now has the same four: Scan food, Log food and Fasting, plus the native Log water shortcut, which logs without opening the app.",
+    "html_anchor": "Four home-screen quick actions, versus one on Android."
+   },
+   {
+    "line": "- Android's **\"Log water\"** launcher shortcut has a hard-coded English label, and the **Siri** phrases are English only.",
+    "label": "Updated in PR #2989 (merged)",
+    "text": "the shortcut's label now comes from the app's translatable strings and is translated into several languages (Spanish, German and French among them); its longer description, \"Log water without opening the app\", is still English only. The Siri phrases are unchanged.",
+    "html_anchor": "phrases are English only."
+   }
+  ]
+ },
+ "es": {
+  "insert_after_line": 4,
+  "section": [
+   "## Actualizaciones posteriores al análisis (21-10-2026)",
+   "",
+   "El análisis de abajo refleja `main` @ `5364674f` y se deja tal cual. Las filas que cambia el trabajo posterior llevan una nota debajo, con la PR fusionada que las cambió (**Actualizado en la PR …** o **Cubierto en parte por la PR …**), o **Sigue pendiente** si lo previsto no se ha hecho. En el CSV las mismas notas están en dos columnas más, `estado_actualizacion` y `notas_actualizacion`. Las cifras de las secciones 0 a 3 no se recalculan.",
+   "",
+   "Las tres PR siguientes están fusionadas en `main` y salen en la versión v1.9.0:",
+   "",
+   "- **[PR #2989](https://github.com/CodeWithCJ/SparkyFitness/pull/2989), acceso rápido en Android** (cierra [#2988](https://github.com/CodeWithCJ/SparkyFitness/issues/2988)):",
+   "  - Acciones rápidas del icono: Escanear comida, Registrar comida y Ayuno se suman al atajo nativo Registrar agua, que se vuelve a publicar después de las demás y ya no trae la app al frente. Su etiqueta sale ahora de las cadenas traducibles de la app. Solo se ejecutan las acciones rápidas que registra la app, así que otra app no puede lanzar ninguna a través de la pantalla principal.",
+   "  - Baldosas de Ajustes rápidos, el equivalente de los controles del Centro de control de iOS: Registrar agua (en segundo plano, también desde la pantalla de bloqueo, con el resultado en la lista de notificaciones), Escanear código de barras, Buscar comida y Calorías restantes (abre el diario con el nuevo enlace `sparkyfitnessmobile://diary`). Iniciar ayuno, Terminar ayuno y Quitar agua no tienen baldosa.",
+   "  - Un atajo o enlace ya no vuelve a abrir su pantalla cuando Android restaura la app después de cerrarla.",
+   "  - Los widgets de Android siguen el idioma de la app en vez de quedarse en inglés en todos los idiomas salvo el polaco.",
+   "- **[PR #3020](https://github.com/CodeWithCJ/SparkyFitness/pull/3020), widget de agua en Android** (cierra [#1815](https://github.com/CodeWithCJ/SparkyFitness/issues/1815)): un widget de 2x2 para la pantalla de inicio con el agua del día frente al objetivo y botones − / + que quitan o añaden un vaso sin abrir la app, como el widget de agua de iOS. No tiene versión para la pantalla de bloqueo.",
+   "- **[PR #3021](https://github.com/CodeWithCJ/SparkyFitness/pull/3021):** el refresco de medianoche de los widgets de calorías y macros sigue funcionando aunque falle un redibujado. No cambia nada visible.",
+   "- **Sigue pendiente:** consumidas y quemadas en el widget de calorías de Android, y más tamaños o poder redimensionar los widgets de calorías y macros ([#2050](https://github.com/CodeWithCJ/SparkyFitness/issues/2050)). Los widgets de pantalla de bloqueo, Siri/Atajos y los controles Quitar agua, Iniciar ayuno y Terminar ayuno siguen siendo solo de iOS.",
+   ""
+  ],
+  "anchors": [
+   {
+    "line": "  - Widget de agua con +/−, widgets de pantalla de bloqueo, Controles del Centro de Control (iOS 18+) y Siri/Atajos (agua, ayuno, peso).",
+    "label": "Cubierto en parte por las PR #2989 y #3020 (fusionadas)",
+    "text": "Android tiene ya el widget de agua con − / + (PR #3020) y cuatro baldosas de Ajustes rápidos como equivalente de los controles del Centro de control: Registrar agua, Escanear código de barras, Buscar comida y Calorías restantes (PR #2989). Siguen siendo solo de iOS los widgets de pantalla de bloqueo, Siri/Atajos y los controles Quitar agua, Iniciar ayuno y Terminar ayuno."
+   },
+   {
+    "line": "  - Cuatro accesos rápidos en el icono, frente a uno en Android.",
+    "label": "Actualizado en la PR #2989 (fusionada)",
+    "text": "Android tiene ya los mismos cuatro: Escanear comida, Registrar comida y Ayuno, más el atajo nativo Registrar agua, que registra sin abrir la app."
+   },
+   {
+    "line": "- El atajo de lanzador **«Log water»** de Android tiene la etiqueta fija en inglés, y las frases de **Siri** solo están en inglés.",
+    "label": "Actualizado en la PR #2989 (fusionada)",
+    "text": "la etiqueta del atajo sale ahora de las cadenas traducibles de la app y ya está traducida a varios idiomas (entre ellos español, alemán y francés); su descripción larga, «Log water without opening the app», sigue solo en inglés. Las frases de Siri no cambian."
+   }
+  ]
+ },
+ "page": {
+  "date_label": "21 Oct 2026",
+  "lede_html": "<strong>Update, 21 Oct 2026:</strong> rows changed by <a href=\"https://github.com/CodeWithCJ/SparkyFitness/pull/2989\">PR #2989</a> (Android quick access), <a href=\"https://github.com/CodeWithCJ/SparkyFitness/pull/3020\">PR #3020</a> (Android water widget) or <a href=\"https://github.com/CodeWithCJ/SparkyFitness/pull/3021\">PR #3021</a> (widget midnight refresh), all merged and in v1.9.0, carry a note, and so do the planned widget items that are still open. List them with the <em>Updates</em> filter, and pick <em>Everything</em> under domains to include the iOS/Android sweep rows. The counts are still those of the original audit.",
+  "filters": [
+   {
+    "value": "2989",
+    "label": "Changed by PR #2989"
+   },
+   {
+    "value": "3020",
+    "label": "Changed by PR #3020"
+   },
+   {
+    "value": "3021",
+    "label": "Changed by PR #3021"
+   },
+   {
+    "value": "open",
+    "label": "Still open"
+   }
+  ]
+ }
+}

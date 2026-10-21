@@ -1,0 +1,248 @@
+[
+ {
+  "id": "native-ios-quick-actions",
+  "status": "done_pr1",
+  "note_en": "Android now has these app icon actions too: Scan food, Log food and Fasting through expo-quick-actions, and Log water as the native shortcut, which logs without opening the app. The feature is no longer iOS-only, although the Android Log water result messages are still in English only.",
+  "note_es": "Android ya tiene también estas acciones rápidas del icono: Escanear comida, Registrar comida y Ayuno mediante expo-quick-actions, y Registrar agua como atajo nativo, que registra sin abrir la app. La funcionalidad deja de ser solo iOS, aunque los mensajes de resultado de Registrar agua en Android siguen solo en inglés."
+ },
+ {
+  "id": "plat-native-quick-actions",
+  "status": "done_pr1",
+  "note_en": "Android now offers the same four actions: Scan food, Log food and Fasting through expo-quick-actions, plus the native Log water shortcut, whose label now uses the same translatable quickActions strings as iOS instead of fixed native text (so far only the English catalog has them, on both platforms). Log water still works differently: Android logs it in the background without opening the app and reports with an English-only Toast that only shows while the app's notifications are on, while iOS opens the app and logs from JS.",
+  "note_es": "Android ofrece ya las mismas cuatro acciones: Escanear comida, Registrar comida y Ayuno con expo-quick-actions, más el atajo nativo Registrar agua, cuya etiqueta usa ahora las mismas cadenas traducibles quickActions que iOS en vez de un texto nativo fijo (de momento solo están en el catálogo en inglés, en ambas plataformas). Registrar agua sigue funcionando distinto: Android lo registra en segundo plano sin abrir la app y avisa con un Toast solo en inglés que solo se ve con las notificaciones de la app activadas, mientras que iOS abre la app y registra desde JS."
+ },
+ {
+  "id": "plat-screens-quick-actions",
+  "status": "done_pr1",
+  "note_en": "Android now registers Scan food, Log food and Fasting through the same useQuickActions hook (mounted by QuickActionsGate in App.tsx), and they open the same screens as on iOS. Log water stays the native shortcut, now with a translatable label, which logs in the background without opening the app and reports in English only; the new withQuickActionLaunchGuard plugin also stops a shortcut's screen from opening again when Android restores the app after killing it.",
+  "note_es": "Android registra ya Escanear comida, Registrar comida y Ayuno con el mismo hook useQuickActions (montado por QuickActionsGate en App.tsx), y abren las mismas pantallas que en iOS. Registrar agua sigue siendo el atajo nativo, ahora con etiqueta traducible, que registra en segundo plano sin abrir la app y avisa solo en inglés; además, el nuevo plugin withQuickActionLaunchGuard evita que la pantalla del atajo se vuelva a abrir sola cuando Android restaura la app después de que el sistema la cerrara en segundo plano."
+ },
+ {
+  "id": "plat-services-quick-actions-home",
+  "status": "done_pr1",
+  "note_en": "useQuickActions no longer returns early on Android: it registers Scan food, Log food and Fasting with expo-quick-actions, then republishes the native Log water shortcut (refreshBackgroundWaterShortcut, then refreshShortcut), because registering the actions replaces every dynamic shortcut. Log water still works differently: Android logs it with WorkManager without opening the app, while iOS opens the app and runs logWaterDrink.",
+  "note_es": "useQuickActions ya no sale antes de tiempo en Android: registra Escanear comida, Registrar comida y Ayuno con expo-quick-actions y después vuelve a publicar el atajo nativo Registrar agua (refreshBackgroundWaterShortcut y luego refreshShortcut), porque al registrar las acciones se sustituye toda la lista de atajos dinámicos. Registrar agua sigue funcionando de otra forma: Android lo registra con WorkManager sin abrir la app, mientras que iOS abre la app y ejecuta logWaterDrink."
+ },
+ {
+  "id": "checkin-fasting-quick-action",
+  "status": "done_pr1",
+  "note_en": "Android now also shows 'Fasting' when you long-press the app icon (expo-quick-actions, with its own adaptive icon), and it opens the fasting detail as on iOS.",
+  "note_es": "Android también muestra ya 'Ayuno' al mantener pulsado el icono de la app (expo-quick-actions, con su propio icono adaptativo), y abre el detalle de ayuno igual que en iOS."
+ },
+ {
+  "id": "diary-quick-actions-food",
+  "status": "done_pr1",
+  "note_en": "Android now has Scan food and Log food among the app icon actions, plus Scan barcode and Search food Quick Settings tiles that open the same screens and serve as the counterpart of the iOS Control Center controls. The iOS Action button, which can also run these controls, still has no Android equivalent.",
+  "note_es": "Android tiene ya Escanear comida y Registrar comida entre las acciones rápidas del icono, además de las baldosas de Ajustes rápidos Escanear código de barras y Buscar comida, que abren las mismas pantallas y hacen de equivalente a los controles del Centro de control de iOS. El botón de Acción de iOS, que también puede lanzar estos controles, sigue sin equivalente en Android."
+ },
+ {
+  "id": "native-android-water-shortcut",
+  "status": "done_pr1",
+  "note_en": "The label now uses the app's translatable quickActions strings through refreshShortcut (so far only the English catalog has them), and the shortcut is published again after the new expo-quick-actions items replace the dynamic list; it no longer brings the app to the front (it has its own taskAffinity), and Scan food, Log food and Fasting now sit beside it. The result Toast is still English-only and only shows while the app's notifications are on (on HyperOS, its floating notifications too).",
+  "note_es": "La etiqueta usa ahora las cadenas traducibles quickActions de la app mediante refreshShortcut (de momento solo están en el catálogo en inglés), y el atajo se vuelve a publicar después de que las nuevas acciones de expo-quick-actions sustituyan la lista dinámica; ya no trae la app al frente (tiene su propio taskAffinity) y a su lado aparecen ahora Escanear comida, Registrar comida y Ayuno. El Toast de resultado sigue solo en inglés y solo se ve con las notificaciones de la app activadas (en HyperOS, también las flotantes)."
+ },
+ {
+  "id": "native-ios-controls",
+  "status": "partial_pr1",
+  "note_en": "Android now has four Quick Settings tiles as counterparts: Log water (logs a drink in the background, also from the lock screen), Scan barcode, Search food and Calories left (today's kcal left; opens the diary). Remove water, Start fast and End fast still have no Android equivalent, and the Log water tile does not show the day's total like the iOS control.",
+  "note_es": "Android tiene ahora cuatro baldosas de Ajustes rápidos equivalentes: Registrar agua (registra una toma en segundo plano, también desde la pantalla de bloqueo), Escanear código de barras, Buscar comida y Calorías restantes (kcal restantes de hoy; abre el diario). Quitar agua, Iniciar ayuno y Terminar ayuno siguen sin equivalente en Android, y la baldosa Registrar agua no muestra el total del día como el control de iOS."
+ },
+ {
+  "id": "plat-native-control-center",
+  "status": "partial_pr1",
+  "note_en": "Android gets four Quick Settings tiles: Log water, Scan barcode, Search food and Calories left (shows today's kcal left and opens the diary). Still iOS-only: Remove water, Start fast and End fast, the water amount on the Log water control, and the Action button.",
+  "note_es": "Android incorpora cuatro baldosas de Ajustes rápidos: Registrar agua, Escanear código de barras, Buscar comida y Calorías restantes (muestra las kcal restantes de hoy y abre el diario). Siguen siendo solo de iOS Quitar agua, Iniciar ayuno y Terminar ayuno, la cantidad de agua en el control Registrar agua y el botón Acción."
+ },
+ {
+  "id": "plat-screens-control-center-handoff",
+  "status": "done_pr1",
+  "note_en": "The Android Scan barcode, Search food and Calories left Quick Settings tiles open the scanner, food search and diary, asking to unlock first on the lock screen. They use sparkyfitnessmobile:// links (including the new diary link) instead of the app-group handoff, which stays iOS-only.",
+  "note_es": "Las baldosas de Ajustes rápidos de Android Escanear código de barras, Buscar comida y Calorías restantes abren el escáner, la búsqueda de comida y el diario, y en la pantalla de bloqueo piden desbloquear antes. Usan enlaces sparkyfitnessmobile:// (incluido el nuevo enlace al diario) en lugar del traspaso por app group, que sigue siendo solo de iOS."
+ },
+ {
+  "id": "missed-plat-screens-control-center-background",
+  "status": "partial_pr1",
+  "note_en": "Android now has a Log water Quick Settings tile that logs a drink without opening the app, also from the lock screen, and puts the result in the notification list. Remove water, Start fast and End fast still have no Android tile.",
+  "note_es": "Android tiene ahora una baldosa de Ajustes rápidos Registrar agua que registra una toma sin abrir la app, también desde la pantalla de bloqueo, y deja el resultado en la lista de notificaciones. Quitar agua, Iniciar ayuno y Terminar ayuno siguen sin baldosa en Android."
+ },
+ {
+  "id": "plat-services-control-center-controls",
+  "status": "partial_pr1",
+  "note_en": "Android now has Quick Settings tiles for Calories left, Log water, Scan barcode and Search food; Calories left reads the calorie widget snapshot each time the panel opens, and Scan barcode, Search food and Calories left open their screens through sparkyfitnessmobile:// links rather than the App Group handoff. Remove water, Start fast and End fast have no tile, and the Log water tile does not show the day's water total.",
+  "note_es": "Android tiene ahora baldosas de Ajustes rápidos para Calorías restantes, Registrar agua, Escanear código de barras y Buscar comida; Calorías restantes lee la instantánea del widget de calorías cada vez que se abre el panel, y Escanear código de barras, Buscar comida y Calorías restantes abren sus pantallas con enlaces sparkyfitnessmobile:// en lugar del traspaso por App Group. Quitar agua, Iniciar ayuno y Terminar ayuno no tienen baldosa, y la baldosa Registrar agua no muestra el total de agua del día."
+ },
+ {
+  "id": "checkin-fasting-ios-controls-siri",
+  "status": "none",
+  "note_en": "",
+  "note_es": ""
+ },
+ {
+  "id": "missed-integrations-os-shortcuts",
+  "status": "partial_pr1",
+  "note_en": "Android adds Scan food, Log food and Fasting app icon shortcuts (they open the app) and Quick Settings tiles, where Log water logs a drink in the background, also from the lock screen; the Log water shortcut now has a translatable label (English only so far) and no longer brings the app to the front. Siri/Shortcuts App Intents (log or remove water, log weight, start or end a fast) still have no Android equivalent.",
+  "note_es": "Android añade las acciones rápidas del icono Escanear comida, Registrar comida y Ayuno (abren la app) y baldosas de Ajustes rápidos, entre ellas Registrar agua, que registra una toma en segundo plano también desde la pantalla de bloqueo; el atajo Registrar agua tiene ahora una etiqueta traducible (de momento solo en inglés) y ya no trae la app al frente. Las App Intents de Siri/Atajos (registrar o quitar agua, registrar peso, empezar o terminar ayuno) siguen sin equivalente en Android."
+ },
+ {
+  "id": "diary-water-external-log",
+  "status": "partial_pr1_planned_pr2",
+  "note_en": "Android now also has a Log water Quick Settings tile that logs a drink in the background, also from the lock screen, and the launcher 'Log water' shortcut no longer brings the app to the front. The planned widgets PR would add an Android water widget with − / + buttons; Siri/Shortcuts, the Action button, the Remove water control and lock-screen water widgets would stay iOS-only.",
+  "note_es": "Android tiene ahora también una baldosa de Ajustes rápidos 'Log water' que registra una bebida en segundo plano, también desde la pantalla de bloqueo, y el atajo 'Log water' del lanzador ya no trae la app al frente. La PR de widgets prevista añadiría en Android un widget de agua con botones − / +; Siri/Atajos, el botón de Acción, el control 'Remove water' y los widgets de agua de la pantalla de bloqueo seguirían siendo solo de iOS."
+ },
+ {
+  "id": "native-siri-shortcuts",
+  "status": "none",
+  "note_en": "",
+  "note_es": ""
+ },
+ {
+  "id": "plat-native-siri-shortcuts",
+  "status": "partial_pr1",
+  "note_en": "Besides the launcher 'Log water' shortcut, Android now has a Log water Quick Settings tile that logs a drink in the background, also from the lock screen; the new Fasting app icon shortcut only opens the fasting screen. Android still has no voice, Shortcuts app or Action button equivalent, and no way to log weight or start or end a fast without opening the app.",
+  "note_es": "Además del atajo 'Log water' del lanzador, Android tiene ahora una baldosa de Ajustes rápidos 'Log water' que registra una bebida en segundo plano, también desde la pantalla de bloqueo; la nueva acción rápida del icono 'Fasting' solo abre la pantalla de ayuno. Android sigue sin equivalente a la voz, la app Atajos o el botón de Acción, y sin forma de registrar el peso ni de iniciar o terminar un ayuno sin abrir la app."
+ },
+ {
+  "id": "missed-plat-screens-siri-shortcuts",
+  "status": "partial_pr1",
+  "note_en": "The launcher 'Log water' shortcut is no longer Android's only action that works without opening the app: the new Log water Quick Settings tile does the same, also from the lock screen. Android still has no Google Assistant or voice integration and no background weight or fasting actions.",
+  "note_es": "El atajo 'Log water' del icono ya no es la única acción de Android que funciona sin abrir la app: la nueva baldosa de Ajustes rápidos 'Log water' hace lo mismo, también desde la pantalla de bloqueo. Android sigue sin integración con Google Assistant ni voz, y sin acciones de peso o ayuno en segundo plano."
+ },
+ {
+  "id": "missed-plat-services-siri-shortcuts",
+  "status": "partial_pr1",
+  "note_en": "On Android the background Log water job now also backs a Quick Settings tile, and the launcher shortcut takes its label from the app's strings (English only so far) and is re-published after the other app icon shortcuts, so the cited code in BackgroundWaterModule.kt now spans about lines 21-76. There are still no weight or fasting actions without opening the app, and no Google Assistant integration.",
+  "note_es": "En Android, el mismo registro de agua en segundo plano lo usa ahora también una baldosa de Ajustes rápidos, y el atajo del lanzador toma su texto de las cadenas de la app (de momento solo en inglés) y se vuelve a publicar tras las demás acciones rápidas del icono, así que el código citado de BackgroundWaterModule.kt ocupa ahora aproximadamente las líneas 21-76. Sigue sin haber acciones de peso o ayuno sin abrir la app, ni integración con Google Assistant."
+ },
+ {
+  "id": "checkin-siri-log-weight",
+  "status": "none",
+  "note_en": "",
+  "note_es": ""
+ },
+ {
+  "id": "native-deep-links",
+  "status": "done_pr1",
+  "note_en": "Adds the 'diary' route (sparkyfitnessmobile://diary), opened by the Android Calories left Quick Settings tile; the Scan barcode and Search food tiles reuse scan and search. On Android only, a link or shortcut that started the app no longer reopens its screen when the system restores a killed app (withQuickActionLaunchGuard).",
+  "note_es": "Añade la ruta 'diary' (sparkyfitnessmobile://diary), con la que la baldosa de Ajustes rápidos 'Calories left' de Android abre el diario; las baldosas 'Scan barcode' y 'Search food' reutilizan scan y search. Solo en Android, un enlace o atajo que abrió la app ya no vuelve a abrir su pantalla cuando Android la restaura después de que el sistema la haya cerrado en segundo plano (withQuickActionLaunchGuard)."
+ },
+ {
+  "id": "diary-home-widgets",
+  "status": "partial_pr1_planned_pr2",
+  "note_en": "PR #2989 adds four Android Quick Settings tiles as the counterpart of the iOS controls (Log water, Scan barcode, Search food, and Calories left with today's kcal left in its label, also on the lock screen), without Start fast, End fast or Remove water. The widgets PR plans an interactive water widget, consumed and burned on the calories widget, and more sizes or resizing for the calories and macros widgets; Lock Screen widget families will stay iOS-only.",
+  "note_es": "La PR #2989 añade en Android cuatro baldosas de Ajustes rápidos como equivalente de los controles de iOS (Registrar agua, Escanear código de barras, Buscar comida y Calorías restantes, con las kcal que quedan hoy en su etiqueta, también en la pantalla de bloqueo), sin Iniciar ayuno, Terminar ayuno ni Quitar agua. La PR de widgets prevé un widget de agua interactivo, que el widget de calorías muestre también consumidas y quemadas, y más tamaños o poder redimensionar los widgets de calorías y macros; las familias de pantalla de bloqueo seguirán siendo solo de iOS."
+ },
+ {
+  "id": "goals-widgets",
+  "status": "planned_pr2",
+  "note_en": "The widgets PR plans an Android water widget with − / + buttons, which would fill the missing water widget, and a calories widget that also shows consumed and burned like iOS. Lock Screen formats will stay iOS-only.",
+  "note_es": "La PR de widgets prevé un widget de agua en Android con botones − / +, que cubriría el widget de agua que falta, y que el widget de calorías muestre también consumidas y quemadas como en iOS. Los formatos de pantalla de bloqueo seguirán siendo solo de iOS."
+ },
+ {
+  "id": "native-widget-calories",
+  "status": "planned_pr2",
+  "note_en": "The widgets PR plans to make the Android widget also show consumed and burned calories like iOS, add a medium size and allow resizing (today it is 2x1 with resizeMode none). The Lock Screen accessories will stay iOS-only.",
+  "note_es": "La PR de widgets prevé que el widget de Android muestre también las calorías consumidas y quemadas como en iOS, añadir un tamaño mediano y permitir redimensionarlo (hoy es 2x1 con resizeMode none). Los accesorios de pantalla de bloqueo seguirán siendo solo de iOS."
+ },
+ {
+  "id": "native-widget-macros",
+  "status": "planned_pr2",
+  "note_en": "The widgets PR plans more sizes or resizing for the Android macros widget, which today is a fixed 2x2. The Lock Screen versions will stay iOS-only.",
+  "note_es": "La PR de widgets prevé más tamaños o poder redimensionar el widget de macros de Android, que hoy es un 2x2 fijo. Las versiones de pantalla de bloqueo seguirán siendo solo de iOS."
+ },
+ {
+  "id": "plat-native-home-widgets",
+  "status": "planned_pr2",
+  "note_en": "The widgets PR plans to make the Android calories widget show eaten and burned like iOS, add a medium size, and let the calories and macros widgets resize instead of staying at a fixed 2x1 and 2x2. On Android both will remain home-screen-only.",
+  "note_es": "La PR de widgets prevé que el widget de calorías de Android muestre comido y quemado como en iOS, añadir un tamaño mediano y que los widgets de calorías y macros se puedan redimensionar en vez de quedarse en 2x1 y 2x2 fijos. En Android seguirán estando solo en la pantalla de inicio."
+ },
+ {
+  "id": "plat-services-widget-calories",
+  "status": "planned_pr2",
+  "note_en": "The widgets PR plans to show eaten and burned on the Android widget like iOS, so the Android snapshot will also need to carry them (today it only has remaining, goal and progress). The Lock Screen variants and the iOS foreground-only refresh are not part of it.",
+  "note_es": "La PR de widgets prevé mostrar comido y quemado en el widget de Android como en iOS, así que el snapshot de Android tendrá que llevarlos también (hoy solo lleva remaining, goal y progress). Las variantes de pantalla de bloqueo y el refresco de iOS solo en primer plano no entran en ella."
+ },
+ {
+  "id": "plat-services-widget-macros",
+  "status": "none",
+  "note_en": "",
+  "note_es": ""
+ },
+ {
+  "id": "native-widget-water",
+  "status": "planned_pr2",
+  "note_en": "Android is to get a Glance water widget with − and + buttons that remove or add a drink without opening the app (issue #1815). The Lock Screen shapes of the iOS water widget are not planned for Android.",
+  "note_es": "Se prevé añadir en Android un widget de agua con Glance y botones − y + que quitan o añaden una bebida sin abrir la app (issue #1815). Las variantes de pantalla de bloqueo del widget de iOS no están previstas en Android."
+ },
+ {
+  "id": "plat-native-water-widget",
+  "status": "planned_pr2",
+  "note_en": "Android is to get a Glance home-screen water widget showing the day's water, with − and + buttons that work without opening the app (issue #1815). The iOS Lock Screen variants (accessoryCircular/Rectangular/Inline) are not planned for Android.",
+  "note_es": "Se prevé añadir en Android un widget de agua de pantalla de inicio con Glance que muestre el agua del día, con botones − y + que funcionan sin abrir la app (issue #1815). Las variantes de pantalla de bloqueo de iOS (accessoryCircular/Rectangular/Inline) no están previstas en Android."
+ },
+ {
+  "id": "missed-plat-screens-water-widget",
+  "status": "planned_pr2",
+  "note_en": "Android is to get a home-screen water widget (Glance) next to the calorie and macro widgets, with buttons to add or remove a drink without opening the app (issue #1815). Only the iOS widget will keep Lock Screen versions.",
+  "note_es": "Se prevé añadir en Android, junto a los widgets de calorías y macros, un widget de agua de pantalla de inicio (Glance) con botones para añadir o quitar una toma sin abrir la app (issue #1815). Solo el widget de iOS seguirá teniendo versiones de pantalla de bloqueo."
+ },
+ {
+  "id": "plat-services-widget-water",
+  "status": "partial_pr1_planned_pr2",
+  "note_en": "PR #2989 adds a Log water Quick Settings tile that logs one drink in the background, also from the lock screen, and stops the Log water shortcut from bringing the app to the front; neither shows consumed/goal or can remove a drink. The water widget with − / + buttons is left for the widgets PR (issue #1815), and androidWidgetSyncService.ts still builds only calorie and macro snapshots.",
+  "note_es": "La PR #2989 añade la baldosa de Ajustes rápidos 'Log water', que registra una bebida en segundo plano, también desde la pantalla de bloqueo, y hace que el atajo 'Log water' ya no traiga la app al frente; ninguno de los dos muestra consumido/objetivo ni permite quitar una bebida. El widget de agua con botones − / + queda para la PR de widgets (issue #1815), y androidWidgetSyncService.ts sigue construyendo solo snapshots de calorías y macros."
+ },
+ {
+  "id": "native-widget-lockscreen",
+  "status": "none",
+  "note_en": "",
+  "note_es": ""
+ },
+ {
+  "id": "plat-native-lockscreen-widgets",
+  "status": "none",
+  "note_en": "",
+  "note_es": ""
+ },
+ {
+  "id": "plat-services-widget-background-refresh",
+  "status": "none",
+  "note_en": "",
+  "note_es": ""
+ },
+ {
+  "id": "native-native-surface-language",
+  "status": "partial_pr1",
+  "note_en": "On Android the calorie and macro widgets now get the real app language instead of en/pl, so changing between other languages reloads them and on Android 13+ they show in the app language instead of English for every shipped language except Latvian, whose widget strings are empty on both platforms. iOS is unchanged: its hook still reduces the language to en/pl and only reloads the calories and macros timelines, and the Live Activity already followed the app language.",
+  "note_es": "En Android los widgets de calorías y macros reciben ahora el idioma real de la app en vez de en/pl, así que cambiar entre otros idiomas los recarga y en Android 13+ salen en el idioma de la app y no en inglés en todos los idiomas que trae, salvo el letón, cuyas cadenas de widget están vacías en las dos plataformas. iOS sigue igual: su hook aún reduce el idioma a en/pl y solo recarga los timelines de calorías y macros; la Live Activity ya seguía el idioma de la app."
+ },
+ {
+  "id": "plat-services-widget-language",
+  "status": "partial_pr1",
+  "note_en": "The Android hook now passes the resolved app language (normalizeLanguage) to prepareWidgetLocale and dedupes on it, so the en/pl limitation is gone on Android. The iOS hook (useIOSWidgetLanguageRefresh.ts) still reduces the language to en/pl, so switching from German to French still forces no reload there.",
+  "note_es": "El hook de Android pasa ahora a prepareWidgetLocale el idioma resuelto de la app (normalizeLanguage) y deduplica con él, así que la limitación en/pl desaparece en Android. El hook de iOS (useIOSWidgetLanguageRefresh.ts) sigue reduciendo el idioma a en/pl, por lo que pasar de alemán a francés sigue sin forzar recarga allí."
+ },
+ {
+  "id": "native-camera-barcode",
+  "status": "done_pr1",
+  "note_en": "On Android the scanner can now also be opened from the 'Scan food' app icon quick action and from the 'Scan barcode' Quick Settings tile, the Android counterpart of the iOS control, which asks to unlock first on the lock screen. The Android widgets already had a Scan barcode button before this PR.",
+  "note_es": "En Android el escáner ahora también se abre desde la acción rápida del icono 'Scan food' y desde la baldosa de Ajustes rápidos 'Scan barcode', la equivalente en Android del control de iOS, que en la pantalla de bloqueo pide desbloquear antes. Los widgets de Android ya tenían el botón de escanear antes de esta PR."
+ },
+ {
+  "id": "plat-native-notification-channels",
+  "status": "done_pr1",
+  "note_en": "Android adds a 'Quick logging' channel (default importance, no sound or vibration) that carries the result of the Log water Quick Settings tile. Its name is English-only for now.",
+  "note_es": "Android suma un canal 'Quick logging' (importancia normal, sin sonido ni vibración) que recoge el resultado de la baldosa de Ajustes rápidos 'Log water'. Por ahora su nombre solo está en inglés."
+ },
+ {
+  "id": "plat-services-notification-channels",
+  "status": "done_pr1",
+  "note_en": "There is now also a native 'Quick logging' channel, created the first time the Log water Quick Settings tile posts its result; it uses default importance without sound, vibration or pop-up. It is not created from notifications.ts and its name is English-only.",
+  "note_es": "Ahora existe también un canal nativo 'Quick logging', que se crea la primera vez que la baldosa de Ajustes rápidos 'Log water' publica su resultado; usa importancia normal sin sonido, vibración ni aviso emergente. No se crea desde notifications.ts y su nombre solo está en inglés."
+ },
+ {
+  "id": "diary-date-url-highlight",
+  "status": "partial_pr1",
+  "note_en": "The shared linking config now accepts sparkyfitnessmobile://diary (added for the Android Calories left tile, but valid on both platforms), which opens the Diary tab. It takes no date or food to highlight, so the web's ?date= and ?highlight= still have no mobile equivalent.",
+  "note_es": "La configuración de enlaces común acepta ahora sparkyfitnessmobile://diary (añadido para la baldosa 'Calories left' de Android, pero válido en ambas plataformas), que abre la pestaña Diario. No admite fecha ni alimento a resaltar, así que ?date= y ?highlight= de la web siguen sin equivalente en móvil."
+ }
+]

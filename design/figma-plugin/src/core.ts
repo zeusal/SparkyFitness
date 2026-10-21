@@ -225,8 +225,7 @@ export function applyThemeFallback(): number {
     });
     return changed ? out : null;
   };
-  const walk = (n: SceneNode, vars: Map<string, Variable>): void => {
-    if (n.type === 'COMPONENT' || n.type === 'COMPONENT_SET') return;
+  const rebindNode = (n: SceneNode, vars: Map<string, Variable>): void => {
     if ('fills' in n && Array.isArray(n.fills)) {
       const fills = rebind(n.fills as Paint[], vars);
       if (fills) n.fills = fills;
@@ -235,16 +234,17 @@ export function applyThemeFallback(): number {
       const strokes = rebind(n.strokes, vars);
       if (strokes) n.strokes = strokes;
     }
-    if ('children' in n) for (const c of n.children) walk(c, vars);
+  };
+  const walk = (n: SceneNode, vars: Map<string, Variable>): void => {
+    if (n.type === 'COMPONENT' || n.type === 'COMPONENT_SET') return;
+    rebindNode(n, vars);
+    if ('children' in n && n.children) for (const c of n.children) walk(c, vars);
   };
   for (const [node, mode] of pendingThemes) {
     const vars = t.themeVars[mode];
     if (!vars || node.removed) continue;
-    // The frame itself may be a component (a themed variant); its own paints still switch.
-    if ('fills' in node && Array.isArray(node.fills)) {
-      const fills = rebind(node.fills as Paint[], vars);
-      if (fills) node.fills = fills;
-    }
+    // The themed frame's own paints switch even when it is a component (a themed variant).
+    rebindNode(node, vars);
     for (const c of node.children) walk(c, vars);
   }
   const count = pendingThemes.length;
@@ -256,7 +256,9 @@ export function applyThemeFallback(): number {
 export function themeSummary(): string {
   const t = getTheme();
   if (t.hasModes) return 'Light/Dark/AMOLED as variable modes';
-  return 'Light mode + Dark and AMOLED collections (this plan allows one mode per collection)';
+  const modes = (['light', 'dark', 'amoled'] as const).filter((m) => t.modeIds[m]).map((m) => THEME_LABELS[m]);
+  const own = (['dark', 'amoled'] as const).filter((m) => t.themeVars[m]).map((m) => THEME_LABELS[m]);
+  return `${modes.join('/')} as variable mode${modes.length > 1 ? 's' : ''} + ${own.join(' and ')} as separate collections (this plan limits modes per collection)`;
 }
 
 // ---------------------------------------------------------------- typography

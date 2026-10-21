@@ -95,7 +95,9 @@ class BaseNode {
     c.id = `${nextId++}:0`;
     c.parent = newParent;
     c._overrides = this._overrides ? { ...this._overrides } : undefined;
-    c.children = this.children ? this.children.map((k) => k._copy(c)) : this.children;
+    // Leaf nodes (text, vectors, shapes) have no children property at all, as in Figma.
+    if (this.children) c.children = this.children.map((k) => k._copy(c));
+    else delete c.children;
     stats.nodes[this.type] = (stats.nodes[this.type] || 0) + 1;
     nodes.set(c.id, c);
     return c;
@@ -178,7 +180,7 @@ class FrameLike extends BaseNode {
 class TextNode extends BaseNode {
   constructor() {
     super('TEXT');
-    this.children = undefined;
+    delete this.children;
     this._fontName = null;
     this._chars = '';
     this.fontSize = 12; this.textAutoResize = 'WIDTH_AND_HEIGHT'; this.textAlignHorizontal = 'LEFT';
@@ -304,7 +306,7 @@ function svgToFrame(svg) {
   if (!shapes.length) throw new Error('createNodeFromSvg: no shapes');
   for (const s of shapes) {
     const v = track(new BaseNode('VECTOR'));
-    v.children = undefined;
+    delete v.children;
     v.vectorNetwork = {};
     const stroke = /stroke="(?!none)/.test(s);
     const fillNone = /fill="none"/.test(s);
@@ -334,13 +336,13 @@ export function install() {
     createAutoLayout(dir = 'HORIZONTAL') { const f = figma.createFrame(); f.layoutMode = dir; return f; },
     createComponent() { const c = track(new ComponentNode()); current.appendChild(c); return c; },
     createText() { const t = track(new TextNode()); current.appendChild(t); return t; },
-    createRectangle() { const r = track(new BaseNode('RECTANGLE')); r.children = undefined; r.cornerRadius = 0; current.appendChild(r); return r; },
-    createEllipse() { const e = track(new BaseNode('ELLIPSE')); e.children = undefined; e.arcData = { startingAngle: 0, endingAngle: 2 * Math.PI, innerRadius: 0 }; current.appendChild(e); return e; },
-    createLine() { const l = track(new BaseNode('LINE')); l.children = undefined; current.appendChild(l); return l; },
-    createVector() { const v = track(new BaseNode('VECTOR')); v.children = undefined; current.appendChild(v); return v; },
+    createRectangle() { const r = track(new BaseNode('RECTANGLE')); delete r.children; r.cornerRadius = 0; current.appendChild(r); return r; },
+    createEllipse() { const e = track(new BaseNode('ELLIPSE')); delete e.children; e.arcData = { startingAngle: 0, endingAngle: 2 * Math.PI, innerRadius: 0 }; current.appendChild(e); return e; },
+    createLine() { const l = track(new BaseNode('LINE')); delete l.children; current.appendChild(l); return l; },
+    createVector() { const v = track(new BaseNode('VECTOR')); delete v.children; current.appendChild(v); return v; },
     createSection() { const s = track(new BaseNode('SECTION')); current.appendChild(s); return s; },
     createNodeFromSvg(svg) { const f = svgToFrame(svg); current.appendChild(f); return f; },
-    flatten(ns, parent) { const v = track(new BaseNode('VECTOR')); v.children = undefined; (parent || current).appendChild(v); for (const n of ns) n.remove(); return v; },
+    flatten(ns, parent) { const v = track(new BaseNode('VECTOR')); delete v.children; (parent || current).appendChild(v); for (const n of ns) n.remove(); return v; },
     group(ns, parent) { const g = track(new BaseNode('GROUP')); parent.appendChild(g); for (const n of ns) g.appendChild(n); return g; },
     combineAsVariants(ns, parent) {
       if (!ns.length) throw new Error('combineAsVariants: empty');

@@ -88,13 +88,20 @@ class BaseNode {
   findChildren(fn) { return (this.children || []).filter((c) => !fn || fn(c)); }
   findChild(fn) { return this.findChildren(fn)[0] || null; }
   findAllWithCriteria({ types }) { return this.findAll((n) => !types || types.includes(n.type)); }
-  clone() {
+  // Deep copy with no side effects on the original's parent (used by clone() and instances).
+  _copy(newParent) {
     const c = Object.create(Object.getPrototypeOf(this));
     Object.assign(c, this);
     c.id = `${nextId++}:0`;
-    c.parent = null;
-    c.children = (this.children || []).map((k) => { const kk = k.clone(); kk.parent = c; return kk; });
+    c.parent = newParent;
+    c._overrides = this._overrides ? { ...this._overrides } : undefined;
+    c.children = this.children ? this.children.map((k) => k._copy(c)) : this.children;
     stats.nodes[this.type] = (stats.nodes[this.type] || 0) + 1;
+    return c;
+  }
+  // Figma: the duplicate is placed next to the original, in the same parent.
+  clone() {
+    const c = this._copy(null);
     if (this.parent) this.parent.appendChild(c);
     return c;
   }
@@ -104,6 +111,7 @@ class BaseNode {
     if (!c || !c.modes.find((m) => m.modeId === modeId)) throw new Error('setExplicitVariableModeForCollection: unknown collection/mode');
     this._explicitMode = modeId;
   }
+  async loadAsync() { if (this.type !== 'PAGE') throw new Error('loadAsync on non-page'); }
   async setEffectStyleIdAsync(id) { if (!effectStyles.has(id)) throw new Error('unknown effect style ' + id); this._effectStyleId = id; }
   set constraints(v) { this._constraints = v; }
   get constraints() { return this._constraints || { horizontal: 'MIN', vertical: 'MIN' }; }
@@ -238,7 +246,7 @@ class InstanceNode extends FrameLike {
     this.mainComponent = main;
     this._overrides = {};
     this._w = main.width; this._h = main.height;
-    this.children = (main.children || []).map((c) => { const k = c.clone(); k.parent = this; return k; });
+    this.children = (main.children || []).map((c) => c._copy(this));
   }
   get componentProperties() {
     const owner = ownerOf(this.mainComponent);

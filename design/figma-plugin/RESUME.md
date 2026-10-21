@@ -12,20 +12,24 @@ Fecha del punto de control: miércoles 21 de octubre de 2026. Se retoma el domin
   - `scripts/mock-figma.mjs` + `scripts/run.mjs`: simulador estricto de la API de Figma para ejecutar el plugin en Node (`node scripts/run.mjs all` o `node scripts/run.mjs <módulo>`).
   - `manifest.json` y `README.md` (instrucciones para ejecutarlo en Figma Desktop).
 
-## En curso en el momento del punto de control
+## Versión de avance (lista para usar)
 
-Módulos escritos por agentes en paralelo. Si alguno falta o no pasa las comprobaciones, hay que terminarlo:
+`src/main-preview.ts` construye Cover, Foundations y Components (controles, y superficies y filas). Se comprueba con `npm run typecheck:preview` y `npm run test:preview`, y se genera con `npm run build:preview`. En el simulador da 3 páginas, 204 componentes (16 con variantes), 69 variables, 25 estilos de texto y 4 de sombra.
+
+## Pendiente
+
+La construcción con agentes se cortó a las 16:08 UTC del 21 de octubre, cuando se reinició el entorno. Terminados y comprobados: `foundations.ts`, `components-controls.ts` y `components-surfaces.ts`. Faltan los cinco módulos marcados abajo:
 
 | Módulo | Función | Contenido |
 | --- | --- | --- |
-| `src/foundations.ts` | `buildFoundations` | Color, Typography, Spacing & Radius, Elevation, Iconography (crea los componentes de icono), Themes |
-| `src/components-controls.ts` | `buildControls` | Button, Text Field, Search Field, Stepper, Segmented Control, Switch, Picker Trigger, chips y badges |
-| `src/components-surfaces.ts` | `buildSurfaces` | Card Header, Card, Settings Row, Library Row, Diary Food Row, Meal Card Header, Swipe Delete Row, Collapsible Header |
-| `src/components-navigation.ts` | `buildNavigation` | Tab Bar, Top Bar, Date Navigator, Footer bars, Bottom Sheet Picker, Action Sheet, Add Sheet, Dropdown Menu |
-| `src/components-feedback.ts` | `buildFeedback` | Toast, Status View, Empty Day, Banner |
-| `src/components-dataviz.ts` | `buildDataviz` | Progress Ring, Calorie Summary, Macro Bar, Macro Composition Ring, Hydration Gauge, Bar/Line Chart, Stat Tile, Legend, Exercise Progress Row |
-| `src/patterns.ts` | `buildPatterns` | Screen anatomy, Screen types, States, Rules, Layout rhythm |
-| `src/screens.ts` | `buildScreens` | Dashboard, Diary, Library, Settings en Light, Dark y AMOLED |
+| `src/foundations.ts` (hecho) | `buildFoundations` | Color, Typography, Spacing & Radius, Elevation, Iconography (crea los componentes de icono), Themes |
+| `src/components-controls.ts` (hecho) | `buildControls` | Button, Text Field, Search Field, Stepper, Segmented Control, Switch, Picker Trigger, chips y badges |
+| `src/components-surfaces.ts` (hecho) | `buildSurfaces` | Card Header, Card, Settings Row, Library Row, Diary Food Row, Meal Card Header, Swipe Delete Row, Collapsible Header |
+| `src/components-navigation.ts` (falta) | `buildNavigation` | Tab Bar, Top Bar, Date Navigator, Footer bars, Bottom Sheet Picker, Action Sheet, Add Sheet, Dropdown Menu |
+| `src/components-feedback.ts` (falta) | `buildFeedback` | Toast, Status View, Empty Day, Banner |
+| `src/components-dataviz.ts` (falta) | `buildDataviz` | Progress Ring, Calorie Summary, Macro Bar, Macro Composition Ring, Hydration Gauge, Bar/Line Chart, Stat Tile, Legend, Exercise Progress Row |
+| `src/patterns.ts` (falta) | `buildPatterns` | Screen anatomy, Screen types, States, Rules, Layout rhythm |
+| `src/screens.ts` (falta) | `buildScreens` | Dashboard, Diary, Library, Settings en Light, Dark y AMOLED |
 
 ## Siguientes pasos
 

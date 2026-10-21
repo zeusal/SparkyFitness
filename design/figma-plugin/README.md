@@ -12,6 +12,19 @@ Genera en un archivo de Figma el sistema de diseño completo de la app móvil de
 
 Todos los colores están enlazados a variables y todos los textos a estilos, así que cambiar un token actualiza todo el archivo.
 
+## Estado: versión de avance
+
+De momento solo están terminados los fundamentos y las dos primeras familias de componentes (controles, y superficies y filas). Mientras faltan los demás módulos:
+
+```bash
+npm install
+npm run typecheck:preview   # comprueba los tipos de la versión de avance
+npm run build:preview       # genera code.js con Cover, Foundations y Components (controles, tarjetas y filas)
+npm run test:preview        # opcional: la ejecuta en el simulador de la API de Figma
+```
+
+`npm run typecheck` y `npm run build` son para la versión completa y fallarán hasta que estén todos los módulos.
+
 ## Cómo ejecutarlo
 
 Los plugins en desarrollo solo funcionan en **Figma Desktop** (la app de escritorio), no en el navegador.

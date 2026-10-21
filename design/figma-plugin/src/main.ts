@@ -46,7 +46,9 @@ async function run(): Promise<void> {
   core.createEffectStyles();
 
   // The file's first page becomes the cover.
+  // Under dynamic-page only the current page is loaded; load the first one before reading it.
   const first = figma.root.children[0];
+  await first.loadAsync();
   if (first.children.length === 0) first.name = 'Cover';
   const cover = await core.usePage('Cover');
   core.layoutBoards(cover, [await buildCover()]);

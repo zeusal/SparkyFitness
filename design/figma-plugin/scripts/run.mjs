@@ -5,10 +5,10 @@
 import { build } from 'esbuild';
 import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { install, stats } from './mock-figma.mjs';
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const target = process.argv[2] || 'all';
 const cache = path.join(ROOT, '.cache');
 fs.mkdirSync(cache, { recursive: true });
@@ -24,8 +24,8 @@ const BUILDERS = {
   screens: 'buildScreens',
 };
 
-let entry = path.join(ROOT, 'src/main.ts');
-if (target !== 'all') {
+let entry = path.join(ROOT, target === 'preview' ? 'src/main-preview.ts' : 'src/main.ts');
+if (target !== 'all' && target !== 'preview') {
   if (!BUILDERS[target]) throw new Error(`unknown module ${target}; one of: all, ${Object.keys(BUILDERS).join(', ')}`);
   entry = path.join(cache, `entry-${target}.ts`);
   const needsIcons = target !== 'foundations';

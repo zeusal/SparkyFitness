@@ -4,7 +4,11 @@
   "private": true,
   "scripts": {
     "typecheck": "tsc --noEmit -p .",
-    "build": "esbuild src/main.ts --bundle --outfile=code.js --target=es2017 --format=iife"
+    "typecheck:preview": "tsc --noEmit -p tsconfig.preview.json",
+    "build": "esbuild src/main.ts --bundle --outfile=code.js --target=es2017 --format=iife",
+    "build:preview": "esbuild src/main-preview.ts --bundle --outfile=code.js --target=es2017 --format=iife",
+    "test": "node scripts/run.mjs all",
+    "test:preview": "node scripts/run.mjs preview"
   },
   "dependencies": {
     "@figma/plugin-typings": "^1.142.0",

@@ -614,7 +614,7 @@ export const ICON_NAMES = Object.keys(ICONS);
 export const ICON_STATES = [
   { state: 'Default', token: 'text-primary', opacity: 1, use: 'Ink Navy. Header actions, back and close glyphs, neutral glyphs.' },
   { state: 'Active', token: 'accent-primary', opacity: 1, use: 'Sparky Blue. Selected, checked or focused (focused tab, menu check, picked food), and action glyphs.' },
-  { state: 'Inactive', token: 'text-muted', opacity: 1, use: 'Muted Slate. Unselected check circles and radios, muted glyphs.' },
+  { state: 'Inactive', token: 'text-muted', opacity: 1, use: 'Muted Slate. Unselected check circles, muted glyphs.' },
   { state: 'Disabled', token: 'text-primary', opacity: 0.4, use: 'Ink Navy at 40%. Disabled header actions.' },
 ] as const;
 export type IconState = (typeof ICON_STATES)[number]['state'];
@@ -657,7 +657,9 @@ export function createIconComponents(parent: FrameNode): void {
     for (const s of ICON_STATES) {
       const c = variants.size === 0 ? base : base.clone();
       c.name = `State=${s.state}`;
-      recolorGlyph(c, paint(s.token, s.opacity));
+      recolorGlyph(c, paint(s.token));
+      // Layer opacity, so overlapping paths fade as one glyph (as the app's opacity does).
+      if (s.opacity < 1) c.opacity = s.opacity;
       variants.set(s.state, c);
     }
     const set = figma.combineAsVariants([...variants.values()], parent);
@@ -701,6 +703,14 @@ export function iconSet(name: string): ComponentSetNode {
   return s;
 }
 
+/** The State variant a token selects (Default when the token is not a state color). */
+export function iconStateFor(colorToken: string | null): IconState {
+  return (colorToken && STATE_BY_TOKEN[tokenKey(colorToken)]) || 'Default';
+}
+
+/** What icon() drew, by instance id, so component slots can be normalized without mainComponent. */
+const iconInfo = new Map<string, { name: string; state: IconState; shown: SolidPaint }>();
+
 /**
  * Instance of an app icon at size px. A state token (text-primary, accent-primary, text-muted and
  * their tab twins) picks that State variant; any other token, or a fixed hex via solidHex, is a
@@ -708,13 +718,14 @@ export function iconSet(name: string): ComponentSetNode {
  */
 export function icon(name: string, size: number, colorToken: string | null, solidHex?: string): InstanceNode {
   const key = colorToken ? tokenKey(colorToken) : null;
-  const state: IconState = (!solidHex && key && STATE_BY_TOKEN[key]) || 'Default';
+  const state = solidHex ? 'Default' : iconStateFor(key);
   const i = iconComponent(name, state).createInstance();
   i.name = 'Icon';
   i.resize(size, size);
-  const stateToken = ICON_STATES.find((s) => s.state === state)?.token;
-  const p = solidHex ? solid(solidHex) : key && key !== stateToken ? paint(key) : null;
-  if (p) recolorGlyph(i, p);
+  const stateToken = ICON_STATES.find((s) => s.state === state)?.token ?? 'text-primary';
+  const override = solidHex ? solid(solidHex) : key && key !== stateToken ? paint(key) : null;
+  if (override) recolorGlyph(i, override);
+  iconInfo.set(i.id, { name, state, shown: override ?? paint(stateToken) });
   return i;
 }
 
@@ -852,14 +863,26 @@ function exposeTextProps(name: ComponentName, node: ComponentNode | ComponentSet
     const key = node.addComponentProperty(prop, 'TEXT', targets[0].characters);
     for (const t of targets) t.componentPropertyReferences = { characters: key };
   }
-  // Icon slots: direct icon instances named "Icon" become one swappable property.
-  const iconSlots = node.findAll(
-    (n) => n.type === 'INSTANCE' && n.name === 'Icon' && !!n.parent && n.parent.type !== 'INSTANCE'
-  ) as InstanceNode[];
+  // Icon slots: direct icon instances named "Icon" become one swappable property. Every layer
+  // bound to it must share one main component, so slots drawn in a State variant move to the
+  // Default variant and keep their color as an override. The main component comes from iconInfo:
+  // reading InstanceNode.mainComponent throws under documentAccess "dynamic-page".
+  const iconSlots = (
+    node.findAll(
+      (n) => n.type === 'INSTANCE' && n.name === 'Icon' && !!n.parent && n.parent.type !== 'INSTANCE'
+    ) as InstanceNode[]
+  ).filter((s) => iconInfo.has(s.id));
   if (iconSlots.length > 0) {
-    const first = iconSlots[0].mainComponent;
+    for (const s of iconSlots) {
+      const info = iconInfo.get(s.id);
+      if (!info || info.state === 'Default') continue;
+      s.swapComponent(iconComponent(info.name, 'Default'));
+      recolorGlyph(s, info.shown);
+      info.state = 'Default';
+    }
+    const first = iconInfo.get(iconSlots[0].id);
     if (first) {
-      const key = node.addComponentProperty('Icon', 'INSTANCE_SWAP', first.id);
+      const key = node.addComponentProperty('Icon', 'INSTANCE_SWAP', iconComponent(first.name).id);
       for (const s of iconSlots) s.componentPropertyReferences = { mainComponent: key };
     }
   }

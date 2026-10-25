@@ -12,7 +12,7 @@ import { COLOR_TOKENS } from './data/tokens';
 function buildCover(): FrameNode {
   const { root, body } = core.board(
     'SparkyFitness Mobile — Design System (preview)',
-    'Generated from SparkyFitnessMobile/DESIGN.md and global.css. Colors are variables with Light, Dark and AMOLED modes; type and shadows are shared styles; every component is built from them. This preview contains the foundations and the first component families; navigation, feedback, data visualization, patterns and screens come with the full build.',
+    'Generated from SparkyFitnessMobile/DESIGN.md and global.css. Colors are variables with Light, Dark and AMOLED values (modes of one collection, or one collection per theme on plans with a single mode); type and shadows are shared styles; every component is built from them. This preview contains the foundations and the first component families; navigation, feedback, data visualization, patterns and screens come with the full build.',
     1600
   );
   const rows = core.frame({ name: 'Contents', dir: 'H', gap: 24, wrap: true });

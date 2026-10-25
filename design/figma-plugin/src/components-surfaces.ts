@@ -24,6 +24,7 @@ import {
   frame,
   icon,
   iconComponent,
+  iconStateFor,
   instance,
   paint,
   rect,
@@ -155,9 +156,12 @@ function tint(glyphInstance: InstanceNode, token: string): void {
   }
 }
 
-/** Swaps an instance's "Icon" slot to another app icon and tints it with a category token. */
+/**
+ * Swaps an instance's "Icon" slot to another app icon in the State its token selects, and tints it
+ * with that token (always, so a color override carried over from the slot cannot win).
+ */
 function swapIcon(inst: InstanceNode, name: string, token: string): void {
-  setProps(inst, { Icon: iconComponent(name).id });
+  setProps(inst, { Icon: iconComponent(name, iconStateFor(token)).id });
   const slot = inst.findOne((n) => n.type === 'INSTANCE' && n.name === 'Icon');
   if (slot && slot.type === 'INSTANCE') tint(slot, token);
 }

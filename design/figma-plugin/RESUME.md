@@ -12,6 +12,15 @@ Fecha del punto de control: miércoles 21 de octubre de 2026. Se retoma el domin
   - `scripts/mock-figma.mjs` + `scripts/run.mjs`: simulador estricto de la API de Figma para ejecutar el plugin en Node (`node scripts/run.mjs all` o `node scripts/run.mjs <módulo>`).
   - `manifest.json` y `README.md` (instrucciones para ejecutarlo en Figma Desktop).
 
+## Arreglos tras la primera prueba en Figma (21–25 de octubre)
+
+- Tema oscuro: en un plan con un solo modo por colección (Starter), `addMode` falla y las muestras Dark y AMOLED salían en claro. Ahora el plugin crea las colecciones "SparkyFitness / Color (Dark)" y "(AMOLED)" y `applyThemeFallback()` vuelve a enlazar los colores de cada marco con tema al final de la construcción. El mensaje final dice qué opción se usó.
+- Iconos: cada icono es un conjunto de componentes con la propiedad State (Default, Active en Sparky Blue, Inactive, Disabled al 40 % como opacidad de capa). La lámina Iconography muestra los estados y los pares de iconos de selección.
+- Ranuras de icono en componentes: todas las capas enlazadas a la propiedad Icon comparten la variante Default y llevan el color como sobrescritura. El componente principal se sabe por `iconInfo` (`InstanceNode.mainComponent` lanza un error con `documentAccess: "dynamic-page"`; la versión de avance anterior fallaba por eso al construir Components).
+- Simulador: `--max-modes=1` imita un plan de un solo modo (`npm run test:preview` prueba los dos casos), `mainComponent` falla como en Figma, las capas enlazadas a INSTANCE_SWAP deben compartir componente y una comprobación final verifica los 889 colores de las muestras con tema.
+
+Pendiente de este bloque: que el usuario lo pruebe en Figma Desktop (mensaje final, láminas Themes y Color en oscuro, State en los iconos).
+
 ## Versión de avance (lista para usar)
 
 `src/main-preview.ts` construye Cover, Foundations y Components (controles, y superficies y filas). Se comprueba con `npm run typecheck:preview` y `npm run test:preview`, y se genera con `npm run build:preview`. En el simulador da 3 páginas, 204 componentes (16 con variantes), 69 variables, 25 estilos de texto y 4 de sombra.

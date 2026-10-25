@@ -249,7 +249,7 @@ function buildColorBoard(): FrameNode {
   const width = 1600;
   const { root, body } = core.board(
     'Color',
-    `${COLOR_TOKENS.length} color variables in the "SparkyFitness / Color" collection (Light, Dark and AMOLED modes), generated from global.css. Each swatch is a rectangle bound to the variable inside a frame set to that mode, so it always shows the live value. Token classes follow Tailwind v4 naming (utility prefix + token name); tokens marked JS only are read as CSS variables for icons, charts and switch tracks. AMOLED reuses the Dark value for ${COLOR_TOKENS.length - changed} tokens; only ${changed} change (pure-black canvas, darker surfaces and borders).`,
+    `${COLOR_TOKENS.length} color variables in the "SparkyFitness / Color" collection, generated from global.css, with Light, Dark and AMOLED values: modes of the collection, or "SparkyFitness / Color (Dark)" and "(AMOLED)" collections with the same names on plans with one mode per collection. Each swatch is a rectangle bound to the variable inside a frame rendered in that theme, so it always shows the live value. Token classes follow Tailwind v4 naming (utility prefix + token name); tokens marked JS only are read as CSS variables for icons, charts and switch tracks. AMOLED reuses the Dark value for ${COLOR_TOKENS.length - changed} tokens; only ${changed} change (pure-black canvas, darker surfaces and borders).`,
     width
   );
   const groups: string[] = [];

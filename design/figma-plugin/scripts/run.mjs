@@ -1,5 +1,6 @@
 // Runs the builder (or one module) against the strict Figma mock.
 //   node scripts/run.mjs all                 -> bundles src/main.ts and runs the full build
+//   node scripts/run.mjs preview --max-modes=1 -> preview build, as on a plan with one variable mode
 //   node scripts/run.mjs components-controls -> runs foundations prerequisites + that module,
 //                                               stubbing any catalog component it does not build
 import { build } from 'esbuild';
@@ -10,6 +11,9 @@ import { install, stats } from './mock-figma.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const target = process.argv[2] || 'all';
+// --max-modes=N simulates a Figma plan that allows N variable modes per collection.
+const maxModes = process.argv.find((a) => a.startsWith('--max-modes='));
+if (maxModes) process.env.FIGMA_MAX_MODES = maxModes.split('=')[1];
 const cache = path.join(ROOT, '.cache');
 fs.mkdirSync(cache, { recursive: true });
 

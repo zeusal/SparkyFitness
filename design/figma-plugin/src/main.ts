@@ -16,7 +16,7 @@ import { ICON_NAMES } from './core';
 async function buildCover(): Promise<FrameNode> {
   const { root, body } = core.board(
     'SparkyFitness Mobile — Design System',
-    'Generated from SparkyFitnessMobile/DESIGN.md and global.css. Colors are variables with Light, Dark and AMOLED modes; type and shadows are shared styles; every component is built from them. When code and this file disagree, the code wins: regenerate the file instead of editing tokens by hand.',
+    'Generated from SparkyFitnessMobile/DESIGN.md and global.css. Colors are variables with Light, Dark and AMOLED values (modes of one collection, or one collection per theme on plans with a single mode); type and shadows are shared styles; every component is built from them. When code and this file disagree, the code wins: regenerate the file instead of editing tokens by hand.',
     1600
   );
   const rows = core.frame({ name: 'Contents', dir: 'H', gap: 24, wrap: true });

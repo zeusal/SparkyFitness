@@ -150,6 +150,10 @@ Object.defineProperty(BaseNode.prototype, 'componentPropertyReferences', {
       if (!owner._props[key]) throw new Error(`componentPropertyReferences: ${key} is not defined on ${owner.name}`);
       if (field === 'characters' && this.type !== 'TEXT') throw new Error('characters reference on non-TEXT node');
       if (field === 'mainComponent' && this.type !== 'INSTANCE') throw new Error('mainComponent reference on non-INSTANCE node');
+      // Every layer bound to one INSTANCE_SWAP property shows its value, so all must share the
+      // property's default component (Figma would otherwise swap them and drop their look).
+      if (field === 'mainComponent' && this._main.id !== owner._props[key].defaultValue)
+        throw new Error(`INSTANCE_SWAP ${key} on ${owner.name}: slot "${this.name}" is ${this._main.parent && this._main.parent.name}/${this._main.name}, not the property's default`);
     }
     this._cpr = refs;
   },
@@ -246,7 +250,7 @@ class ComponentSetNode extends FrameLike {
 class InstanceNode extends FrameLike {
   constructor(main) {
     super('INSTANCE');
-    this.mainComponent = main;
+    this._main = main;
     this._overrides = {};
     this._w = main.width; this._h = main.height;
     // The instance root shows the main component's paints until overridden.
@@ -254,16 +258,16 @@ class InstanceNode extends FrameLike {
     this.children = (main.children || []).map((c) => c._copy(this));
   }
   get componentProperties() {
-    const owner = ownerOf(this.mainComponent);
+    const owner = ownerOf(this._main);
     const out = {};
     if (owner.type === 'COMPONENT_SET') {
-      for (const [k, v] of Object.entries(parseVariantName(this.mainComponent.name))) out[k] = { type: 'VARIANT', value: v };
+      for (const [k, v] of Object.entries(parseVariantName(this._main.name))) out[k] = { type: 'VARIANT', value: v };
     }
     for (const [k, def] of Object.entries(owner._props)) out[k] = { type: def.type, value: this._overrides[k] ?? def.defaultValue };
     return out;
   }
   setProperties(props) {
-    const owner = ownerOf(this.mainComponent);
+    const owner = ownerOf(this._main);
     const current = this.componentProperties;
     const variantChange = {};
     for (const [k, v] of Object.entries(props)) {
@@ -273,17 +277,19 @@ class InstanceNode extends FrameLike {
       else this._overrides[k] = v;
     }
     if (Object.keys(variantChange).length) {
-      const want = { ...parseVariantName(this.mainComponent.name), ...variantChange };
+      const want = { ...parseVariantName(this._main.name), ...variantChange };
       const match = owner.children.find((c) => { const p = parseVariantName(c.name); return Object.keys(want).every((k) => p[k] === want[k]); });
       if (!match) throw new Error(`setProperties: no variant of ${owner.name} matches ${JSON.stringify(want)}`);
-      this.mainComponent = match;
+      this._main = match;
     }
   }
   detachInstance() { const f = new FrameLike('FRAME'); return f; }
-  swapComponent(c) { this.mainComponent = c; }
+  swapComponent(c) { if (!c || c.type !== 'COMPONENT') throw new Error('swapComponent: COMPONENT required'); this._main = c; }
+  // documentAccess "dynamic-page": the sync getter throws, as in Figma.
+  get mainComponent() { throw new Error('in get_mainComponent: Cannot call with documentAccess: dynamic-page. Use node.getMainComponentAsync instead.'); }
+  async getMainComponentAsync() { return this._main; }
 }
 
-const MAX_MODES = Number(process.env.FIGMA_MAX_MODES || 4);
 const nodes = new Map();
 const collections = new Map();
 const variables = new Map();
@@ -375,8 +381,8 @@ export function install() {
       createVariableCollection(name) {
         const c = { id: `VC:${nextId++}`, name, modes: [{ modeId: `${nextId++}:0`, name: 'Mode 1' }], variableIds: [] };
         c.renameMode = (id, n) => { const m = c.modes.find((x) => x.modeId === id); if (!m) throw new Error('renameMode: unknown mode'); m.name = n; };
-        // FIGMA_MAX_MODES=1 simulates a plan with one mode per collection (Figma's message).
-        c.addMode = (n) => { if (c.modes.length >= MAX_MODES) throw new Error(`in addMode: Limited to ${MAX_MODES} modes only`); const m = { modeId: `${nextId++}:0`, name: n }; c.modes.push(m); return m.modeId; };
+        // FIGMA_MAX_MODES=1 (or run.mjs --max-modes=1) simulates a plan with one mode per collection.
+        c.addMode = (n) => { const max = Number(process.env.FIGMA_MAX_MODES || 4); if (c.modes.length >= max) throw new Error(`in addMode: Limited to ${max} modes only`); const m = { modeId: `${nextId++}:0`, name: n }; c.modes.push(m); return m.modeId; };
         collections.set(c.id, c);
         return c;
       },

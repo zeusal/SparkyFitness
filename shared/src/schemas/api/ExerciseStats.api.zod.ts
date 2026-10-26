@@ -167,6 +167,8 @@ export const exerciseActivityQueryItemSchema = z.object({
   floorsClimbed: z.number().nullable().optional(),
   /** Total ascent in metres, whatever the unit system of the request. */
   elevationGainMeters: z.number().nullable().optional(),
+  /** The person's own 1 (easy) to 10 (maximal) rating of the workout. */
+  workoutEffort: z.number().int().min(1).max(10).nullable().optional(),
   /** Average running cadence in steps per minute. */
   avgCadence: z.number().nullable().optional(),
   /** Average stride length in centimetres. */
@@ -218,6 +220,14 @@ export const exercisePersonalRecordItemSchema = z.object({
     'custom',
   ]),
   label: z.string(), // e.g. "Half Marathon (21.1 km)"
+  /**
+   * Time for the standard distance itself, never a longer activity's total.
+   * `best_split`: the fastest stretch of that distance measured inside the
+   * activity (GPS track or distance series). `activity_pace`: an activity with
+   * no measured split that nearly matches the distance, scaled to it by its
+   * average pace. Optional because an older server omits it.
+   */
+  timeBasis: z.enum(['best_split', 'activity_pace']).optional(),
   bestTimeSeconds: z.number(),
   formattedTime: z.string(), // e.g. "1:42:15"
   avgPaceSecondsPerKm: z.number(),

@@ -4,15 +4,21 @@ Usage, from anywhere: python3 -I parity-report/tools/update_parity_page.py
 
 Starts from the untouched page in original/, adds each row's note (kind, PRs
 and English text from notes/parity-notes.json) to the embedded data, an
-Updates filter, the update box on the Executive summary tab and the notes on
-three summary lines (texts from notes/parity-summary.json), and writes the
+Updates filter, the update box on the Executive summary tab (with the
+features added since the audit, from notes/new-features.json) and the notes
+on three summary lines (texts from notes/parity-summary.json), and writes the
 page at the top of parity-report/. The page is self-contained.
 """
 import csv
 import html
 import json
 import re
+import sys
 from pathlib import Path
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from apply_parity_update import new_feature_lines  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 ORIG = ROOT / 'original'
@@ -104,6 +110,12 @@ sec = [l for l in EN['section'] if l.strip()]
 title = re.sub(r'\(\d{4}-\d{2}-\d{2}\)', f'({PAGE["date_label"]})', sec[0].lstrip('# '))
 paras = [l for l in sec[1:] if not l.lstrip().startswith('- ')]
 items = [l for l in sec[1:] if l.lstrip().startswith('- ')]
+new_lines = [l for l in new_feature_lines('en') if l.strip()]
+new_html = ''
+if new_lines:
+    new_title = new_lines[0].lstrip('# ')
+    new_html = f'<h3>{html.escape(new_title)}</h3>\n<ul>' + ''.join(f'<li>{inline(l[2:])}</li>' for l in new_lines[1:]) + '</ul>'
+
 body = ''.join(f'<p>{inline(p)}</p>\n' for p in paras).replace('note under them', 'note in the Explorer').replace(
     'In the CSV the same notes are in two extra columns, <code>update_status</code> and <code>update_notes</code>. ', '')
 lis, open_sub = '', False
@@ -124,7 +136,7 @@ for l in items:
         lis += f'\n<li>{text}'
 lis += '</ul></li>' if open_sub else '</li>'
 rep('<div class="summary"><p><strong>Numbers:</strong>',
-    f'<div class="summary"><div class="updbox"><h3>{html.escape(title)}</h3>\n{body}<ul>{lis}</ul></div>\n<p><strong>Numbers:</strong>')
+    f'<div class="summary"><div class="updbox"><h3>{html.escape(title)}</h3>\n{body}<ul>{lis}</ul>{new_html}</div>\n<p><strong>Numbers:</strong>')
 
 # Notes on summary lines: each anchor names the text its line ends with on the page.
 for anchor in EN['anchors']:

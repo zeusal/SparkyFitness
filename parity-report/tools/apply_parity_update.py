@@ -3,11 +3,12 @@
 Usage, from anywhere: python3 -I parity-report/tools/apply_parity_update.py
 
 Reads the untouched audit from original/, the row notes from
-notes/parity-notes.json and the summary texts from notes/parity-summary.json,
-and writes the four report files at the top of parity-report/. Nothing in the
-audit changes: each CSV gains two trailing columns, and each Markdown file
-gains the update section after the title block plus sub-bullets under the
-rows and summary lines the notes are about.
+notes/parity-notes.json, the summary texts from notes/parity-summary.json and
+the features added since the audit from notes/new-features.json, and writes
+the four report files at the top of parity-report/. Nothing in the audit
+changes: each CSV gains two trailing columns, and each Markdown file gains the
+update section (with the list of new features) after the title block, plus
+sub-bullets under the rows and summary lines the notes are about.
 """
 import csv
 import io
@@ -19,6 +20,46 @@ ROOT = Path(__file__).resolve().parents[1]
 ORIG = ROOT / 'original'
 NOTES = {n['id']: n for n in json.load(open(ROOT / 'notes' / 'parity-notes.json', encoding='utf-8')) if n['kind'] != 'none'}
 SUMMARY = json.load(open(ROOT / 'notes' / 'parity-summary.json', encoding='utf-8'))
+NEW_FEATURES_PATH = ROOT / 'notes' / 'new-features.json'
+NEW_FEATURES = json.load(open(NEW_FEATURES_PATH, encoding='utf-8')) if NEW_FEATURES_PATH.exists() else []
+
+PLACES = {
+    'en': {'web': 'web', 'ios': 'iOS', 'android': 'Android', 'Apple Watch': 'Apple Watch', 'Wear OS': 'Wear OS',
+           'only': ' only', 'partial': ' (partly)'},
+    'es': {'web': 'web', 'ios': 'iOS', 'android': 'Android', 'Apple Watch': 'Apple Watch', 'Wear OS': 'Wear OS',
+           'only': ' (solo)', 'partial': ' (en parte)'},
+}
+
+
+def where(feature, lang):
+    """Where a new feature is available, e.g. "web, iOS and Android"."""
+    p = PLACES[lang]
+    parts = []
+    for key in ('web', 'ios', 'android'):
+        value = feature[key]
+        if value == 'Yes':
+            parts.append(p[key])
+        elif value == 'Partial':
+            parts.append(p[key] + p['partial'])
+    watch = feature.get('watch', 'none')
+    for w in (['Apple Watch', 'Wear OS'] if watch == 'both' else [watch] if watch in ('Apple Watch', 'Wear OS') else []):
+        parts.append(p[w])
+    if len(parts) == 1:
+        return parts[0] + p['only']
+    joiner = ' and ' if lang == 'en' else ' y '
+    return ', '.join(parts[:-1]) + joiner + parts[-1]
+
+
+def new_feature_lines(lang):
+    if not NEW_FEATURES:
+        return []
+    head = SUMMARY[lang]['new_features_heading']
+    lines = [head, '']
+    for f in NEW_FEATURES:
+        prs = ', '.join(f'#{n}' for n in f['prs'])
+        lines.append(f"- **{f[f'name_{lang}']}** ({where(f, lang)}; {prs}): {f[f'description_{lang}']}")
+    lines.append('')
+    return lines
 
 
 def pr_list(prs, lang):
@@ -85,6 +126,7 @@ def update_md(lang, by_id):
         out.append(line)
         if i == summary['insert_after_line'] - 1:
             out.extend(summary['section'])
+            out.extend(new_feature_lines(lang))
         if line in anchors:
             a = anchors[line]
             indent = len(line) - len(line.lstrip(' ')) + 2

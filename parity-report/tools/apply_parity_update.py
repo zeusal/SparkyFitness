@@ -158,10 +158,11 @@ def update_md(lang, by_id):
             applied.append((num, m.group(1), row_id))
     missing_anchors = set(anchors) - used_anchors
     assert not missing_anchors, f'summary anchors not found in the original: {missing_anchors}'
-    # A row with no bold entry can still be listed by name alone ("- Name").
+    # A row with no bold entry can still be listed by name alone ("- Name"),
+    # or by name and a short remark ("- Name — No web equivalent.").
     for row_id in sorted(set(NOTES) - {a[2] for a in applied}):
         plain = f"- {by_id[row_id][name_col]}"
-        hits = [i for i, l in enumerate(out) if l == plain]
+        hits = [i for i, l in enumerate(out) if l == plain or l.startswith(plain + ' — ')]
         if len(hits) != 1:
             continue
         note = NOTES[row_id]

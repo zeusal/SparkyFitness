@@ -1,0 +1,427 @@
+[
+ {
+  "id": "native-ios-quick-actions",
+  "kind": "done",
+  "prs": [
+   2989
+  ],
+  "note_en": "Android now has these app icon actions too: Scan food, Log food and Fasting through expo-quick-actions, and Log water as the native shortcut, which logs without opening the app. Both platforms take the titles from the same quickActions strings, translated in 10 of the 15 other languages the app ships (Hungarian, Italian, Latvian, Norwegian and Russian still show English). On Android the Log water result messages and the shortcut's long label are still English-only.",
+  "note_es": "Android ya tiene también estas acciones del icono: Escanear comida, Registrar comida y Ayuno mediante expo-quick-actions, y Registrar agua como atajo nativo, que registra sin abrir la app. Las dos plataformas sacan los títulos de las mismas cadenas quickActions, traducidas en 10 de los otros 15 idiomas que trae la app (en húngaro, italiano, letón, noruego y ruso siguen en inglés). En Android, los mensajes de resultado de Registrar agua y la etiqueta larga del atajo siguen solo en inglés.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/hooks/useQuickActions.ts:32-61 (items; log-water left out on Android), 163-193 (registered on iOS and Android); /home/user/sf-main/SparkyFitnessMobile/src/localization/localeRegistry.json (16 shipped locales: en + de, es, fr, hu, it, lv, nb-NO, nl, pl, pt-BR, ru, tr, yue-Hant, zh-Hans, zh-Hant; no cs) and generatedLocaleResources.ts:23-40 (cs not bundled); locales/{de,es,fr,nl,pl,pt-BR,tr,yue-Hant,zh-Hans,zh-Hant}/translation.json have quickActions, locales/{hu,it,lv,nb-NO,ru} do not; logWaterInBackground only in locales/en/translation.json:6239-6247; /home/user/sf-main/SparkyFitnessMobile/targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/LogWaterActivity.kt:190-203 (hard-coded English results)"
+ },
+ {
+  "id": "plat-native-quick-actions",
+  "kind": "done",
+  "prs": [
+   2989
+  ],
+  "note_en": "Android now offers the same four actions: Scan food, Log food and Fasting through expo-quick-actions, plus the native Log water shortcut. All four titles come from the same quickActions strings as on iOS, translated in 10 of the 15 other languages the app ships (the rest show English). Log water still works differently: Android logs it in the background without opening the app and reports with an English-only Toast that only shows while the app's notifications are on, while iOS opens the app, logs from JS and shows a Toast from the same translated strings.",
+  "note_es": "Android ofrece ya las mismas cuatro acciones: Escanear comida, Registrar comida y Ayuno con expo-quick-actions, más el atajo nativo Registrar agua. Los cuatro títulos salen de las mismas cadenas quickActions que en iOS, traducidas en 10 de los otros 15 idiomas que trae la app (en el resto aparecen en inglés). Registrar agua sigue funcionando distinto: Android lo registra en segundo plano sin abrir la app y avisa con un Toast en inglés que únicamente aparece si las notificaciones de la app están activadas, mientras que iOS abre la app, lo registra desde JS y muestra un Toast con esas mismas cadenas traducidas.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/hooks/useQuickActions.ts:32-61, 63-72 (restoreLogWaterShortcut with quickActions.logWater), 75-113 (iOS logWaterDrink, Toast from quickActions.waterLogged/waterFailed), 163-193; /home/user/sf-main/SparkyFitnessMobile/targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/BackgroundWaterModule.kt:38-76 (refreshShortcut, stored labels, English fallback); LogWaterActivity.kt:122-132 (report; Toast needs notifications on), 190-203 (English messages), 290-294 (Toast); /home/user/sf-main/SparkyFitnessMobile/src/localization/localeRegistry.json (15 shipped non-English locales, fallbackLocale en; cs not shipped)"
+ },
+ {
+  "id": "plat-screens-quick-actions",
+  "kind": "done",
+  "prs": [
+   2989
+  ],
+  "note_en": "Android now registers Scan food, Log food and Fasting through the same useQuickActions hook (mounted by QuickActionsGate in App.tsx), and they open the same screens as on iOS. Log water stays the native shortcut: it now takes its label from the same quickActions string as iOS, logs in the background without opening the app and reports in English only. The withQuickActionLaunchGuard plugin keeps a shortcut's screen from opening again when Android restores the app after killing it.",
+  "note_es": "Android registra ya Escanear comida, Registrar comida y Ayuno con el mismo hook useQuickActions (montado por QuickActionsGate en App.tsx), y abren las mismas pantallas que en iOS. Registrar agua sigue siendo el atajo nativo: ahora toma la etiqueta de la misma cadena quickActions que iOS, registra en segundo plano sin abrir la app y avisa solo en inglés. El plugin withQuickActionLaunchGuard evita que la pantalla de un atajo se vuelva a abrir sola cuando Android restaura la app después de haberla cerrado en segundo plano.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/App.tsx:221-231, 491 (QuickActionsGate), 448-470 (linking: scan, search); /home/user/sf-main/SparkyFitnessMobile/src/hooks/useQuickActions.ts:63-72 (Log water label from quickActions.logWater), 139-156 (runQuickAction navigation), 163-193; /home/user/sf-main/SparkyFitnessMobile/plugins/withQuickActionLaunchGuard.ts:1-33; /home/user/sf-main/SparkyFitnessMobile/app.config.ts:280; LogWaterActivity.kt:190-203 (English results)"
+ },
+ {
+  "id": "plat-services-quick-actions-home",
+  "kind": "done",
+  "prs": [
+   2989
+  ],
+  "note_en": "useQuickActions no longer skips Android: it registers Scan food, Log food and Fasting with expo-quick-actions, then puts the native Log water shortcut back (refreshBackgroundWaterShortcut), because registering replaces every dynamic shortcut; a language change runs both again, so the shortcut is relabelled too. It only runs the action ids it registered for the platform, so on Android another app cannot trigger the JS log-water action through MainActivity. Log water still works differently: Android logs it with WorkManager without opening the app, while iOS opens the app and runs logWaterDrink.",
+  "note_es": "useQuickActions ya no se salta Android: registra Escanear comida, Registrar comida y Ayuno con expo-quick-actions y después vuelve a poner el atajo nativo Registrar agua (refreshBackgroundWaterShortcut), porque al registrar se sustituye toda la lista de atajos dinámicos; al cambiar de idioma se repiten los dos pasos, así que el atajo también cambia de etiqueta. Solo ejecuta las acciones que ha registrado para la plataforma, de modo que en Android otra app no puede lanzar a través de MainActivity la acción JS de registrar agua. Registrar agua sigue funcionando de otra forma: Android lo registra con WorkManager sin abrir la app, mientras que iOS abre la app y ejecuta logWaterDrink.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/hooks/useQuickActions.ts:63-72 (restoreLogWaterShortcut), 163-193 (setItems then restore on Android; registeredIds check 176-184; effect deps [enabled, language] at 192); /home/user/sf-main/SparkyFitnessMobile/src/services/backgroundWater.ts:136-157 (refreshBackgroundWaterShortcut, queued with syncs/clears); /home/user/sf-main/SparkyFitnessMobile/targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/BackgroundWaterModule.kt:38-54 (refreshShortcut); /home/user/sf-main/SparkyFitnessMobile/plugins/withBackgroundWater.ts:162, 168 (LogWaterActivity not exported, empty taskAffinity)"
+ },
+ {
+  "id": "checkin-fasting-quick-action",
+  "kind": "done",
+  "prs": [
+   2989
+  ],
+  "note_en": "Android now also shows Fasting when you long-press the app icon (expo-quick-actions, with its own adaptive icon), and it opens the fasting detail as on iOS. Its title comes from the same quickActions string on both platforms.",
+  "note_es": "Android también muestra ya Ayuno al mantener pulsado el icono de la app (expo-quick-actions, con su propio icono adaptativo), y abre el detalle de ayuno igual que en iOS. El título sale de la misma cadena quickActions en las dos plataformas.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/hooks/useQuickActions.ts:50-54 (fasting item, ic_shortcut_fasting on Android), 147-148 (navigate FastingDetail), 163-193; /home/user/sf-main/SparkyFitnessMobile/targets/android-background-water/res/drawable/ic_shortcut_fasting.xml (adaptive-icon)"
+ },
+ {
+  "id": "diary-quick-actions-food",
+  "kind": "done",
+  "prs": [
+   2989
+  ],
+  "note_en": "Android now has Scan food and Log food among the app icon actions, plus Scan barcode and Search food Quick Settings tiles that open the same screens and serve as the counterpart of the iOS Control Center controls. The iOS Action button, which can also run these controls, still has no Android equivalent.",
+  "note_es": "Android tiene ya Escanear comida y Registrar comida entre las acciones del icono, además de las baldosas de Ajustes rápidos Escanear código de barras y Buscar comida, que abren las mismas pantallas y hacen de equivalente a los controles del Centro de control de iOS. El botón Acción de iOS, que también puede lanzar estos controles, sigue sin equivalente en Android.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/hooks/useQuickActions.ts:35-44, 139-146; /home/user/sf-main/SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/QuickSettingsTiles.kt.tmpl:14-18, 65-75 (ScanFoodTileService -> ://scan, SearchFoodTileService -> ://search); /home/user/sf-main/SparkyFitnessMobile/App.tsx:460-461 (FoodScan 'scan', FoodSearch 'search'); /home/user/sf-main/SparkyFitnessMobile/targets/widget/Controls.swift:79-108 (ScanFoodControl/SearchFoodControl)"
+ },
+ {
+  "id": "native-android-water-shortcut",
+  "kind": "done",
+  "prs": [
+   2989,
+   3020
+  ],
+  "note_en": "The short label now comes from the app's quickActions strings, translated in 10 of the 15 other languages the app ships; the long label is still English-only. The shortcut is put back after the expo-quick-actions items replace the dynamic list, no longer brings the app to the front and sits beside Scan food, Log food and Fasting, and a drink logged from it also updates a placed water widget. The result Toast is still English-only and only shows while the app's notifications are on (on HyperOS, its floating notifications too).",
+  "note_es": "La etiqueta corta sale ahora de las cadenas quickActions de la app, traducidas en 10 de los otros 15 idiomas que trae; la larga sigue solo en inglés. El atajo se vuelve a poner después de que las acciones de expo-quick-actions sustituyan la lista dinámica, ya no trae la app al frente y aparece junto a Escanear comida, Registrar comida y Ayuno, y cada toma registrada con él actualiza también el widget de agua si hay uno colocado. El Toast de resultado sigue en inglés y únicamente se ve con las notificaciones de la app activadas (en HyperOS, también las flotantes).",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/BackgroundWaterModule.kt:38-76 (refreshShortcut, stored labels, English fallback 63-66); LogWaterActivity.kt:64-76 (worker calls showTotalOnWaterWidget), 94-107 (ACTION_WATER_TOTALS broadcast), 122-132 (report), 190-203 (English results), 290-294 (Toast); /home/user/sf-main/SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WaterWidgetReceiver.kt.tmpl:35-57 (applies the totals); /home/user/sf-main/SparkyFitnessServer/services/measurementService.ts:835-852 (POST returns water totals); /home/user/sf-main/SparkyFitnessMobile/plugins/withBackgroundWater.ts:168 (taskAffinity ''); /home/user/sf-main/SparkyFitnessMobile/src/localization/localeRegistry.json (cs not shipped), locales/en/translation.json:6239-6247 (logWaterInBackground only in en); /home/user/sf-main/SparkyFitnessMobile/AGENTS.md:236 (HyperOS floating notifications)"
+ },
+ {
+  "id": "native-ios-controls",
+  "kind": "partial",
+  "prs": [
+   2989,
+   3020
+  ],
+  "note_en": "Android has four Quick Settings tiles as counterparts: Log water (logs a drink in the background, also from the lock screen), Scan barcode, Search food and Calories left (today's kcal left; opens the diary). Remove water, Start fast and End fast have no tile; the only way to remove a drink without opening the app is the − button on the home screen water widget. The Log water tile does not show the day's total like the iOS control; on Android that total is on the water widget.",
+  "note_es": "Android tiene cuatro baldosas de Ajustes rápidos equivalentes: Registrar agua (registra una toma en segundo plano, también desde la pantalla de bloqueo), Escanear código de barras, Buscar comida y Calorías restantes (kcal restantes de hoy; abre el diario). Quitar agua, Iniciar ayuno y Terminar ayuno no tienen baldosa; la única forma de quitar una toma sin abrir la app es el botón − del widget de agua de la pantalla de inicio. La baldosa Registrar agua no muestra el total del día como el control de iOS; en Android ese total aparece en el widget de agua.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/plugins/withQuickSettingsTiles.ts:17-38 (only four tiles); /home/user/sf-main/SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/QuickSettingsTiles.kt.tmpl:65-75 (Scan, Search), :86-98 (LogWater: render only sets the label, onClick enqueueLogWater), :106-121 (CaloriesLeft: kcal left, openApp(\"diary\")); /home/user/sf-main/SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WaterWidget.kt.tmpl:51-62,129-177 (amount vs goal, − and + buttons); /home/user/sf-main/SparkyFitnessMobile/targets/android-widget/res/xml/sparky_water_widget_info.xml:12 (widgetCategory home_screen only); /home/user/sf-main/SparkyFitnessMobile/targets/widget/Controls.swift:11-41 (iOS LogWaterControl shows the total), :44-71, :111-123; /home/user/sf-main/SparkyFitnessMobile/targets/widget/index.swift:10-18"
+ },
+ {
+  "id": "plat-native-control-center",
+  "kind": "partial",
+  "prs": [
+   2989,
+   3020
+  ],
+  "note_en": "Android has four Quick Settings tiles: Log water, Scan barcode, Search food and Calories left (shows today's kcal left and opens the diary). Still iOS-only: Remove water, Start fast and End fast as controls, the water amount on the Log water control, and the Action button; on Android the day's water and a − button to remove a drink are on the home screen water widget instead.",
+  "note_es": "Android tiene cuatro baldosas de Ajustes rápidos: Registrar agua, Escanear código de barras, Buscar comida y Calorías restantes (muestra las kcal restantes de hoy y abre el diario). Siguen siendo solo de iOS Quitar agua, Iniciar ayuno y Terminar ayuno como controles, la cantidad de agua en el control Registrar agua y el botón Acción; en Android, el agua del día y un botón − para quitar una toma están en el widget de agua de la pantalla de inicio.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/plugins/withQuickSettingsTiles.ts:17-38; /home/user/sf-main/SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/QuickSettingsTiles.kt.tmpl:86-121; /home/user/sf-main/SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WaterWidget.kt.tmpl:129-177; /home/user/sf-main/SparkyFitnessMobile/targets/android-widget/res/xml/sparky_water_widget_info.xml:12; /home/user/sf-main/SparkyFitnessMobile/targets/widget/Controls.swift:11-41,111-123; /home/user/sf-main/SparkyFitnessMobile/targets/widget/index.swift:10-18"
+ },
+ {
+  "id": "plat-screens-control-center-handoff",
+  "kind": "done",
+  "prs": [
+   2989
+  ],
+  "note_en": "The Android Scan barcode, Search food and Calories left Quick Settings tiles open the scanner, food search and the diary, asking to unlock first on the lock screen. They use sparkyfitnessmobile:// links (scan, search and diary) instead of the app-group handoff, which stays iOS-only.",
+  "note_es": "Las baldosas de Ajustes rápidos de Android Escanear código de barras, Buscar comida y Calorías restantes abren el escáner, la búsqueda de comida y el diario, y en la pantalla de bloqueo piden desbloquear antes. Usan enlaces sparkyfitnessmobile:// (scan, search y diary) en lugar del traspaso por app group, que sigue siendo solo de iOS.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/QuickSettingsTiles.kt.tmpl:41-62 (openApp, unlockAndRun when isLocked), :68, :74, :121; /home/user/sf-main/SparkyFitnessMobile/App.tsx:456-461 (diary, scan, search links); /home/user/sf-main/SparkyFitnessMobile/src/hooks/useQuickActions.ts:207-209 (useControlRouteHandoff returns unless Platform.OS === 'ios')"
+ },
+ {
+  "id": "missed-plat-screens-control-center-background",
+  "kind": "partial",
+  "prs": [
+   2989,
+   3020
+  ],
+  "note_en": "On Android the Log water Quick Settings tile logs a drink without opening the app, also from the lock screen, and puts the result in the notification list (a Toast if the app's notifications are off). The home screen water widget's − and + buttons also remove or add a drink without opening the app, but Remove water has no tile, and Start fast and End fast have no Android equivalent.",
+  "note_es": "En Android, la baldosa de Ajustes rápidos Registrar agua registra una toma sin abrir la app, también desde la pantalla de bloqueo, y deja el resultado en la lista de notificaciones (o en un Toast si las notificaciones de la app están desactivadas). Los botones − y + del widget de agua de la pantalla de inicio también quitan o añaden una toma sin abrir la app, pero Quitar agua no tiene baldosa, e Iniciar ayuno y Terminar ayuno no tienen equivalente en Android.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/QuickSettingsTiles.kt.tmpl:86-98; /home/user/sf-main/SparkyFitnessMobile/targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/LogWaterActivity.kt:47-61 (enqueueLogWater fromTile), :129-132 (report: notification for the tile, Toast if notify fails), :143-188 (notify returns false when notifications are off); /home/user/sf-main/SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WaterWidgetActions.kt:22-58 (WaterChangeAction, WaterWidgetWorker -> postWaterChange); /home/user/sf-main/SparkyFitnessMobile/targets/android-widget/res/xml/sparky_water_widget_info.xml:12 (home_screen only); /home/user/sf-main/SparkyFitnessMobile/plugins/withQuickSettingsTiles.ts:17-38 (no remove-water or fasting tile)"
+ },
+ {
+  "id": "plat-services-control-center-controls",
+  "kind": "partial",
+  "prs": [
+   2989,
+   3020
+  ],
+  "note_en": "Android has Quick Settings tiles for Calories left, Log water, Scan barcode and Search food, drawn again each time the panel opens (Calories left reads the calorie widget snapshot); the three that open the app use sparkyfitnessmobile:// links rather than the App Group handoff. Remove water, Start fast and End fast have no tile, and the Log water tile does not show the day's total; that total is on the water widget, which also picks up drinks logged from the tile and has a − button to remove one.",
+  "note_es": "Android tiene baldosas de Ajustes rápidos para Calorías restantes, Registrar agua, Escanear código de barras y Buscar comida, que se vuelven a dibujar cada vez que se abre el panel (Calorías restantes lee la instantánea del widget de calorías); las tres que abren la app usan enlaces sparkyfitnessmobile:// en lugar del traspaso por App Group. Quitar agua, Iniciar ayuno y Terminar ayuno no tienen baldosa, y la baldosa Registrar agua no muestra el total del día; ese total está en el widget de agua, que también recoge las tomas registradas desde la baldosa y tiene un botón − para quitar una.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/QuickSettingsTiles.kt.tmpl:24-34 (refresh on onStartListening), :106-121 (CalorieWidget.loadSnapshot); /home/user/sf-main/SparkyFitnessMobile/targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/LogWaterActivity.kt:64-76,95-107 (showTotalOnWaterWidget broadcast); /home/user/sf-main/SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WaterWidgetReceiver.kt.tmpl:36-57 (ACTION_WATER_TOTALS applied to the snapshot); /home/user/sf-main/SparkyFitnessMobile/src/hooks/useWidgetSync.ts:119 (iOS reloadControls), :157-170 (Android water snapshot push); /home/user/sf-main/SparkyFitnessMobile/src/hooks/useQuickActions.ts:207-209"
+ },
+ {
+  "id": "checkin-fasting-ios-controls-siri",
+  "kind": "none",
+  "prs": [],
+  "note_en": "",
+  "note_es": "",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/plugins/withQuickSettingsTiles.ts:17-38 (no fasting tile); only fasting reference under /home/user/sf-main/SparkyFitnessMobile/targets/android-* is targets/android-background-water/res/drawable/ic_shortcut_fasting.xml; /home/user/sf-main/SparkyFitnessMobile/src/hooks/useQuickActions.ts:51-53,147-148 (Android Fasting shortcut only opens FastingDetail); /home/user/sf-main/SparkyFitnessMobile/targets/widget/ShortcutIntents.swift:370,408; /home/user/sf-main/SparkyFitnessMobile/targets/widget/Controls.swift:44-71"
+ },
+ {
+  "id": "missed-integrations-os-shortcuts",
+  "kind": "partial",
+  "prs": [
+   2989,
+   3020
+  ],
+  "note_en": "Android has Scan food, Log food and Fasting app icon shortcuts that open the app, plus four Quick Settings tiles and a water widget: the Log water shortcut and tile log a drink in the background (the tile also from the lock screen), and the widget's − and + buttons remove or add one, all with the stored login. The app icon shortcut names, Log water included, are translated in 10 of the 15 other languages the app ships, but the Log water long label, the Log water and Calories left tile names, the Log water result messages, the \"Quick logging\" notification channel and the water widget's texts are still English only. Siri/Shortcuts App Intents (log or remove water, log weight, start or end a fast) still have no Android equivalent.",
+  "note_es": "Android tiene las acciones rápidas del icono Escanear comida, Registrar comida y Ayuno, que abren la app, además de cuatro baldosas de Ajustes rápidos y un widget de agua: el atajo y la baldosa Registrar agua registran una toma en segundo plano (la baldosa, también desde la pantalla de bloqueo) y los botones − y + del widget quitan o añaden una, todo ello con la sesión guardada. Los nombres de las acciones rápidas del icono, Registrar agua incluida, están traducidos en 10 de los otros 15 idiomas que trae la app, pero la etiqueta larga de Registrar agua, los nombres de las baldosas Registrar agua y Calorías restantes, los mensajes de resultado al registrar agua, el canal de notificaciones \"Quick logging\" y los textos del widget de agua siguen solo en inglés. Las App Intents de Siri/Atajos (registrar o quitar agua, registrar peso, empezar o terminar ayuno) siguen sin equivalente en Android.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/hooks/useQuickActions.ts:32-61 (Android items without log-water), :65-72 (restoreLogWaterShortcut labels), :181-183 (only registered ids run); /home/user/sf-main/SparkyFitnessMobile/targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/BackgroundWaterModule.kt:46-54,63-66 (shortcut labels from the app language); /home/user/sf-main/SparkyFitnessMobile/src/localization/locales/*/translation.json quickActions.scanFood/searchFood/logWater/fasting in cs, de, es, fr, nl, pl, pt-BR, tr, yue-Hant, zh-Hans, zh-Hant; logWaterInBackground only in en (en/translation.json:6243); /home/user/sf-main/SparkyFitnessMobile/targets/android-widget/res/values/widget_strings.xml:15-33 (tile_log_water, tile_calories_left and every sparky_water_widget_*/widget_water_* string absent from all values-*; values-lv is empty); /home/user/sf-main/SparkyFitnessMobile/targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/LogWaterActivity.kt:59, :149 (\"Quick logging\"), :170, :190-202 (hard-coded result texts), :228-230 (postWaterChange with the stored login); /home/user/sf-main/SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WaterWidgetActions.kt:22-58; /home/user/sf-main/SparkyFitnessMobile/targets/widget/ShortcutIntents.swift:260,300,338,370,408"
+ },
+ {
+  "id": "diary-water-external-log",
+  "kind": "partial",
+  "prs": [
+   2989,
+   3020
+  ],
+  "note_en": "Android now logs water without opening the app from the launcher 'Log water' shortcut, a Log water Quick Settings tile (also from the lock screen) and a 2x2 home screen water widget whose − and + buttons remove or add one drink of the Dashboard's container. Siri/Shortcuts, the Action button, the Remove water control and Lock Screen water widgets are still iOS-only, and the Android water widget comes in one size only (iOS has small and medium).",
+  "note_es": "Android ya registra agua sin abrir la app desde el atajo 'Log water' del lanzador, una baldosa de Ajustes rápidos 'Log water' (también desde la pantalla de bloqueo) y un widget de agua de 2x2 para la pantalla de inicio, cuyos botones − y + quitan o añaden una bebida del recipiente del Panel. Siri/Atajos, el botón de Acción, el control 'Remove water' y los widgets de agua de la pantalla de bloqueo siguen siendo solo de iOS, y el widget de agua de Android tiene un único tamaño (en iOS hay pequeño y mediano).",
+  "evidence": "SparkyFitnessMobile/targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/LogWaterActivity.kt:34-61,64-76,228-281; .../backgroundwater/BackgroundWaterModule.kt:56-76; SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/QuickSettingsTiles.kt.tmpl:86-98; .../widget/WaterWidget.kt.tmpl:51-70,149-177; .../widget/WaterWidgetActions.kt:22-59; SparkyFitnessMobile/targets/android-widget/res/xml/sparky_water_widget_info.xml:5-12 (2x2, resizeMode none, home_screen only); SparkyFitnessMobile/targets/widget/waterWidget.swift:134-166,250-264 (− / + buttons; systemSmall, systemMedium, accessory families); SparkyFitnessMobile/targets/widget/Controls.swift:111-120 (RemoveWaterControl); SparkyFitnessMobile/plugins/ios/ShortcutProvider.swift:9-38"
+ },
+ {
+  "id": "native-siri-shortcuts",
+  "kind": "none",
+  "prs": [],
+  "note_en": "",
+  "note_es": "",
+  "evidence": "SparkyFitnessMobile/plugins/ios/ShortcutProvider.swift:9-38 (still four App Shortcuts with English phrases); SparkyFitnessMobile/targets/widget/ShortcutIntents.swift:260-420 (RemoveWaterIntent isDiscoverable=false at 307); targets/widget/*.lproj hold only Localizable.strings, no AppShortcuts.strings or .xcstrings anywhere outside ios/; merges 2fbb53954 (#2989), c24c9ac9e (#3020) and 71fe2e61f (#3021) touch nothing under targets/widget or plugins/ios (only the JS bridge modules/background-water/index.ts); Weblate sync d211e1016 adds no Siri phrase translations"
+ },
+ {
+  "id": "plat-native-siri-shortcuts",
+  "kind": "partial",
+  "prs": [
+   2989,
+   3020
+  ],
+  "note_en": "Android now logs a drink without opening the app from the launcher 'Log water' shortcut, a Log water Quick Settings tile (also from the lock screen) and the water widget's + button, and removes one with the widget's − button, one drink per tap where the iOS Log water action takes 1 to 20. It still has no voice, Shortcuts app or Action button equivalent, and no way to log weight or start or end a fast without opening the app; the Fasting app icon shortcut only opens the fasting screen.",
+  "note_es": "Android ya registra una bebida sin abrir la app desde el atajo 'Log water' del lanzador, una baldosa de Ajustes rápidos 'Log water' (también desde la pantalla de bloqueo) y el botón + del widget de agua, y quita una con el botón − del widget, siempre de una en una, mientras que la acción 'Log water' de iOS admite de 1 a 20. Sigue sin equivalente a la voz, la app Atajos o el botón de Acción, y sin forma de registrar el peso ni de iniciar o terminar un ayuno sin abrir la app; la acción rápida 'Fasting' del icono solo abre la pantalla de ayuno.",
+  "evidence": "SparkyFitnessMobile/targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/LogWaterActivity.kt:47-76 (shortcut and tile post 1 drink),228-281; SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/QuickSettingsTiles.kt.tmpl:86-98; .../widget/WaterWidgetActions.kt:22-59; .../widget/WaterWidget.kt.tmpl:149-177; SparkyFitnessMobile/src/hooks/useQuickActions.ts:50-61,147-149 (fasting only navigates to FastingDetail); SparkyFitnessMobile/plugins/ios/ShortcutProvider.swift:9-38; SparkyFitnessMobile/targets/widget/ShortcutIntents.swift:267 (Drinks inclusiveRange 1-20),338-420"
+ },
+ {
+  "id": "missed-plat-screens-siri-shortcuts",
+  "kind": "partial",
+  "prs": [
+   2989,
+   3020
+  ],
+  "note_en": "Android's actions that work without opening the app are now the launcher 'Log water' shortcut, the Log water Quick Settings tile (also from the lock screen) and the water widget's − and + buttons. Android still has no Google Assistant or voice integration and no background weight or fasting actions.",
+  "note_es": "Las acciones de Android que funcionan sin abrir la app son ahora el atajo 'Log water' del lanzador, la baldosa de Ajustes rápidos 'Log water' (también desde la pantalla de bloqueo) y los botones − y + del widget de agua. Android sigue sin integración con Google Assistant ni voz, y sin acciones de peso o ayuno en segundo plano.",
+  "evidence": "SparkyFitnessMobile/targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/LogWaterActivity.kt:34-76; .../backgroundwater/BackgroundWaterModule.kt:56-76; SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/QuickSettingsTiles.kt.tmpl:86-98; .../widget/WaterWidget.kt.tmpl:149-177; .../widget/WaterWidgetActions.kt:22-59; SparkyFitnessMobile/plugins/ios/ShortcutProvider.swift:9-38"
+ },
+ {
+  "id": "missed-plat-services-siri-shortcuts",
+  "kind": "partial",
+  "prs": [
+   2989,
+   3020
+  ],
+  "note_en": "On Android the same background water request (postWaterChange in LogWaterActivity.kt) now serves the launcher 'Log water' shortcut, a Log water Quick Settings tile and the water widget's − and + buttons; the cited shortcut code in BackgroundWaterModule.kt now spans about lines 21-76. The shortcut's short label is translated in 10 of the 15 non-English languages the app ships, but its long label, the tile and water widget texts, the result Toasts and notifications and the notifications' 'Quick logging' channel are English only. There are still no weight or fasting actions without opening the app, and no Google Assistant integration.",
+  "note_es": "En Android, la misma petición de agua en segundo plano (postWaterChange en LogWaterActivity.kt) la usan ahora el atajo 'Log water' del lanzador, una baldosa de Ajustes rápidos 'Log water' y los botones − y + del widget de agua; el código citado del atajo en BackgroundWaterModule.kt ocupa ahora aproximadamente las líneas 21-76. El texto corto del atajo está traducido en 10 de los 15 idiomas distintos del inglés que incluye la app, pero su texto largo, los textos de la baldosa y del widget de agua, los Toast y notificaciones con el resultado y el canal 'Quick logging' de esas notificaciones siguen solo en inglés. Sigue sin haber acciones de peso o ayuno sin abrir la app, ni integración con Google Assistant.",
+  "evidence": "SparkyFitnessMobile/targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/BackgroundWaterModule.kt:21-76 (default English labels at 63,66); .../backgroundwater/LogWaterActivity.kt:47-76,129-203 (hard-coded English at 59,149,170,192-201),228-281; SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WaterWidgetActions.kt:45-59; .../widget/QuickSettingsTiles.kt.tmpl:86-98; SparkyFitnessMobile/src/hooks/useQuickActions.ts:65-72; SparkyFitnessMobile/src/localization/localeRegistry.json (en + 15 shipped locales: de, es, fr, hu, it, lv, nb-NO, nl, pl, pt-BR, ru, tr, yue-Hant, zh-Hans, zh-Hant); src/localization/locales/*/translation.json quickActions.logWater present in de, es, fr, nl, pl, pt-BR, tr, yue-Hant, zh-Hans, zh-Hant, missing in hu, it, lv, nb-NO, ru; quickActions.logWaterInBackground only in en; SparkyFitnessMobile/targets/android-widget/res/values/widget_strings.xml:15,17-33 (tile_log_water, sparky_water_widget_* and widget_water_* absent from every values-*/widget_strings.xml)"
+ },
+ {
+  "id": "checkin-siri-log-weight",
+  "kind": "none",
+  "prs": [],
+  "note_en": "",
+  "note_es": "",
+  "evidence": "SparkyFitnessMobile/targets/widget/ShortcutIntents.swift:338-366 (LogWeightIntent unchanged); SparkyFitnessMobile/targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/LogWaterActivity.kt:228-281 (Android background path posts water only); no weight action in targets/android-widget or targets/android-background-water"
+ },
+ {
+  "id": "native-deep-links",
+  "kind": "done",
+  "prs": [
+   2989,
+   3020
+  ],
+  "note_en": "There is now a 'diary' route (sparkyfitnessmobile://diary), which the Android Calories left Quick Settings tile opens; the Scan barcode and Search food tiles use scan and search, and a tap outside the Android water widget's buttons opens the Dashboard through the root link, as on iOS. On Android only, a link or shortcut that started the app does not reopen its screen when Android restores the app after the system killed it (withQuickActionLaunchGuard).",
+  "note_es": "Existe ahora la ruta 'diary' (sparkyfitnessmobile://diary), con la que la baldosa de Ajustes rápidos 'Calories left' de Android abre el diario; las baldosas 'Scan barcode' y 'Search food' usan scan y search, y un toque fuera de los botones del widget de agua de Android abre el Panel con el enlace raíz, como en iOS. Solo en Android, un enlace o atajo que abrió la app no vuelve a abrir su pantalla cuando Android la restaura después de que el sistema la haya cerrado en segundo plano (withQuickActionLaunchGuard).",
+  "evidence": "SparkyFitnessMobile/App.tsx:448-469 (Diary: 'diary' at 457), 477-488 (linking only once Tabs is reached); SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/QuickSettingsTiles.kt.tmpl:41-75,121; .../widget/WaterWidget.kt.tmpl:95-104; SparkyFitnessMobile/targets/widget/waterWidget.swift:218 (widgetURL sparkyfitnessmobile://); SparkyFitnessMobile/plugins/withQuickActionLaunchGuard.ts:1-32; iOS Calories left control reaches the diary via the app group instead (targets/widget/ShortcutIntents.swift:488-493, src/hooks/useQuickActions.ts:207-228)"
+ },
+ {
+  "id": "diary-home-widgets",
+  "kind": "partial",
+  "prs": [
+   2989,
+   3020
+  ],
+  "note_en": "Android now has calories, macros and water widgets (the water one with − and + buttons that work without opening the app) and four Quick Settings tiles as the counterpart of the iOS controls: Log water, Scan barcode, Search food, and Calories left with today's kcal left in its label, also on the lock screen. Still iOS-only: the Lock Screen widget families and the Start fast, End fast and Remove water controls, though on Android the water widget's − button removes a drink. The Android calories widget still lacks consumed and burned, and the calories and macros widgets are still a fixed 2x1 and 2x2.",
+  "note_es": "Android ya tiene widgets de calorías, macros y agua (el de agua, con botones − y + que funcionan sin abrir la app) y cuatro baldosas de Ajustes rápidos como equivalente de los controles de iOS: Registrar agua, Escanear código de barras, Buscar comida y Calorías restantes, con las kcal que quedan hoy en su etiqueta, también en la pantalla de bloqueo. Siguen siendo solo de iOS las familias de widgets de pantalla de bloqueo y los controles Iniciar ayuno, Terminar ayuno y Quitar agua, aunque en Android el botón − del widget de agua quita una bebida. El widget de calorías de Android sigue sin mostrar consumidas y quemadas, y los de calorías y macros siguen siendo un 2x1 y un 2x2 fijos.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/plugins/withCalorieWidget.ts:27-43 (calorie, macro and water receivers); targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WaterWidget.kt.tmpl:51-70,149-177,205-241; targets/android-widget/res/xml/sparky_water_widget_info.xml:4-12; plugins/withQuickSettingsTiles.ts:17-38; targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/QuickSettingsTiles.kt.tmpl:65-122; targets/widget/index.swift:7-18 (iOS controls incl. RemoveWater, StartFast, EndFast); targets/widget/widgets.swift:319-322, macroWidget.swift:423-426, waterWidget.swift:260-263 (accessory families); CalorieWidget.kt.tmpl:77-88; res/xml/sparky_calorie_widget_info.xml:4-12 (2x1, resizeMode none), sparky_macro_widget_info.xml:4-12 (2x2, resizeMode none)"
+ },
+ {
+  "id": "goals-widgets",
+  "kind": "partial",
+  "prs": [
+   3020
+  ],
+  "note_en": "Android now also has a water widget showing today's water against the goal with a bar and − and + buttons, next to the calories and macros widgets. Still different: the Android calories widget shows only kcal left and its bar, without consumed and burned (planned but not done, and no PR is open for it), and the Lock Screen formats are iOS-only.",
+  "note_es": "Android ya tiene también un widget de agua con el agua de hoy frente al objetivo, una barra y botones − y +, junto a los widgets de calorías y macros. Sigue habiendo diferencias: el widget de calorías de Android solo muestra las kcal restantes y su barra, sin consumidas ni quemadas (estaba previsto, pero no se ha hecho ni hay ninguna PR abierta), y los formatos de pantalla de bloqueo siguen siendo solo de iOS.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WaterWidget.kt.tmpl:129-177,243-268; plugins/withCalorieWidget.ts:38-42; targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/CalorieWidget.kt.tmpl:77-88,171-177; src/services/androidWidgetSyncService.ts:15-20; targets/widget/widgets.swift:255-256,278-280; targets/widget/waterWidget.swift:150-163,176-193,260-263; targets/android-widget/res/xml/sparky_water_widget_info.xml:12 (home_screen only)"
+ },
+ {
+  "id": "native-widget-calories",
+  "kind": "open",
+  "prs": [],
+  "note_en": "The consumed and burned view, the medium size and resizing planned for this widget have not been done, and no PR is open for them. The Android widget still shows only kcal left, its bar and the Search and Scan buttons, at a fixed 2x1 (resizeMode none) on the home screen only; the Lock Screen accessories are iOS-only.",
+  "note_es": "Lo previsto para este widget (mostrar consumidas y quemadas, un tamaño mediano y poder redimensionarlo) no se ha hecho y no hay ninguna PR abierta para ello. El widget de Android sigue mostrando solo las kcal restantes, su barra y los botones de buscar y escanear, en un 2x1 fijo (resizeMode none) y solo en la pantalla de inicio; los accesorios de pantalla de bloqueo son solo de iOS.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/CalorieWidget.kt.tmpl:77-88,99-166,171-177; targets/android-widget/res/xml/sparky_calorie_widget_info.xml:4-6,10,12; src/services/androidWidgetSyncService.ts:15-20; targets/widget/widgets.swift:255-256,278-299,319-322"
+ },
+ {
+  "id": "native-widget-macros",
+  "kind": "open",
+  "prs": [],
+  "note_en": "The extra sizes or resizing planned for the Android macros widget have not been done, and no PR is open for them; it is still a fixed 2x2 on the home screen only. iOS keeps its small and medium sizes and the Lock Screen versions.",
+  "note_es": "Los tamaños adicionales o el redimensionado previstos para el widget de macros de Android no se han hecho y no hay ninguna PR abierta para ello; sigue siendo un 2x2 fijo y solo en la pantalla de inicio. iOS mantiene sus tamaños pequeño y mediano y las versiones de pantalla de bloqueo.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/MacroWidget.kt.tmpl:60-64; targets/android-widget/res/xml/sparky_macro_widget_info.xml:4-6,10,12; targets/widget/macroWidget.swift:254-262,423-426"
+ },
+ {
+  "id": "plat-native-home-widgets",
+  "kind": "open",
+  "prs": [],
+  "note_en": "The eaten and burned view on the calories widget, the medium size and resizing that were planned have not been done, and no PR is open for them. On Android the calories widget is still a fixed 2x1 and the macros widget a fixed 2x2, both home-screen-only with the Search and Scan buttons, while iOS has small and medium sizes.",
+  "note_es": "No se ha hecho lo previsto (comido y quemado en el widget de calorías, un tamaño mediano y poder redimensionarlos) y no hay ninguna PR abierta para ello. En Android el widget de calorías sigue siendo un 2x1 fijo y el de macros un 2x2 fijo, ambos solo en la pantalla de inicio y con los botones de buscar y escanear, mientras que iOS tiene tamaños pequeño y mediano.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/targets/android-widget/res/xml/sparky_calorie_widget_info.xml:4-6,10,12; targets/android-widget/res/xml/sparky_macro_widget_info.xml:4-6,10,12; targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/CalorieWidget.kt.tmpl:77-97,128-166; MacroWidget.kt.tmpl:60-64,88-137; targets/widget/widgets.swift:290-299,319-322; targets/widget/macroWidget.swift:394-403,423-426"
+ },
+ {
+  "id": "plat-services-widget-calories",
+  "kind": "open",
+  "prs": [],
+  "note_en": "Showing eaten and burned on the Android widget has not been done and no PR is open for it, so the Android snapshot still carries only remaining, goal and progress. The Lock Screen variants are still iOS-only, and iOS still updates this widget only from the app in the foreground.",
+  "note_es": "No se ha hecho que el widget de Android muestre comido y quemado ni hay ninguna PR abierta para ello, así que su snapshot sigue llevando solo remaining, goal y progress. Las variantes de pantalla de bloqueo siguen siendo solo de iOS, e iOS sigue actualizando este widget solo con la app en primer plano.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/services/androidWidgetSyncService.ts:15-20,86-101; targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/CalorieWidget.kt.tmpl:171-177,198-214; src/hooks/useWidgetSync.ts:50-81 (iOS writes food/burned only from the app), 129-142 (Android, deduplicated by pushOnce); src/services/backgroundSyncService.ts:132-141 (Android-only background refresh); targets/widget/widgets.swift:319-322"
+ },
+ {
+  "id": "plat-services-widget-macros",
+  "kind": "none",
+  "prs": [],
+  "note_en": "",
+  "note_es": "",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/hooks/useWidgetSync.ts:83-90 (iOS macroSnapshot without goals), 144-155; src/services/androidWidgetSyncService.ts:22-32,103-115 (Android goals); targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/MacroWidget.kt.tmpl:320-362 (per-macro progress toward goal); targets/widget/macroWidget.swift:86,144-147 (iOS composition ring)"
+ },
+ {
+  "id": "native-widget-water",
+  "kind": "done",
+  "prs": [
+   3020
+  ],
+  "note_en": "Android now has an interactive water widget too: a 2x2 home-screen widget with today's water against the goal, a bar, and − and + buttons that remove or add one drink of the container chosen on the Dashboard without opening the app. It comes in one fixed size and has no Lock Screen versions, while iOS offers small and medium sizes and three Lock Screen shapes.",
+  "note_es": "Android también tiene ya un widget de agua interactivo: un widget de 2x2 para la pantalla de inicio con el agua de hoy frente al objetivo, una barra y botones − y + que quitan o añaden una bebida del recipiente elegido en el Panel sin abrir la app. Tiene un único tamaño fijo y no tiene versiones de pantalla de bloqueo, mientras que iOS ofrece tamaños pequeño y mediano y tres formatos de pantalla de bloqueo.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WaterWidget.kt.tmpl:63-71 (single 200x200 size), 140-147 (LinearProgressIndicator), 149-177 (− / + ChangeButton, only when showsButtons), 226-227 (actionRunCallback<WaterChangeAction>); WaterWidgetActions.kt:22-37, 45-58 (tap recorded, sent by WaterWidgetWorker via postWaterChange); targets/android-widget/res/xml/sparky_water_widget_info.xml:5-12 (2x2, resizeMode none, home_screen); plugins/withCalorieWidget.ts:39-41 (receiver registered); iOS: targets/widget/waterWidget.swift:150-166 (buttons), 194-216 (medium/small), 260-263 (families incl. accessory*)"
+ },
+ {
+  "id": "plat-native-water-widget",
+  "kind": "done",
+  "prs": [
+   3020
+  ],
+  "note_en": "Android now has a Glance home-screen water widget whose − and + buttons remove or add one drink in the background (through WorkManager, with the same request as the Log water shortcut and tile), without opening the app. Unlike iOS it draws a bar instead of a ring, comes in one fixed 2x2 size and has no Lock Screen variants (accessoryCircular/Rectangular/Inline); it also shows a short status line when a change fails.",
+  "note_es": "Android tiene ya un widget de agua de pantalla de inicio con Glance cuyos botones − y + quitan o añaden una bebida en segundo plano (con WorkManager y la misma petición que el atajo y la baldosa Registrar agua), sin abrir la app. A diferencia de iOS, muestra una barra en lugar de un anillo, tiene un único tamaño fijo de 2x2 y no tiene variantes de pantalla de bloqueo (accessoryCircular/Rectangular/Inline); además, muestra una breve línea de estado cuando un cambio falla.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WaterWidget.kt.tmpl:63-71, 140-148 (bar + StatusLine), 182-203 (status strings), 205-241 (ChangeButton); WaterWidgetStore.kt:171-198 (status set only from a failed or empty change), 223-233 (enqueueSend, WorkManager unique work); WaterWidgetActions.kt:45-58 (WaterWidgetWorker -> postWaterChange); targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/LogWaterActivity.kt:63-74, 228 (shared postWaterChange); res/xml/sparky_water_widget_info.xml:10-12; iOS: targets/widget/waterWidget.swift:114-130 (WaterRing), 150-166, 175-193 (accessory variants), 260-263"
+ },
+ {
+  "id": "missed-plat-screens-water-widget",
+  "kind": "done",
+  "prs": [
+   3020
+  ],
+  "note_en": "Android now has a water widget next to the calorie and macro widgets, with today's water against the goal and − and + buttons that remove or add a drink without opening the app. A drink logged from the Log water shortcut or Quick Settings tile also shows on it. Only iOS has a medium size and Lock Screen versions.",
+  "note_es": "Android tiene ya, junto a los widgets de calorías y macros, un widget de agua con el agua de hoy frente al objetivo y botones − y + que quitan o añaden una bebida sin abrir la app. Las bebidas registradas con el atajo o la baldosa de Ajustes rápidos Registrar agua también se reflejan en él. Solo iOS tiene tamaño mediano y versiones de pantalla de bloqueo.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/targets/android-widget/res/values/widget_strings.xml:17-34 (water widget strings); targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WaterWidget.kt.tmpl:63-71, 149-177; WaterWidgetReceiver.kt.tmpl:36-57 (ACTION_WATER_TOTALS -> applyTotalsLocked); WaterWidgetStore.kt:204-212; targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/LogWaterActivity.kt:63-74, 95-107 (showTotalOnWaterWidget after a shortcut/tile log); res/xml/sparky_water_widget_info.xml:12 (home_screen); iOS: targets/widget/waterWidget.swift:260-263"
+ },
+ {
+  "id": "plat-services-widget-water",
+  "kind": "done",
+  "prs": [
+   2989,
+   3020
+  ],
+  "note_en": "Android now has its own water widget, fed like the iOS one: through useWidgetSync the Dashboard sends the drink size, unit and whether logging is possible, and androidWidgetSyncService builds the water snapshot. On Android the background sync also refreshes its totals, and an account change clears it. The widget's − and + buttons, the Log water shortcut and the Log water Quick Settings tile share one native request, and a drink logged from the shortcut or tile updates the widget's total.",
+  "note_es": "Android tiene ya su propio widget de agua, alimentado como el de iOS: el Panel envía mediante useWidgetSync el tamaño de la bebida, la unidad y si se puede registrar, y androidWidgetSyncService construye el snapshot de agua. En Android, además, la sincronización en segundo plano actualiza sus totales y un cambio de cuenta lo borra. Los botones − y + del widget, el atajo Registrar agua y la baldosa de Ajustes rápidos Registrar agua comparten la misma petición nativa, y una bebida registrada desde el atajo o la baldosa actualiza el total del widget.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/services/androidWidgetSyncService.ts:34-84 (WaterWidgetInfo, buildAndroidWaterSnapshot), 146-154 (pushAndroidWaterSnapshot), 169-172 (clearAndroidWidgetSnapshots), 174-205 (refreshAndroidWidgetsFromServer pushes water); src/hooks/useWidgetSync.ts:100-117 (iOS waterSnapshot), 157-172 (Android water push); src/screens/DashboardScreen.tsx:307-311; src/services/backgroundSyncService.ts:132-141 (Android-only widget refresh); src/hooks/useAuth.ts:63-69 (clear on identity change); src/services/CalorieWidgetBridge.ts:26-29 (native module only on Android, so iOS waterSnapshot is not cleared); targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/QuickSettingsTiles.kt.tmpl:85-98 (LogWaterTileService); targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/LogWaterActivity.kt:63-74, 95-107, 228 (postWaterChange shared with WaterWidgetActions.kt:52)"
+ },
+ {
+  "id": "native-widget-lockscreen",
+  "kind": "none",
+  "prs": [],
+  "note_en": "",
+  "note_es": "",
+  "evidence": "Unchanged: all three Android widgets, including the new water widget, declare home_screen only (/home/user/sf-main/SparkyFitnessMobile/targets/android-widget/res/xml/sparky_calorie_widget_info.xml:12, sparky_macro_widget_info.xml:12, sparky_water_widget_info.xml:12); iOS accessory families remain in targets/widget/widgets.swift:319-322, macroWidget.swift:423-426, waterWidget.swift:260-263. Lock Screen versions were never planned for Android."
+ },
+ {
+  "id": "plat-native-lockscreen-widgets",
+  "kind": "none",
+  "prs": [],
+  "note_en": "",
+  "note_es": "",
+  "evidence": "Unchanged: /home/user/sf-main/SparkyFitnessMobile/targets/android-widget/res/xml/*.xml:12 all android:widgetCategory=\"home_screen\" (the new sparky_water_widget_info.xml too); WaterWidget.kt.tmpl:67-70 has a single fixed size with no accessory variant; iOS: targets/widget/widgets.swift:319-322, macroWidget.swift:423-426, waterWidget.swift:175-193, 260-263"
+ },
+ {
+  "id": "plat-services-widget-background-refresh",
+  "kind": "done",
+  "prs": [
+   2989,
+   3020
+  ],
+  "note_en": "The Android background refresh now also updates the new water widget's total and goal, keeping the drink size and unit the app last sent, and the Calories left Quick Settings tile reads the same refreshed calorie snapshot whenever the panel opens. The snapshots are erased when the account changes, and a refresh still loading at that moment pushes nothing. iOS still has no background refresh: the background task does not touch its widgets.",
+  "note_es": "La actualización en segundo plano de Android refresca ahora también el total y el objetivo del nuevo widget de agua, conservando el tamaño de la toma y la unidad que la app envió por última vez, y la baldosa de Ajustes rápidos Calorías restantes lee esa instantánea de calorías ya actualizada cada vez que se abre el panel. Las instantáneas se borran al cambiar de cuenta, y una actualización que aún estuviera cargando en ese momento no envía nada. iOS sigue sin actualización en segundo plano: la tarea en segundo plano no toca sus widgets.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/services/backgroundSyncService.ts:132-141 (Android only; file unchanged since 5364674f); src/services/androidWidgetSyncService.ts:174-205 (refreshAndroidWidgetsFromServer: generation read :175, checked after the summary loads :188, calorie+macro+water pushes :190-196); androidWidgetSyncService.ts:69-84 (buildAndroidWaterSnapshot without water info = totals only); targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WaterWidgetStore.kt:105-122 (mergeFromAppLocked keeps drinkMl/unit/canLog from the stored copy); QuickSettingsTiles.kt.tmpl:24-34 (tile redrawn on onStartListening) and :106-121 (CaloriesLeftTileService reads CalorieWidget.loadSnapshot); androidWidgetSyncService.ts:169-172 + src/hooks/useAuth.ts:63-69 (clearAndroidWidgetSnapshots on account change, from #2989 commit ed5d74097); CalorieWidgetModule.kt.tmpl clearSnapshots/clearWaterWidget (erases calorie, macro and water, cancels pending water taps)"
+ },
+ {
+  "id": "plat-native-widget-refresh",
+  "kind": "done",
+  "prs": [
+   3020,
+   3021
+  ],
+  "note_en": "The new Android water widget gets the same background refresh and midnight reset as the calorie and macro widgets, and shows the server's total after a drink logged from its − / + buttons or the Log water shortcut or tile, much as the iOS water widget does after its buttons, controls or Siri. The midnight refresh is now set again even after a failed redraw. iOS widgets still get no server data in the background, only what the app or those water actions write.",
+  "note_es": "El nuevo widget de agua de Android tiene el mismo refresco en segundo plano y el mismo reinicio a medianoche que los de calorías y macros, y muestra el total del servidor tras registrar una toma con sus botones − / + o con el atajo o la baldosa Registrar agua, de forma parecida al widget de agua de iOS con sus botones, controles o Siri. La actualización de medianoche se vuelve a programar aunque falle el redibujado. Los widgets de iOS siguen sin recibir datos del servidor en segundo plano, solo lo que escriben la app o esas acciones de agua.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/services/androidWidgetSyncService.ts:194-196 (water snapshot in the background refresh); targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WaterWidgetReceiver.kt.tmpl:36-56 (ACTION_WATER_TOTALS from the shortcut/tile), :58-78 and :132-142 (midnight alarm, re-armed in finally); WaterWidget.kt.tmpl:88-89 + WidgetSnapshots.kt:18-26 (another day's snapshot reads as none, so the midnight redraw empties it); targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/LogWaterActivity.kt:64-76, :94-106 (LogWaterWorker -> showTotalOnWaterWidget); WaterWidgetStore.kt:171-212 (applyOutcomeLocked after − / +, applyTotalsLocked after shortcut/tile); CalorieWidgetReceiver.kt.tmpl:25-45 and MacroWidgetReceiver.kt.tmpl:25-46 (scheduleMidnightRefresh in finally, commit 3e3c45f08 / #3021). iOS (unchanged since 5364674f apart from pt-BR/tr strings): targets/widget/waterWidget.swift:101-111 (timeline .after min(15 min, midnight)); ShortcutIntents.swift:139-200 (WaterSnapshotWriter, used by LogWaterIntent :260 and RemoveWaterIntent :300, which the widget buttons waterWidget.swift:152,159 and Controls.swift:31,116 call); src/hooks/useWidgetSync.ts:58-127 (iOS foreground write)"
+ },
+ {
+  "id": "plat-services-background-sync",
+  "kind": "none",
+  "prs": [],
+  "note_en": "",
+  "note_es": "",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/services/backgroundSyncService.ts has no changes since 5364674f (absent from git diff 5364674f HEAD), so :132-141, :259-281 and :382-396 still read as audited; the only related change is inside refreshAndroidWidgetsFromServer (src/services/androidWidgetSyncService.ts:174-205, now also pushing the water widget), which the two widget refresh rows cover, and the row's 'also updates the widgets' is still true."
+ },
+ {
+  "id": "native-native-surface-language",
+  "kind": "partial",
+  "prs": [
+   2989,
+   3020
+  ],
+  "note_en": "On Android the calorie, macro and water widgets, the Quick Settings tiles and the app icon shortcuts now follow the actual app language and update when it changes, without a restart. Still English-only on Android: the water widget texts, the Log water and Calories left tile names, the Log water shortcut's long label and the Log water results (Toast, notification and its Quick logging channel, hard-coded in the code); the shortcut titles are untranslated in Hungarian, Italian, Latvian, Norwegian and Russian on both platforms, and the Latvian widget strings are empty on both. iOS is unchanged: its hook still reduces the language to en/pl and reloads only the calorie and macro timelines, not the water widget or the controls, whose texts there are translated only into Brazilian Portuguese; the Live Activity already followed the app language.",
+  "note_es": "En Android los widgets de calorías, macros y agua, las baldosas de Ajustes rápidos y las acciones rápidas del icono de la app siguen ahora el idioma real de la app y se actualizan cuando cambia, sin reiniciarla. En Android quedan solo en inglés los textos del widget de agua, los nombres de las baldosas Log water y Calories left, la etiqueta larga de la acción rápida Log water y los resultados de Log water (Toast, notificación y su canal Quick logging, fijados en el código); los títulos de las acciones rápidas no están traducidos al húngaro, italiano, letón, noruego ni ruso en ninguna de las dos plataformas, y las cadenas de widget en letón están vacías en ambas. iOS no cambia: su hook aún reduce el idioma a en/pl y solo recarga los timelines de calorías y macros, no el widget de agua ni los controles, cuyos textos allí solo están traducidos al portugués de Brasil; la Live Activity ya seguía el idioma de la app.",
+  "evidence": "SparkyFitnessMobile/src/hooks/useWidgetLanguageRefresh.ts:43,68-72 (normalizeLanguage; reloads calorie, macro and water widgets); targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/CalorieWidgetModule.kt.tmpl:223-252 (locale revision bump incl. WaterWidget); WaterWidget.kt.tmpl:93,120,130,148 and WaterWidgetReceiver.kt.tmpl:81-93 (WidgetLocale context, ACTION_LOCALE_CHANGED); QuickSettingsTiles.kt.tmpl:29-38,66,72,87,107-118 (tiles drawn with WidgetLocale.localizedContext on each panel open); src/hooks/useQuickActions.ts:65-72,163-192 (re-registers shortcuts and the native Log water labels on language change); targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/BackgroundWaterModule.kt:46-67 (long label from quickActions.logWaterInBackground); src/localization/locales/en/translation.json:6243 (logWaterInBackground) vs every other shipped locale (key absent; quickActions block absent in hu, it, lv, nb-NO, ru); src/localization/localeRegistry.json (16 shipped locales); targets/android-widget/res/values/widget_strings.xml:15-34 (tile_* and water strings) vs values-*/widget_strings.xml (17 calorie/macro strings only, values-lv empty); targets/android-background-water/kotlin/.../LogWaterActivity.kt:59,149,170,192-201 (hard-coded English results and channel name); targets/widget/en.lproj and pt-BR.lproj (36 keys incl. water/control) vs other .lproj (17 or fewer, lv.lproj empty); src/hooks/useIOSWidgetLanguageRefresh.ts:54-55,67,76; targets/widget/waterWidget.swift:251; src/services/workoutLiveActivity.ios.ts:495"
+ },
+ {
+  "id": "plat-services-widget-language",
+  "kind": "partial",
+  "prs": [
+   2989,
+   3020
+  ],
+  "note_en": "The Android hook now passes the resolved app language (normalizeLanguage) to prepareWidgetLocale, dedupes on it and reloads the calorie, macro and water widgets, so the en/pl limitation is gone on Android. The iOS hook (useIOSWidgetLanguageRefresh.ts) still reduces the language to en/pl, so switching from German to French still forces no reload there, and it reloads only the calorie and macro timelines, not the water widget or the controls.",
+  "note_es": "El hook de Android pasa ya a prepareWidgetLocale el idioma resuelto de la app (normalizeLanguage), deduplica con él y recarga los widgets de calorías, macros y agua, así que la limitación en/pl desaparece en Android. El hook de iOS (useIOSWidgetLanguageRefresh.ts) sigue reduciendo el idioma a en/pl, de modo que pasar de alemán a francés no fuerza allí ninguna recarga, y solo recarga los timelines de calorías y macros, no el widget de agua ni los controles.",
+  "evidence": "SparkyFitnessMobile/src/hooks/useWidgetLanguageRefresh.ts:41-99 (normalizeLanguage :43, dedupe :46-52, prepareWidgetLocale :55-58, reloads incl. reloadWaterWidget :68-72); targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/CalorieWidgetModule.kt.tmpl:223-252; src/hooks/useIOSWidgetLanguageRefresh.ts:9-10,54-55,67,76 (en/pl dedupe, only 'widget' and 'macroWidget'); targets/widget/waterWidget.swift:251 (kind 'waterWidget' not reloaded by the language hook); src/hooks/useWidgetSync.ts:28,117-119 (water widget and controls reloaded only on data sync); App.tsx:338-339"
+ },
+ {
+  "id": "native-camera-barcode",
+  "kind": "done",
+  "prs": [
+   2989
+  ],
+  "note_en": "On Android the scanner now also opens from the 'Scan food' app icon quick action, as on iOS, and from the 'Scan barcode' Quick Settings tile. The tile is Android's counterpart of the iOS control and asks you to unlock first if the phone is locked. The calorie and macro widgets have a Scan barcode button on Android and in their medium size on iOS; the water widget has none on either platform.",
+  "note_es": "En Android el escáner ahora también se abre desde la acción rápida 'Scan food' del icono de la app, como en iOS, y desde la baldosa de Ajustes rápidos 'Scan barcode'. La baldosa es la equivalente en Android del control de iOS y, si el móvil está bloqueado, pide desbloquearlo antes. Los widgets de calorías y macros tienen botón para escanear en Android y en su tamaño mediano en iOS; el widget de agua no lo tiene en ninguna de las dos plataformas.",
+  "evidence": "SparkyFitnessMobile/src/hooks/useQuickActions.ts:32-61 (scan-food registered on both platforms, only log-water filtered out on Android), :139-143 (navigates to FoodScan), :181-184 (only registered ids run); SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/QuickSettingsTiles.kt.tmpl:40-62 (openApp, unlockAndRun when isLocked), :65-69 (ScanFoodTileService opens sparkyfitnessmobile://scan); CalorieWidget.kt.tmpl:94,156 and MacroWidget.kt.tmpl:92,130 (scan button, widgets fixed size per res/xml/*_widget_info.xml resizeMode none); WaterWidget.kt.tmpl:95,104 (only opens the app); SparkyFitnessMobile/targets/widget/widgets.swift:198-213,284-301 and macroWidget.swift:251-266,394-402 (scan ActionButton only in mediumBody; small and Lock Screen sizes have none); waterWidget.swift:218 (iOS water widget only opens the app); Controls.swift:78-91 (ScanFoodControl); git: useQuickActions at 5364674f was iOS-only (Platform.OS !== 'ios' return)"
+ },
+ {
+  "id": "plat-native-notification-channels",
+  "kind": "done",
+  "prs": [
+   2989
+  ],
+  "note_en": "Android also has a 'Quick logging' channel (default importance, no sound or vibration) that shows the result of the Log water Quick Settings tile. Unlike the other channels, its name and the result messages are hard-coded in English in the native code and are not translated.",
+  "note_es": "Android tiene además un canal 'Quick logging' (importancia normal, sin sonido ni vibración) que muestra el resultado de la baldosa de Ajustes rápidos 'Log water'. A diferencia de los demás canales, su nombre y los mensajes del resultado están escritos en inglés directamente en el código nativo y no se traducen.",
+  "evidence": "SparkyFitnessMobile/targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/LogWaterActivity.kt:115 (CHANNEL_ID quick-logging), :129-132 (only fromTile goes to a notification, otherwise Toast), :143-153 (IMPORTANCE_DEFAULT, setName(\"Quick logging\"), setSound(null), vibration off), :170 and :190-202 (English result texts); QuickSettingsTiles.kt.tmpl:86-98 (LogWaterTileService, fromTile = true); SparkyFitnessMobile/src/services/notifications.ts:25-35,64-98 (other channel names via notificationCopy/i18n); src/services/workoutLiveActivity.android.ts:121 (Ongoing workout name translated); no 'Quick logging' key in any locale catalog or widget_strings.xml; channel added in #2989 commit 5f3b95049"
+ },
+ {
+  "id": "plat-services-notification-channels",
+  "kind": "done",
+  "prs": [
+   2989
+  ],
+  "note_en": "There is also a native 'Quick logging' channel. It is created the first time the Log water Quick Settings tile posts its result, and it uses default importance with no sound, vibration or pop-up. It is not created from notifications.ts, and its name and messages are hard-coded in English instead of being translated.",
+  "note_es": "Existe además un canal nativo 'Quick logging'. Se crea la primera vez que la baldosa de Ajustes rápidos 'Log water' publica su resultado y usa importancia normal, sin sonido, vibración ni aviso emergente. No se crea desde notifications.ts, y su nombre y sus mensajes están escritos en inglés directamente en el código, sin traducir.",
+  "evidence": "SparkyFitnessMobile/targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/LogWaterActivity.kt:143-153 (createNotificationChannel inside notify(), reached only when fromTile at :131), :149 (setName(\"Quick logging\")), :134-141 (no sound, vibration or heads-up), :170 and :190-202 (English messages); SparkyFitnessMobile/src/services/notifications.ts:64-98 and :172-191 (JS-created channels with localized names); SparkyFitnessMobile/targets/android-workout-notification/kotlin/com/sparkyapps/sparkyfitness/workoutnotification/WorkoutNotificationModule.kt:35 with src/services/workoutLiveActivity.android.ts:121 (Ongoing workout name passed translated from JS)"
+ },
+ {
+  "id": "diary-date-url-highlight",
+  "kind": "partial",
+  "prs": [
+   2989
+  ],
+  "note_en": "The shared link setup accepts sparkyfitnessmobile://diary on both platforms (the Android Calories left tile uses it), and it opens the Diary tab. The app does not read a date from the link and cannot highlight a food, so the web's ?date= and ?highlight= still have no mobile equivalent.",
+  "note_es": "La configuración de enlaces común acepta sparkyfitnessmobile://diary en ambas plataformas (la usa la baldosa 'Calories left' de Android), y ese enlace abre la pestaña Diario. La app no lee ninguna fecha del enlace ni puede resaltar un alimento, así que ?date= y ?highlight= de la web siguen sin equivalente en móvil.",
+  "evidence": "SparkyFitnessMobile/App.tsx:448-469 (linking prefixes and screens: Dashboard '', Diary 'diary', FoodScan 'scan', FoodSearch 'search'); SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/QuickSettingsTiles.kt.tmpl:121 (Calories left opens 'diary'); SparkyFitnessMobile/src/hooks/useQuickActions.ts:206-224 (iOS Calories left control goes to Diary through the app group handoff, not the link); SparkyFitnessMobile/src/types/navigation.ts:52 (Diary: { selectedDate?: string }); SparkyFitnessMobile/src/screens/DiaryScreen.tsx:105,114,141-143 (date from diaryDateStore, only written to params, never read); no highlight handling anywhere in src"
+ }
+]

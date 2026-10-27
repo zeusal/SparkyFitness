@@ -1,6 +1,6 @@
 # Feature parity report: guide
 
-_Last updated: 2026-10-21_
+_Last updated: 2026-10-26_
 
 This folder holds the SparkyFitness feature parity report: every user-reachable feature of the web app (`SparkyFitnessFrontend/`) and the mobile app (`SparkyFitnessMobile/`) compared side by side, plus the differences between iOS and Android inside the mobile app. It is a working document kept on a branch, not part of any package: it is outside the pnpm workspace, and lint-staged and Prettier never touch it (do not run Prettier on it).
 
@@ -19,6 +19,7 @@ This folder holds the SparkyFitness feature parity report: every user-reachable 
 | `original/` | The audit as delivered, without update notes: the four report files and the page. Never edit these. |
 | `notes/parity-notes.json` | The current update notes, one entry per reviewed row. This is what you edit. |
 | `notes/parity-summary.json` | The update section at the top of the Markdown, the notes on summary lines, and the page texts. Edit this too. |
+| `notes/new-features.json` | Features added since the audit that no row covers, listed after the update section in the Markdown and on the page's Executive summary tab. Edit this too. |
 | `notes/history/` | Earlier note sets, kept for reference. |
 | `tools/` | Scripts to find rows, review notes, build the files and check them (see below). |
 
@@ -53,14 +54,19 @@ Each entry in `notes/parity-notes.json` is:
 
 - In the Markdown a note goes as a sub-bullet under the row's bold entry (in section 2 matched by group, in section 3 by platform), or under a plain `- Name` list line when the row has no bold entry. In the CSV it fills the two update columns. In the page it is the row's badge and its "Update" field.
 
-`notes/parity-summary.json` has, per language (`en`, `es`): `insert_after_line` (the update section goes after line 4, the title block), `section` (its Markdown lines), and `anchors` (summary lines in section 0 that get a note: `line` is the exact original line, plus `label` and `text`; English anchors also carry `html_anchor`, the text that line ends with on the page). The `page` object holds the page's `date_label`, `lede_html` and the extra `filters` of the Updates select (one per PR, plus `open`).
+`notes/parity-summary.json` has, per language (`en`, `es`): `insert_after_line` (the update section goes after line 4, the title block), `section` (its Markdown lines), and `anchors` (summary lines in section 0 that get a note: `line` is the exact original line, plus `label` and `text`; English anchors also carry `html_anchor`, the text that line ends with on the page) and `new_features_heading` (the heading of the new features list). The `page` object holds the page's `date_label`, `lede_html` and the extra `filters` of the Updates select (a `value` is a kind, such as `done`, `partial` or `open`, or a PR number).
 
-## Current state (2026-10-21)
+Each entry in `notes/new-features.json` has `name_en`, `name_es`, `description_en`, `description_es`, `web`, `ios` and `android` (Yes, No or Partial), `watch` (`Apple Watch`, `Wear OS`, `both` or `none`), `prs` and `evidence`. The Markdown and the page show where it is available from those values.
 
-- Merged into `main`, released in v1.9.0: [#2989](https://github.com/CodeWithCJ/SparkyFitness/pull/2989) (Android app icon quick actions and Quick Settings tiles; widgets follow the app language; only registered quick actions run), [#3020](https://github.com/CodeWithCJ/SparkyFitness/pull/3020) (Android water widget with − / +, closes #1815) and [#3021](https://github.com/CodeWithCJ/SparkyFitness/pull/3021) (calorie and macro widgets' midnight refresh survives a failed redraw).
+## Current state (2026-10-26)
+
+- The notes cover everything merged into `main` up to `e5547e39f` (26 Oct 2026): 179 PRs. The 53 merged up to 20 Oct (#3025 and earlier, including #2989, #3020 and #3021) are in v1.9.0; the other 126 were not in a release yet. The next update starts from `git log --first-parent e5547e39f..upstream/main`.
+- 173 rows have a note (`done`, `partial` or `open`) and 7 more are recorded as `none`; `notes/new-features.json` lists 27 features no row covers. The biggest change is #3052, the Wear OS companion app (about 70 rows). Others: Android quick access and widgets (#2989, #3020), Compare, mood check-ins, heart rate zones and reports, routes, running and training programs on the web (#2948), medications adherence on mobile (#3103), progress photos on the web (#2965) and custom measurements on mobile (#3194).
+- How the notes were written: a triage of every merged PR from its diff, a drafted and adversarially verified note for each row it linked (156 rows), a sweep of 436 more rows picked by topic words (17 had changed), and a final cross-check of the notes by topic, of the summary and of the new features.
+- Possible issues recorded in the summary: the Android release workflow does not build or bundle the Wear OS app (`SPARKY_EMBED_WEAROS_RELEASE` is not set); starting a fast from Wear OS fails (preset `16:8` sent, `16-8` expected); on Android with a Wear OS watch, "Start on watch" and "Send to watch" on a saved route do not work as on iOS; on iOS an account change does not clear the widgets.
 - Still open: consumed and burned on the Android calories widget, and more sizes or resizing for the calories and macros widgets ([#2050](https://github.com/CodeWithCJ/SparkyFitness/issues/2050)). Lock-screen widgets, Siri/Shortcuts and the Remove water, Start fast and End fast controls are iOS-only.
-- Translations at that point: the `quickActions.*` strings were translated in 10 of the 15 shipped non-English locales (Czech has a catalog but is not shipped); the Android tile names, the water widget texts, the Log water shortcut's long label and the Log water result messages and notification channel were English only.
-- `notes/history/2026-10-19-parity-notes.json` is the first note set, written while #2989 was open and an Android widgets PR was planned. It used an older status model (`done_pr1`, `partial_pr1`, `planned_pr2`, `partial_pr1_planned_pr2`, `none`).
+- Translations at this point: the `quickActions.*` strings are translated in 10 of the 15 shipped non-English locales; the Android tile names, the water widget texts and the Log water shortcut's long label in 6 (es, pl, pt-BR, yue-Hant, zh-Hans, zh-Hant), while the Log water result messages and the "Quick logging" channel are English only; the Wear OS and Apple Watch apps' own texts and the mobile Custom Measurements screens are English only.
+- `notes/history/2026-10-19-parity-notes.json` is the first note set, written while #2989 was open and an Android widgets PR was planned, with an older status model (`done_pr1`, `partial_pr1`, `planned_pr2`, `partial_pr1_planned_pr2`, `none`). `notes/history/2026-10-21-parity-notes.json` is the set for #2989, #3020 and #3021 alone.
 
 ## Updating after new work is merged
 

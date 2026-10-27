@@ -6,10 +6,12 @@ Export the rows to review, grouped, with the audit fields and the current note:
 Merge reviewed rows into notes/parity-notes.json (each row needs id, kind,
 prs, note_en and note_es; evidence is kept when present). The input is either
 a list of rows or a list of {group, rows} objects:
-  python3 -I parity-report/tools/review_rows.py merge REVIEWED.json
+  python3 -I parity-report/tools/review_rows.py merge REVIEWED.json [--skip-none]
 
 A row with kind "none" is kept in the notes file (so the next review knows it
-was looked at) but gets no note in the report.
+was looked at) but gets no note in the report. With --skip-none, such rows are
+left out unless the row already has an entry (use it for the output of
+tools/sweep_rows.workflow.js, where most rows are unchanged).
 """
 import csv
 import json
@@ -48,15 +50,18 @@ def export(out_path, specs):
     print(out_path, {g: len(v) for g, v in out.items()})
 
 
-def merge(in_path):
+def merge(in_path, skip_none=False):
     data = json.load(open(in_path, encoding='utf-8'))
     if isinstance(data, dict) and 'result' in data:
         data = data['result']
     rows = [r for item in data for r in item['rows']] if data and 'rows' in data[0] else data
     notes = load_notes()
     index = {n['id']: i for i, n in enumerate(notes)}
-    changed = added = 0
+    changed = added = skipped = 0
     for r in rows:
+        if skip_none and r['kind'] == 'none' and r['id'] not in index:
+            skipped += 1
+            continue
         assert r['kind'] in KINDS, f"{r['id']}: kind {r['kind']}"
         assert all(isinstance(p, int) for p in r['prs']), f"{r['id']}: prs must be PR numbers"
         if r['kind'] in ('done', 'partial'):
@@ -72,13 +77,13 @@ def merge(in_path):
             notes.append(entry)
             added += 1
     json.dump(notes, open(NOTES_PATH, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
-    print(f'merged into {NOTES_PATH.name}: {changed} replaced, {added} added, {len(notes)} in total')
+    print(f'merged into {NOTES_PATH.name}: {changed} replaced, {added} added, {skipped} unchanged rows skipped, {len(notes)} in total')
 
 
 if __name__ == '__main__':
     if len(sys.argv) >= 4 and sys.argv[1] == 'export':
         export(sys.argv[2], sys.argv[3:])
-    elif len(sys.argv) == 3 and sys.argv[1] == 'merge':
-        merge(sys.argv[2])
+    elif len(sys.argv) in (3, 4) and sys.argv[1] == 'merge' and sys.argv[3:] in ([], ['--skip-none']):
+        merge(sys.argv[2], skip_none=sys.argv[3:] == ['--skip-none'])
     else:
         sys.exit(__doc__)

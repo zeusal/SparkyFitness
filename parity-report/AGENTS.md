@@ -71,10 +71,11 @@ Each entry in `notes/parity-notes.json` is:
    - `python3 -I parity-report/tools/find_rows.py --noted` lists rows that already have a note; an `open` row may now be `done`, and a note's wording may now be wrong.
 3. Export them, grouped by topic: `python3 -I parity-report/tools/review_rows.py export /tmp/review.json widgets=id1,id2 tiles=id3,id4`.
 4. Write and verify the notes against the checkout. `tools/review_notes.workflow.js` does this with one drafting and one adversarial verifying agent per group (arguments: `input`, `code`, `changes`, `groups`); its result, or a hand-written list of rows, goes back in with `python3 -I parity-report/tools/review_rows.py merge result.json`.
-5. Update `notes/parity-summary.json`: the update section in both languages (date, what was merged, what is still open), the summary-line notes, and the page's `date_label`, `lede_html` and `filters`.
-6. Build: `python3 -I parity-report/tools/apply_parity_update.py` and `python3 -I parity-report/tools/update_parity_page.py`.
-7. Check: `python3 -I parity-report/tools/check_additive.py` must end with `OK: only notes were added`. `node parity-report/tools/check_page.cjs [out_dir]` (needs the `playwright` package; set `CHROMIUM_PATH` to use a given browser) loads the page, tries every Updates filter and checks the phone width, and saves screenshots.
-8. Read the result (`git diff --stat`, and the new notes in the Markdown) and update the "Current state" section of this guide.
+5. Sweep the rows no PR was linked to. When much was merged, the search in step 2 misses rows whose text a PR made wrong without touching the files they cite. Pick rows by topic words with `python3 -I parity-report/tools/find_rows.py --any --unnoted --ids <word> …` (rows that mention any of the words and have no notes entry yet), export them by topic and run `tools/sweep_rows.workflow.js` on them (same arguments). Most come back unchanged; merge the result with `python3 -I parity-report/tools/review_rows.py merge result.json --skip-none`, which keeps only the rows that changed.
+6. Update `notes/parity-summary.json`: the update section in both languages (date, what was merged, what is still open), the summary-line notes, and the page's `date_label`, `lede_html` and `filters`.
+7. Build: `python3 -I parity-report/tools/apply_parity_update.py` and `python3 -I parity-report/tools/update_parity_page.py`.
+8. Check: `python3 -I parity-report/tools/check_additive.py` must end with `OK: only notes were added`. `node parity-report/tools/check_page.cjs [out_dir]` (needs the `playwright` package; set `CHROMIUM_PATH` to use a given browser) loads the page, tries every Updates filter and checks the phone width, and saves screenshots.
+9. Read the result (`git diff --stat`, and the new notes in the Markdown) and update the "Current state" section of this guide.
 
 ## Rules for notes
 

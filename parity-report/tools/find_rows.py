@@ -2,14 +2,16 @@
 
 Usage, from anywhere:
   python3 -I parity-report/tools/find_rows.py TERM [TERM ...]
-      Rows whose text or evidence contains every TERM (case-insensitive).
+      Rows whose text or evidence contains every TERM (case-insensitive);
+      with --any, rows that contain at least one.
   python3 -I parity-report/tools/find_rows.py --git REV_RANGE [--repo PATH]
       Rows whose evidence cites a file changed in REV_RANGE, for example
       "5364674f..upstream/main" or "abc123^1..abc123" for one merge commit.
   python3 -I parity-report/tools/find_rows.py --noted
       Every row that has an update note.
 
-Add --ids to print only the ids, one per line.
+Add --ids to print only the ids, one per line, and --unnoted to leave out
+rows that already have an entry in notes/parity-notes.json (of any kind).
 """
 import argparse
 import csv
@@ -30,6 +32,8 @@ p.add_argument('--git', metavar='REV_RANGE')
 p.add_argument('--repo', default=str(ROOT.parent), help='git checkout to diff (default: the one holding parity-report)')
 p.add_argument('--noted', action='store_true')
 p.add_argument('--ids', action='store_true')
+p.add_argument('--any', action='store_true', help='match rows containing any TERM instead of all')
+p.add_argument('--unnoted', action='store_true', help='leave out rows that already have a notes entry')
 args = p.parse_args()
 
 
@@ -60,9 +64,11 @@ else:
     terms = [t.lower() for t in args.terms]
     for r in rows:
         text = ' '.join(r[f] for f in FIELDS).lower()
-        if all(t in text for t in terms):
+        if (any if args.any else all)(t in text for t in terms):
             hits.append((r, ''))
 
+if args.unnoted:
+    hits = [(r, why) for r, why in hits if r['id'] not in notes]
 for r, why in hits:
     if args.ids:
         print(r['id'])

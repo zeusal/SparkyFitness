@@ -1,0 +1,199 @@
+[
+ {
+  "id": "native-widget-calories",
+  "kind": "partial",
+  "prs": [
+   3228
+  ],
+  "note_en": "The Android calories widget can now be resized from its default 2x1. Every size keeps the kcal left, the bar and the Search and Scan buttons; a wide one adds Diary and fasting shortcuts, and a wide one at least two rows tall adds Goal, Food and Burned like the iOS medium widget (the iOS small one shows Food and Burned but no buttons, and iOS has no Diary or fasting shortcuts). Still different: the Lock Screen versions are iOS-only, and the new Goal, Food and Burned labels and the screen reader labels of the new shortcuts are in English in every other language for now.",
+  "note_es": "El widget de calorías de Android ya se puede redimensionar a partir de su 2x1 por defecto. Todos los tamaños mantienen las kcal restantes, la barra y los botones de buscar y escanear; uno ancho añade accesos al Diario y al ayuno, y uno ancho de al menos dos filas añade el objetivo, lo comido y lo quemado, como el widget mediano de iOS (el pequeño de iOS muestra lo comido y lo quemado, pero sin botones, e iOS no tiene accesos al Diario ni al ayuno). Sigue habiendo diferencias: las versiones de pantalla de bloqueo son solo de iOS, y las nuevas etiquetas Goal, Food y Burned y las que lee el lector de pantalla en los nuevos accesos por ahora están en inglés en todos los demás idiomas.",
+  "evidence": "/home/user/sf-pr3228/SparkyFitnessMobile/targets/android-widget/res/xml/sparky_calorie_widget_info.xml:5-6,10-12,14 (2x1 by default, resizeMode horizontal|vertical, home_screen only); targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WidgetSizes.kt:25 (wide = 230 dp),35,43-51,100,112; .../widget/CalorieWidget.kt.tmpl:66 (SizeMode.Responsive),90-95,120-131 (search/scan always, Diary and fasting when wide; contentDescription only),157-177 (compact: shortcuts beside the bar),184-197,261-271 (Goal/Food/Burned row); targets/android-widget/res/values/widget_strings.xml:15-20 (widget_open_diary, widget_open_fasting, widget_goal, widget_food, widget_burned: in none of the 15 res/values-* folders); targets/widget/widgets.swift:111-120 (ring: kcal left),246-260 (small: ring, Food, Burned, no buttons),262-306 (medium: Goal, Food, Burned, Search/Scan),319-322 (systemSmall, systemMedium, accessory families); App.tsx:472-480 (diary and fasting links)"
+ },
+ {
+  "id": "native-widget-macros",
+  "kind": "partial",
+  "prs": [
+   3228
+  ],
+  "note_en": "The Android macros widget can now be resized from its default 2x2: a wide one shows each macro's grams against its goal and adds Diary and fasting shortcuts, and a wide one three rows tall also shows the kcal eaten under the kcal left. iOS keeps a ring of the macros' shares with the kcal eaten in its centre, with no kcal left or goals, and has Search and Scan only in its medium size, where Android has them at every size. Still different: the Lock Screen versions are iOS-only, and the new \"kcal eaten\" text and the screen reader labels of the new shortcuts are in English in every other language for now.",
+  "note_es": "El widget de macros de Android ya se puede redimensionar a partir de su 2x2 por defecto: uno ancho muestra los gramos de cada macro frente a su objetivo y añade accesos al Diario y al ayuno, y uno ancho de tres filas muestra además las kcal consumidas bajo las restantes. iOS mantiene un anillo con la parte de cada macro y las kcal consumidas en el centro, sin kcal restantes ni objetivos, y solo tiene buscar y escanear en el tamaño mediano, mientras que Android los tiene en todos los tamaños. Sigue habiendo diferencias: las versiones de pantalla de bloqueo son solo de iOS, y el nuevo texto «kcal eaten» y las etiquetas que lee el lector de pantalla en los nuevos accesos por ahora están en inglés en todos los demás idiomas.",
+  "evidence": "/home/user/sf-pr3228/SparkyFitnessMobile/targets/android-widget/res/xml/sparky_macro_widget_info.xml:5-6,10-12,14 (2x2 by default, resizable, minResize 110x110, home_screen only); targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WidgetSizes.kt:25,63-69; .../widget/MacroWidget.kt.tmpl:69,93-95,123-177 (wide: grams against goal, search/scan/Diary/fasting column),183-243 (classic and large: search/scan always, Diary and fasting when large),259-277 (kcal left header at every size),279-293 (kcal eaten line),332-343 (widget_amount_of_goal),490-506 (bar = consumed / goal); targets/android-widget/res/values/widget_strings.xml:15-17 (widget_open_diary, widget_open_fasting, widget_kcal_eaten, absent from every res/values-* folder); targets/widget/macroWidget.swift:4-15 (snapshot without remaining or goals),174-206 (ring centre: kcal eaten),349-364 (small: ring and gram rows),366-410 (medium: Search/Scan),423-426 (small, medium and accessory families)"
+ },
+ {
+  "id": "plat-native-home-widgets",
+  "kind": "done",
+  "prs": [
+   3228
+  ],
+  "note_en": "Both Android widgets can now be resized from their default 2x1 and 2x2; on iOS the size, small or medium, is picked when adding the widget. The wider Android sizes add Diary and fasting shortcuts and, on the macros widget, the grams against each goal, and a wide calories widget of two rows or more shows Goal, eaten and burned like the iOS medium one. Android keeps Search and Scan at every size, where iOS has them only on medium, while the iOS small calories widget already shows eaten and burned; the new Android labels (Goal, Food, Burned, kcal eaten) are in English in every other language for now.",
+  "note_es": "Los dos widgets de Android ya se pueden redimensionar a partir de su 2x1 y 2x2 por defecto; en iOS el tamaño, pequeño o mediano, se elige al añadir el widget. Los tamaños más anchos de Android añaden accesos al Diario y al ayuno y, en el de macros, los gramos frente a cada objetivo, y el de calorías, ancho y de dos filas o más, muestra el objetivo, lo comido y lo quemado como el mediano de iOS. Android mantiene Buscar y Escanear en todos los tamaños, mientras que iOS solo los tiene en el mediano, aunque el widget de calorías pequeño de iOS ya muestra lo comido y lo quemado; las nuevas etiquetas de Android (Goal, Food, Burned, kcal eaten) por ahora están en inglés en todos los demás idiomas.",
+  "evidence": "/home/user/sf-pr3228/SparkyFitnessMobile/targets/android-widget/res/xml/sparky_calorie_widget_info.xml:5-6,10-12 and sparky_macro_widget_info.xml:5-6,10-12 (2x1 and 2x2 by default, resizeMode horizontal|vertical); targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WidgetSizes.kt:25-69; .../widget/CalorieWidget.kt.tmpl:116-131,157-197,261-271; .../widget/MacroWidget.kt.tmpl:123-177,201-243,332-343; targets/android-widget/res/values/widget_strings.xml:17-20 (new labels, in no res/values-* folder); App.tsx:472-480 (diary and fasting links); targets/widget/widgets.swift:246-260 (small: Food, Burned, no buttons),262-306 (medium: Goal, Food, Burned, Search/Scan),319-322; targets/widget/macroWidget.swift:349-410,423-426; targets/widget/index.swift:4-10"
+ },
+ {
+  "id": "plat-services-widget-calories",
+  "kind": "partial",
+  "prs": [
+   3228
+  ],
+  "note_en": "Android now gets the same calorie snapshot as iOS, with food and burned, from the app and from the background refresh, and the widget shows Goal, Food and Burned when it is wide and two rows tall. Its Goal is food plus remaining, so in the goal modes that adjust the day's budget, such as adding exercise calories back, it can differ from the base goal the iOS medium widget shows. The Lock Screen variants are still iOS-only, and iOS still updates this widget only from the app in the foreground.",
+  "note_es": "Android recibe ahora la misma instantánea de calorías que iOS, con lo comido y lo quemado, tanto desde la app como desde la actualización en segundo plano, y el widget muestra el objetivo, lo comido y lo quemado cuando es ancho y de dos filas. Su objetivo es lo comido más lo restante, así que en los modos de objetivo que ajustan el presupuesto del día, como los que suman las calorías del ejercicio, puede no coincidir con el objetivo base que muestra el widget mediano de iOS. Las variantes de pantalla de bloqueo siguen siendo solo de iOS, e iOS sigue actualizando este widget solo desde la app en primer plano.",
+  "evidence": "/home/user/sf-pr3228/SparkyFitnessMobile/src/services/calorieWidgetSnapshot.ts:10-34 (one snapshot with food, burned, goal, remaining, progress); src/services/androidWidgetSyncService.ts:84-91,117-125,165-187 (background refresh pushes it too); src/hooks/useWidgetSync.ts:58-76 (iOS),124-137 (Android); src/services/backgroundSyncService.ts:133-135 (refresh only on Android); targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/CalorieWidget.kt.tmpl:93-95,184-197,305-315,346-372 (Goal = food + remaining; figures hidden without food/burned or goal); shared/src/utils/calorieCalculations.ts:283-310 (remaining per goal mode); targets/widget/widgets.swift:278 (iOS Goal = snapshot goal),319-322 (accessory families)"
+ },
+ {
+  "id": "plat-services-widget-macros",
+  "kind": "done",
+  "prs": [
+   3228
+  ],
+  "note_en": "The difference stays: the Android bars measure each macro against its goal, while the iOS ring shows each macro's share of the total and gets no goals. A wide Android widget now also writes the grams against each goal (such as 92 / 150 g), and a wide, tall one adds the kcal eaten under the kcal left, the figure iOS shows in the ring's centre.",
+  "note_es": "La diferencia se mantiene: las barras de Android miden cada macro frente a su objetivo, mientras que el anillo de iOS muestra la parte de cada macro sobre el total y no recibe objetivos. Un widget de Android ancho escribe ahora también los gramos frente a cada objetivo (como 92 / 150 g), y uno ancho y alto añade las kcal consumidas bajo las restantes, la cifra que iOS muestra en el centro del anillo.",
+  "evidence": "/home/user/sf-pr3228/SparkyFitnessMobile/src/hooks/useWidgetSync.ts:78-85 (iOS macro snapshot without goals),139-150; src/services/androidWidgetSyncService.ts:92-106 (goals and remaining sent on Android); targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/MacroWidget.kt.tmpl:123-141 (wide: showGoals),184-200,279-293 (kcal eaten),332-343 (grams against goal),490-506 (bar = consumed / goal); targets/widget/macroWidget.swift:4-15,174-206 (ring centre: kcal eaten),349-410"
+ },
+ {
+  "id": "diary-home-widgets",
+  "kind": "partial",
+  "prs": [
+   2989,
+   3020,
+   3228
+  ],
+  "note_en": "Android has calories, macros and water widgets, now resizable from their default 2x1 or 2x2 (the wider calories and macros widgets add Diary and fasting shortcuts, and a wide calories widget of two rows shows Goal, Food and Burned), plus four Quick Settings tiles as the counterpart of the iOS controls: Log water, Scan barcode, Search food and Calories left, also on the lock screen. Still iOS-only: the Lock Screen widget families and the Start fast, End fast and Remove a drink controls; on Android the water widget's − button removes a drink, and the widgets' fasting shortcut only opens the fasting screen.",
+  "note_es": "Android tiene widgets de calorías, macros y agua, que ya se pueden redimensionar a partir de su 2x1 o 2x2 por defecto (los de calorías y macros, cuando son anchos, añaden accesos al Diario y al ayuno, y el de calorías, ancho y de dos filas, muestra el objetivo, lo comido y lo quemado), además de cuatro baldosas de Ajustes rápidos como equivalente de los controles de iOS: Registrar agua, Escanear código, Buscar comida y Calorías restantes, también en la pantalla de bloqueo. Siguen siendo solo de iOS las familias de widgets de pantalla de bloqueo y los controles Iniciar ayuno, Terminar ayuno y Eliminar toma; en Android el botón − del widget de agua elimina una toma, y el acceso al ayuno de los widgets solo abre la pantalla de ayuno.",
+  "evidence": "/home/user/sf-pr3228/SparkyFitnessMobile/plugins/withCalorieWidget.ts:29,34,39 (calorie, macro and water receivers); targets/android-widget/res/xml/sparky_calorie_widget_info.xml, sparky_macro_widget_info.xml, sparky_water_widget_info.xml:5-6,10,14 (2x1/2x2 by default, resizable, home_screen only); targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/CalorieWidget.kt.tmpl:116-131,184-197; .../widget/MacroWidget.kt.tmpl:123-177,223-242; .../widget/WaterWidget.kt.tmpl:119-140,182-190,211-220 (− / + in every layout); .../widget/QuickSettingsTiles.kt.tmpl:61 (unlockAndRun),65-106 (four tiles); App.tsx:472-480,1007 (diary and fasting links, FastingDetail); targets/widget/index.swift:7-18 (iOS controls incl. RemoveWater, StartFast, EndFast); targets/widget/widgets.swift:319-322, macroWidget.swift:423-426, waterWidget.swift:260-263 (accessory families)"
+ },
+ {
+  "id": "goals-widgets",
+  "kind": "partial",
+  "prs": [
+   3020,
+   3228
+  ],
+  "note_en": "All three Android widgets can now be resized, and their bars show progress toward the goal at every size; the water widget shows the amount against the goal, a wide macros widget writes the grams against each goal, and a wide calories widget of two rows shows Goal, Food and Burned. On iOS the macros ring shows no goals, the water widget shows the amount against the goal at both sizes, and the calories widget shows its Goal only in the medium size, without the exercise calories that some goal modes add to the Android Goal. The Lock Screen formats are still iOS-only.",
+  "note_es": "Los tres widgets de Android ya se pueden redimensionar, y sus barras muestran el progreso hacia el objetivo en todos los tamaños; el de agua muestra la cantidad frente al objetivo, el de macros, cuando es ancho, escribe los gramos frente a cada objetivo, y el de calorías, ancho y de dos filas, muestra el objetivo, lo comido y lo quemado. En iOS el anillo de macros no muestra objetivos, el widget de agua muestra la cantidad frente al objetivo en los dos tamaños y el de calorías muestra su objetivo solo en el tamaño mediano, sin las calorías del ejercicio que algunos modos de objetivo suman al objetivo de Android. Los formatos de pantalla de bloqueo siguen siendo solo de iOS.",
+  "evidence": "/home/user/sf-pr3228/SparkyFitnessMobile/targets/android-widget/res/xml/sparky_calorie_widget_info.xml, sparky_macro_widget_info.xml, sparky_water_widget_info.xml:10,14 (resizable, home_screen only); targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/CalorieWidget.kt.tmpl:97-108,157-183 (bar at every size),184-197,261-271,305-315,363-364 (Goal = food + remaining); .../widget/MacroWidget.kt.tmpl:123-141,332-343,490-506 (bars and grams against each goal); .../widget/WaterWidget.kt.tmpl:389-410 (amount / goal),411 (bar); src/hooks/useWidgetSync.ts:78-85 (iOS macro snapshot without goals); targets/widget/macroWidget.swift:4-15,174-206,349-410; targets/widget/widgets.swift:246-306 (ring; Goal in medium only),278 (snapshot goal); targets/widget/waterWidget.swift:50-55 (amountText, goalLineText),175-237 (amount against goal in small, medium and Lock Screen),260-263"
+ },
+ {
+  "id": "native-widget-water",
+  "kind": "done",
+  "prs": [
+   3020,
+   3228
+  ],
+  "note_en": "Android has an interactive water widget too, with today's water against the goal, a bar, and − and + buttons that remove or add one drink of the Dashboard's container without opening the app. It is 2x2 by default and can be resized: one row tall, the amount sits above a row with the bar and smaller buttons, and wide enough, the amount and bar sit to the left of − and +, like the iOS medium widget. iOS instead offers fixed small and medium sizes with a ring, plus three Lock Screen shapes that Android lacks.",
+  "note_es": "Android también tiene un widget de agua interactivo, con el agua de hoy frente al objetivo, una barra y botones − y + que quitan o añaden una bebida del recipiente elegido en el Panel sin abrir la app. Mide 2x2 por defecto y se puede redimensionar: con una sola fila de alto, la cantidad queda encima de una fila con la barra y botones más pequeños, y con anchura suficiente, la cantidad y la barra quedan a la izquierda de − y +, como en el widget mediano de iOS. iOS, en cambio, ofrece tamaños fijos pequeño y mediano con un anillo, además de tres formatos de pantalla de bloqueo que Android no tiene.",
+  "evidence": "/home/user/sf-pr3228/SparkyFitnessMobile/targets/android-widget/res/xml/sparky_water_widget_info.xml:3-6 (2x2 target), 10-12 (resizeMode horizontal|vertical, minResize 110x40 dp), 14 (home_screen only); targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WidgetSizes.kt:71-110 (water steps: classic from 140 dp tall, side by side from 300 dp wide); WaterWidget.kt.tmpl:72 (SizeMode.Responsive), 118-143 (layout per size), 147-193 (SideBySide, buttons on the right), 199-226 (Compact: amount on top, then a 28 dp row with the bar and 36 dp buttons), 276-284 (LinearProgressIndicator bar), 287-318 (− / + buttons); iOS: targets/widget/waterWidget.swift:114-130 (WaterRing), 194-216 (medium: ring, title, amount, buttons on the right; small: ring and buttons), 260-263 (systemSmall, systemMedium, accessoryCircular/Rectangular/Inline)"
+ },
+ {
+  "id": "plat-native-water-widget",
+  "kind": "done",
+  "prs": [
+   3020,
+   3228
+  ],
+  "note_en": "Android has a Glance home-screen water widget whose − and + buttons remove or add one drink in the background (through WorkManager, with the same request as the Log water shortcut and tile) without opening the app, and it shows a short status line when a change fails. It is 2x2 by default and can be resized, keeping the buttons even one row tall and putting them beside the amount when wide, while iOS has fixed small and medium sizes. Unlike iOS it draws a bar instead of a ring and has no Lock Screen variants (accessoryCircular/Rectangular/Inline).",
+  "note_es": "Android tiene un widget de agua de pantalla de inicio con Glance cuyos botones − y + quitan o añaden una bebida en segundo plano (con WorkManager y la misma petición que el atajo y la baldosa Registrar agua) sin abrir la app, y muestra una breve línea de estado cuando un cambio falla. Mide 2x2 por defecto y se puede redimensionar: conserva los botones incluso con una sola fila de alto y, si se ensancha, los coloca junto a la cantidad, mientras que iOS tiene tamaños fijos pequeño y mediano. A diferencia de iOS, muestra una barra en lugar de un anillo y no tiene variantes de pantalla de bloqueo (accessoryCircular/Rectangular/Inline).",
+  "evidence": "/home/user/sf-pr3228/SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WaterWidget.kt.tmpl:72 (SizeMode.Responsive(WidgetSizes.waterSizes)), 118-143, 147-193 (SideBySide, buttons on the right), 199-226 (Compact keeps the buttons), 320-348 (status line), 350-387 (ChangeButton -> WaterChangeAction); WidgetSizes.kt:71-110; WaterWidgetActions.kt and the WorkManager path unchanged by #3228 (WaterWidgetStore.kt only moves the optionalDouble helper to WidgetSnapshots.kt); res/xml/sparky_water_widget_info.xml:10-14 (resizeMode horizontal|vertical, minResize 110x40 dp, home_screen only); iOS: targets/widget/waterWidget.swift:114-130 (WaterRing), 150-166 (Button(intent:) iOS 17+), 175-193 (accessory variants), 260-263"
+ },
+ {
+  "id": "plat-services-widget-water",
+  "kind": "done",
+  "prs": [
+   2989,
+   3020,
+   3228
+  ],
+  "note_en": "Android has its own water widget with − and + buttons, fed from the Dashboard through useWidgetSync like the iOS one; on Android the background sync also refreshes it, an account change clears it, and a drink logged from the Log water shortcut or Quick Settings tile (the same native request as its buttons) updates its total. The Android widget is 2x2 by default and can be resized, from one row up to a wide layout with the buttons beside the amount, while iOS has fixed small and medium sizes plus Lock Screen versions. On both platforms its texts are translated into Spanish, Polish, Brazilian Portuguese, Cantonese and Simplified and Traditional Chinese, but not into the other nine shipped languages.",
+  "note_es": "Android tiene su propio widget de agua con botones − y +, alimentado desde el Panel mediante useWidgetSync igual que el de iOS; en Android, además, la sincronización en segundo plano lo actualiza, un cambio de cuenta lo vacía y una bebida registrada desde el atajo Registrar agua o la baldosa de Ajustes rápidos (la misma petición nativa que usan sus botones) actualiza su total. El widget de Android mide 2x2 por defecto y se puede redimensionar, desde una sola fila hasta un formato ancho con los botones junto a la cantidad, mientras que iOS tiene tamaños fijos pequeño y mediano y versiones para la pantalla de bloqueo. En ambas plataformas sus textos están traducidos al español, polaco, portugués de Brasil, cantonés y chino simplificado y tradicional, pero no a los otros nueve idiomas incluidos.",
+  "evidence": "/home/user/sf-pr3228/SparkyFitnessMobile/src/services/androidWidgetSyncService.ts:160-163 (clearAndroidWidgetSnapshots), 165-200 (refreshAndroidWidgetsFromServer pushes the water snapshot); targets/android-widget/res/xml/sparky_water_widget_info.xml:3-14 (2x2 target, resizeMode horizontal|vertical, minResize 110x40 dp, home_screen); WidgetSizes.kt:71-110; WaterWidget.kt.tmpl:118-226; iOS: targets/widget/waterWidget.swift:194-216, 260-263. Translations: res/values/widget_strings.xml has 17 water strings (sparky_water_* and widget_water_*), all present in values-{es,pl,pt-rBR,b+yue+Hant,zh-rCN,zh-rTW} (37 strings each), none in values-{de,fr,hu,it,nb-rNO,nl,ru,tr} (17 strings), values-lv empty; iOS widget.water.* in es, pl, pt-BR, yue-Hant, zh-Hans, zh-Hant .lproj only; #3228 adds no water strings; src/localization/localeRegistry.json lists 15 non-English locales"
+ },
+ {
+  "id": "missed-plat-screens-water-widget",
+  "kind": "done",
+  "prs": [
+   3020,
+   3228
+  ],
+  "note_en": "Android has a water widget next to the calorie and macro widgets, with today's water against the goal and − and + buttons that remove or add a drink without opening the app; a drink logged from the Log water shortcut or Quick Settings tile also shows on it. It is 2x2 by default and can be resized, keeping the buttons even one row tall and, when wide, placing them beside the amount like the iOS medium widget. Only iOS has Lock Screen versions.",
+  "note_es": "Android tiene, junto a los widgets de calorías y macros, un widget de agua con el agua de hoy frente al objetivo y botones − y + que quitan o añaden una toma sin abrir la app; las tomas registradas con el atajo o la baldosa de Ajustes rápidos Registrar agua también se reflejan en él. Mide 2x2 por defecto y se puede redimensionar: conserva los botones incluso con una sola fila de alto y, si se ensancha, los coloca junto a la cantidad, como el widget mediano de iOS. Solo iOS tiene versiones para la pantalla de bloqueo.",
+  "evidence": "/home/user/sf-pr3228/SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WaterWidget.kt.tmpl:52-66 (doc: wide like the iOS medium widget), 118-143, 147-193, 199-226, 287-318; WidgetSizes.kt:71-110; res/xml/sparky_water_widget_info.xml:10-14 (resizeMode horizontal|vertical, home_screen); targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/LogWaterActivity.kt (showTotalOnWaterWidget, unchanged by #3228); iOS: targets/widget/waterWidget.swift:194-207 (medium: ring, title, amount, buttons on the right), 260-263"
+ },
+ {
+  "id": "native-deep-links",
+  "kind": "done",
+  "prs": [
+   2989,
+   3020,
+   3071,
+   3078,
+   3228
+  ],
+  "note_en": "There are now also routes for the diary ('diary'), fasting ('fasting'), the heart rate zone settings ('settings/heart-rate-zones') and route generation ('routes/generate'). Only Android uses the first two: the Calories left Quick Settings tile opens 'diary' and the wider calorie and macro widgets add Diary and fasting shortcuts, while iOS reaches those screens without a link (its Calories left control and the app icon's Fasting shortcut), and nothing uses the last two; the Scan barcode and Search food tiles use scan and search, and a tap elsewhere on a widget opens the Dashboard through the root link on both platforms. On Android only, a link or shortcut that started the app does not reopen its screen when Android restores the app after the system killed it (withQuickActionLaunchGuard).",
+  "note_es": "Ahora también hay rutas para el diario ('diary'), el ayuno ('fasting'), los ajustes de zonas de frecuencia cardiaca ('settings/heart-rate-zones') y la generación de recorridos ('routes/generate'). Solo Android usa las dos primeras: la baldosa de Ajustes rápidos Calorías restantes abre 'diary' y los widgets de calorías y macros, cuando se ensanchan, añaden accesos al diario y al ayuno, mientras que iOS llega a esas pantallas sin enlace (con su control Calorías restantes y el atajo Ayuno del icono de la app), y nada usa las dos últimas; las baldosas Escanear código y Buscar comida usan scan y search, y un toque en cualquier otra parte de un widget abre el Panel con el enlace raíz en ambas plataformas. Solo en Android, un enlace o atajo que abrió la app no vuelve a abrir su pantalla cuando Android la restaura después de que el sistema la haya cerrado en segundo plano (withQuickActionLaunchGuard).",
+  "evidence": "/home/user/sf-pr3228/SparkyFitnessMobile/App.tsx:464-491 (linking: Diary 'diary' 474, FastingDetail 'fasting' 480, HeartRateZonesSettings 482, RouteGenerate 488), 499-510 (linking only once Tabs is reached); src/types/navigation.ts:411; targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/CalorieWidget.kt.tmpl:110-130 (diary and fasting shortcuts only when wide); MacroWidget.kt.tmpl:97-110, 123-176 (wide: four shortcuts in a column), 222-240 (large: Diary and fasting in the row); WaterWidget.kt.tmpl:97 (root link); QuickSettingsTiles.kt.tmpl:41-42, 68, 74, 121 (scan, search, diary); iOS without links: targets/widget/Controls.swift:146 (CaloriesLeftControl -> OpenDiaryControlIntent), ShortcutIntents.swift:455-494 (leaveControlRoute('diary') in the app group), src/hooks/useQuickActions.ts:50-53, 147-148 (app icon Fasting -> FastingDetail), 207-225 (useControlRouteHandoff navigates to Diary); iOS links only root, search and scan: targets/widget/widgets.swift:194-196, 292-297; macroWidget.swift:247-249, 396-401; waterWidget.swift:218; no producer of settings/heart-rate-zones or routes/generate (grep sparkyfitnessmobile:// in src, targets, modules, plugins); plugins/withQuickActionLaunchGuard.ts"
+ },
+ {
+  "id": "plat-services-widget-language",
+  "kind": "partial",
+  "prs": [
+   2989,
+   3020
+  ],
+  "note_en": "The Android hook passes the resolved app language (normalizeLanguage) to prepareWidgetLocale, dedupes on it and reloads the calorie, macro and water widgets, so the en/pl limitation is gone on Android. The iOS hook (useIOSWidgetLanguageRefresh.ts) still reduces the language to en/pl, so switching from German to French forces no reload there, and it reloads only the calorie and macro timelines, not the water widget or the controls.",
+  "note_es": "El hook de Android pasa a prepareWidgetLocale el idioma resuelto de la app (normalizeLanguage), deduplica con él y recarga los widgets de calorías, macros y agua, así que la limitación en/pl desaparece en Android. El hook de iOS (useIOSWidgetLanguageRefresh.ts) sigue reduciendo el idioma a en/pl, de modo que pasar de alemán a francés no fuerza allí ninguna recarga, y solo recarga los timelines de calorías y macros, no el widget de agua ni los controles.",
+  "evidence": "Unchanged by #3228, which touches neither hook. /home/user/sf-pr3228/SparkyFitnessMobile/src/hooks/useWidgetLanguageRefresh.ts:39 (Android only), 43 (normalizeLanguage), 46-52 (dedupe), 55-58 (prepareWidgetLocale), 68-72 (reloadWidget, reloadMacroWidget, reloadWaterWidget); src/hooks/useIOSWidgetLanguageRefresh.ts:51 (iOS only), 54-55 (en/pl), 58-63 (dedupe), 67, 76 (only 'widget' and 'macroWidget'); targets/widget/waterWidget.swift:251 (kind 'waterWidget'); App.tsx:352-353"
+ },
+ {
+  "id": "native-native-surface-language",
+  "kind": "partial",
+  "prs": [
+   2989,
+   3020,
+   3025,
+   3051,
+   3052,
+   3228
+  ],
+  "note_en": "On Android the calorie, macro and water widgets, the Quick Settings tiles and the app icon shortcuts follow the app language and update when it changes, but the water widget texts, the Log water and Calories left tile names and the Log water shortcut's long label are translated only into Spanish, Polish, Brazilian Portuguese, Cantonese and Simplified and Traditional Chinese, the Log water results are hard-coded in English, and the labels the wider calorie and macro widgets add (Goal, Food, Burned, kcal eaten and the spoken names of the Diary and fasting shortcuts) exist only in English so far. iOS has the same six translations for its water widget and controls and translates its own Goal, Food and Burned into every shipped language but Latvian, but its hook still reduces the language to en/pl and reloads only the calorie and macro timelines; on both platforms the shortcut titles are untranslated in Hungarian, Italian, Latvian, Norwegian and Russian and the Latvian widget strings are empty. The Wear OS and Apple Watch apps' own texts are English-only.",
+  "note_es": "En Android, los widgets de calorías, macros y agua, las baldosas de Ajustes rápidos y las acciones rápidas del icono siguen el idioma de la app y se actualizan cuando cambia, pero los textos del widget de agua, los nombres de las baldosas Log water y Calories left y la etiqueta larga del atajo Log water solo están traducidos al español, polaco, portugués de Brasil, cantonés y chino simplificado y tradicional, los resultados de Log water están escritos en inglés en el propio código, y las etiquetas que añaden los widgets de calorías y macros más anchos (Goal, Food, Burned, kcal eaten y los nombres que se leen en voz alta para los accesos al diario y al ayuno) solo existen en inglés por ahora. iOS tiene esas mismas seis traducciones para su widget de agua y sus controles y traduce sus propias etiquetas Goal, Food y Burned a todos los idiomas incluidos salvo el letón, pero su hook aún reduce el idioma a en/pl y solo recarga los timelines de calorías y macros; en ambas plataformas los títulos de las acciones rápidas no están traducidos al húngaro, italiano, letón, noruego ni ruso, y las cadenas de los widgets en letón están vacías. Los textos propios de las apps de Wear OS y del Apple Watch están solo en inglés.",
+  "evidence": "/home/user/sf-pr3228/SparkyFitnessMobile/targets/android-widget/res/values/widget_strings.xml:15-21 (new widget_open_diary, widget_open_fasting, widget_kcal_eaten, widget_goal, widget_food, widget_burned, widget_amount_of_goal; 44 strings) vs values-{es,pl,pt-rBR,zh-rCN,zh-rTW,b+yue+Hant} (37, none of the 7 new; water and tile_* strings present), values-{de,fr,hu,it,nb-rNO,nl,ru,tr} (17), values-lv (0); used at CalorieWidget.kt.tmpl:120-130, 267-269 and MacroWidget.kt.tmpl:107-110, 285 (contentDescription of the Diary/fasting icons, EatenLine); iOS widget.goal/food/burned in every targets/widget/*.lproj except lv.lproj (empty); targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/LogWaterActivity.kt:59, 149, 170, 192-201 (hard-coded English results); quickActions.logWaterInBackground only in es, pl, pt-BR, yue-Hant, zh-Hans, zh-Hant; quickActions absent from src/localization/locales/{hu,it,lv,nb-NO,ru}/translation.json; src/hooks/useWidgetLanguageRefresh.ts:39-72; src/hooks/useIOSWidgetLanguageRefresh.ts:51-83 (en/pl, calorie and macro only); 15 non-English locales in src/localization/localeRegistry.json; Wear OS and Apple Watch strings unchanged"
+ },
+ {
+  "id": "plat-services-widget-background-refresh",
+  "kind": "done",
+  "prs": [
+   2989,
+   3020,
+   3228
+  ],
+  "note_en": "The Android background refresh updates all three widgets: the calorie figures (including the Food and Burned figures the larger calorie widget sizes show), the macros, and the water total and goal, keeping the drink size and unit the app last sent; the Calories left Quick Settings tile reads the same calorie snapshot whenever the panel opens. The snapshots are erased when the account changes, and a refresh still loading at that moment pushes nothing. iOS still has no background refresh: the background task does not touch its widgets.",
+  "note_es": "La actualización en segundo plano de Android refresca los tres widgets: las cifras de calorías (incluidas las de comida y quemadas que muestran los tamaños grandes del widget de calorías), los macros y el total y el objetivo del agua, conservando el tamaño de la toma y la unidad que la app envió por última vez; la baldosa de Ajustes rápidos Calorías restantes lee esa misma instantánea de calorías cada vez que se abre el panel. Las instantáneas se borran al cambiar de cuenta, y una actualización que aún esté cargando en ese momento no envía nada. iOS sigue sin actualización en segundo plano: la tarea en segundo plano no toca sus widgets.",
+  "evidence": "/home/user/sf-pr3228/SparkyFitnessMobile/src/services/backgroundSyncService.ts:133-143 (Android only refreshAndroidWidgetsFromServer); src/services/androidWidgetSyncService.ts:84-108 (buildAndroidWidgetSnapshots uses buildCalorieWidgetSnapshot), 160-163 (clear), 165-200 (refresh: generation check, calorie, macro and water pushes); src/services/calorieWidgetSnapshot.ts:10-33 (food and burned from calorieBalance); targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/CalorieWidget.kt.tmpl:92-94 (figures only when wide and at least 160 dp tall), 346-372 (parseSnapshot reads food/burned); WaterWidgetStore.kt (mergeFromAppLocked keeps drinkMl/unit/canLog); QuickSettingsTiles.kt.tmpl:106-121 (CaloriesLeftTileService reads CalorieWidget.loadSnapshot); src/hooks/useAuth.ts (clearAndroidWidgetSnapshots on identity change)"
+ },
+ {
+  "id": "plat-native-widget-refresh",
+  "kind": "done",
+  "prs": [
+   3020,
+   3021
+  ],
+  "note_en": "The new Android water widget gets the same background refresh and midnight reset as the calorie and macro widgets, and shows the server's total after a drink logged from its − / + buttons or the Log water shortcut or tile, much as the iOS water widget does after its buttons, controls or Siri. The midnight refresh is now set again even after a failed redraw. iOS widgets still get no server data in the background, only what the app or those water actions write.",
+  "note_es": "El nuevo widget de agua de Android tiene el mismo refresco en segundo plano y el mismo reinicio a medianoche que los de calorías y macros, y muestra el total del servidor tras registrar una toma con sus botones − / + o con el atajo o la baldosa Registrar agua, de forma parecida al widget de agua de iOS con sus botones, controles o Siri. La actualización de medianoche se vuelve a programar aunque falle el redibujado. Los widgets de iOS siguen sin recibir datos del servidor en segundo plano, solo lo que escriben la app o esas acciones de agua.",
+  "evidence": "Unchanged by #3228, which leaves the receivers, the midnight alarm and the background task alone (it changes the layouts and the calorie snapshot's fields). /home/user/sf-pr3228/SparkyFitnessMobile/src/services/backgroundSyncService.ts:133-143; src/services/androidWidgetSyncService.ts:165-200 (water snapshot in the background refresh); targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WaterWidgetReceiver.kt.tmpl:36-56 (ACTION_WATER_TOTALS), 58-78 and 132-142 (midnight alarm, re-armed in finally); WaterWidget.kt.tmpl:90-91; CalorieWidgetReceiver.kt.tmpl:25-45 and MacroWidgetReceiver.kt.tmpl:25-46 (scheduleMidnightRefresh in finally, #3021). iOS: targets/widget/waterWidget.swift:101-111 (timeline .after min(15 min, midnight)); ShortcutIntents.swift (WaterSnapshotWriter); src/hooks/useWidgetSync.ts"
+ },
+ {
+  "id": "native-widget-lockscreen",
+  "kind": "none",
+  "prs": [],
+  "note_en": "",
+  "note_es": "",
+  "evidence": "Android widgets are still home-screen only after #3228: /home/user/sf-pr3228/SparkyFitnessMobile/targets/android-widget/res/xml/sparky_calorie_widget_info.xml:14, sparky_macro_widget_info.xml:14, sparky_water_widget_info.xml:14 (widgetCategory=\"home_screen\"); iOS accessory families unchanged: targets/widget/widgets.swift:319-322, macroWidget.swift:423-426, waterWidget.swift:260-263"
+ },
+ {
+  "id": "plat-native-lockscreen-widgets",
+  "kind": "none",
+  "prs": [],
+  "note_en": "",
+  "note_es": "",
+  "evidence": "#3228 makes the Android widgets resizable but adds no lock screen category: /home/user/sf-pr3228/SparkyFitnessMobile/targets/android-widget/res/xml/sparky_{calorie,macro,water}_widget_info.xml:10-14 (resizeMode horizontal|vertical, widgetCategory=\"home_screen\"); iOS: targets/widget/widgets.swift:198-213, 319-322; macroWidget.swift:253-266, 423-426; waterWidget.swift:175-193, 260-263"
+ }
+]

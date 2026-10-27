@@ -21,6 +21,7 @@ This folder holds the SparkyFitness feature parity report: every user-reachable 
 | `notes/parity-summary.json` | The update section at the top of the Markdown, the notes on summary lines, and the page texts. Edit this too. |
 | `notes/new-features.json` | Features added since the audit that no row covers, listed after the update section in the Markdown and on the page's Executive summary tab. Edit this too. |
 | `notes/history/` | Earlier note sets, kept for reference. |
+| `notes/pending/` | Notes prepared for a PR that is not merged yet, written against its branch (`pr-<number>.json`, the same shape as `parity-notes.json`). The build ignores them. |
 | `tools/` | Scripts to find rows, review notes, build the files and check them (see below). |
 
 ### Report layout
@@ -90,5 +91,5 @@ Each entry in `notes/new-features.json` has `name_en`, `name_es`, `description_e
 - Back every claim with the code (keep `file:line` references in `evidence`). Check translation claims against the shipped locales (`SparkyFitnessMobile/src/localization/localeRegistry.json`), the mobile catalogs, the Android resource folders (`targets/android-widget/res/values-*`) and hard-coded native strings before writing "translated" or "English only".
 - English and Spanish say the same thing. The Spanish is natural Spain Spanish (Quick Settings = Ajustes rápidos, tile = baldosa); identifiers and product names stay as they are.
 - Do not put the status label inside the note, and do not mention reviews, tools or how the work was done.
-- Labels only name merged PRs. Planned work that has not been merged is `open`, not a status of its own.
+- Labels only name merged PRs. Planned work that has not been merged is `open`, not a status of its own. While a PR that covers an `open` row is in review, the row's note can say so in one sentence ("PR #N, not merged yet, …"); the notes for after its merge go in `notes/pending/pr-<N>.json`. Once it is merged, check them against `main` (the merged code may differ from the branch), merge them with `python3 -I parity-report/tools/review_rows.py merge parity-report/notes/pending/pr-<N>.json`, update the summary and delete the file.
 - Commits that change this folder follow the repository's commit conventions (root `AGENTS.md`).

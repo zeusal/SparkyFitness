@@ -3,7 +3,7 @@
   "name_en": "Several mood check-ins a day",
   "name_es": "Varios registros de ánimo al día",
   "description_en": "Log several mood check-ins a day, each with its own time, and see them listed with the day average; each one can be edited or deleted. On the web this is on the Check-In page (Fasting & Mood tab); in the phone app the Dashboard mood card opens the day's list.",
-  "description_es": "Registra varios estados de ánimo al día, cada uno con su hora, y consúltalos en una lista con la media del día; cada registro se puede editar o borrar. En la web está en la página Check-In (pestaña Fasting & Mood); en la app del móvil, la tarjeta de ánimo del Dashboard abre la lista del día.",
+  "description_es": "Registra varios estados de ánimo al día, cada uno con su hora, y consúltalos en una lista con la media del día; cada registro se puede editar o borrar. En la web está en la página Check-in (pestaña Ayuno y estado de ánimo); en la app del móvil, la tarjeta de ánimo del Panel abre la lista del día.",
   "web": "Yes",
   "ios": "Yes",
   "android": "Yes",
@@ -13,13 +13,13 @@
    3016,
    3018
   ],
-  "evidence": "SparkyFitnessFrontend/src/pages/CheckIn/CheckIn.tsx:128-129, 196-202; src/pages/CheckIn/CheckInTopRow.tsx:198-319 (composer with Time, list, delete confirmation); src/pages/CheckIn/MoodCheckinList.tsx:76-100 (day average), 104-200 (rows with edit/delete). SparkyFitnessMobile/src/components/mood/MoodCard.tsx:89-92 (card opens MoodDay); src/screens/MoodDayScreen.tsx:43-55 (one-entry form on an older server), 145-252 (day average, list, Add check-in); src/components/mood/MoodCheckinListItem.tsx:27-138 (tap to edit, swipe to delete); App.tsx:1330-1340. SparkyFitnessServer/db/migrations/20261021000000_multiple_mood_checkins.sql; routes/moodRoutes.ts"
+  "evidence": "SparkyFitnessFrontend/src/pages/CheckIn/CheckIn.tsx:128-129, 195-207; src/pages/CheckIn/CheckInTopRow.tsx:198-319 (composer with Time, list, delete confirmation); src/pages/CheckIn/MoodCheckinList.tsx:76-100 (day average), 104-200 (rows with edit/delete); public/locales/es/translation.json:9 (nav.checkin 'Check-in'), 3060 (checkIn.tabs.fasting). SparkyFitnessMobile/src/components/mood/MoodCard.tsx:89-92 (card opens MoodDay); src/screens/MoodDayScreen.tsx:43-55 (one-entry form on an older server), 145-252 (day average, list, Add check-in); src/components/mood/MoodCheckinListItem.tsx:27-138 (tap to edit, swipe to delete); App.tsx:1330-1340. SparkyFitnessServer/db/migrations/20261021000000_multiple_mood_checkins.sql; routes/moodRoutes.ts"
  },
  {
   "name_en": "Energy and focus ratings on mood check-ins",
   "name_es": "Valoraciones de energía y concentración en el registro de ánimo",
   "description_en": "Rate energy (Drained to Energized) and focus (Scattered to Locked in) from 1 to 5 when logging a mood; both are optional and show in the day's check-ins and day average. Same on web, iOS and Android.",
-  "description_es": "Puntúa de 1 a 5 la energía (de Agotado a Con energía) y la concentración (de Disperso a Muy centrado) al registrar el ánimo; las dos son opcionales y aparecen en los registros del día y en su media. Igual en la web, iOS y Android.",
+  "description_es": "Puntúa de 1 a 5 la energía (de Agotado a Con energía) y la concentración (de Disperso a Enfocado al máximo, o Totalmente enfocado en el móvil) al registrar el ánimo; las dos son opcionales y aparecen en los registros del día y en su media. Igual en la web, iOS y Android.",
   "web": "Yes",
   "ios": "Yes",
   "android": "Yes",
@@ -28,13 +28,13 @@
    3002,
    3012
   ],
-  "evidence": "SparkyFitnessFrontend/src/pages/CheckIn/MoodMeter.tsx:322-338; src/pages/CheckIn/RatingSelector.tsx:33-36 (tapping the chosen value clears it); src/pages/CheckIn/MoodCheckinList.tsx:69-98. SparkyFitnessMobile/src/components/mood/MoodLogFields.tsx:88-115; src/components/mood/MoodCheckinListItem.tsx:59-68, 101-116; src/screens/MoodDayScreen.tsx:220-235. SparkyFitnessServer/db/migrations/20261020000000_add_energy_focus_to_mood_entries.sql; shared/src/compare/metrics.ts:23-26 (also Compare metrics)"
+  "evidence": "SparkyFitnessFrontend/src/pages/CheckIn/MoodMeter.tsx:322-338; src/pages/CheckIn/RatingSelector.tsx:33-36 (tapping the chosen value clears it); src/pages/CheckIn/MoodCheckinList.tsx:69-98; public/locales/es/translation.json:3166-3170 (Agotado, Con energía, Disperso, Enfocado al máximo). SparkyFitnessMobile/src/components/mood/MoodLogFields.tsx:88-115; src/components/mood/MoodCheckinListItem.tsx:59-68, 101-116; src/screens/MoodDayScreen.tsx:220-235; src/localization/locales/es/translation.json:6868-6872 (Agotado, Con energía, Disperso, Totalmente enfocado). SparkyFitnessServer/db/migrations/20261020000000_add_energy_focus_to_mood_entries.sql; shared/src/compare/metrics.ts:23-26 (also Compare metrics)"
  },
  {
   "name_en": "Mood check-in reminders",
   "name_es": "Recordatorios del registro de ánimo",
-  "description_en": "Get a daily reminder to log a mood check-in, at up to five times you choose under Settings > Notifications; tapping it opens a new check-in. Phone app only, the same on iOS and Android (Android gives them their own notification channel).",
-  "description_es": "Recibe un aviso diario para registrar el ánimo, a hasta cinco horas que eliges en Ajustes > Notificaciones; al tocarlo se abre un registro nuevo. Solo en la app del móvil, igual en iOS y Android (Android les da su propio canal de notificaciones).",
+  "description_en": "Get a daily reminder to log a mood check-in, at up to five times you choose under Settings > App Settings > Notifications; tapping it opens a new check-in. Phone app only, the same on iOS and Android (Android gives them their own notification channel).",
+  "description_es": "Recibe un aviso diario para registrar el ánimo a las horas que elijas (hasta cinco) en Ajustes > Ajustes de la app > Notificaciones; al tocarlo se abre un registro nuevo. Solo en la app del móvil, igual en iOS y Android (Android les da su propio canal de notificaciones).",
   "web": "No",
   "ios": "Yes",
   "android": "Yes",
@@ -42,11 +42,11 @@
   "prs": [
    3028
   ],
-  "evidence": "SparkyFitnessMobile/src/screens/NotificationSettingsScreen.tsx:197-212, 616-719 ('Mood check-ins' section, reminder times); src/utils/checkinReminderTimes.ts:1-2 (max 5, default 20:30); src/services/moodCheckinReminderService.ts; src/services/offerCheckinReminders.ts:23-47 (one-time offer); src/services/moodCheckinNotificationHandler.ts:24 (opens MoodLog); src/services/notifications.ts:173-183 (Android channel). No mood reminder in SparkyFitnessFrontend/src"
+  "evidence": "SparkyFitnessMobile/src/screens/SettingsScreen.tsx:254-258 (App Settings row); src/screens/AppSettingsScreen.tsx:229-239 (Notifications row); src/screens/NotificationSettingsScreen.tsx:197-212, 616-719 ('Mood check-ins' section, reminder times); src/utils/checkinReminderTimes.ts:1-2 (max 5, default 20:30); src/services/moodCheckinReminderService.ts:47-80 (one DAILY trigger per time); src/services/offerCheckinReminders.ts:23-47 (one-time offer); src/services/moodCheckinNotificationHandler.ts:24 (opens MoodLog); src/services/notifications.ts:173-183 (Android channel). No mood reminder in SparkyFitnessFrontend/src"
  },
  {
   "name_en": "Compare report: do two tracked things go together?",
-  "name_es": "Informe Comparar: ¿van juntas dos cosas que registras?",
+  "name_es": "Informe Compare: ¿van juntas dos cosas que registras?",
   "description_en": "Pick two of 24 tracked things (mood, sleep, heart rate, food, training, weight, steps and more) and a timing to see whether they go together, by day or by week, with an answer, a dots chart, an over-time chart and checks. Same on web and the phone app, but the web shows both charts at once and adds a table of the other timings and a day-by-day table.",
   "description_es": "Elige dos de 24 cosas que registras (ánimo, sueño, frecuencia cardiaca, comida, entrenamiento, peso, pasos y más) y un desfase para ver si van juntas, por días o por semanas, con una respuesta, un gráfico de puntos, un gráfico en el tiempo y comprobaciones. Igual en la web y en la app del móvil, pero la web muestra los dos gráficos a la vez y añade una tabla con los otros desfases y otra día a día.",
   "web": "Yes",
@@ -58,13 +58,13 @@
    3076,
    3108
   ],
-  "evidence": "shared/src/compare/metrics.ts:23-48 (24 metrics); shared/src/compare/spans.ts:10-45 (30/60/90 days or custom up to 180 by day; 6 months/1 year or custom up to 366 by week). SparkyFitnessMobile/src/screens/ReportsScreen.tsx:116-124 (Compare link); src/screens/CompareReportScreen.tsx; src/components/compare/CompareChart.tsx, CompareChecksCard.tsx, CompareStartState.tsx. SparkyFitnessFrontend/src/pages/Reports/ReportsControls.tsx:89-93 (Compare tab); src/pages/Reports/Compare/CompareReport.tsx:127-133 (only your own data), 240-245 (CompareTimingTable, CompareDaysTable); src/pages/Reports/Compare/compareRecents.ts. SparkyFitnessServer/routes/v2/reportRoutes.ts (GET /v2/reports/compare)"
+  "evidence": "shared/src/compare/metrics.ts:23-48 (24 metrics); shared/src/compare/spans.ts:10-45 (30/60/90 days or custom up to 180 by day; 6 months/1 year or custom up to 366 by week). SparkyFitnessMobile/src/screens/ReportsScreen.tsx:116-124 (Compare link); src/screens/CompareReportScreen.tsx:174-180; src/components/compare/CompareChart.tsx:20-41 (dots/over-time toggle), CompareChecksCard.tsx, CompareStartState.tsx. SparkyFitnessFrontend/src/pages/Reports/ReportsControls.tsx:89-93 (Compare tab); src/pages/Reports/Compare/CompareReport.tsx:127-133 (only your own data), 222-245 (both charts side by side, CompareTimingTable, CompareDaysTable); src/pages/Reports/Compare/compareRecents.ts. SparkyFitnessServer/routes/v2/reportRoutes.ts (GET /v2/reports/compare)"
  },
  {
   "name_en": "Compare: before and since a habit started",
-  "name_es": "Comparar: antes y desde que empezó un hábito",
+  "name_es": "Compare: antes y desde que empezó un hábito",
   "description_en": "Ask Compare whether something changed since a habit started: it compares the days before and since a start date that it suggests or you pick, with a before/since chart. Same on web and the phone app; the web adds a month-by-month table.",
-  "description_es": "Pregunta a Comparar si algo cambió desde que empezaste un hábito: compara los días anteriores y posteriores a una fecha de inicio que sugiere o que eliges, con un gráfico de antes y después. Igual en la web y en la app del móvil; la web añade una tabla mes a mes.",
+  "description_es": "Pregunta a Compare si algo cambió desde que empezaste un hábito: compara los días anteriores y posteriores a una fecha de inicio que sugiere o que eliges, con un gráfico de antes y después. Igual en la web y en la app del móvil; la web añade una tabla mes a mes.",
   "web": "Yes",
   "ios": "Yes",
   "android": "Yes",
@@ -73,13 +73,13 @@
    3084,
    3116
   ],
-  "evidence": "shared/src/compare/since.ts:60-64, 100-130; shared/src/compare/question.ts:62-76. SparkyFitnessMobile/src/screens/CompareReportScreen.tsx:185-211 (CompareSinceCard, CompareSinceChart, CompareSinceRows); src/components/compare/CompareSentence.tsx:112-117; src/components/compare/CompareSinceRows.tsx. SparkyFitnessFrontend/src/pages/Reports/Compare/CompareReport.tsx:158 (CompareSinceControls), 216 (CompareSinceMonthTable); src/pages/Reports/Compare/CompareSentence.tsx:174-176; CompareSinceAnswer.tsx; CompareSinceChart.tsx. SparkyFitnessServer/routes/v2/reportRoutes.ts:287-299 (mode=since)"
+  "evidence": "shared/src/compare/since.ts:60-64, 100-130; shared/src/compare/question.ts:62-76. SparkyFitnessMobile/src/screens/CompareReportScreen.tsx:185-211 (CompareSinceCard, CompareSinceChart, CompareSinceRows); src/components/compare/CompareSentence.tsx:112-117; src/components/compare/CompareSinceRows.tsx (start date and line). SparkyFitnessFrontend/src/pages/Reports/Compare/CompareReport.tsx:158 (CompareSinceControls), 208-216 (CompareSinceAnswer, CompareSinceChart, CompareSinceMonthTable); src/pages/Reports/Compare/CompareSentence.tsx:174-176; CompareSinceAnswer.tsx; CompareSinceChart.tsx. SparkyFitnessServer/routes/v2/reportRoutes.ts:287-299 (mode=since)"
  },
  {
   "name_en": "Compare questions in Sparky chat and MCP",
-  "name_es": "Preguntas de Comparar en el chat de Sparky y por MCP",
+  "name_es": "Preguntas de Compare en el chat de Sparky y por MCP",
   "description_en": "Ask Sparky chat, or an AI assistant connected through MCP, whether two tracked things go together or whether something changed since a habit started; it uses the same analysis as the Compare report and only reads your own data. Available wherever the chat is: web, iOS and Android.",
-  "description_es": "Pregunta al chat de Sparky, o a un asistente de IA conectado por MCP, si dos cosas que registras van juntas o si algo cambió desde que empezaste un hábito; usa el mismo análisis que el informe Comparar y solo lee tus propios datos. Disponible allí donde está el chat: web, iOS y Android.",
+  "description_es": "Pregunta al chat de Sparky, o a un asistente de IA conectado por MCP, si dos cosas que registras van juntas o si algo cambió desde que empezaste un hábito; usa el mismo análisis que el informe Compare y solo lee tus propios datos. Disponible allí donde está el chat: web, iOS y Android.",
   "web": "Yes",
   "ios": "Yes",
   "android": "Yes",
@@ -87,13 +87,13 @@
   "prs": [
    3089
   ],
-  "evidence": "SparkyFitnessServer/ai/tools/compareTools.ts:649-651 (compare, since, list_metrics), 710-729 (sparky_compare_metrics); ai/tools/index.ts:132-136 ('reports' category); ai/mcp/toolAccess.ts:124 (read); services/chatService.ts:1825 ('compare'/'correlate' route to reports). Mobile chat sends no tool categories and relies on that routing: SparkyFitnessMobile/src/screens/ChatScreen.tsx"
+  "evidence": "SparkyFitnessServer/ai/tools/compareTools.ts:38-41 (chat tools act as the session user), 649-651 (compare, since, list_metrics), 710-729 (sparky_compare_metrics); ai/tools/index.ts:132-136 ('reports' category); ai/mcp/toolAccess.ts:124 (read); services/chatService.ts:1825 ('compare'/'correlate' route to reports). Mobile chat sends no tool categories and relies on that routing: SparkyFitnessMobile/src/screens/ChatScreen.tsx"
  },
  {
   "name_en": "Heart Rate report",
   "name_es": "Informe de frecuencia cardiaca",
-  "description_en": "A Heart Rate report with your resting heart rate trend and your own zone ranges. The web adds 24-hour and multi-day heart rate timelines and a per-workout section; the phone app instead shows summary figures (including 1-minute recovery) and insights, without timelines or the per-workout section.",
-  "description_es": "Un informe de frecuencia cardiaca con la tendencia de tu FC en reposo y los rangos de tus propias zonas. La web añade líneas de tiempo de FC de 24 horas y de varios días y una sección por entreno; la app del móvil muestra en su lugar cifras resumen (incluida la recuperación a 1 minuto) y observaciones, sin líneas de tiempo ni sección por entreno.",
+  "description_en": "A Heart Rate report with your resting heart rate trend (average and range) and your own zone ranges. The web adds 24-hour and multi-day heart rate timelines and a per-workout section; the phone app has neither, but adds 1-minute recovery and insights.",
+  "description_es": "Un informe de frecuencia cardiaca con la tendencia de tu FC en reposo (media y rango) y los rangos de tus propias zonas. La web añade líneas de tiempo de FC de 24 horas y de varios días y una sección por entreno; la app del móvil no tiene ninguna de las dos, pero añade la recuperación a 1 minuto y observaciones.",
   "web": "Yes",
   "ios": "Partial",
   "android": "Partial",
@@ -102,7 +102,7 @@
    3143,
    3165
   ],
-  "evidence": "SparkyFitnessFrontend/src/pages/Reports/ReportsControls.tsx:49-53 (Heart Rate tab); src/pages/Reports/HeartRateAnalyticsCard.tsx:125-167 (window presets, range and day timelines, range navigator, RestingHrTrendSection, HeartRateWorkoutsSection); src/components/HeartRateZoneLegend.tsx. SparkyFitnessMobile/src/screens/ReportsScreen.tsx:107-115 (Heart Rate link); src/screens/HeartRateReportScreen.tsx:160-200 (average and range of resting HR, 1-min recovery, recorded days), 246-260 (trend), 315-330 (zone ranges), 342-350 (insights); src/components/reports/HeartRateZoneRanges.tsx"
+  "evidence": "SparkyFitnessFrontend/src/pages/Reports/ReportsControls.tsx:49-53 (Heart Rate tab); src/pages/Reports/HeartRateAnalyticsCard.tsx:125-167 (window presets, range and day timelines, range navigator, RestingHrTrendSection, HeartRateWorkoutsSection); src/pages/Reports/HeartRate/RestingHrTrendSection.tsx:41-100 (trend with average, range and direction); src/pages/Reports/HeartRate/HeartRateRangeTimeline.tsx:325 and HeartRateDayTimeline.tsx (HeartRateZoneLegend). SparkyFitnessMobile/src/screens/ReportsScreen.tsx:107-115 (Heart Rate link); src/screens/HeartRateReportScreen.tsx:160-200 (average and range of resting HR, 1-min recovery, recorded days), 246-260 (trend), 315-330 (zone ranges), 342-350 (insights); src/components/reports/HeartRateZoneRanges.tsx"
  },
  {
   "name_en": "Heart rate zone settings",
@@ -122,8 +122,8 @@
  {
   "name_en": "Readiness, form and running estimates",
   "name_es": "Preparación, forma y estimaciones de carrera",
-  "description_en": "A Readiness and Form card (a readiness score out of 100 from form, sleep, resting heart rate and HRV, plus fitness, fatigue and form from your training load) and a Running Estimates card (estimated VO2 max and running power), in web Reports > Exercise and the phone's Exercise Statistics. Only the phone app also shows readiness on the Dashboard Training Load card and uses the estimate when no VO2 max is synced.",
-  "description_es": "Una tarjeta Readiness and Form (una puntuación de preparación sobre 100 a partir de la forma, el sueño, la FC en reposo y la VFC, y el estado físico, la fatiga y la forma según tu carga de entrenamiento) y una tarjeta Running Estimates (VO2 máx. y potencia de carrera estimados), en Informes > Ejercicio de la web y en Estadísticas de ejercicio del móvil. Solo la app del móvil muestra además la preparación en la tarjeta de carga de entrenamiento del Dashboard y usa la estimación cuando no hay VO2 máx. sincronizado.",
+  "description_en": "A Readiness and Form card (a readiness score out of 100 from form, sleep, resting heart rate and HRV, plus fitness, fatigue and form from your training load) and a Running Estimates card (estimated VO2 max and running power), in web Reports > Exercise Progress and the phone's Exercise Statistics. Only the phone app also shows readiness on the Dashboard Training Load card and, when no VO2 max is synced, plots the estimate in the Dashboard VO2 max chart.",
+  "description_es": "Una tarjeta Readiness and Form (una puntuación de preparación sobre 100 a partir de la forma, el sueño, la FC en reposo y la VFC, y el estado físico, la fatiga y la forma según tu carga de entrenamiento) y una tarjeta Running Estimates (VO2 máx. y potencia de carrera estimados), en Informes > Progreso de ejercicio de la web y en Estadísticas de ejercicios del móvil. Solo la app del móvil muestra además la preparación en la tarjeta de carga de entrenamiento del Panel y, si no hay VO2 máx. sincronizado, dibuja la estimación en el gráfico de VO2 máx. del Panel.",
   "web": "Yes",
   "ios": "Yes",
   "android": "Yes",
@@ -131,7 +131,7 @@
   "prs": [
    3155
   ],
-  "evidence": "SparkyFitnessFrontend/src/pages/Reports/ExerciseReportsDashboard.tsx:876-877; src/pages/Reports/FitnessFatigueCard.tsx:67-82, 154-162; src/pages/Reports/RunEstimatesCard.tsx:31-70. SparkyFitnessMobile/src/screens/ExerciseStatisticsScreen.tsx:518-531; src/components/exerciseStats/FitnessFatigueCard.tsx; src/components/exerciseStats/RunEstimatesCard.tsx; src/components/TrainingLoadDashboardCard.tsx:156-178 (readiness line); src/hooks/useVo2MaxRange.ts:107-121 (estimated VO2 max fallback). shared/src/utils/readiness.ts; shared/src/utils/runningEstimates.ts"
+  "evidence": "SparkyFitnessFrontend/src/pages/Reports/ReportsControls.tsx:60-61 (tab label reports.exerciseProgressTab = 'Exercise Progress' in public/locales/en/translation.json:4913, 'Progreso de ejercicio' in es:3629); src/pages/Reports/ExerciseReportsDashboard.tsx:876-877; src/pages/Reports/FitnessFatigueCard.tsx:67-82, 154-162; src/pages/Reports/RunEstimatesCard.tsx:31-70. SparkyFitnessMobile/src/screens/ExerciseStatisticsScreen.tsx:138-139, 518-531; src/components/exerciseStats/FitnessFatigueCard.tsx; src/components/exerciseStats/RunEstimatesCard.tsx; src/components/TrainingLoadDashboardCard.tsx:156-178 (readiness line); src/hooks/useVo2MaxRange.ts:107-121 (estimated VO2 max fallback), used by src/hooks/useHealthTrends.ts:138 and src/components/HealthTrendsPager.tsx:131 (Dashboard); src/components/Vo2MaxLineChart.tsx:158 ('VO2 max (estimated)'). shared/src/utils/readiness.ts; shared/src/utils/runningEstimates.ts"
  },
  {
   "name_en": "Saved routes library",
@@ -165,8 +165,8 @@
  {
   "name_en": "Edit a saved route on the map",
   "name_es": "Editar una ruta guardada en el mapa",
-  "description_en": "Edit a saved route's line on the map: drag, add or delete points, choose whether each stretch follows roads or goes straight, and undo or redo. Phone app only; hidden on Android builds without a Google Maps key.",
-  "description_es": "Edita el trazado de una ruta guardada en el mapa: arrastra, añade o borra puntos, elige si cada tramo sigue las calles o va en línea recta, y deshaz o rehaz. Solo en la app del móvil; no aparece en las compilaciones de Android sin clave de Google Maps.",
+  "description_en": "Edit a saved route's line on the map: drag, add or delete points, switch between map and satellite, undo or redo, and, with a routing provider, choose whether each stretch follows roads or goes straight. Phone app only; hidden on Android builds without a Google Maps key.",
+  "description_es": "Edita el trazado de una ruta guardada en el mapa: arrastra, añade o borra puntos, cambia entre mapa y satélite, deshaz o rehaz y, con un proveedor de rutas, elige si cada tramo sigue las calles o va en línea recta. Solo en la app del móvil; no aparece en las compilaciones de Android sin clave de Google Maps.",
   "web": "No",
   "ios": "Yes",
   "android": "Yes",
@@ -174,13 +174,13 @@
   "prs": [
    3077
   ],
-  "evidence": "SparkyFitnessMobile/src/screens/RouteDetailScreen.tsx:287-295 ('Edit route on map' only when canShowRouteMap()); src/screens/RouteDrawScreen.tsx:200-201 ('Edit route'), 211-221 (tap to add or insert points), 318-323 (Map/Satellite), 452-490 (Delete point, Follow roads/Straight before and after), 527-547 (Undo, Redo, Clear). SparkyFitnessServer/routes/v2/routeRoutes.ts (PATCH /:id)"
+  "evidence": "SparkyFitnessMobile/src/screens/RouteDetailScreen.tsx:287-295 ('Edit route on map' only when canShowRouteMap()); src/screens/RouteDrawScreen.tsx:103-106 (snapping only when a routing provider is available), 200-201 ('Edit route'), 211-221 (tap to add or insert points), 287-296 (drag a point), 318-323 (Map/Satellite), 366-404 (Follow roads switch, disabled without a provider), 452-490 (Delete point, Follow roads/Straight before and after, only while snapping), 527-547 (Undo, Redo, Clear); src/utils/routeMapSupport.ts:15-21. SparkyFitnessServer/routes/v2/routeRoutes.ts (PATCH /:id)"
  },
  {
   "name_en": "Follow a saved route on Apple Watch",
   "name_es": "Seguir una ruta guardada en el Apple Watch",
-  "description_en": "Send saved routes to the Apple Watch or start one from the phone, then follow it on an outdoor run or walk with turn prompts (haptic and spoken), a map and off-route warnings. iPhone and Apple Watch only; Wear OS cannot follow routes.",
-  "description_es": "Envía rutas guardadas al Apple Watch o empieza una desde el móvil, y síguela en una carrera o caminata al aire libre con avisos de giro (vibración y voz), un mapa y alertas al salirte de la ruta. Solo iPhone y Apple Watch; Wear OS no puede seguir rutas.",
+  "description_en": "Send saved routes to the Apple Watch or start one from the phone, then follow it on an outdoor run or walk with turn prompts (haptic and spoken), a map and off-route warnings. iPhone and Apple Watch only: with a Wear OS watch the Android phone still shows Start on watch and Send to watch, but sending fails and the Wear OS run ignores the route.",
+  "description_es": "Envía rutas guardadas al Apple Watch o empieza una desde el móvil, y síguela en una carrera o caminata al aire libre con avisos de giro (vibración y voz), un mapa y alertas al salirte de la ruta. Solo iPhone y Apple Watch: con un reloj Wear OS, el móvil Android sigue mostrando Start on watch y Send to watch, pero el envío falla y la carrera de Wear OS ignora la ruta.",
   "web": "No",
   "ios": "Yes",
   "android": "No",
@@ -188,13 +188,13 @@
   "prs": [
    3090
   ],
-  "evidence": "SparkyFitnessMobile/src/screens/RouteDetailScreen.tsx:128-190, 296-356 (Start on watch, Send to watch, Remove from watch); src/services/watchRouteSync.ts:14-50; src/screens/RecordActivityScreen.tsx:298-302 (route picker with Watch GPS outdoors); targets/watch/Presentation/WatchRouteView.swift; targets/watch/Application/WatchRouteLibraryStore.swift; targets/watch/en.lproj/Localizable.strings:173-189 (turn cues, off route, arrived). Android: modules/watch-connectivity/android/.../WatchConnectivityModule.kt has no sendRoute/removeRoute, and targets/wearos has no route following"
+  "evidence": "SparkyFitnessMobile/src/screens/RouteDetailScreen.tsx:53 (isPaired), 128-190, 297-356 (Start on watch, Send to watch, Remove from watch, shown whenever a watch is paired); src/services/watchRouteSync.ts:14-50; src/services/watchRunControl.ts:18-70 (route sent in startRun); src/screens/RecordActivityScreen.tsx:284-301 (route picker with Watch GPS outdoors); targets/watch/Presentation/WatchRouteView.swift; targets/watch/Application/WatchRouteLibraryStore.swift; targets/watch/en.lproj/Localizable.strings:173-189 (turn cues, off route, arrived). Android: modules/watch-connectivity/index.ts:1027-1029 declares sendRoute/removeRoute, but only ios/WatchConnectivityModule.swift implements them, not android/.../WatchConnectivityModule.kt (functions at 1552-1733); isPaired at WatchConnectivityModule.kt:1568-1574; targets/wearos/.../PayloadAdapters.kt:324-348 and Models.kt:555-562 (run start request has no route)"
  },
  {
   "name_en": "Share a cardio activity as an image",
   "name_es": "Compartir una actividad de cardio como imagen",
-  "description_en": "Share a cardio activity as an image: its stats over a photo from the library or the camera, in a Classic, Route or Minimal layout with a chosen text colour. Phone app only, the same on iOS and Android.",
-  "description_es": "Comparte una actividad de cardio como imagen: sus datos sobre una foto de la galería o de la cámara, con diseño Classic, Route o Minimal y el color de texto que elijas. Solo en la app del móvil, igual en iOS y Android.",
+  "description_en": "Share a cardio activity as an image: its stats and, when it has a GPS track, its route, in a Classic, Route or Minimal layout (Minimal without the route) with a chosen text colour, over a photo from the library or the camera or on a transparent background. Phone app only, the same on iOS and Android.",
+  "description_es": "Comparte una actividad de cardio como imagen: sus datos y, si tiene recorrido GPS, su ruta, con diseño Clásico, Ruta o Minimalista (el Minimalista sin la ruta) y el color de texto que elijas, sobre una foto de la galería o de la cámara o sobre fondo transparente. Solo en la app del móvil, igual en iOS y Android.",
   "web": "No",
   "ios": "Yes",
   "android": "Yes",
@@ -202,7 +202,7 @@
   "prs": [
    3014
   ],
-  "evidence": "SparkyFitnessMobile/src/screens/CardioSessionScreen.tsx:196-207 ('Share as image'); src/screens/ActivityShareScreen.tsx:96-327 (Choose photo, Take photo, Remove, Layout Classic/Route/Minimal, Color, Share image); src/components/activityShare/ActivityShareCard.tsx; src/services/activityShareImage.ts. No share-image feature in SparkyFitnessFrontend/src"
+  "evidence": "SparkyFitnessMobile/src/screens/CardioSessionScreen.tsx:196-207 ('Share as image'); src/screens/ActivityShareScreen.tsx:96-327 (Choose photo, Take photo, Remove, Layout, Color, Share image), 190-197 (no stored route: stats only, except Minimal), 228-235 (no photo: transparent PNG); src/components/activityShare/ActivityShareCard.tsx:183-200 (Route layout draws the track), 204-215 (Classic draws it smaller); src/services/activityShareImage.ts. Spanish labels: src/localization/locales/es/translation.json activityShare.layoutClassic 'Clásico', layoutRoute 'Ruta', layoutMinimal 'Minimalista'. No share-image feature in SparkyFitnessFrontend/src"
  },
  {
   "name_en": "Running goals: weekly distance and race countdown",
@@ -220,9 +220,9 @@
  },
  {
   "name_en": "Realign a run program to finish on the goal day",
-  "name_es": "Reajustar un programa de carrera para acabar el día objetivo",
+  "name_es": "Reajustar un programa de carrera para que acabe el día objetivo",
   "description_en": "When missed weeks or spare time mean a run program no longer ends on its goal day, realign the rest of the plan after a before/after preview. The phone app has a card for it on the training programs screen; on the web it can only be done by asking Sparky chat.",
-  "description_es": "Cuando las semanas perdidas o el tiempo de sobra hacen que un programa de carrera ya no acabe en su día objetivo, reajusta el resto del plan tras ver el antes y el después. La app del móvil tiene una tarjeta para ello en la pantalla de programas; en la web solo se puede pidiéndoselo al chat de Sparky.",
+  "description_es": "Cuando las semanas perdidas o el tiempo de sobra hacen que un programa de carrera ya no acabe en su día objetivo, reajusta el resto del plan tras ver el antes y el después. La app del móvil tiene una tarjeta para ello en la pantalla de programas de entrenamiento; en la web solo se puede hacer pidiéndoselo al chat de Sparky.",
   "web": "Partial",
   "ios": "Yes",
   "android": "Yes",
@@ -230,13 +230,13 @@
   "prs": [
    3109
   ],
-  "evidence": "SparkyFitnessMobile/src/components/recording/RunProgramRealignCard.tsx:46-104; src/screens/RunProgramsScreen.tsx:366. routes/v2/runProgramRoutes.ts:234 (POST /realign) and ai/tools/runProgramTools.ts:229-232, 257 (realign_run_program); shared/src/utils/runProgramRealign.ts. Web: no realign in SparkyFitnessFrontend/src; only the 'Skip N workouts' catch-up in src/pages/Exercises/TrainingPrograms/TrainingProgramCalendar.tsx:229-244"
+  "evidence": "SparkyFitnessMobile/src/components/recording/RunProgramRealignCard.tsx:46-104; src/screens/RunProgramsScreen.tsx:112 ('Training programs'), 366. routes/v2/runProgramRoutes.ts:234 (POST /realign) and ai/tools/runProgramTools.ts:229-232, 257 (realign_run_program); shared/src/utils/runProgramRealign.ts. Web: no realign in SparkyFitnessFrontend/src; only the 'Skip N workouts' catch-up in src/pages/Exercises/TrainingPrograms/TrainingProgramCalendar.tsx:229-244"
  },
  {
   "name_en": "Guided running fitness tests",
   "name_es": "Pruebas guiadas de forma física para correr",
-  "description_en": "Run a guided fitness test (5K time trial, 30-minute all-out run or 12-minute Cooper test) outdoors or on a treadmill to get your threshold and training paces, which then set your pace zones and plans. Tests are recorded only in the phone app, never on a watch; the web shows the results read-only in Reports > Exercise > Cardio.",
-  "description_es": "Haz una prueba guiada de forma física (contrarreloj de 5K, carrera a tope de 30 minutos o test de Cooper de 12 minutos) al aire libre o en cinta para obtener tu ritmo umbral y tus ritmos de entrenamiento, que luego fijan tus zonas de ritmo y tus planes. Las pruebas solo se graban en la app del móvil, nunca en un reloj; la web muestra los resultados en modo lectura en Informes > Ejercicio > Cardio.",
+  "description_en": "Run a guided fitness test (5K time trial, 30-minute all-out run or 12-minute Cooper test) outdoors or on a treadmill to get your threshold and training paces, which then set your pace zones and plans. Tests are recorded only in the phone app, never on a watch; the web shows the results read-only in Reports > Exercise Progress > Cardio.",
+  "description_es": "Haz una prueba guiada de forma física (contrarreloj de 5K, carrera a tope de 30 minutos o test de Cooper de 12 minutos) al aire libre o en cinta para obtener tu ritmo umbral y tus ritmos de entrenamiento, que luego fijan tus zonas de ritmo y tus planes. Las pruebas solo se graban en la app del móvil, nunca en un reloj; la web muestra los resultados, sin poder cambiarlos, en Informes > Progreso de ejercicio > Cardio.",
   "web": "Partial",
   "ios": "Yes",
   "android": "Yes",
@@ -244,13 +244,13 @@
   "prs": [
    3154
   ],
-  "evidence": "SparkyFitnessMobile/App.tsx:623-629 (FitnessTest, FitnessTestResult); src/utils/fitnessTest.ts:140-153 (5K, 30-minute, Cooper); src/screens/FitnessTestScreen.tsx; src/screens/FitnessTestResultScreen.tsx; src/components/recording/IndoorTestFields.tsx; src/screens/RunProgramsScreen.tsx:316 (FitnessTestPanel); src/screens/RecordActivityScreen.tsx:292-296 (never on the watch). SparkyFitnessFrontend/src/components/ExerciseCharts/FitnessTestsCard.tsx:120-175; src/pages/Reports/ExerciseReportsDashboard.tsx:931-938. SparkyFitnessServer/routes/v2/fitnessTestRoutes.ts; db/migrations/20261018120000_create_fitness_tests.sql"
+  "evidence": "SparkyFitnessMobile/App.tsx:623-629 (FitnessTest, FitnessTestResult); src/utils/fitnessTest.ts:140-153 (5K, 30-minute, Cooper); src/screens/FitnessTestScreen.tsx; src/screens/FitnessTestResultScreen.tsx; src/components/recording/IndoorTestFields.tsx; src/screens/RunProgramsScreen.tsx:316 (FitnessTestPanel); src/screens/RecordActivityScreen.tsx:292-296 (never on the watch); src/hooks/usePaceZones.ts. SparkyFitnessFrontend/src/components/ExerciseCharts/FitnessTestsCard.tsx:120-175; src/pages/Reports/ExerciseReportsDashboard.tsx:929-938 (Cardio view); src/pages/Reports/ReportsControls.tsx:60-61 (reports.exerciseProgressTab = 'Exercise Progress' in public/locales/en, 'Progreso de ejercicio' in es; exerciseAnalytics.views.cardioShort = 'Cardio'). SparkyFitnessServer/routes/v2/fitnessTestRoutes.ts; db/migrations/20261018120000_create_fitness_tests.sql"
  },
  {
   "name_en": "Plate calculator",
   "name_es": "Calculadora de discos",
   "description_en": "See which plates to load on each side of a barbell, EZ bar or trap bar for a set, using the bars and plates you own (Equipment > Plates & bars), or the nearest weights you can load. The phone app offers it in the live workout and in the workout and preset forms; the web only in the workout player.",
-  "description_es": "Consulta qué discos cargar a cada lado de una barra, barra Z o barra hexagonal para una serie, con las barras y discos que tienes (Equipo > Discos y barras), o los pesos más cercanos que puedes montar. La app del móvil la ofrece en el entreno en curso y en los formularios de entreno y de rutina; la web, solo en el reproductor de entrenos.",
+  "description_es": "Consulta qué discos cargar a cada lado de una barra, barra Z o barra hexagonal para una serie, con las barras y discos que tienes (Equipamiento > Plates & bars), o los pesos más cercanos que puedes montar. La app del móvil la ofrece en el entreno en curso y en los formularios de entreno y de plantilla; la web, solo en el reproductor de entrenos.",
   "web": "Partial",
   "ios": "Yes",
   "android": "Yes",
@@ -258,7 +258,7 @@
   "prs": [
    3186
   ],
-  "evidence": "shared/src/utils/plateCalculator.ts:320 (calculatePlateLoad), 390 (usesBarbell). Web: SparkyFitnessFrontend/src/pages/Diary/WorkoutPlaybackSetRow.tsx:362-379 (plates button); src/pages/Diary/WorkoutPlaybackExercisesList.tsx:287, 335 (PlateCalculatorDialog); src/pages/Exercises/EquipmentManager.tsx:159-262 (inventory). Mobile: SparkyFitnessMobile/src/screens/ActiveWorkoutScreen.tsx:635-720 (keyboard bar 'Calculator', PlateCalculatorSheet); src/components/WorkoutMenus.tsx:151-156 ('Plate calculator' in the set menu); src/components/WorkoutFormExerciseList.tsx; src/components/ActiveWorkoutExerciseCard.tsx:1529 (PlateBarGraphic); src/screens/EquipmentScreen.tsx:53-58; src/screens/PlateInventoryScreen.tsx. SparkyFitnessServer/routes/v2/plateInventoryRoutes.ts"
+  "evidence": "shared/src/utils/plateCalculator.ts:26 (BAR_KINDS), 320 (calculatePlateLoad), 390 (usesBarbell). Web: SparkyFitnessFrontend/src/pages/Diary/WorkoutPlaybackSetRow.tsx:362-379 (plates button); src/pages/Diary/WorkoutPlaybackExercisesList.tsx:287, 335 (PlateCalculatorDialog); src/pages/Exercises/EquipmentManager.tsx:159-262 (inventory, in the Equipment section of src/pages/Exercises/Exercises.tsx:696). Mobile: SparkyFitnessMobile/src/screens/ActiveWorkoutScreen.tsx:635-720 (keyboard bar 'Calculator', PlateCalculatorSheet); src/components/WorkoutMenus.tsx:151-156 ('Plate calculator' in the set menu); src/components/WorkoutFormExerciseList.tsx:930-961 (used by WorkoutAddScreen, WorkoutDetailScreen, WorkoutPresetFormScreen); src/components/ActiveWorkoutExerciseCard.tsx:1529 (PlateBarGraphic); src/screens/EquipmentScreen.tsx:53-58; src/screens/PlateInventoryScreen.tsx. Spanish UI: equipmentHub.title / equipment.title = 'Equipamiento'; plates.* untranslated. SparkyFitnessServer/routes/v2/plateInventoryRoutes.ts"
  },
  {
   "name_en": "Link a logged workout to a synced workout",
@@ -277,16 +277,17 @@
  {
   "name_en": "Workout effort score (1-10)",
   "name_es": "Esfuerzo del entreno (1-10)",
-  "description_en": "Rate how hard a workout felt, from 1 to 10, on the Apple Watch when a strength workout or a watch-recorded run or walk ends; the iPhone also reads effort ratings saved in Apple Health. The web and the Android app only show a stored rating, and no app lets you enter or change it.",
-  "description_es": "Puntúa de 1 a 10 lo duro que fue un entreno en el Apple Watch al acabar un entreno de fuerza o una carrera o caminata grabada en el reloj; el iPhone también lee las valoraciones de esfuerzo guardadas en Apple Health. La web y la app de Android solo muestran una valoración ya guardada, y ninguna app permite introducirla ni cambiarla.",
+  "description_en": "Rate how hard a workout felt, from 1 to 10, on the Apple Watch when a strength workout or a watch-recorded run or walk ends. The iPhone also reads effort ratings saved in Apple Health, and activities imported from Intervals.icu bring the rating given there. The web and the Android app only show a stored rating, and neither the web nor the phone app lets you enter or change one; the rating the phone app asks for after a run program workout is kept with the program, not on the workout.",
+  "description_es": "Puntúa de 1 a 10 lo duro que fue un entreno en el Apple Watch al acabar un entreno de fuerza o una carrera o caminata grabada en el reloj. El iPhone también lee las valoraciones de esfuerzo guardadas en Apple Health, y las actividades importadas de Intervals.icu traen la valoración que se les dio allí. La web y la app de Android solo muestran una valoración ya guardada, y ni la web ni la app del móvil permiten introducirla ni cambiarla; la valoración que pide la app del móvil tras un entreno de un programa de carrera se guarda en el programa, no en el entreno.",
   "web": "Partial",
   "ios": "Yes",
   "android": "Partial",
   "watch": "Apple Watch",
   "prs": [
-   3065
+   3065,
+   3139
   ],
-  "evidence": "SparkyFitnessMobile/targets/watch/Presentation/WorkoutEffortPicker.swift:11; targets/watch/Presentation/WorkoutView.swift:151; targets/watch/Presentation/WatchRunView.swift:286; targets/watch/en.lproj/Localizable.strings:165 ('How hard was that?'); src/services/healthkit/workoutEffort.ts (Apple Health read); display: src/screens/WorkoutDetailScreen.tsx:772-780, src/screens/ActivityDetailScreen.tsx:474-481, src/utils/cardioSessionStats.ts:161-167. Web display only: SparkyFitnessFrontend/src/pages/Diary/ExerciseEntryDisplay.tsx:272-281; src/pages/Diary/ExercisePresetEntryDisplay.tsx:120-125. Wear OS has only per-set RPE: targets/wearos/.../WorkoutScreens.kt:800-830. SparkyFitnessServer/routes/exerciseEntryRoutes.ts (POST /:id/effort)"
+  "evidence": "SparkyFitnessMobile/targets/watch/Presentation/WorkoutEffortPicker.swift:11; targets/watch/Presentation/WorkoutView.swift:151; targets/watch/Presentation/WatchRunView.swift:286; targets/watch/en.lproj/Localizable.strings:165 ('How hard was that?'); src/services/healthkit/workoutEffort.ts and src/services/healthkit/index.ts:1251-1466 (Apple Health read); display: src/screens/WorkoutDetailScreen.tsx:772-780, src/screens/ActivityDetailScreen.tsx:474-481, src/utils/cardioSessionStats.ts:161-167. Web display only: SparkyFitnessFrontend/src/pages/Diary/ExerciseEntryDisplay.tsx:272-281; src/pages/Diary/ExercisePresetEntryDisplay.tsx:120-125. Wear OS has only per-set RPE: targets/wearos/.../WorkoutScreens.kt:800-830. SparkyFitnessServer/routes/exerciseEntryRoutes.ts:1376 (POST /:id/effort, called only from the watch bridges: src/hooks/useWatchWorkoutBridge.ts:732, src/services/watchRunQueue.ts:139); integrations/intervals/intervalsDataProcessor.ts:94, 132-135 (Intervals.icu icu_rpe stored as workout_effort). Run program rating kept apart: src/components/recording/RunEffortPrompt.tsx:38 (Diary, DiaryScreen.tsx:678) and src/screens/RunSummaryScreen.tsx:171 call rateProgramWorkout -> SparkyFitnessServer/models/runProgramRepository.ts:327-357 (run_programs.effort_log only)"
  },
  {
   "name_en": "Top food sources for a nutrient",
@@ -320,7 +321,7 @@
   "name_en": "Arithmetic in quantity fields",
   "name_es": "Operaciones en los campos de cantidad",
   "description_en": "Type a calculation such as 30*5 or (2+1)/2 in the web quantity fields for logging or editing food and meals, and it is replaced by the result. The phone app's quantity fields accept numbers only.",
-  "description_es": "Escribe una operación como 30*5 o (2+1)/2 en los campos de cantidad de la web al registrar o editar comidas y platos, y se sustituye por el resultado. Los campos de cantidad de la app del móvil solo aceptan números.",
+  "description_es": "Escribe una operación como 30*5 o (2+1)/2 en los campos de cantidad de la web al registrar o editar alimentos y comidas, y se sustituye por el resultado. Los campos de cantidad de la app del móvil solo aceptan números.",
   "web": "Yes",
   "ios": "No",
   "android": "No",
@@ -334,7 +335,7 @@
   "name_en": "Count activity calories separately (adaptive calorie goal)",
   "name_es": "Contar aparte las calorías de actividad (objetivo calórico adaptativo)",
   "description_en": "With Dynamic Goal and the adaptive method, an optional switch keeps past activity out of the learned calorie baseline and adds today's steps and workouts to the day's budget once. Same on web and the phone app; the web also explains it in the calorie target breakdown.",
-  "description_es": "Con Dynamic Goal y el método adaptativo, un interruptor opcional deja la actividad pasada fuera de la base calórica aprendida y suma una sola vez los pasos y entrenos de hoy al presupuesto del día. Igual en la web y en la app del móvil; la web además lo explica en el desglose del objetivo calórico.",
+  "description_es": "Con el modo Objetivo dinámico y el método adaptativo, un interruptor opcional deja la actividad pasada fuera de la base calórica aprendida y suma una sola vez los pasos y entrenos de hoy al presupuesto del día. Igual en la web y en la app del móvil; la web además lo explica en el desglose del objetivo calórico.",
   "web": "Yes",
   "ios": "Yes",
   "android": "Yes",
@@ -342,7 +343,7 @@
   "prs": [
    3061
   ],
-  "evidence": "SparkyFitnessFrontend/src/pages/Settings/CalculationSettings.tsx:169-170, 1444-1445 ('Count activity calories separately'); src/components/CalorieTargetBreakdown/AdaptiveActivityNotes.tsx. SparkyFitnessMobile/src/screens/CalorieSettingsScreen.tsx:483-484 (formula), 616-640 (switch, only for dynamic + adaptive). shared/src/utils/calorieCalculations.ts (isAdaptiveActivitySeparated); SparkyFitnessServer/db/migrations/20261022110000_add_adaptive_activity_separation.sql; services/adaptiveActivityService.ts"
+  "evidence": "SparkyFitnessFrontend/src/pages/Settings/CalculationSettings.tsx:169-170, 1437-1460 ('Count activity calories separately', only for dynamic + adaptive); src/components/CalorieTargetBreakdown/AdaptiveActivityNotes.tsx. SparkyFitnessMobile/src/screens/CalorieSettingsScreen.tsx:483-484 (formula), 616-640 (switch, only for dynamic + adaptive). shared/src/utils/calorieCalculations.ts:48-58 (isAdaptiveActivitySeparated); SparkyFitnessServer/db/migrations/20261022110000_add_adaptive_activity_separation.sql; services/adaptiveActivityService.ts. Spanish UI: settings.calorieGoalAdjustment.dynamicGoal (web) and calorieSettings.modes.dynamic (mobile) = 'Objetivo dinámico'"
  },
  {
   "name_en": "Food preferences and saved food tasks in Sparky chat",

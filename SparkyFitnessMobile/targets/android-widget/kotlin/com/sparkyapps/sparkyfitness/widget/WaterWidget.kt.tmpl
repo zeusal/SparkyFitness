@@ -198,6 +198,7 @@ class WaterWidget : GlanceAppWidget() {
             WaterWidgetStore.STATUS_BLOCKED -> R.string.widget_water_status_blocked
             WaterWidgetStore.STATUS_FAILED -> R.string.widget_water_status_failed
             WaterWidgetStore.STATUS_NOTHING_TO_REMOVE -> R.string.widget_water_status_nothing_to_remove
+            WaterWidgetStore.STATUS_WAITING -> R.string.widget_water_status_waiting
             else -> return
         }
         Spacer(modifier = GlanceModifier.height(6.dp))

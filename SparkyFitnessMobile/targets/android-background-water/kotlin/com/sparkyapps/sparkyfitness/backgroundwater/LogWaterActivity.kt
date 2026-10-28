@@ -19,6 +19,8 @@ import android.widget.Toast
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.work.Constraints
+import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
@@ -55,7 +57,16 @@ class LogWaterActivity : Activity() {
 fun enqueueLogWater(context: Context, fromTile: Boolean = false) {
     try {
         val requestBuilder = OneTimeWorkRequestBuilder<LogWaterWorker>()
-            .setInputData(workDataOf(KEY_FROM_TILE to fromTile))
+            .setInputData(
+                workDataOf(
+                    KEY_FROM_TILE to fromTile,
+                    // The drink belongs to the day and the account of the tap,
+                    // even when the request waits for a network.
+                    KEY_ENTRY_DATE to today(),
+                    KEY_ACCOUNT_EPOCH to waterWidgetAccountEpoch(context),
+                ),
+            )
+            .setConstraints(waterRequestConstraints())
         // Before Android 12 an expedited job runs as a foreground service,
         // and this worker does not supply ForegroundInfo.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -71,11 +82,23 @@ fun enqueueLogWater(context: Context, fromTile: Boolean = false) {
 /** Owns the POST that [enqueueLogWater] queued, after its caller has gone. */
 class LogWaterWorker(context: Context, params: WorkerParameters) : Worker(context, params) {
     override fun doWork(): Result {
-        // Read before the request: an account change while it is out moves
-        // the widget's epoch on, and the widget then drops this total.
-        val accountEpoch = waterWidgetAccountEpoch(applicationContext)
-        val outcome = postWaterChange(applicationContext, 1)
-        if (outcome is WaterChangeOutcome.Changed) {
+        // A run is repeated only when an earlier one was stopped, maybe after
+        // its request reached the server, which logs a drink every time.
+        if (runAttemptCount > 0) {
+            Log.w(TAG, "Log water stopped before it finished; not sent again")
+            return Result.success()
+        }
+        // An account change while the request waited moved the epoch on: the
+        // drink was meant for the previous account.
+        val accountEpoch = inputData.getLong(KEY_ACCOUNT_EPOCH, 0L)
+        if (accountEpoch != waterWidgetAccountEpoch(applicationContext)) {
+            Log.w(TAG, "Log water dropped: the account changed while it waited")
+            return Result.success()
+        }
+        val entryDate = inputData.getString(KEY_ENTRY_DATE) ?: today()
+        val outcome = postWaterChange(applicationContext, 1, entryDate)
+        // An earlier day's total is not what the widget shows.
+        if (outcome is WaterChangeOutcome.Changed && entryDate == today()) {
             showTotalOnWaterWidget(applicationContext, outcome, accountEpoch)
         }
         report(applicationContext, resultFor(outcome), inputData.getBoolean(KEY_FROM_TILE, false))
@@ -120,6 +143,8 @@ fun clearWaterFailureNotice(context: Context) {
 }
 
 private const val KEY_FROM_TILE = "from_tile"
+private const val KEY_ENTRY_DATE = "entry_date"
+private const val KEY_ACCOUNT_EPOCH = "account_epoch"
 private const val CHANNEL_ID = "quick-logging"
 private const val LOGGED_NOTIFICATION_ID = 7301
 private const val FAILED_NOTIFICATION_ID = 7302
@@ -247,11 +272,12 @@ sealed class WaterChangeOutcome {
 }
 
 /**
- * Adds [drinks] of the dashboard's container to today's water, or removes
- * them when negative (the server removes the newest drinks logged by hand).
- * Blocking network call: run it off the main thread.
+ * Adds [drinks] of the dashboard's container to the water of [entryDate], the
+ * day they were tapped, or removes them when negative (the server removes the
+ * newest drinks logged by hand). Blocking network call: run it off the main
+ * thread.
  */
-fun postWaterChange(context: Context, drinks: Int): WaterChangeOutcome {
+fun postWaterChange(context: Context, drinks: Int, entryDate: String): WaterChangeOutcome {
     // Where a failure happened: only one while connecting can be the phone
     // blocking the app, as nothing has been sent to the server yet.
     var phase = "reading the stored login"
@@ -265,7 +291,7 @@ fun postWaterChange(context: Context, drinks: Int): WaterChangeOutcome {
         val containerName = config.getString("containerName")
         val volume = config.optString("volumeLabel", "")
         val body = JSONObject()
-            .put("entry_date", SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()))
+            .put("entry_date", entryDate)
             .put("change_drinks", drinks)
             .put("container_id", config.getInt("containerId"))
 
@@ -313,6 +339,28 @@ fun postWaterChange(context: Context, drinks: Int): WaterChangeOutcome {
         Log.w(TAG, "Water change failed while $phase: ${e.javaClass.simpleName}: ${e.message}; ${networkSummary(context)}")
         if (blocked) WaterChangeOutcome.Blocked else WaterChangeOutcome.Unreachable
     }
+}
+
+/** Today on the device, the day a drink is logged for, as the server takes it. */
+fun today(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+
+/**
+ * The water requests wait for a usable network instead of failing without
+ * one. Without it WorkManager also starts them at once in the app's process,
+ * where a battery saver can block the network, and from Android 14 QPR2 an
+ * expedited job may use the network under battery saver, Doze and App
+ * Standby only when it declares that it needs one.
+ */
+fun waterRequestConstraints(): Constraints =
+    Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+
+/** Whether this app can use a network with working internet right now. */
+fun hasUsableNetwork(context: Context): Boolean {
+    val connectivity = context.getSystemService(ConnectivityManager::class.java) ?: return false
+    val network = connectivity.activeNetwork ?: return false
+    val capabilities = connectivity.getNetworkCapabilities(network) ?: return false
+    return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+        capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
 }
 
 /** The app's App info screen, where its battery use (and its background data) is set. */

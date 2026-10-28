@@ -122,6 +122,7 @@ const REQUIRED_KEYS = [
   'widget_water_status_blocked',
   'widget_water_status_failed',
   'widget_water_status_nothing_to_remove',
+  'widget_water_status_waiting',
   'widget_preview_water_amount',
 ];
 
@@ -472,7 +473,7 @@ describe('Android widget localization contract', () => {
       );
       // The request itself is made outside the lock.
       expect(actions).toMatch(
-        /withContext\(Dispatchers\.IO\) \{ postWaterChange\(context, batch\.drinks\) \}/
+        /withContext\(Dispatchers\.IO\) \{ postWaterChange\(context, batch\.drinks, batch\.entryDate\) \}/
       );
 
       const receiver = fs.readFileSync(
@@ -481,6 +482,77 @@ describe('Android widget localization contract', () => {
       );
       expect(receiver).toMatch(
         /WidgetSnapshotLock\.mutex\.withLock \{\s*\n\s*WaterWidgetStore\.applyTotalsLocked/
+      );
+    });
+
+    it('waits for a usable network and sends each drink dated the day it was tapped', () => {
+      const logWater = fs.readFileSync(LOG_WATER_PATH, 'utf8');
+      const store = fs.readFileSync(
+        path.join(KOTLIN_ROOT, 'WaterWidgetStore.kt'),
+        'utf8'
+      );
+      const actions = fs.readFileSync(
+        path.join(KOTLIN_ROOT, 'WaterWidgetActions.kt'),
+        'utf8'
+      );
+      // Both requests declare that they need a network: WorkManager then
+      // waits for one instead of starting a run that is bound to fail, and
+      // an expedited job may use it under battery saver (Android 14 QPR2+).
+      expect(logWater).toMatch(
+        /fun waterRequestConstraints\(\): Constraints =\s*Constraints\.Builder\(\)\.setRequiredNetworkType\(NetworkType\.CONNECTED\)\.build\(\)/
+      );
+      expect(store).toMatch(/\.setConstraints\(waterRequestConstraints\(\)\)/);
+      const enqueueLogWater = logWater.slice(
+        logWater.indexOf('fun enqueueLogWater('),
+        logWater.indexOf('class LogWaterWorker')
+      );
+      expect(enqueueLogWater).toMatch(
+        /\.setConstraints\(waterRequestConstraints\(\)\)/
+      );
+      // A tap with no usable network says it is waiting.
+      expect(actions).toMatch(/val waiting = !hasUsableNetwork\(context\)/);
+      expect(actions).toMatch(
+        /WaterWidgetStore\.addTapLocked\(context, change, waiting\)/
+      );
+      expect(store).toMatch(
+        /if \(waiting\) obj\.put\(KEY_STATUS, STATUS_WAITING\) else obj\.remove\(KEY_STATUS\)/
+      );
+      // A new day moves the taps still waiting under the day they were made,
+      // out of the new day's figures, and they go out first, dated that day.
+      const merge = store.slice(
+        store.indexOf('suspend fun mergeFromAppLocked'),
+        store.indexOf('suspend fun addTapLocked')
+      );
+      expect(merge).toMatch(
+        /earlier\.put\(day, earlier\.optInt\(day, 0\) \+ pending\)/
+      );
+      expect(store).toMatch(
+        /return Batch\(drinks, accountEpoch\(context\), date, entryDate = earliestDay\)/
+      );
+      expect(store).toMatch(
+        /return Batch\(drinks, accountEpoch\(context\), date, entryDate = date\)/
+      );
+      // An earlier day's answer never changes today's figures.
+      expect(store).toMatch(
+        /is WaterChangeOutcome\.Changed -> \{\s*if \(!forToday\) return/
+      );
+      expect(logWater).toMatch(/\.put\("entry_date", entryDate\)/);
+      // The shortcut and the tile keep the tap's day and account, and never
+      // post again after a stopped run, as the server logs every request.
+      expect(enqueueLogWater).toMatch(/KEY_ENTRY_DATE to today\(\)/);
+      expect(enqueueLogWater).toMatch(
+        /KEY_ACCOUNT_EPOCH to waterWidgetAccountEpoch\(context\)/
+      );
+      const doWork = logWater.slice(logWater.indexOf('class LogWaterWorker'));
+      expect(doWork.indexOf('if (runAttemptCount > 0)')).toBeGreaterThan(-1);
+      expect(doWork.indexOf('if (runAttemptCount > 0)')).toBeLessThan(
+        doWork.indexOf('postWaterChange(')
+      );
+      expect(doWork).toMatch(
+        /if \(accountEpoch != waterWidgetAccountEpoch\(applicationContext\)\) \{[\s\S]*?return Result\.success\(\)/
+      );
+      expect(doWork).toMatch(
+        /postWaterChange\(applicationContext, 1, entryDate\)/
       );
     });
 
@@ -500,7 +572,8 @@ describe('Android widget localization contract', () => {
         /val blocked = phase == "connecting" && isBlockedInBackground\(context, e\)/
       );
       // The real error is logged, without the URL or the headers.
-      const logLine = logWater.match(/Log\.w\(TAG, [^\n]*\)/)?.[0] ?? '';
+      const logLine =
+        logWater.match(/Log\.w\(TAG, "Water change failed[^\n]*\)/)?.[0] ?? '';
       expect(logLine).toContain('e.javaClass.simpleName');
       expect(logLine).not.toMatch(/baseUrl|headers|config/);
       // The shortcut and the tile say how to fix it; the tile's notification

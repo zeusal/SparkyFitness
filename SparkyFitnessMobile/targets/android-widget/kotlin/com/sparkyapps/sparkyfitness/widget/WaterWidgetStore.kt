@@ -10,6 +10,7 @@ import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import com.sparkyapps.sparkyfitness.backgroundwater.WATER_WIDGET_ACCOUNT_EPOCH
 import com.sparkyapps.sparkyfitness.backgroundwater.WaterChangeOutcome
+import com.sparkyapps.sparkyfitness.backgroundwater.waterRequestConstraints
 import kotlin.math.max
 import kotlinx.coroutines.CancellationException
 import org.json.JSONObject
@@ -59,16 +60,24 @@ internal object WaterWidgetStore {
     const val STATUS_BLOCKED = "blocked"
     const val STATUS_FAILED = "failed"
     const val STATUS_NOTHING_TO_REMOVE = "nothing_to_remove"
+    const val STATUS_WAITING = "waiting"
 
     private const val KEY_ACCOUNT_EPOCH = WATER_WIDGET_ACCOUNT_EPOCH
     private const val KEY_PENDING = "pendingDrinks"
     private const val KEY_SENDING = "sendingDrinks"
     private const val KEY_STATUS = "status"
+    // Taps from earlier days still waiting to be sent, by day: they go out
+    // dated the day they were made, and never count in today's figures.
+    private const val KEY_EARLIER = "earlierDrinks"
     // The server accepts up to 100 drinks a request.
     private const val MAX_DRINKS_PER_REQUEST = 100
 
-    /** Taps taken by the worker, and the account and day they were made for. */
-    class Batch(val drinks: Int, val accountEpoch: Long, val date: String)
+    /**
+     * Taps taken by the worker: the account they were made for, the day of
+     * the snapshot they were taken from ([date]) and the day they were made
+     * ([entryDate]), which differs for taps left over from an earlier day.
+     */
+    class Batch(val drinks: Int, val accountEpoch: Long, val date: String, val entryDate: String)
 
     fun parse(json: String?): WaterSnapshot? {
         if (json == null) return null
@@ -99,8 +108,9 @@ internal object WaterWidgetStore {
      * drink until its container has loaded; whatever is left out is kept from
      * the stored copy. The manual part comes with every push and is never
      * kept, as the day's water may have changed since. Taps not yet sent are
-     * always kept; the request still out is forgotten when the day changes,
-     * as its answer is then dropped. A push from the app answers any error the
+     * always kept, and when the day changes they move to [KEY_EARLIER] under
+     * the day they were made; the request still out is forgotten, as its
+     * answer is then dropped. A push from the app answers any error the
      * widget was showing. Redraws nothing: the app reloads the widget after it.
      */
     suspend fun mergeFromAppLocked(context: Context, json: String) {
@@ -113,24 +123,35 @@ internal object WaterWidgetStore {
             for (key in listOf("drinkMl", "unit", "canLog")) {
                 if (!incoming.has(key) && stored.has(key)) incoming.put(key, stored.get(key))
             }
-            if (stored.has(KEY_PENDING)) incoming.put(KEY_PENDING, stored.get(KEY_PENDING))
-            if (stored.has(KEY_SENDING) && stored.optString("date") == incoming.optString("date")) {
-                incoming.put(KEY_SENDING, stored.get(KEY_SENDING))
+            stored.optJSONObject(KEY_EARLIER)?.let { incoming.put(KEY_EARLIER, it) }
+            val pending = stored.optInt(KEY_PENDING, 0)
+            if (stored.optString("date") == incoming.optString("date")) {
+                if (stored.has(KEY_PENDING)) incoming.put(KEY_PENDING, pending)
+                if (stored.has(KEY_SENDING)) incoming.put(KEY_SENDING, stored.get(KEY_SENDING))
+            } else if (pending != 0) {
+                val earlier = incoming.optJSONObject(KEY_EARLIER) ?: JSONObject()
+                val day = stored.optString("date")
+                earlier.put(day, earlier.optInt(day, 0) + pending)
+                incoming.put(KEY_EARLIER, earlier)
             }
         }
         incoming.remove(KEY_STATUS)
         writeLocked(context, incoming, redraw = false)
     }
 
-    /** Adds a tap to send. False when there is nothing to change (no snapshot for today, or nothing to remove). */
-    suspend fun addTapLocked(context: Context, change: Int): Boolean {
+    /**
+     * Adds a tap to send, showing "Waiting to send" when it was made with no
+     * usable network ([waiting]). False when there is nothing to change (no
+     * snapshot for today, or nothing to remove).
+     */
+    suspend fun addTapLocked(context: Context, change: Int, waiting: Boolean): Boolean {
         if (change == 0) return false
         val obj = storedObject(context) ?: return false
         val snapshot = parse(obj.toString()) ?: return false
         if (!snapshot.showsButtons) return false
         if (change < 0 && !snapshot.canRemove) return false
         obj.put(KEY_PENDING, snapshot.pendingDrinks + change)
-        obj.remove(KEY_STATUS)
+        if (waiting) obj.put(KEY_STATUS, STATUS_WAITING) else obj.remove(KEY_STATUS)
         writeLocked(context, obj, redraw = true)
         return true
     }
@@ -150,16 +171,31 @@ internal object WaterWidgetStore {
         writeLocked(context, obj, redraw = true)
     }
 
-    /** Takes the taps waiting to be sent, or null when there are none. */
+    /**
+     * Takes the taps waiting to be sent, an earlier day's first, or null when
+     * there are none. An earlier day's taps are not shown, so they are not
+     * counted as being sent either.
+     */
     suspend fun takePendingLocked(context: Context): Batch? {
         val obj = storedObject(context) ?: return null
+        val date = obj.optString("date", "")
+        val earlier = obj.optJSONObject(KEY_EARLIER)
+        val earliestDay = earlier?.keys()?.asSequence()?.filter { earlier.optInt(it, 0) != 0 }?.minOrNull()
+        if (earlier != null && earliestDay != null) {
+            val waiting = earlier.optInt(earliestDay, 0)
+            val drinks = waiting.coerceIn(-MAX_DRINKS_PER_REQUEST, MAX_DRINKS_PER_REQUEST)
+            if (waiting == drinks) earlier.remove(earliestDay) else earlier.put(earliestDay, waiting - drinks)
+            if (earlier.length() == 0) obj.remove(KEY_EARLIER)
+            writeLocked(context, obj, redraw = false)
+            return Batch(drinks, accountEpoch(context), date, entryDate = earliestDay)
+        }
         val pending = obj.optInt(KEY_PENDING, 0)
         if (pending == 0) return null
         val drinks = pending.coerceIn(-MAX_DRINKS_PER_REQUEST, MAX_DRINKS_PER_REQUEST)
         obj.put(KEY_PENDING, pending - drinks)
         obj.put(KEY_SENDING, obj.optInt(KEY_SENDING, 0) + drinks)
         writeLocked(context, obj, redraw = false)
-        return Batch(drinks, accountEpoch(context), obj.optString("date", ""))
+        return Batch(drinks, accountEpoch(context), date, entryDate = date)
     }
 
     /**
@@ -175,9 +211,13 @@ internal object WaterWidgetStore {
         if (obj.optString("date", "") != batch.date) return
         val before = obj.finiteDouble("consumedMl") ?: 0.0
         val drinkMl = obj.finiteDouble("drinkMl") ?: 0.0
-        obj.put(KEY_SENDING, obj.optInt(KEY_SENDING, 0) - batch.drinks)
+        // An earlier day's taps were never counted as being sent, and the
+        // server's totals for that day are not today's.
+        val forToday = batch.entryDate == batch.date
+        if (forToday) obj.put(KEY_SENDING, obj.optInt(KEY_SENDING, 0) - batch.drinks)
         when (outcome) {
             is WaterChangeOutcome.Changed -> {
+                if (!forToday) return
                 val total = outcome.totalMl ?: max(0.0, before + batch.drinks * drinkMl)
                 obj.put("consumedMl", total)
                 outcome.manualMl?.let { obj.put("manualMl", it) }
@@ -192,6 +232,7 @@ internal object WaterWidgetStore {
             else -> {
                 obj.put(KEY_PENDING, 0)
                 obj.put(KEY_SENDING, 0)
+                obj.remove(KEY_EARLIER)
                 obj.put(KEY_STATUS, statusFor(outcome))
             }
         }
@@ -224,6 +265,7 @@ internal object WaterWidgetStore {
     /** Sends the waiting taps in the order they were made, one request after another. */
     fun enqueueSend(context: Context) {
         val request = OneTimeWorkRequestBuilder<WaterWidgetWorker>()
+            .setConstraints(waterRequestConstraints())
         // Before Android 12 an expedited job runs as a foreground service,
         // and this worker does not supply ForegroundInfo.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

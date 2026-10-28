@@ -8,6 +8,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.sparkyapps.sparkyfitness.backgroundwater.WaterChangeOutcome
 import com.sparkyapps.sparkyfitness.backgroundwater.clearWaterFailureNotice
+import com.sparkyapps.sparkyfitness.backgroundwater.hasUsableNetwork
 import com.sparkyapps.sparkyfitness.backgroundwater.postWaterChange
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.withLock
@@ -25,7 +26,10 @@ class WaterChangeAction : ActionCallback {
         // reach the open-the-app action behind it.
         val change = parameters[WaterWidget.CHANGE_KEY] ?: return
         if (change == 0) return
-        val added = WidgetSnapshotLock.mutex.withLock { WaterWidgetStore.addTapLocked(context, change) }
+        // With no usable network the request waits for one, and the widget
+        // says so rather than looking stuck.
+        val waiting = !hasUsableNetwork(context)
+        val added = WidgetSnapshotLock.mutex.withLock { WaterWidgetStore.addTapLocked(context, change, waiting) }
         if (added) {
             WaterWidgetStore.enqueueSend(context)
         } else {
@@ -49,7 +53,7 @@ class WaterWidgetWorker(context: Context, params: WorkerParameters) : CoroutineW
         while (true) {
             val batch = WidgetSnapshotLock.mutex.withLock { WaterWidgetStore.takePendingLocked(context) }
                 ?: return Result.success()
-            val outcome = withContext(Dispatchers.IO) { postWaterChange(context, batch.drinks) }
+            val outcome = withContext(Dispatchers.IO) { postWaterChange(context, batch.drinks, batch.entryDate) }
             // A drink logged from here answers the tile's last failure, as a
             // drink logged from the shortcut or the tile does.
             if (outcome is WaterChangeOutcome.Changed) clearWaterFailureNotice(context)

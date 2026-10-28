@@ -45,6 +45,7 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
+import com.sparkyapps.sparkyfitness.backgroundwater.appInfoIntent
 import {{APPLICATION_ID}}.R
 import java.text.NumberFormat
 
@@ -53,7 +54,8 @@ import java.text.NumberFormat
  * dashboard's container without opening the app, the Android side of the iOS
  * water widget (targets/widget/waterWidget.swift). Drawn in a fixed 2x2 like
  * the macro widget, with a bar like the other Android widgets. A tap anywhere
- * else opens the app.
+ * else opens the app, or its App info while the phone keeps it offline in the
+ * background ([WaterWidgetStore.STATUS_BLOCKED]).
  *
  * The buttons only show once the Dashboard has sent its container (`canLog`,
  * false until then, as on iOS) and that container logs plain water (one
@@ -94,6 +96,13 @@ class WaterWidget : GlanceAppWidget() {
 
         val openAppIntent = Intent(Intent.ACTION_VIEW, Uri.parse("sparkyfitnessmobile://"))
             .setPackage(context.packageName)
+        // While the phone keeps the app offline in the background, a tap opens
+        // App info, where its battery use is set, instead of the app.
+        val tapIntent = if (snapshot?.status == WaterWidgetStore.STATUS_BLOCKED) {
+            appInfoIntent(context)
+        } else {
+            openAppIntent
+        }
 
         Box(
             modifier = GlanceModifier
@@ -101,7 +110,7 @@ class WaterWidget : GlanceAppWidget() {
                 .background(GlanceTheme.colors.surface)
                 .appWidgetBackgroundCornerRadius()
                 .padding(14.dp)
-                .clickable(actionStartActivity(openAppIntent)),
+                .clickable(actionStartActivity(tapIntent)),
             contentAlignment = Alignment.Center,
         ) {
             Column(modifier = GlanceModifier.fillMaxWidth()) {
@@ -186,6 +195,7 @@ class WaterWidget : GlanceAppWidget() {
             WaterWidgetStore.STATUS_PICK_CONTAINER -> R.string.widget_water_status_pick_container
             WaterWidgetStore.STATUS_EXPIRED -> R.string.widget_water_status_expired
             WaterWidgetStore.STATUS_UNREACHABLE -> R.string.widget_water_status_unreachable
+            WaterWidgetStore.STATUS_BLOCKED -> R.string.widget_water_status_blocked
             WaterWidgetStore.STATUS_FAILED -> R.string.widget_water_status_failed
             WaterWidgetStore.STATUS_NOTHING_TO_REMOVE -> R.string.widget_water_status_nothing_to_remove
             else -> return

@@ -5,10 +5,16 @@ import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
+import android.provider.Settings
+import android.util.Log
 import android.widget.Toast
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
@@ -21,7 +27,9 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import org.json.JSONObject
 import java.net.HttpURLConnection
+import java.net.SocketException
 import java.net.URL
+import java.net.UnknownHostException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -117,7 +125,8 @@ private const val LOGGED_NOTIFICATION_ID = 7301
 private const val FAILED_NOTIFICATION_ID = 7302
 private const val LOGGED_SHOWN_FOR_MS = 30_000L
 
-private class LogWaterResult(val logged: Boolean, val message: String)
+/** [opensAppInfo]: the notification opens the app's App info, where its battery use is set. */
+private class LogWaterResult(val logged: Boolean, val message: String, val opensAppInfo: Boolean = false)
 
 /**
  * The shortcut is tapped on the home screen, so a Toast is enough. Over the
@@ -173,7 +182,12 @@ private fun notify(context: Context, result: LogWaterResult): Boolean {
         } else {
             builder.setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
         }
-        context.packageManager.getLaunchIntentForPackage(context.packageName)?.let {
+        val target = if (result.opensAppInfo) {
+            appInfoIntent(context)
+        } else {
+            context.packageManager.getLaunchIntentForPackage(context.packageName)
+        }
+        target?.let {
             builder.setContentIntent(PendingIntent.getActivity(context, 0, it, PendingIntent.FLAG_IMMUTABLE))
         }
         // Two ids, because on many Android versions a logged drink's timeout
@@ -199,6 +213,12 @@ private fun resultFor(outcome: WaterChangeOutcome): LogWaterResult {
         is WaterChangeOutcome.Failed ->
             LogWaterResult(false, "SparkyFitness could not log the water (error ${outcome.status})")
         WaterChangeOutcome.Unreachable -> LogWaterResult(false, "SparkyFitness could not reach your server")
+        WaterChangeOutcome.Blocked -> LogWaterResult(
+            false,
+            "Your phone kept SparkyFitness offline in the background. " +
+                "In its App info, set battery use to unrestricted (No restrictions).",
+            opensAppInfo = true,
+        )
     }
 }
 
@@ -218,6 +238,12 @@ sealed class WaterChangeOutcome {
     object Expired : WaterChangeOutcome()
     data class Failed(val status: Int) : WaterChangeOutcome()
     object Unreachable : WaterChangeOutcome()
+
+    /**
+     * The phone kept the app offline in the background (a battery saver mode,
+     * or a limit on background data), so the request never left it.
+     */
+    object Blocked : WaterChangeOutcome()
 }
 
 /**
@@ -226,6 +252,9 @@ sealed class WaterChangeOutcome {
  * Blocking network call: run it off the main thread.
  */
 fun postWaterChange(context: Context, drinks: Int): WaterChangeOutcome {
+    // Where a failure happened: only one while connecting can be the phone
+    // blocking the app, as nothing has been sent to the server yet.
+    var phase = "reading the stored login"
     return try {
         val json = BackgroundWaterStore.load(context) ?: return WaterChangeOutcome.NotSignedIn
         val config = JSONObject(json)
@@ -254,6 +283,9 @@ fun postWaterChange(context: Context, drinks: Int): WaterChangeOutcome {
                 connection.setRequestProperty(name, headers.getString(name))
             }
             connection.setRequestProperty("Content-Type", "application/json")
+            phase = "connecting"
+            connection.connect()
+            phase = "sending"
             connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
             val status = connection.responseCode
             when {
@@ -276,9 +308,58 @@ fun postWaterChange(context: Context, drinks: Int): WaterChangeOutcome {
             connection.disconnect()
         }
     } catch (e: Exception) {
-        WaterChangeOutcome.Unreachable
+        val blocked = phase == "connecting" && isBlockedInBackground(context, e)
+        // Never the URL or the headers: they carry the login.
+        Log.w(TAG, "Water change failed while $phase: ${e.javaClass.simpleName}: ${e.message}; ${networkSummary(context)}")
+        if (blocked) WaterChangeOutcome.Blocked else WaterChangeOutcome.Unreachable
     }
 }
+
+/** The app's App info screen, where its battery use (and its background data) is set. */
+fun appInfoIntent(context: Context): Intent =
+    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+/**
+ * Whether [error], raised while connecting, came from the phone keeping the
+ * app offline in the background rather than from the network or the server.
+ * Android reports its own blocks (battery saver, background data limits). A
+ * phone maker's battery mode may not, and then shows only as a lookup or a
+ * socket refused while the phone itself is online, for an app that is not
+ * exempt from battery optimisation.
+ */
+private fun isBlockedInBackground(context: Context, error: Exception): Boolean {
+    val connectivity = context.getSystemService(ConnectivityManager::class.java) ?: return false
+    @Suppress("DEPRECATION") // The only call that tells a blocked network from none.
+    if (connectivity.activeNetworkInfo?.detailedState == android.net.NetworkInfo.DetailedState.BLOCKED) return true
+    val refused = error is UnknownHostException ||
+        (error is SocketException && error.message?.contains("EPERM") == true)
+    if (!refused || !phoneIsOnline(connectivity)) return false
+    val power = context.getSystemService(PowerManager::class.java) ?: return false
+    return !power.isIgnoringBatteryOptimizations(context.packageName)
+}
+
+/** Whether any network has working internet, whatever this app may use. */
+private fun phoneIsOnline(connectivity: ConnectivityManager): Boolean {
+    @Suppress("DEPRECATION") // The per-app calls hide a default network the app is blocked from.
+    return connectivity.allNetworks.any { network ->
+        connectivity.getNetworkCapabilities(network)
+            ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+    }
+}
+
+/** What the phone reported when a change failed, for the log. */
+private fun networkSummary(context: Context): String {
+    val connectivity = context.getSystemService(ConnectivityManager::class.java)
+    val power = context.getSystemService(PowerManager::class.java)
+    @Suppress("DEPRECATION")
+    val network = connectivity?.activeNetworkInfo?.detailedState
+    return "network=$network, phoneOnline=${connectivity?.let { phoneIsOnline(it) }}, " +
+        "batteryExempt=${power?.isIgnoringBatteryOptimizations(context.packageName)}, " +
+        "powerSave=${power?.isPowerSaveMode}, sdk=${Build.VERSION.SDK_INT}"
+}
+
+private const val TAG = "SparkyWater"
 
 /** Absent, null and non-finite all read as unknown. */
 private fun JSONObject.optionalNumber(name: String): Double? {

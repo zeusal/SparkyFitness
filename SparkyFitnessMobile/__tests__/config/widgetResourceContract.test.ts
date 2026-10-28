@@ -24,6 +24,10 @@ const KOTLIN_ROOT = path.join(
   'widget'
 );
 const RES_ROOT = path.join(TARGETS_ROOT, 'res');
+const LOG_WATER_PATH = path.join(
+  __dirname,
+  '../../targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/LogWaterActivity.kt'
+);
 
 /**
  * Discover every Android widget resource directory below `res/`, mapping
@@ -115,6 +119,7 @@ const REQUIRED_KEYS = [
   'widget_water_status_pick_container',
   'widget_water_status_expired',
   'widget_water_status_unreachable',
+  'widget_water_status_blocked',
   'widget_water_status_failed',
   'widget_water_status_nothing_to_remove',
   'widget_preview_water_amount',
@@ -477,6 +482,62 @@ describe('Android widget localization contract', () => {
       expect(receiver).toMatch(
         /WidgetSnapshotLock\.mutex\.withLock \{\s*\n\s*WaterWidgetStore\.applyTotalsLocked/
       );
+    });
+
+    it('tells a phone that keeps the app offline in the background from an unreachable server', () => {
+      const logWater = fs.readFileSync(LOG_WATER_PATH, 'utf8');
+      // The connection opens before anything is written, so a failure while
+      // connecting never reached the server; only that one can be a block.
+      const post = logWater.slice(logWater.indexOf('fun postWaterChange('));
+      expect(post.indexOf('phase = "connecting"')).toBeGreaterThan(-1);
+      expect(post.indexOf('connection.connect()')).toBeGreaterThan(
+        post.indexOf('phase = "connecting"')
+      );
+      expect(post.indexOf('connection.outputStream')).toBeGreaterThan(
+        post.indexOf('connection.connect()')
+      );
+      expect(logWater).toMatch(
+        /val blocked = phase == "connecting" && isBlockedInBackground\(context, e\)/
+      );
+      // The real error is logged, without the URL or the headers.
+      const logLine = logWater.match(/Log\.w\(TAG, [^\n]*\)/)?.[0] ?? '';
+      expect(logLine).toContain('e.javaClass.simpleName');
+      expect(logLine).not.toMatch(/baseUrl|headers|config/);
+      // The shortcut and the tile say how to fix it; the tile's notification
+      // opens App info.
+      expect(logWater).toMatch(
+        /WaterChangeOutcome\.Blocked -> LogWaterResult\([\s\S]*?opensAppInfo = true/
+      );
+      expect(logWater).toMatch(
+        /if \(result\.opensAppInfo\) \{\s*appInfoIntent\(context\)/
+      );
+
+      const store = fs.readFileSync(
+        path.join(KOTLIN_ROOT, 'WaterWidgetStore.kt'),
+        'utf8'
+      );
+      // Every outcome is mapped, so a new one cannot read as "Could not log".
+      const statusFor = store.slice(
+        store.indexOf('private fun statusFor('),
+        store.indexOf('private fun accountEpoch(')
+      );
+      expect(statusFor).toMatch(
+        /WaterChangeOutcome\.Blocked -> STATUS_BLOCKED/
+      );
+      expect(statusFor).not.toMatch(/else ->/);
+
+      const widget = fs.readFileSync(
+        path.join(KOTLIN_ROOT, 'WaterWidget.kt.tmpl'),
+        'utf8'
+      );
+      expect(widget).toMatch(
+        /WaterWidgetStore\.STATUS_BLOCKED -> R\.string\.widget_water_status_blocked/
+      );
+      // While blocked, a tap on the widget opens App info.
+      expect(widget).toMatch(
+        /val tapIntent = if \(snapshot\?\.status == WaterWidgetStore\.STATUS_BLOCKED\) \{\s*appInfoIntent\(context\)/
+      );
+      expect(widget).toMatch(/\.clickable\(actionStartActivity\(tapIntent\)\)/);
     });
 
     it('shows the water buttons only for a container that logs plain water', () => {

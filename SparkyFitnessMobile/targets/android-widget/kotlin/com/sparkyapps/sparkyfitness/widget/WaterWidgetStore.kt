@@ -56,6 +56,7 @@ internal object WaterWidgetStore {
     const val STATUS_PICK_CONTAINER = "pick_container"
     const val STATUS_EXPIRED = "expired"
     const val STATUS_UNREACHABLE = "unreachable"
+    const val STATUS_BLOCKED = "blocked"
     const val STATUS_FAILED = "failed"
     const val STATUS_NOTHING_TO_REMOVE = "nothing_to_remove"
 
@@ -232,12 +233,18 @@ internal object WaterWidgetStore {
             .enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, request.build())
     }
 
+    /**
+     * The status a failed change leaves. Every outcome is listed, so a new one
+     * cannot silently read as "Could not log the water"; a change that went
+     * through never gets here.
+     */
     private fun statusFor(outcome: WaterChangeOutcome): String = when (outcome) {
         WaterChangeOutcome.NotSignedIn -> STATUS_SIGN_IN
         WaterChangeOutcome.NoContainer -> STATUS_PICK_CONTAINER
         WaterChangeOutcome.Expired -> STATUS_EXPIRED
         WaterChangeOutcome.Unreachable -> STATUS_UNREACHABLE
-        else -> STATUS_FAILED
+        WaterChangeOutcome.Blocked -> STATUS_BLOCKED
+        is WaterChangeOutcome.Failed, is WaterChangeOutcome.Changed -> STATUS_FAILED
     }
 
     private fun accountEpoch(context: Context): Long = prefs(context).getLong(KEY_ACCOUNT_EPOCH, 0L)

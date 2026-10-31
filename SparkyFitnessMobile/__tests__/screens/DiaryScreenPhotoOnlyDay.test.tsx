@@ -21,6 +21,25 @@ jest.mock('../../src/hooks', () => ({
 jest.mock('../../src/hooks/useMeasurements', () => ({
   useMeasurements: () => ({ measurements: null, customMeasurements: [] }),
 }));
+// Settled and empty, like sleep below: the screen keeps a day with nothing on it behind
+// its loading state until every query has answered, and the real ones would stay
+// pending against the test client.
+jest.mock('../../src/hooks/useCustomMeasurements', () => ({
+  useCustomMeasurementsByDate: () => ({
+    data: [],
+    isLoading: false,
+    isFetched: true,
+    refetch: jest.fn(),
+  }),
+}));
+jest.mock('../../src/hooks/useActiveWorkoutPlan', () => ({
+  useActiveWorkoutPlans: () => ({
+    plan: null,
+    plans: [],
+    isLoading: false,
+    isFetched: true,
+  }),
+}));
 
 // Sleep is settled and empty throughout: this suite is about the photo arm of the
 // predicate, and an unmocked query would stay pending and hide the day behind the
@@ -176,8 +195,9 @@ const renderDiary = () => {
 
 /**
  * A progress photo is something the user recorded for the day, so it defeats the empty
- * state exactly as a logged supplement does. The photo summary lives in the non-empty
- * branch, so a predicate that ignores photos hides them on the very day they were taken.
+ * state exactly as a logged supplement does. The photo summary shows on every day, so a
+ * predicate that ignored photos would put "No entries recorded for this day" above the
+ * very photos taken that day.
  */
 describe('DiaryScreen on a photo-only day', () => {
   beforeEach(() => {
@@ -190,28 +210,39 @@ describe('DiaryScreen on a photo-only day', () => {
     mockPhotosByDate.mockReturnValue({ photos: [photo()], isLoading: false });
     renderDiary();
 
-    expect(screen.queryByText('Add Food')).toBeNull();
+    expect(screen.queryByText('No entries recorded for this day')).toBeNull();
   });
 
-  it('shows that day the photo summary it would otherwise hide', () => {
+  it('shows that day its photos without the empty message above them', () => {
     mockPhotosByDate.mockReturnValue({ photos: [photo()], isLoading: false });
     renderDiary();
 
     expect(screen.getByText('Progress photos')).toBeTruthy();
+    expect(screen.queryByText('No entries recorded for this day')).toBeNull();
   });
 
   it('still shows the empty day when nothing at all was recorded', () => {
     // The other half of the rule: no photos must not defeat the empty state.
     renderDiary();
 
-    expect(screen.getByText('Add Food')).toBeTruthy();
+    expect(screen.getByText('No entries recorded for this day')).toBeTruthy();
   });
 
-  it('holds the empty state back while the photos are still loading', () => {
-    // Ungated, a day with photos flashes the empty illustration until they land.
+  it('keeps the photo prompt under the empty message, so a photo can still be added', () => {
+    renderDiary();
+
+    expect(screen.getByText('No entries recorded for this day')).toBeTruthy();
+    expect(screen.getByText('Tap to add photos')).toBeTruthy();
+  });
+
+  it('holds the day behind the loading state while the photos are still loading', () => {
+    // Ungated, a day with photos flashes the empty message until they land; and showing
+    // the add prompts meanwhile flashes them before the empty message joins them.
     mockPhotosByDate.mockReturnValue({ photos: [], isLoading: true });
     renderDiary();
 
-    expect(screen.queryByText('Add Food')).toBeNull();
+    expect(screen.getByText('Loading diary...')).toBeTruthy();
+    expect(screen.queryByText('No entries recorded for this day')).toBeNull();
+    expect(screen.queryByText('Tap to add photos')).toBeNull();
   });
 });

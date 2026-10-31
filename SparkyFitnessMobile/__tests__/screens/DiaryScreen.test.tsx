@@ -91,10 +91,18 @@ const mockUseCheckInPhotoDates = jest.fn(() => ({
   dates: [] as string[],
   isLoading: false,
 }));
+const mockUseCheckInPhotosByDate = jest.fn(
+  (_date?: string, _enabled?: boolean) => ({
+    photos: [] as never[],
+    isLoading: false,
+    isFetched: true,
+  })
+);
 jest.mock('../../src/hooks/useCheckInPhotos', () => ({
   useCheckInPhotoDates: (enabled?: boolean) =>
     mockUseCheckInPhotoDates(enabled as never),
-  useCheckInPhotosByDate: () => ({ photos: [], isLoading: false }),
+  useCheckInPhotosByDate: (date?: string, enabled?: boolean) =>
+    mockUseCheckInPhotosByDate(date, enabled),
 }));
 jest.mock('../../src/hooks/usePreferences', () => ({
   usePreferences: jest.fn(() => ({
@@ -143,9 +151,19 @@ jest.mock('../../src/hooks/useStartLiveWorkout', () => ({
   }),
 }));
 
+const mockUseActiveWorkoutPlans = jest.fn(
+  (_date?: string, _options?: { enabled?: boolean }) => ({
+    plan: null,
+    plans: [] as never[],
+    isLoading: false,
+    isFetched: true,
+  })
+);
 jest.mock('../../src/hooks/useActiveWorkoutPlan', () => ({
-  useActiveWorkoutPlan: () => ({ plan: null, plans: [], isLoading: false }),
-  useActiveWorkoutPlans: () => ({ plan: null, plans: [], isLoading: false }),
+  useActiveWorkoutPlan: (date?: string, options?: { enabled?: boolean }) =>
+    mockUseActiveWorkoutPlans(date, options),
+  useActiveWorkoutPlans: (date?: string, options?: { enabled?: boolean }) =>
+    mockUseActiveWorkoutPlans(date, options),
 }));
 
 jest.mock('../../src/hooks/useWorkoutPresets', () => ({
@@ -448,6 +466,35 @@ describe('DiaryScreen custom queries', () => {
     );
   });
 
+  test('the photo and workout plan queries wait for a server, like the other day queries', () => {
+    // A request that failed while there was no server would otherwise count as
+    // the day's answer once the server came back, and the day would be called
+    // empty without them.
+    configureConnection(false);
+    renderScreen();
+
+    expect(mockUseCheckInPhotosByDate).toHaveBeenLastCalledWith(
+      '2024-06-15',
+      false
+    );
+    expect(mockUseActiveWorkoutPlans).toHaveBeenLastCalledWith(
+      '2024-06-15',
+      expect.objectContaining({ enabled: false })
+    );
+
+    configureConnection(true);
+    renderScreen();
+
+    expect(mockUseCheckInPhotosByDate).toHaveBeenLastCalledWith(
+      '2024-06-15',
+      true
+    );
+    expect(mockUseActiveWorkoutPlans).toHaveBeenLastCalledWith(
+      '2024-06-15',
+      expect.objectContaining({ enabled: true })
+    );
+  });
+
   test('Test C — pull-to-refresh refetches custom data', async () => {
     const { UNSAFE_getByType } = renderScreen();
 
@@ -695,8 +742,14 @@ describe('DiaryScreen sleep cards', () => {
   });
 
   test('shows the rest of the diary while the sleep query is still in flight', () => {
-    // Summary already resolved, sleep still in flight. The food and exercise that already
-    // arrived must not sit behind "Loading diary..." waiting on `/api/sleep`.
+    // Summary already resolved with food, sleep still in flight. The food and exercise
+    // that already arrived must not sit behind "Loading diary..." waiting on `/api/sleep`.
+    mockUseDailySummary.mockReturnValue({
+      summary: { ...baseSummary, foodEntries: [buildFoodEntry('f1')] },
+      isLoading: false,
+      isError: false,
+      refetch: refetchSummary,
+    } as ReturnType<typeof useDailySummary>);
     configureSleep({ wakeUp: null, naps: [], bedTime: null, isLoading: true });
 
     const { getByTestId, queryByTestId } = renderScreen();
@@ -706,15 +759,17 @@ describe('DiaryScreen sleep cards', () => {
     expect(getByTestId('exercise-summary')).toBeTruthy();
   });
 
-  test('holds the empty-day illustration until the sleep query settles', () => {
+  test('holds an otherwise empty day behind the loading state until the sleep query settles', () => {
     // Nothing else logged, so the day looks empty — but a night that is still loading
-    // could yet fill it. Showing the illustration now would flip to sleep cards a moment
-    // later; the sections stay up instead until sleep has actually answered.
+    // could yet fill it. Neither the empty message nor the add prompts show until sleep
+    // has answered, so the day never flips from one to the other a moment later.
     configureSleep({ wakeUp: null, naps: [], bedTime: null, isLoading: true });
 
-    const { queryByTestId, rerender } = renderScreen();
+    const { getByTestId, queryByTestId, rerender } = renderScreen();
 
+    expect(getByTestId('status-view')).toBeTruthy();
     expect(queryByTestId('empty-day')).toBeNull();
+    expect(queryByTestId('food-summary')).toBeNull();
     expect(queryByTestId('wake-up-card')).toBeNull();
 
     // Sleep resolves with nothing: now the day really is empty.
@@ -725,7 +780,9 @@ describe('DiaryScreen sleep cards', () => {
       </SafeAreaProvider>
     );
 
+    expect(queryByTestId('status-view')).toBeNull();
     expect(queryByTestId('empty-day')).toBeTruthy();
+    expect(queryByTestId('food-summary')).toBeTruthy();
   });
 
   test('a bed time alone is enough to keep the day non-empty', () => {
@@ -742,7 +799,7 @@ describe('DiaryScreen sleep cards', () => {
   });
 
   test('orders the day chronologically, with Bed Time last before the measurements', () => {
-    // A populated day so the food/exercise/measurements branch renders.
+    // A day with food, so it is not empty and nothing else sits above the sections.
     mockUseDailySummary.mockReturnValue({
       summary: { ...baseSummary, foodEntries: [buildFoodEntry('f1')] },
       isLoading: false,
@@ -848,6 +905,231 @@ describe('DiaryScreen sleep cards', () => {
 
     expect(refetchSleep).toHaveBeenCalled();
     expect(refetchSummary).toHaveBeenCalled();
+  });
+});
+
+describe('DiaryScreen empty day', () => {
+  const restoreDayHookMocks = () => {
+    mockUseCheckInPhotosByDate.mockReturnValue({
+      photos: [],
+      isLoading: false,
+      isFetched: true,
+    });
+    mockUseActiveWorkoutPlans.mockReturnValue({
+      plan: null,
+      plans: [],
+      isLoading: false,
+      isFetched: true,
+    });
+  };
+
+  const settledEmptySleep = () =>
+    mockUseSleepDay.mockReturnValue({
+      wakeUp: null,
+      naps: [],
+      bedTime: null,
+      isLoading: false,
+      isFetched: true,
+      isError: false,
+      isForbidden: false,
+      refetch: refetchSleep,
+    } as ReturnType<typeof useSleepDay>);
+
+  /** Index of each node in a depth-first walk, to check what renders above what. */
+  const renderOrder = (
+    root: ReturnType<typeof renderScreen>['UNSAFE_root'],
+    nodes: unknown[]
+  ) => {
+    const all: unknown[] = [];
+    const walk = (node: typeof root) => {
+      all.push(node);
+      node.children.forEach((child) => {
+        if (typeof child !== 'string') walk(child);
+      });
+    };
+    walk(root);
+    return nodes.map((node) => all.indexOf(node));
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    useDiaryDateStore.setState({
+      selectedDate: '2024-06-15',
+      lastKnownToday: getTodayDate(),
+    });
+    configureConnection(true);
+    configureFamilyUsers([]);
+    configureOnlineData();
+    settledEmptySleep();
+    restoreDayHookMocks();
+  });
+
+  afterEach(restoreDayHookMocks);
+
+  test('keeps the add prompts for food, exercise and photos under the empty message', () => {
+    const { getByTestId, getByText, queryByText, UNSAFE_root } = renderScreen();
+
+    const emptyDay = getByTestId('empty-day');
+    const food = getByTestId('food-summary');
+    const exercise = getByTestId('exercise-summary');
+    const photos = getByText('progressPhotos.tapToAdd');
+
+    // The message sits on top and the sections stay under it, in their usual order.
+    const positions = renderOrder(UNSAFE_root, [
+      emptyDay,
+      food,
+      exercise,
+      photos,
+    ]);
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    for (let index = 1; index < positions.length; index++) {
+      expect(positions[index]).toBeGreaterThan(positions[index - 1]);
+    }
+    // The single Add Food button the empty state used to show instead is gone.
+    expect(queryByText('diary.addFood')).toBeNull();
+  });
+
+  test('the photo prompt on an empty day opens the progress photos for that day', () => {
+    const { getByText } = renderScreen();
+
+    fireEvent.press(getByText('progressPhotos.tapToAdd'));
+
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('ProgressPhotos', {
+      date: '2024-06-15',
+    });
+  });
+
+  test.each([
+    [
+      'sleep',
+      () =>
+        mockUseSleepDay.mockReturnValue({
+          wakeUp: null,
+          naps: [],
+          bedTime: null,
+          isLoading: true,
+          isFetched: false,
+          isError: false,
+          isForbidden: false,
+          refetch: refetchSleep,
+        } as ReturnType<typeof useSleepDay>),
+    ],
+    [
+      'progress photos',
+      () =>
+        mockUseCheckInPhotosByDate.mockReturnValue({
+          photos: [],
+          isLoading: true,
+          isFetched: false,
+        }),
+    ],
+    [
+      'measurements',
+      () =>
+        mockUseMeasurements.mockReturnValue({
+          measurements: undefined,
+          isLoading: true,
+          isFetched: false,
+          isError: false,
+          refetch: refetchMeasurements,
+        } as unknown as ReturnType<typeof useMeasurements>),
+    ],
+    [
+      'custom measurements',
+      () =>
+        mockUseCustomMeasurementsByDate.mockReturnValue({
+          data: undefined,
+          isLoading: true,
+          isFetched: false,
+          refetch: refetchCustomMeasurements,
+        } as unknown as ReturnType<typeof useCustomMeasurementsByDate>),
+    ],
+    [
+      'workout plans',
+      () =>
+        mockUseActiveWorkoutPlans.mockReturnValue({
+          plan: null,
+          plans: [],
+          isLoading: true,
+          isFetched: false,
+        }),
+    ],
+  ])(
+    'shows neither the add prompts nor the empty message while %s is on its first load',
+    (_source, startLoading) => {
+      startLoading();
+
+      const { getByTestId, queryByTestId, queryByText } = renderScreen();
+
+      expect(getByTestId('status-view')).toBeTruthy();
+      expect(queryByTestId('empty-day')).toBeNull();
+      expect(queryByTestId('food-summary')).toBeNull();
+      expect(queryByText('progressPhotos.tapToAdd')).toBeNull();
+    }
+  );
+
+  test('does not wait on the other queries once the summary has food', () => {
+    mockUseDailySummary.mockReturnValue({
+      summary: { ...baseSummary, foodEntries: [buildFoodEntry('f1')] },
+      isLoading: false,
+      isError: false,
+      refetch: refetchSummary,
+    } as ReturnType<typeof useDailySummary>);
+    mockUseCheckInPhotosByDate.mockReturnValue({
+      photos: [],
+      isLoading: true,
+      isFetched: false,
+    });
+
+    const { getByTestId, queryByTestId } = renderScreen();
+
+    expect(queryByTestId('status-view')).toBeNull();
+    expect(getByTestId('food-summary')).toBeTruthy();
+    expect(queryByTestId('empty-day')).toBeNull();
+  });
+
+  test('does not wait on the rest once another query has found something', () => {
+    // A weigh-in already makes the day non-empty, whatever sleep turns out to hold.
+    mockUseMeasurements.mockReturnValue({
+      measurements: { weight: 80 },
+      isLoading: false,
+      isFetched: true,
+      isError: false,
+      refetch: refetchMeasurements,
+    } as unknown as ReturnType<typeof useMeasurements>);
+    mockUseSleepDay.mockReturnValue({
+      wakeUp: null,
+      naps: [],
+      bedTime: null,
+      isLoading: true,
+      isFetched: false,
+      isError: false,
+      isForbidden: false,
+      refetch: refetchSleep,
+    } as ReturnType<typeof useSleepDay>);
+
+    const { getByTestId, queryByTestId } = renderScreen();
+
+    expect(queryByTestId('status-view')).toBeNull();
+    expect(getByTestId('measurements-summary')).toBeTruthy();
+    expect(queryByTestId('empty-day')).toBeNull();
+  });
+
+  test('retrying a failed load does not send an empty day back to loading', () => {
+    // The photos load failed, so the query has no data and a retry (pull-to-refresh,
+    // coming back to the tab) reports loading again. It already answered, so the empty
+    // day stays as it is instead of flashing the loading state.
+    mockUseCheckInPhotosByDate.mockReturnValue({
+      photos: [],
+      isLoading: true,
+      isFetched: true,
+    });
+
+    const { getByTestId, queryByTestId } = renderScreen();
+
+    expect(queryByTestId('status-view')).toBeNull();
+    expect(getByTestId('empty-day')).toBeTruthy();
+    expect(getByTestId('food-summary')).toBeTruthy();
   });
 });
 

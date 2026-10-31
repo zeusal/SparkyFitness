@@ -42,7 +42,6 @@ import ServingAdjustSheet, {
 } from '../components/ServingAdjustSheet';
 import { BedTimeCard, NapsCard, WakeUpCard } from '../components/SleepCards';
 import StatusView from '../components/StatusView';
-import Button from '../components/ui/Button';
 import {
   useCustomNutrients,
   useDailySummary,
@@ -98,6 +97,16 @@ import {
   type NativeHeaderDatePickerNavigation,
 } from '../utils/nativeHeaderDatePicker';
 
+/**
+ * Whether a query is still waiting for its first answer for this day.
+ * `isLoading` alone is not enough: a query whose load failed has no data, so
+ * retrying it (pull-to-refresh, coming back to the tab) reports loading again.
+ * `isFetched` stays true once it has answered, with data or an error, and that
+ * answer already decided the day.
+ */
+const isAwaitingFirstAnswer = (isLoading: boolean, isFetched: boolean) =>
+  isLoading && !isFetched;
+
 type DiaryScreenProps = CompositeScreenProps<
   BottomTabScreenProps<TabParamList, 'Diary'>,
   NativeStackScreenProps<RootStackParamList>
@@ -149,9 +158,14 @@ const DiaryScreen: React.FC<DiaryScreenProps> = ({ navigation }) => {
   const { dates: photoDates } = useCheckInPhotoDates(calendarOpened);
   // Owned here rather than inside CheckInPhotosSummary: the empty-day predicate
   // below needs the same answer, and one subscription keeps refetch-on-focus
-  // from firing twice for one query.
-  const { photos: dayPhotos, isLoading: isPhotosLoading } =
-    useCheckInPhotosByDate(selectedDate);
+  // from firing twice for one query. Gated on the connection like the other
+  // day queries: a request that failed while there was no server would count
+  // as this day's answer once it came back.
+  const {
+    photos: dayPhotos,
+    isLoading: isPhotosLoading,
+    isFetched: isPhotosFetched,
+  } = useCheckInPhotosByDate(selectedDate, isConnected);
   const openCalendar = useCallback(() => {
     setCalendarOpened(true);
     calendarRef.current?.present();
@@ -290,12 +304,21 @@ const DiaryScreen: React.FC<DiaryScreenProps> = ({ navigation }) => {
     date: selectedDate,
     enabled: isConnected,
   });
-  const { measurements, refetch: refetchMeasurements } = useMeasurements({
+  const {
+    measurements,
+    isLoading: isMeasurementsLoading,
+    isFetched: isMeasurementsFetched,
+    refetch: refetchMeasurements,
+  } = useMeasurements({
     date: selectedDate,
     enabled: isConnected,
   });
-  const { data: customMeasurements, refetch: refetchCustomMeasurements } =
-    useCustomMeasurementsByDate(selectedDate, { enabled: isConnected });
+  const {
+    data: customMeasurements,
+    isLoading: isCustomMeasurementsLoading,
+    isFetched: isCustomMeasurementsFetched,
+    refetch: refetchCustomMeasurements,
+  } = useCustomMeasurementsByDate(selectedDate, { enabled: isConnected });
   const { customNutrients, refetch: refetchCustomNutrients } =
     useCustomNutrients({ enabled: isConnected });
   const { preferences: nutrientPrefs, refetch: refetchNutrientPrefs } =
@@ -306,6 +329,7 @@ const DiaryScreen: React.FC<DiaryScreenProps> = ({ navigation }) => {
     naps,
     bedTime,
     isLoading: isSleepLoading,
+    isFetched: isSleepFetched,
     refetch: refetchSleep,
   } = useSleepDay(selectedDate, { enabled: isConnected });
 
@@ -344,7 +368,11 @@ const DiaryScreen: React.FC<DiaryScreenProps> = ({ navigation }) => {
   );
 
   const { startLiveWorkout } = useStartLiveWorkout(navigation);
-  const { plans: activePlans } = useActiveWorkoutPlans(selectedDate);
+  const {
+    plans: activePlans,
+    isLoading: isPlansLoading,
+    isFetched: isPlansFetched,
+  } = useActiveWorkoutPlans(selectedDate, { enabled: isConnected });
   const { presets: allPresets } = useWorkoutPresets();
 
   const handleStartPlanAssignment = useCallback(
@@ -510,35 +538,42 @@ const DiaryScreen: React.FC<DiaryScreenProps> = ({ navigation }) => {
 
   const isRefreshing = refreshing;
 
-  const isDayEmpty = useMemo(() => {
-    return (
-      !isSleepLoading &&
-      wakeUp === null &&
-      summary?.foodEntries.length === 0 &&
-      !hasSupplementNutrition(summary?.supplementTotals) && //A logged supplement is something the user recorded for this day, so the day is not empty even with no food, exercise or measurement.
-      summary?.exerciseEntries.length === 0 &&
-      !hasAnyMeasurement &&
-      // A progress photo is something the user recorded for this day, so it
-      // defeats the empty state exactly as a logged supplement does. Gated on
-      // the load like sleep above: ungated, a day with photos flashes the empty
-      // illustration until they arrive.
-      !isPhotosLoading &&
-      dayPhotos.length === 0 &&
-      naps.length === 0 &&
-      bedTime === null &&
-      !activePlans.some((plan) => plan.next_assignment)
-    );
-  }, [
-    isSleepLoading,
-    wakeUp,
-    summary,
-    hasAnyMeasurement,
-    isPhotosLoading,
-    dayPhotos,
-    naps,
-    bedTime,
-    activePlans,
-  ]);
+  // Something already known to be on this day. A logged supplement or a
+  // progress photo counts as much as food or exercise: each is something the
+  // user recorded, so the day is not empty without the others. A planned
+  // workout due today counts too.
+  const hasDayContent =
+    (summary != null &&
+      (summary.foodEntries.length > 0 ||
+        hasSupplementNutrition(summary.supplementTotals) ||
+        summary.exerciseEntries.length > 0)) ||
+    wakeUp !== null ||
+    naps.length > 0 ||
+    bedTime !== null ||
+    hasAnyMeasurement ||
+    dayPhotos.length > 0 ||
+    activePlans.some((plan) => plan.next_assignment);
+
+  // The queries besides the summary that can still put something on the day,
+  // while any of them waits for its first answer.
+  const isRestOfDayLoading =
+    isAwaitingFirstAnswer(isSleepLoading, isSleepFetched) ||
+    isAwaitingFirstAnswer(isPhotosLoading, isPhotosFetched) ||
+    isAwaitingFirstAnswer(isMeasurementsLoading, isMeasurementsFetched) ||
+    isAwaitingFirstAnswer(
+      isCustomMeasurementsLoading,
+      isCustomMeasurementsFetched
+    ) ||
+    isAwaitingFirstAnswer(isPlansLoading, isPlansFetched);
+
+  // A day with nothing on it yet is called empty only once every query has
+  // answered, and stays behind the loading state until then. Deciding earlier
+  // showed the day's add prompts and swapped in the empty state a moment later,
+  // or showed the empty state and then took it away when a late photo, night
+  // or measurement arrived.
+  const isDayUndecided =
+    summary != null && !hasDayContent && isRestOfDayLoading;
+  const isDayEmpty = summary != null && !hasDayContent && !isRestOfDayLoading;
 
   const renderContent = () => {
     if (!isConnectionLoading && !isConnected) {
@@ -561,10 +596,13 @@ const DiaryScreen: React.FC<DiaryScreenProps> = ({ navigation }) => {
       );
     }
 
-    // Sleep is deliberately not part of this gate: the cards render nothing until their
-    // entries arrive, so a slow `/api/sleep` fills them in late instead of holding the
-    // food and exercise that already loaded behind "Loading diary...".
-    if (isLoading || isConnectionLoading) {
+    // The other queries (sleep, photos, measurements, plans) hold this gate only
+    // while the day could still turn out empty. Once something is known to be on
+    // the day, such as food or exercise from the summary, it shows at once: the
+    // sleep cards render nothing until their entries arrive, so a slow
+    // `/api/sleep` fills them in late instead of holding what already loaded
+    // behind "Loading diary...".
+    if (isLoading || isConnectionLoading || isDayUndecided) {
       return (
         <StatusView
           loading
@@ -631,146 +669,121 @@ const DiaryScreen: React.FC<DiaryScreenProps> = ({ navigation }) => {
             customNutrients={customNutrients}
           />
         )}
-        {isDayEmpty ? (
-          <>
-            <EmptyDayIllustration />
-            <Button
-              variant="primary"
-              className="px-6 mt-4 self-center"
-              onPress={() =>
-                navigation.navigate('FoodSearch', { date: selectedDate })
-              }
-            >
-              {t('diary.addFood', { defaultValue: 'Add Food' })}
-            </Button>
-          </>
-        ) : (
-          <>
-            <WakeUpCard
-              entry={wakeUp}
-              day={selectedDate}
-              navigation={navigation}
-            />
-            <FoodSummary
-              foodEntries={summary.foodEntries}
-              mealTypes={mealTypes}
-              goals={summary.goals}
-              calorieGoal={summary.calorieGoal}
-              onAddFood={() =>
-                navigation.navigate('FoodSearch', { date: selectedDate })
-              }
-              onAdjustServing={(entry) =>
-                servingSheetRef.current?.present(entry)
-              }
-              onPressMealType={openMealTypeDetail}
-            />
-            <ExerciseSummary
-              exerciseEntries={summary.exerciseEntries}
-              entryDate={selectedDate}
-              getImageSource={getImageSource}
-              weightUnit={weightUnit}
-              distanceUnit={distanceUnit}
-              onAddExercise={() =>
-                addSheetRef.current?.present({ initialMenu: 'exercise' })
-              }
-              programBanner={
-                <>
-                  <RunEffortPrompt
-                    date={selectedDate}
-                    today={toLocalDateString(new Date())}
-                  />
-                  <ProgramRetestPrompt
-                    date={selectedDate}
-                    today={toLocalDateString(new Date())}
-                    onRetest={() => navigation.navigate('FitnessTest')}
-                  />
-                  <RunProgramBanner
-                    date={selectedDate}
-                    exerciseEntries={summary.exerciseEntries}
-                    onStart={() =>
-                      navigation.navigate('RecordActivity', {
-                        programWorkout: true,
-                      })
-                    }
-                  />
-                </>
-              }
-              onPressPlanAssignment={handleStartPlanAssignment}
-              onPressWorkout={(session) => {
-                if (session.type === 'preset') {
-                  // The live workout's surface is the active screen; detail is
-                  // for reviewing past or planned sessions.
-                  if (
-                    useActiveWorkoutStore.getState().sessionId === session.id
-                  ) {
-                    navigation.navigate('ActiveWorkout');
-                    return;
-                  }
-                  navigation.navigate('WorkoutDetail', { session });
-                } else {
-                  const synced = cardioSessionFromDiaryEntry(
-                    session,
-                    distanceUnit
-                  );
-                  if (synced) {
-                    navigation.navigate('CardioSession', {
-                      session: synced,
-                      distanceUnit,
-                    });
-                    return;
-                  }
-                  // A run, walk or ride logged in the app (a GPS recording
-                  // or a watch run is saved as an in-app entry) opens the
-                  // stats screen too, with an Edit button that hands over to
-                  // the activity editor. Anything without a distance or heart
-                  // rate has nothing for that screen to show.
-                  const inApp =
-                    (session.distance ?? 0) > 0 ||
-                    session.avg_heart_rate != null
-                      ? cardioSessionFromDiaryEntry(session, distanceUnit, {
-                          allowInApp: true,
-                        })
-                      : null;
-                  if (!inApp) {
-                    navigation.navigate('ActivityDetail', { session });
-                    return;
-                  }
-                  navigation.navigate('CardioSession', {
-                    session: inApp,
-                    distanceUnit,
-                    diaryEntry: session,
-                  });
+        {/* An empty day keeps the sections below: on such a day they are the
+            add prompts for food, exercise and photos, so the message sits above
+            them rather than replacing them. */}
+        {isDayEmpty && <EmptyDayIllustration />}
+        <WakeUpCard entry={wakeUp} day={selectedDate} navigation={navigation} />
+        <FoodSummary
+          foodEntries={summary.foodEntries}
+          mealTypes={mealTypes}
+          goals={summary.goals}
+          calorieGoal={summary.calorieGoal}
+          onAddFood={() =>
+            navigation.navigate('FoodSearch', { date: selectedDate })
+          }
+          onAdjustServing={(entry) => servingSheetRef.current?.present(entry)}
+          onPressMealType={openMealTypeDetail}
+        />
+        <ExerciseSummary
+          exerciseEntries={summary.exerciseEntries}
+          entryDate={selectedDate}
+          getImageSource={getImageSource}
+          weightUnit={weightUnit}
+          distanceUnit={distanceUnit}
+          onAddExercise={() =>
+            addSheetRef.current?.present({ initialMenu: 'exercise' })
+          }
+          programBanner={
+            <>
+              <RunEffortPrompt
+                date={selectedDate}
+                today={toLocalDateString(new Date())}
+              />
+              <ProgramRetestPrompt
+                date={selectedDate}
+                today={toLocalDateString(new Date())}
+                onRetest={() => navigation.navigate('FitnessTest')}
+              />
+              <RunProgramBanner
+                date={selectedDate}
+                exerciseEntries={summary.exerciseEntries}
+                onStart={() =>
+                  navigation.navigate('RecordActivity', {
+                    programWorkout: true,
+                  })
                 }
-              }}
-            />
-            <NapsCard naps={naps} day={selectedDate} navigation={navigation} />
-            <BedTimeCard
-              entry={bedTime}
-              day={selectedDate}
-              navigation={navigation}
-            />
-            <MeasurementsSummary
-              measurements={measurements}
-              customMeasurements={manualCustomMeasurements}
-              weightMode={weightMode}
-              bodyUnit={bodyUnit}
-              heightMode={heightMode}
-              onPress={() =>
-                navigation.navigate('MeasurementsAdd', { date: selectedDate })
+              />
+            </>
+          }
+          onPressPlanAssignment={handleStartPlanAssignment}
+          onPressWorkout={(session) => {
+            if (session.type === 'preset') {
+              // The live workout's surface is the active screen; detail is
+              // for reviewing past or planned sessions.
+              if (useActiveWorkoutStore.getState().sessionId === session.id) {
+                navigation.navigate('ActiveWorkout');
+                return;
               }
-            />
+              navigation.navigate('WorkoutDetail', { session });
+            } else {
+              const synced = cardioSessionFromDiaryEntry(session, distanceUnit);
+              if (synced) {
+                navigation.navigate('CardioSession', {
+                  session: synced,
+                  distanceUnit,
+                });
+                return;
+              }
+              // A run, walk or ride logged in the app (a GPS recording
+              // or a watch run is saved as an in-app entry) opens the
+              // stats screen too, with an Edit button that hands over to
+              // the activity editor. Anything without a distance or heart
+              // rate has nothing for that screen to show.
+              const inApp =
+                (session.distance ?? 0) > 0 || session.avg_heart_rate != null
+                  ? cardioSessionFromDiaryEntry(session, distanceUnit, {
+                      allowInApp: true,
+                    })
+                  : null;
+              if (!inApp) {
+                navigation.navigate('ActivityDetail', { session });
+                return;
+              }
+              navigation.navigate('CardioSession', {
+                session: inApp,
+                distanceUnit,
+                diaryEntry: session,
+              });
+            }
+          }}
+        />
+        <NapsCard naps={naps} day={selectedDate} navigation={navigation} />
+        <BedTimeCard
+          entry={bedTime}
+          day={selectedDate}
+          navigation={navigation}
+        />
+        <MeasurementsSummary
+          measurements={measurements}
+          customMeasurements={manualCustomMeasurements}
+          weightMode={weightMode}
+          bodyUnit={bodyUnit}
+          heightMode={heightMode}
+          onPress={() =>
+            navigation.navigate('MeasurementsAdd', { date: selectedDate })
+          }
+        />
 
-            {/* Below the measurements: both are the same check-in, keyed on
+        {/* Below the measurements: both are the same check-in, keyed on
                 (user_id, entry_date) server-side. */}
-            <CheckInPhotosSummary
-              date={selectedDate}
-              photos={dayPhotos}
-              onPress={() =>
-                navigation.navigate('ProgressPhotos', { date: selectedDate })
-              }
-            />
-          </>
-        )}
+        <CheckInPhotosSummary
+          date={selectedDate}
+          photos={dayPhotos}
+          onPress={() =>
+            navigation.navigate('ProgressPhotos', { date: selectedDate })
+          }
+        />
       </ScrollView>
     );
   };

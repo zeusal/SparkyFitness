@@ -24,6 +24,7 @@ export function useActiveWorkoutPlans(
     plans: query.data ?? [],
     plan: query.data?.[0] ?? null,
     isLoading: query.isLoading,
+    isFetched: query.isFetched,
     isError: query.isError,
     refetch: query.refetch,
   };

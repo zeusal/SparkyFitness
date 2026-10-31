@@ -96,6 +96,7 @@ export function useSleepDay(
     naps: buckets.naps,
     bedTime: buckets.bedTime,
     isLoading: query.isLoading,
+    isFetched: query.isFetched,
     isError: query.isError,
     isForbidden,
     refetch: query.refetch,

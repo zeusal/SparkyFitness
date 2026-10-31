@@ -1352,7 +1352,6 @@
     "checkConnection": "Please check your connection and try again.",
     "retry": "Retry",
     "title": "Diary",
-    "addFood": "Add Food",
     "emptyDay": "No entries recorded for this day"
   },
   "medications": {

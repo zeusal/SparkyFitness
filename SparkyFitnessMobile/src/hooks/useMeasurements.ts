@@ -30,6 +30,7 @@ export function useMeasurements({
   return {
     measurements: query.data,
     isLoading: query.isLoading,
+    isFetched: query.isFetched,
     isError: query.isError,
     error: query.error,
     refetch: query.refetch,

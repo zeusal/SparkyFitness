@@ -54,6 +54,7 @@ export function useCheckInPhotosByDate(date: string, enabled = true) {
   return {
     photos: query.data ?? [],
     isLoading: query.isLoading,
+    isFetched: query.isFetched,
     isError: query.isError,
     refetch: query.refetch,
   };

@@ -98,8 +98,8 @@ class CalorieWidgetModule(reactContext: ReactApplicationContext) :
 
     /**
      * Stores the water widget's snapshot, keeping the taps it has not sent
-     * yet (WaterWidgetStore). Like the other writes it does not redraw: JS
-     * calls reloadWaterWidget after it.
+     * yet (WaterWidgetStore), and sends them when some still wait. Like the
+     * other writes it does not redraw: JS calls reloadWaterWidget after it.
      */
     @ReactMethod
     fun setWaterSnapshot(json: String, promise: Promise) {
@@ -107,7 +107,7 @@ class CalorieWidgetModule(reactContext: ReactApplicationContext) :
         moduleScope.launch(snapshotWrites) {
             WidgetSnapshotLock.mutex.withLock {
                 try {
-                    WaterWidgetStore.mergeFromAppLocked(ctx, json)
+                    if (WaterWidgetStore.mergeFromAppLocked(ctx, json)) WaterWidgetStore.enqueueSend(ctx)
                     promise.resolve(null)
                 } catch (e: CancellationException) {
                     throw e

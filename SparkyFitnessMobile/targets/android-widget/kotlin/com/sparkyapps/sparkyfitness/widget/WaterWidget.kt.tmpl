@@ -54,8 +54,9 @@ import java.text.NumberFormat
  * dashboard's container without opening the app, the Android side of the iOS
  * water widget (targets/widget/waterWidget.swift). Drawn in a fixed 2x2 like
  * the macro widget, with a bar like the other Android widgets. A tap anywhere
- * else opens the app, or its App info while the phone keeps it offline in the
- * background ([WaterWidgetStore.STATUS_BLOCKED]).
+ * else opens the app, or its App info while the phone keeps (or may keep) it
+ * offline in the background ([WaterWidgetStore.STATUS_BLOCKED],
+ * [WaterWidgetStore.STATUS_MAYBE_BLOCKED]).
  *
  * The buttons only show once the Dashboard has sent its container (`canLog`,
  * false until then, as on iOS) and that container logs plain water (one
@@ -96,9 +97,12 @@ class WaterWidget : GlanceAppWidget() {
 
         val openAppIntent = Intent(Intent.ACTION_VIEW, Uri.parse("sparkyfitnessmobile://"))
             .setPackage(context.packageName)
-        // While the phone keeps the app offline in the background, a tap opens
-        // App info, where its battery use is set, instead of the app.
-        val tapIntent = if (snapshot?.status == WaterWidgetStore.STATUS_BLOCKED) {
+        // While the phone keeps (or may keep) the app offline in the
+        // background, a tap opens App info, where its battery use is set,
+        // instead of the app.
+        val blocked = snapshot?.status == WaterWidgetStore.STATUS_BLOCKED ||
+            snapshot?.status == WaterWidgetStore.STATUS_MAYBE_BLOCKED
+        val tapIntent = if (blocked) {
             appInfoIntent(context)
         } else {
             openAppIntent
@@ -196,9 +200,11 @@ class WaterWidget : GlanceAppWidget() {
             WaterWidgetStore.STATUS_EXPIRED -> R.string.widget_water_status_expired
             WaterWidgetStore.STATUS_UNREACHABLE -> R.string.widget_water_status_unreachable
             WaterWidgetStore.STATUS_BLOCKED -> R.string.widget_water_status_blocked
+            WaterWidgetStore.STATUS_MAYBE_BLOCKED -> R.string.widget_water_status_maybe_blocked
             WaterWidgetStore.STATUS_FAILED -> R.string.widget_water_status_failed
             WaterWidgetStore.STATUS_NOTHING_TO_REMOVE -> R.string.widget_water_status_nothing_to_remove
             WaterWidgetStore.STATUS_WAITING -> R.string.widget_water_status_waiting
+            WaterWidgetStore.STATUS_UNCONFIRMED -> R.string.widget_water_status_unconfirmed
             else -> return
         }
         Spacer(modifier = GlanceModifier.height(6.dp))

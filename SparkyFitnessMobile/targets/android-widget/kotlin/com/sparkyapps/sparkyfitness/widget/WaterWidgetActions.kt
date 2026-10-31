@@ -41,9 +41,12 @@ class WaterChangeAction : ActionCallback {
 }
 
 /**
- * Sends the taps waiting in the snapshot, all of them in one request, and
- * shows the day's total the server answers. Taps made while a request is out
- * are sent by the next pass of the loop, or by the next worker in the chain.
+ * Sends the taps waiting in the snapshot, one day at a time, an ended day's
+ * first, in requests of up to 100 drinks, and shows the day's total the
+ * server answers. Taps made while a request is out
+ * are sent by the next pass of the loop, or by the next worker in the chain,
+ * unless that request fails: today's waiting taps are then dropped and the
+ * run ends.
  * Not renamed lightly: WorkManager stores the class name of queued work.
  */
 class WaterWidgetWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
@@ -58,6 +61,9 @@ class WaterWidgetWorker(context: Context, params: WorkerParameters) : CoroutineW
             // drink logged from the shortcut or the tile does.
             if (outcome is WaterChangeOutcome.Changed) clearWaterFailureNotice(context)
             WidgetSnapshotLock.mutex.withLock { WaterWidgetStore.applyOutcomeLocked(context, batch, outcome) }
+            // After a failure the next tap or app push sends again: drinks
+            // kept for an ended day would otherwise be tried in a loop.
+            if (outcome !is WaterChangeOutcome.Changed) return Result.success()
         }
     }
 }

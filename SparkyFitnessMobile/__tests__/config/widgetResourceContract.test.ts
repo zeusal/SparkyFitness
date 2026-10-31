@@ -120,9 +120,11 @@ const REQUIRED_KEYS = [
   'widget_water_status_expired',
   'widget_water_status_unreachable',
   'widget_water_status_blocked',
+  'widget_water_status_maybe_blocked',
   'widget_water_status_failed',
   'widget_water_status_nothing_to_remove',
   'widget_water_status_waiting',
+  'widget_water_status_unconfirmed',
   'widget_preview_water_amount',
 ];
 
@@ -454,10 +456,11 @@ describe('Android widget localization contract', () => {
       expect(doWork.indexOf('reclaimSendingLocked(context)')).toBeLessThan(
         doWork.indexOf('while (true)')
       );
-      // An answer for a day the app has since moved past is dropped, and so
-      // is a shortcut total sent before an account change.
+      // A success for a day the app has since moved past changes nothing (a
+      // failure there is pinned further down), and a shortcut total sent
+      // before an account change is dropped.
       expect(store).toMatch(
-        /if \(obj\.optString\("date", ""\) != batch\.date\) return/
+        /if \(obj\.optString\("date", ""\) != batch\.date\) \{\s*(\/\/[^\n]*\s*)*if \(outcome is WaterChangeOutcome\.Changed\) return\s/
       );
       expect(store).toMatch(
         /if \(accountEpoch != null && accountEpoch != accountEpoch\(context\)\) return/
@@ -524,17 +527,13 @@ describe('Android widget localization contract', () => {
         store.indexOf('suspend fun addTapLocked')
       );
       expect(merge).toMatch(
-        /earlier\.put\(day, earlier\.optInt\(day, 0\) \+ pending\)/
+        /keepEarlier\(incoming, stored\.optString\("date"\), pending\)/
       );
       expect(store).toMatch(
-        /return Batch\(drinks, accountEpoch\(context\), date, entryDate = earliestDay\)/
+        /return Batch\(drinks, accountEpoch\(context\), date, entryDate = earliestDay, fromEarlier = true\)/
       );
       expect(store).toMatch(
-        /return Batch\(drinks, accountEpoch\(context\), date, entryDate = date\)/
-      );
-      // An earlier day's answer never changes today's figures.
-      expect(store).toMatch(
-        /is WaterChangeOutcome\.Changed -> \{\s*if \(!forToday\) return/
+        /return Batch\(drinks, accountEpoch\(context\), date, entryDate = date, fromEarlier = false\)/
       );
       expect(logWater).toMatch(/\.put\("entry_date", entryDate\)/);
       // The shortcut and the tile keep the tap's day and account, and never
@@ -552,7 +551,198 @@ describe('Android widget localization contract', () => {
         /if \(accountEpoch != waterWidgetAccountEpoch\(applicationContext\)\) \{[\s\S]*?return Result\.success\(\)/
       );
       expect(doWork).toMatch(
+        /val entryDate = inputData\.getString\(KEY_ENTRY_DATE\) \?: today\(\)/
+      );
+      expect(doWork).toMatch(
         /postWaterChange\(applicationContext, 1, entryDate\)/
+      );
+      // The shortcut and the tile say at once that a drink waits, and their
+      // drinks go out one at a time in the order they were tapped.
+      expect(enqueueLogWater).toMatch(
+        /val waiting = !hasUsableNetwork\(context\)\s*if \(waiting && fromTile\) notify\(context, LogWaterResult\(false, WAITING_MESSAGE, waiting = true\)\)/
+      );
+      expect(enqueueLogWater.indexOf('val waiting')).toBeLessThan(
+        enqueueLogWater.indexOf('enqueueUniqueWork(')
+      );
+      expect(enqueueLogWater).toMatch(
+        /enqueueUniqueWork\(LOG_WATER_WORK, ExistingWorkPolicy\.APPEND_OR_REPLACE, request\)/
+      );
+      expect(logWater).toMatch(
+        /if \(enqueueLogWater\(applicationContext\)\) \{\s*Toast\.makeText\(applicationContext, WAITING_MESSAGE, Toast\.LENGTH_LONG\)\.show\(\)/
+      );
+      // The result replaces the waiting notice, and the dropped cases say so.
+      expect(logWater).toMatch(
+        /private fun report\([^)]*\) \{\s*NotificationManagerCompat\.from\(context\)\.cancel\(WAITING_NOTIFICATION_ID\)/
+      );
+      const rerun = doWork.slice(
+        doWork.indexOf('if (runAttemptCount > 0)'),
+        doWork.indexOf('val accountEpoch')
+      );
+      expect(rerun).toMatch(/report\(/);
+      expect(rerun).toMatch(/return Result\.success\(\)/);
+      const accountGuard = doWork.slice(
+        doWork.indexOf('if (accountEpoch != waterWidgetAccountEpoch'),
+        doWork.indexOf('val entryDate')
+      );
+      expect(accountGuard).toMatch(/report\(/);
+      expect(accountGuard).toMatch(/return Result\.success\(\)/);
+      expect(doWork).toMatch(
+        /val accountEpoch = inputData\.getLong\(KEY_ACCOUNT_EPOCH, 0L\)/
+      );
+      // A stopped run stays quiet once its request ends, so its rerun gives
+      // the drink's only answer.
+      const answer = doWork.slice(
+        doWork.indexOf('val outcome = postWaterChange(')
+      );
+      expect(
+        answer.indexOf('if (isStopped) return Result.success()')
+      ).toBeGreaterThan(-1);
+      expect(
+        answer.indexOf('if (isStopped) return Result.success()')
+      ).toBeLessThan(answer.indexOf('showTotalOnWaterWidget('));
+      expect(rerun).toMatch(/LogWaterResult\(false, unconfirmedMessage\(\)\)/);
+      // An earlier day's drink never sets today's figure on the widget.
+      expect(doWork).toMatch(
+        /if \(outcome is WaterChangeOutcome\.Changed && entryDate == today\(\)\) \{\s*showTotalOnWaterWidget/
+      );
+      // The earliest waiting day goes first, and a push keeps the waiting
+      // days and sends them.
+      expect(store).toMatch(
+        /filter \{ earlier\.optInt\(it, 0\) != 0 \}\?\.minOrNull\(\)/
+      );
+      expect(merge).toMatch(
+        /stored\.optJSONObject\(KEY_EARLIER\)\?\.let \{ incoming\.put\(KEY_EARLIER, it\) \}/
+      );
+      // A new day forgets an ended day's request still out, as it forgets
+      // today's: its answer no longer takes back a count.
+      const sameDay = merge.slice(
+        merge.indexOf(
+          'if (stored.optString("date") == incoming.optString("date"))'
+        ),
+        merge.indexOf('} else if (pending != 0)')
+      );
+      expect(sameDay).toMatch(/incoming\.put\(KEY_EARLIER_SENDING/);
+      expect(merge.match(/incoming\.put\(KEY_EARLIER_SENDING/g)).toHaveLength(
+        1
+      );
+      const module = fs.readFileSync(
+        path.join(KOTLIN_ROOT, 'CalorieWidgetModule.kt.tmpl'),
+        'utf8'
+      );
+      expect(module).toMatch(
+        /if \(WaterWidgetStore\.mergeFromAppLocked\(ctx, json\)\) WaterWidgetStore\.enqueueSend\(ctx\)/
+      );
+      // An earlier day's batch is counted apart from today's, where it was
+      // taken from, and only taps of the snapshot's day set today's figure.
+      const apply = store.slice(
+        store.indexOf('suspend fun applyOutcomeLocked'),
+        store.indexOf('private fun putFailureStatus(')
+      );
+      // One batch is out at a time, so its counter is taken back only while
+      // it still holds the batch (a date that went back and forth may have
+      // replaced it).
+      expect(apply).toMatch(
+        /val counter = if \(batch\.fromEarlier\) KEY_EARLIER_SENDING else KEY_SENDING\s*if \(obj\.optInt\(counter, 0\) == batch\.drinks\) obj\.remove\(counter\)/
+      );
+      expect(apply).toMatch(/val forToday = batch\.entryDate == batch\.date/);
+      expect(apply).toMatch(
+        /is WaterChangeOutcome\.Changed -> if \(forToday\) \{/
+      );
+      // A failure keeps an ended day's drinks, and puts the batch back when
+      // sending it again may go through, even once a new day's push has
+      // forgotten the request, where it also drops the new day's waiting
+      // taps, as any failure does; the worker then stops instead of looping.
+      const otherDay = apply.slice(
+        apply.indexOf('if (obj.optString("date", "") != batch.date) {'),
+        apply.indexOf('val before = ')
+      );
+      expect(otherDay).toMatch(
+        /if \(outcome is WaterChangeOutcome\.Changed\) return\s*val shown = isSnapshotToday\(obj\.optString\("date", ""\)\)\s*(\/\/[^\n]*\s*)*val kept = !\(shown && isSnapshotToday\(batch\.entryDate\)\) && worthSendingAgain\(outcome\)\s*if \(kept\) keepEarlier\(obj, batch\.entryDate, batch\.drinks\)/
+      );
+      // Only a snapshot that is shown gets a status, and its dropped taps
+      // are marked, so later kept drinks never show as waiting over them.
+      expect(otherDay).toMatch(
+        /if \(shown\) \{\s*val droppedToday = obj\.optInt\(KEY_PENDING, 0\) != 0 \|\| isSnapshotToday\(batch\.entryDate\)\s*if \(droppedToday\) \{\s*obj\.put\(KEY_PENDING, 0\)\s*obj\.put\(KEY_DROPPED, true\)\s*\}\s*putFailureStatus\(obj, outcome, onlyKept = kept && !droppedToday\)\s*\}/
+      );
+      expect(apply.slice(apply.indexOf('else -> {'))).toMatch(
+        /val shown = isSnapshotToday\(batch\.date\)\s*(\/\/[^\n]*\s*)*val kept = !\(shown && isSnapshotToday\(batch\.entryDate\)\) && worthSendingAgain\(outcome\)/
+      );
+      expect(apply).toMatch(
+        /if \(kept\) \{\s*if \(batch\.fromEarlier\) \{\s*keepEarlier\(obj, batch\.entryDate, batch\.drinks\)\s*\} else \{\s*obj\.put\(KEY_PENDING, obj\.optInt\(KEY_PENDING, 0\) \+ batch\.drinks\)/
+      );
+      // A failure that only kept drinks to send again says they wait, and
+      // "may not have been saved" is not replaced by an error that would
+      // invite another tap.
+      const sameDayFailure = apply.slice(apply.indexOf('else -> {'));
+      expect(sameDayFailure).toMatch(
+        /val shown = isSnapshotToday\(batch\.date\)[\s\S]*?val droppedToday = shown && \(forToday \|\| obj\.optInt\(KEY_PENDING, 0\) != 0\)/
+      );
+      expect(sameDayFailure).toMatch(
+        /if \(droppedToday\) obj\.put\(KEY_DROPPED, true\)/
+      );
+      // Only the day shown loses its waiting taps, and the outcome never
+      // touches earlierDrinks but through keepEarlier, so an ended day's
+      // drinks survive a failure.
+      expect(sameDayFailure).toMatch(
+        /if \(shown\) \{\s*obj\.put\(KEY_PENDING, 0\)\s*obj\.put\(KEY_SENDING, 0\)\s*\}/
+      );
+      expect(apply).not.toMatch(/\bKEY_EARLIER\b/);
+      expect(sameDayFailure).toMatch(
+        /if \(shown\) putFailureStatus\(obj, outcome, onlyKept = kept && !droppedToday\)/
+      );
+      expect(apply).not.toMatch(/obj\.put\(KEY_STATUS, statusFor\(outcome\)\)/);
+      const failureStatus = store.slice(
+        store.indexOf('private fun putFailureStatus('),
+        store.indexOf('private fun keepEarlier(')
+      );
+      expect(failureStatus).toMatch(
+        /val current = obj\.optString\(KEY_STATUS\)\s*if \(current == STATUS_UNCONFIRMED\) return/
+      );
+      // Kept drinks show as waiting unless the person has to act first, and
+      // never over an error already showing, which may be the one that
+      // dropped today's taps.
+      expect(failureStatus).toMatch(
+        /val actFirst = outcome == WaterChangeOutcome\.NotSignedIn \|\|\s*outcome == WaterChangeOutcome\.NoContainer \|\| outcome == WaterChangeOutcome\.Expired/
+      );
+      expect(failureStatus).toMatch(
+        /if \(!onlyKept \|\| actFirst \|\| obj\.optBoolean\(KEY_DROPPED, false\)\) \{\s*obj\.put\(KEY_STATUS, statusFor\(outcome\)\)\s*\} else if \(current\.isEmpty\(\) \|\| current == STATUS_WAITING \|\| current == STATUS_NOTHING_TO_REMOVE\) \{\s*obj\.put\(KEY_STATUS, STATUS_WAITING\)/
+      );
+      // The mark lasts until the next tap or app push: a tap clears it, and
+      // a push builds the snapshot without it.
+      expect(store).toMatch(
+        /obj\.put\(KEY_PENDING, snapshot\.pendingDrinks \+ change\)\s*obj\.remove\(KEY_DROPPED\)/
+      );
+      expect(merge).not.toMatch(/KEY_DROPPED/);
+      expect(store).toMatch(
+        /is WaterChangeOutcome\.Unreachable -> !outcome\.requestSent/
+      );
+      // A refusal that may pass later (408, 429) keeps an ended day's
+      // drinks; any other redirect or 4xx would be refused at every send.
+      expect(store).toMatch(
+        /is WaterChangeOutcome\.Failed -> outcome\.status == 408 \|\| outcome\.status == 429/
+      );
+      expect(actions).toMatch(
+        /if \(outcome !is WaterChangeOutcome\.Changed\) return Result\.success\(\)/
+      );
+      // "Waiting to send" shows only while something waits, and a worker
+      // that forgets taps another one took says they may not have gone out.
+      expect(store).toMatch(
+        /takeUnless \{ it == STATUS_WAITING && pending == 0 && sending == 0 && earlier == 0 \}/
+      );
+      const reclaim = store.slice(
+        store.indexOf('suspend fun reclaimSendingLocked'),
+        store.indexOf('suspend fun takePendingLocked')
+      );
+      expect(reclaim).toMatch(/obj\.put\(KEY_STATUS, STATUS_UNCONFIRMED\)/);
+      const widget = fs.readFileSync(
+        path.join(KOTLIN_ROOT, 'WaterWidget.kt.tmpl'),
+        'utf8'
+      );
+      expect(widget).toMatch(
+        /WaterWidgetStore\.STATUS_WAITING -> R\.string\.widget_water_status_waiting/
+      );
+      expect(widget).toMatch(
+        /WaterWidgetStore\.STATUS_UNCONFIRMED -> R\.string\.widget_water_status_unconfirmed/
       );
     });
 
@@ -568,18 +758,55 @@ describe('Android widget localization contract', () => {
       expect(post.indexOf('connection.outputStream')).toBeGreaterThan(
         post.indexOf('connection.connect()')
       );
-      expect(logWater).toMatch(
-        /val blocked = phase == "connecting" && isBlockedInBackground\(context, e\)/
+      // A failure from here on may have reached the server.
+      expect(post.indexOf('phase = "sending"')).toBeGreaterThan(
+        post.indexOf('connection.connect()')
       );
-      // The real error is logged, without the URL or the headers.
+      expect(post.indexOf('phase = "sending"')).toBeLessThan(
+        post.indexOf('connection.outputStream')
+      );
+      expect(logWater).toMatch(
+        /\(if \(phase == "connecting"\) blockedOutcome\(context, e\) else null\)\s*\?: WaterChangeOutcome\.Unreachable\(requestSent = phase == "sending"\)/
+      );
+      // Only a block Android reports, or a socket the phone refused, is
+      // called a block. A failed lookup may also be a server name that does
+      // not resolve from here (umbrel.local away from home), so it is hedged.
+      const classify = logWater.slice(
+        logWater.indexOf('private fun blockedOutcome('),
+        logWater.indexOf('private fun phoneIsOnline(')
+      );
+      expect(classify).toMatch(
+        /DetailedState\.BLOCKED\) \{\s*return WaterChangeOutcome\.Blocked/
+      );
+      expect(classify).toMatch(
+        /error is SocketException && error\.message\?\.contains\("EPERM"\) == true\) return WaterChangeOutcome\.Blocked/
+      );
+      expect(classify).toMatch(
+        /error !is UnknownHostException \|\| !phoneIsOnline\(connectivity\)\) return null/
+      );
+      expect(classify).toMatch(
+        /isIgnoringBatteryOptimizations\(context\.packageName\)\) null else WaterChangeOutcome\.MaybeBlocked/
+      );
+      expect(classify).not.toMatch(
+        /UnknownHostException[^\n]*WaterChangeOutcome\.Blocked/
+      );
+      // The real error is logged, without the URL or the headers, and its
+      // message only for a failure on the network: one from setting a header
+      // can quote the header's value.
       const logLine =
         logWater.match(/Log\.w\(TAG, "Water change failed[^\n]*\)/)?.[0] ?? '';
       expect(logLine).toContain('e.javaClass.simpleName');
-      expect(logLine).not.toMatch(/baseUrl|headers|config/);
+      expect(logLine).not.toMatch(/baseUrl|headers|config|e\.message/);
+      expect(logWater).toMatch(
+        /val detail = if \(phase == "connecting" \|\| phase == "sending"\) ": \$\{e\.message\}" else ""/
+      );
       // The shortcut and the tile say how to fix it; the tile's notification
       // opens App info.
       expect(logWater).toMatch(
         /WaterChangeOutcome\.Blocked -> LogWaterResult\([\s\S]*?opensAppInfo = true/
+      );
+      expect(logWater).toMatch(
+        /WaterChangeOutcome\.MaybeBlocked -> LogWaterResult\([\s\S]*?opensAppInfo = true/
       );
       expect(logWater).toMatch(
         /if \(result\.opensAppInfo\) \{\s*appInfoIntent\(context\)/
@@ -597,7 +824,31 @@ describe('Android widget localization contract', () => {
       expect(statusFor).toMatch(
         /WaterChangeOutcome\.Blocked -> STATUS_BLOCKED/
       );
+      expect(statusFor).toMatch(
+        /WaterChangeOutcome\.MaybeBlocked -> STATUS_MAYBE_BLOCKED/
+      );
       expect(statusFor).not.toMatch(/else ->/);
+      // A request that may have reached the server never invites another
+      // tap, which would log the drink twice: one sent with no answer, or a
+      // server error that is not a redirect or a 4xx.
+      expect(logWater).toMatch(
+        /data class Failed\(val status: Int\) : WaterChangeOutcome\(\) \{\s*override val mayHaveLogged: Boolean get\(\) = status !in 300\.\.499/
+      );
+      expect(logWater).toMatch(
+        /data class Unreachable\(val requestSent: Boolean\) : WaterChangeOutcome\(\) \{\s*override val mayHaveLogged: Boolean get\(\) = requestSent/
+      );
+      expect(statusFor).toMatch(
+        /is WaterChangeOutcome\.Unreachable -> if \(outcome\.mayHaveLogged\) STATUS_UNCONFIRMED else STATUS_UNREACHABLE/
+      );
+      expect(statusFor).toMatch(
+        /is WaterChangeOutcome\.Failed -> if \(outcome\.mayHaveLogged\) STATUS_UNCONFIRMED else STATUS_FAILED/
+      );
+      expect(logWater).toMatch(
+        /is WaterChangeOutcome\.Unreachable -> if \(outcome\.mayHaveLogged\) \{\s*LogWaterResult\(false, unconfirmedMessage\(\)\)/
+      );
+      expect(logWater).toMatch(
+        /is WaterChangeOutcome\.Failed -> if \(outcome\.mayHaveLogged\) \{\s*LogWaterResult\(false, unconfirmedMessage\(outcome\.status\)\)/
+      );
 
       const widget = fs.readFileSync(
         path.join(KOTLIN_ROOT, 'WaterWidget.kt.tmpl'),
@@ -606,9 +857,15 @@ describe('Android widget localization contract', () => {
       expect(widget).toMatch(
         /WaterWidgetStore\.STATUS_BLOCKED -> R\.string\.widget_water_status_blocked/
       );
+      expect(widget).toMatch(
+        /WaterWidgetStore\.STATUS_MAYBE_BLOCKED -> R\.string\.widget_water_status_maybe_blocked/
+      );
       // While blocked, a tap on the widget opens App info.
       expect(widget).toMatch(
-        /val tapIntent = if \(snapshot\?\.status == WaterWidgetStore\.STATUS_BLOCKED\) \{\s*appInfoIntent\(context\)/
+        /val blocked = snapshot\?\.status == WaterWidgetStore\.STATUS_BLOCKED \|\|\s*snapshot\?\.status == WaterWidgetStore\.STATUS_MAYBE_BLOCKED/
+      );
+      expect(widget).toMatch(
+        /val tapIntent = if \(blocked\) \{\s*appInfoIntent\(context\)/
       );
       expect(widget).toMatch(/\.clickable\(actionStartActivity\(tapIntent\)\)/);
     });

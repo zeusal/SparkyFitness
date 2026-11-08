@@ -686,11 +686,57 @@ describe('buildExternalVariantOptions', () => {
       }),
     ]);
 
+    expect(options.map(({ id, label }) => [id, label])).toEqual([
+      ['ext-0', '1 bottle (0 cal)'],
+      ['ext-1', '100 ml (0 cal)'],
+      ['ext-2', '500 ml (0 cal)'],
+    ]);
     expect(options[0]).toMatchObject({
-      label: '1 bottle (0 cal)',
       quantityUnitLabel: 'bottle',
       perServingLabel: '1 bottle',
     });
+  });
+
+  test('keeps 100 g selectable for a zero-nutrition portion', () => {
+    // Open Food Facts "1 portion (100 g)" of a food with no nutrients: the
+    // portion and 100 g only match because both are zero.
+    const empty = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+    const options = buildExternalVariantOptions([
+      makeExternalVariant({
+        ...empty,
+        serving_size: 100,
+        serving_unit: 'g',
+        serving_description: '100 g',
+      }),
+      makeExternalVariant({
+        ...empty,
+        serving_size: 1,
+        serving_unit: 'serving',
+        serving_description: '1 serving',
+      }),
+    ]);
+
+    expect(
+      options.map(({ id, label, servingSize, servingUnit }) => ({
+        id,
+        label,
+        servingSize,
+        servingUnit,
+      }))
+    ).toEqual([
+      {
+        id: 'ext-1',
+        label: '1 serving (0 cal)',
+        servingSize: 1,
+        servingUnit: 'serving',
+      },
+      {
+        id: 'ext-0',
+        label: '100 g (0 cal)',
+        servingSize: 100,
+        servingUnit: 'g',
+      },
+    ]);
   });
 
   test('keeps the weight a provider states for a small serving', () => {
@@ -736,10 +782,42 @@ describe('buildExternalVariantOptions', () => {
       }),
     ]);
 
-    expect(options[0]).toMatchObject({
-      label: '1 glass (1 cal)',
-      quantityUnitLabel: 'glass',
-    });
+    expect(options.map(({ id, label }) => [id, label])).toEqual([
+      ['ext-0', '1 glass (1 cal)'],
+      ['ext-1', '100 ml (1 cal)'],
+    ]);
+    expect(options[0].quantityUnitLabel).toBe('glass');
+  });
+
+  test('checks every weight in a group against the 100 ml reference', () => {
+    // A can and its own 330 ml, plus 100 ml that only matches by rounding.
+    const trace = { calories: 1, protein: 0, carbs: 0.1, fat: 0 };
+    const options = buildExternalVariantOptions([
+      makeExternalVariant({
+        ...trace,
+        serving_size: 1,
+        serving_unit: 'can',
+        serving_description: '1 can',
+      }),
+      makeExternalVariant({
+        ...trace,
+        serving_size: 330,
+        serving_unit: 'ml',
+        serving_description: '330 ml',
+      }),
+      makeExternalVariant({
+        ...trace,
+        serving_size: 100,
+        serving_unit: 'mL',
+        serving_description: '100 mL',
+      }),
+    ]);
+
+    expect(options.map(({ id, label }) => [id, label])).toEqual([
+      ['ext-0', '1 can (1 cal)'],
+      ['ext-1', '330 ml (1 cal)'],
+      ['ext-2', '100 mL (1 cal)'],
+    ]);
   });
 
   test('keeps a provider description that says more than the size and unit', () => {

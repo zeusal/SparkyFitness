@@ -532,6 +532,29 @@ function getVisibleLocalVariantGroups(groups: VariantGroup[]) {
   return groups;
 }
 
+/**
+ * The groups the provider serving picker offers. A group whose values do not
+ * show that its servings are one amount (see groupIsOneAmount) is offered
+ * serving by serving, so each one stays selectable and none borrows another's
+ * weight.
+ */
+function pickerVariantGroups<T extends FoodVariantDetail & ServingIdentity>(
+  variants: T[]
+): VariantGroup<T>[] {
+  const byId = new Map(variants.map((variant) => [variant.id, variant]));
+  return groupEquivalentVariants(variants).flatMap((group) => {
+    if (groupIsOneAmount(group.base, group.equivalents)) return [group];
+    const members = group.equivalents.flatMap((unit) => {
+      const variant = unit.id ? byId.get(unit.id) : undefined;
+      return variant ? [variant] : [];
+    });
+    return [group.base, ...members].map((base) => ({
+      base,
+      equivalents: [],
+    }));
+  });
+}
+
 export function resolveLocalPickerVariantId(
   variants: FoodVariantDetail[] | undefined,
   selectedVariantId?: string
@@ -613,47 +636,42 @@ export function buildExternalVariantOptions(
     })
   );
 
-  return groupEquivalentVariants(optionVariants).map(
-    ({ base, equivalents }) => {
-      const servingDescription = base.serving_description ?? undefined;
-      const values = {
-        servingSize: base.serving_size,
-        servingUnit: base.serving_unit,
-        servingDescription,
-        calories: base.calories,
-      };
-      const weights = groupedWeightBelongsToServing(base, equivalents)
-        ? equivalents
-        : undefined;
-      return {
-        id: base.id,
-        label: formatVariantLabel(values, weights),
-        quantityUnitLabel: formatQuantityUnitLabel(values, weights),
-        perServingLabel: formatVariantServingLabel(values, weights),
-        servingDescription,
-        servingSize: base.serving_size,
-        servingUnit: base.serving_unit,
-        calories: base.calories,
-        protein: base.protein,
-        carbs: base.carbs,
-        fat: base.fat,
-        fiber: base.dietary_fiber,
-        saturatedFat: base.saturated_fat,
-        sodium: base.sodium,
-        sugars: base.sugars,
-        transFat: base.trans_fat,
-        potassium: base.potassium,
-        calcium: base.calcium,
-        iron: base.iron,
-        caffeineMg: base.caffeine_mg,
-        waterMl: base.water_ml,
-        alcoholG: base.alcohol_g,
-        cholesterol: base.cholesterol,
-        vitaminA: base.vitamin_a,
-        vitaminC: base.vitamin_c,
-      };
-    }
-  );
+  return pickerVariantGroups(optionVariants).map(({ base, equivalents }) => {
+    const servingDescription = base.serving_description ?? undefined;
+    const values = {
+      servingSize: base.serving_size,
+      servingUnit: base.serving_unit,
+      servingDescription,
+      calories: base.calories,
+    };
+    return {
+      id: base.id,
+      label: formatVariantLabel(values, equivalents),
+      quantityUnitLabel: formatQuantityUnitLabel(values, equivalents),
+      perServingLabel: formatVariantServingLabel(values, equivalents),
+      servingDescription,
+      servingSize: base.serving_size,
+      servingUnit: base.serving_unit,
+      calories: base.calories,
+      protein: base.protein,
+      carbs: base.carbs,
+      fat: base.fat,
+      fiber: base.dietary_fiber,
+      saturatedFat: base.saturated_fat,
+      sodium: base.sodium,
+      sugars: base.sugars,
+      transFat: base.trans_fat,
+      potassium: base.potassium,
+      calcium: base.calcium,
+      iron: base.iron,
+      caffeineMg: base.caffeine_mg,
+      waterMl: base.water_ml,
+      alcoholG: base.alcohol_g,
+      cholesterol: base.cholesterol,
+      vitaminA: base.vitamin_a,
+      vitaminC: base.vitamin_c,
+    };
+  });
 }
 
 export function buildLocalUnitVariants(
@@ -808,27 +826,32 @@ function coerceNumber(value: unknown): number {
 }
 
 /**
- * Whether the metric weight grouped with a provider serving is that
- * serving's own. Servings are grouped on equal nutrition, which every amount
- * of an all-zero food shares. A provider that states a serving's weight sends
- * it with the same values, so a weight such as 1.2 g for one almond holds
- * whenever the values are not all zero. Values can also match the 100 g or
- * 100 ml reference by rounding, since providers scale each portion from it: a
- * 125 ml glass of a drink with 1 kcal and 1 mg of sodium per 100 ml rounds to
- * the same values. That weight needs a value of 10 or more, which rounding to
- * whole units can only make match an amount up to about 10% away.
+ * Whether the servings in a group are one amount. Servings are grouped on
+ * equal nutrition, which every amount of an all-zero food shares. A provider
+ * that states a serving's weight sends it with the same values, so a weight
+ * such as 1.2 g for one almond holds whenever the values are not all zero.
+ * Values can also match the 100 g or 100 ml reference by rounding, since
+ * providers scale each portion from it: a 125 ml glass of a drink with 1 kcal
+ * and 1 mg of sodium per 100 ml rounds to the same values. A group holding
+ * that reference needs a value of 10 or more, which rounding to whole units
+ * can only make match an amount up to about 10% away.
  */
-function groupedWeightBelongsToServing(
-  variant: NutritionLike,
+function groupIsOneAmount(
+  variant: NutritionLike & ServingIdentity,
   equivalents: EquivalentUnit[]
 ): boolean {
-  const weight = findMetricEquivalent(equivalents);
-  if (!weight) return true;
+  if (equivalents.length === 0) return true;
   const values = [
     ...FOOD_VARIANT_NUTRIENT_FIELDS.map((field) => variant[field]),
     ...Object.values(variant.custom_nutrients ?? {}),
   ].map((value) => Math.abs(coerceNumber(value)));
-  return isReferenceServing(weight.serving_size, weight.serving_unit)
+  const hasReference = [variant, ...equivalents].some((serving) =>
+    isReferenceServing(
+      coerceNumber(serving.serving_size),
+      serving.serving_unit?.trim().toLowerCase() ?? ''
+    )
+  );
+  return hasReference
     ? values.some((value) => value >= 10)
     : values.some((value) => value > 0);
 }

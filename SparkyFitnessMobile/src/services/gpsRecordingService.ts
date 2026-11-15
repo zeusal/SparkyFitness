@@ -197,6 +197,14 @@ export interface RecordingSession {
    */
   savedForm?: FormMetrics | null;
   /**
+   * Set once every part of the save went through (the entry, its route and a
+   * fitness test). `savedEntryId` alone is also set by a save that failed
+   * half-way, so a Discard uses this to tell the two apart: it deletes a
+   * half-saved entry but never one that was saved in full, which a session
+   * left behind by a failed clear or an app killed after the save still holds.
+   */
+  saveComplete?: boolean;
+  /**
    * A treadmill or other indoor session: no location task and no route, just
    * the clock (and a paired watch's heart rate). Absent on sessions saved by
    * an earlier build, which were all outdoors.
@@ -1731,6 +1739,19 @@ export function markRecordingSaved(
   });
 }
 
+/**
+ * Records that the save finished, so a Discard of a session that is somehow
+ * still around afterwards clears the phone and leaves the diary entry alone.
+ */
+export function markRecordingSaveComplete(): Promise<void> {
+  return enqueue(async () => {
+    if (!session) return;
+    session = { ...session, saveComplete: true };
+    await persistSession();
+    publish();
+  });
+}
+
 /** Whether the person discarded this recording rather than saving it. */
 export function wasRecordingDiscarded(sessionId: string): boolean {
   return discardedSessionIds.has(sessionId);
@@ -1758,7 +1779,8 @@ async function deleteHalfSavedEntry(
  * `discarded` is the person throwing the recording away. A save that created
  * the diary entry and then failed (the route upload, say) leaves that entry
  * behind, so it is deleted first; if that fails the recording is kept and the
- * error thrown, so the discard can be retried. Clearing the store after a
+ * error thrown, so the discard can be retried. An entry whose save went through
+ * in full (`saveComplete`) is never deleted. Clearing the store after a
  * successful save leaves `discarded` off.
  */
 export function discardRecording({
@@ -1767,8 +1789,12 @@ export function discardRecording({
   return enqueue(async () => {
     await hydrate();
     if (discarded && session) {
-      if (session.savedEntryId) {
+      if (session.savedEntryId && !session.saveComplete) {
         await deleteHalfSavedEntry(session.savedEntryId, session.startedAt);
+        // The entry is gone: if clearing the phone below fails, a retried
+        // Save must create a new one rather than re-send to the deleted id.
+        session = { ...session, savedEntryId: null, savedForm: null };
+        await persistSession();
       }
       savedEntriesBySession.delete(session.id);
       discardedSessionIds.add(session.id);

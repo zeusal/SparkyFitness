@@ -51,6 +51,7 @@ import {
   ingestFixes,
   markLap,
   markRecordingSaved,
+  markRecordingSaveComplete,
   pauseRecording,
   resetRecordingStateForTests,
   resumeRecording,
@@ -414,6 +415,37 @@ describe('finishing and discarding', () => {
 
       expect(mockedDelete).not.toHaveBeenCalled();
       expect(wasRecordingDiscarded(id)).toBe(true);
+    });
+
+    it('keeps an entry whose save went through in full', async () => {
+      // A session can outlive a complete save: the clear after it failed, or
+      // the app was killed before it ran.
+      const id = await halfSaved();
+      await markRecordingSaveComplete();
+      expect((await storedSession())?.saveComplete).toBe(true);
+
+      await discardRecording({ discarded: true });
+
+      expect(mockedDelete).not.toHaveBeenCalled();
+      expect(await storedSession()).toBeNull();
+      expect(wasRecordingDiscarded(id)).toBe(true);
+    });
+
+    it('forgets the deleted entry before clearing the phone', async () => {
+      mockedDelete.mockResolvedValue(undefined);
+      await halfSaved();
+      // Clearing the phone fails after the entry is gone.
+      // A once-only failure: the storage mock keeps working for later tests.
+      jest
+        .mocked(AsyncStorage.removeItem)
+        .mockRejectedValueOnce(new Error('disk'));
+
+      await expect(discardRecording({ discarded: true })).rejects.toThrow(
+        'disk'
+      );
+
+      // A retried Save must create a new entry, not re-send to the deleted one.
+      expect((await storedSession())?.savedEntryId).toBeNull();
     });
 
     it('never deletes the entry when clearing after a successful save', async () => {

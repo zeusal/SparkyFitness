@@ -4,6 +4,11 @@ import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import i18n from '../localization/i18n';
 import { addLog } from './LogService';
+import { deleteExerciseEntry } from './api/exerciseApi';
+import { ApiError } from './api/errors';
+import { queryClient } from '../hooks/queryClient';
+import { invalidateExerciseCache } from '../hooks/invalidateExerciseCache';
+import { toLocalDateString } from '../utils/dateUtils';
 import {
   beginRecordingCues,
   endRecordingCues,
@@ -243,6 +248,10 @@ let heartRate: StoredHeartRate = { samples: [], batchIds: [] };
 /** Saved entry ids by recording, for Apple zones that arrive after the session is cleared. */
 const savedEntriesBySession = new Map<string, string>();
 const MAX_SAVED_ENTRY_IDS = 5;
+// Recordings the person discarded, so the watch bridge can tell them from a
+// saved one after the session has left the store: a discard that removed a
+// half-saved entry still had `savedEntryId` set until the end.
+const discardedSessionIds = new Set<string>();
 /** Apple's zone group for the recording, held until the diary entry can take it. */
 let appleZonesForSession: {
   sessionId: string;
@@ -1722,10 +1731,52 @@ export function markRecordingSaved(
   });
 }
 
-/** Drops the session and every stored point. */
-export function discardRecording(): Promise<void> {
+/** Whether the person discarded this recording rather than saving it. */
+export function wasRecordingDiscarded(sessionId: string): boolean {
+  return discardedSessionIds.has(sessionId);
+}
+
+/**
+ * Deletes the diary entry a failed save already created. A 404 means it is
+ * gone already, which is what a discard wants.
+ */
+async function deleteHalfSavedEntry(
+  entryId: string,
+  startedAt: number
+): Promise<void> {
+  try {
+    await deleteExerciseEntry(entryId);
+  } catch (error) {
+    if (!(error instanceof ApiError && error.statusCode === 404)) throw error;
+  }
+  invalidateExerciseCache(queryClient, toLocalDateString(new Date(startedAt)));
+}
+
+/**
+ * Drops the session and every stored point.
+ *
+ * `discarded` is the person throwing the recording away. A save that created
+ * the diary entry and then failed (the route upload, say) leaves that entry
+ * behind, so it is deleted first; if that fails the recording is kept and the
+ * error thrown, so the discard can be retried. Clearing the store after a
+ * successful save leaves `discarded` off.
+ */
+export function discardRecording({
+  discarded = false,
+}: { discarded?: boolean } = {}): Promise<void> {
   return enqueue(async () => {
     await hydrate();
+    if (discarded && session) {
+      if (session.savedEntryId) {
+        await deleteHalfSavedEntry(session.savedEntryId, session.startedAt);
+      }
+      savedEntriesBySession.delete(session.id);
+      discardedSessionIds.add(session.id);
+      if (discardedSessionIds.size > MAX_SAVED_ENTRY_IDS) {
+        const oldest = discardedSessionIds.values().next().value;
+        if (oldest !== undefined) discardedSessionIds.delete(oldest);
+      }
+    }
     await stopUpdates();
     stopRecordingCues();
     await clearStoredPoints();
@@ -1780,5 +1831,6 @@ export function resetRecordingStateForTests(): void {
   heartRateAlertStep = null;
   hydrated = null;
   queue = Promise.resolve();
+  discardedSessionIds.clear();
   publish();
 }

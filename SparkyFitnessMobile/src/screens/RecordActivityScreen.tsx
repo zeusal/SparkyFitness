@@ -925,7 +925,7 @@ const RecordActivityScreen: React.FC<Props> = ({ navigation, route }) => {
           onPress: () =>
             void run(
               async () => {
-                await discardRecording();
+                await discardRecording({ discarded: true });
                 // The screen stays mounted. A distance typed for this session
                 // must not be offered as the next one's estimate.
                 setIndoorDistanceText(null);

@@ -20,6 +20,7 @@ import {
   peekAppleWorkoutZones,
   resumeRecording,
   savedRecordingEntryId,
+  wasRecordingDiscarded,
   useGpsRecording,
   type RecordingSnapshot,
 } from '../services/gpsRecordingService';
@@ -177,7 +178,8 @@ export function useWatchRecordingBridge(enabled: boolean): void {
       // Saved or discarded: the session left the store.
       const saved =
         lastSession.current?.id === lastSent.current.id &&
-        lastSession.current.savedEntryId != null;
+        lastSession.current.savedEntryId != null &&
+        !wasRecordingDiscarded(lastSent.current.id);
       endRecording(lastSent.current.id, unitRef.current, !saved);
       lastSent.current = null;
       lastSession.current = null;

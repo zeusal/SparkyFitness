@@ -15,6 +15,15 @@ jest.mock('../../src/services/LogService', () => ({ addLog: jest.fn() }));
 jest.mock('../../src/services/stepCounter', () => ({
   captureStepCounterBaseline: jest.fn(async () => null),
 }));
+jest.mock('../../src/services/api/exerciseApi', () => ({
+  deleteExerciseEntry: jest.fn(),
+}));
+jest.mock('../../src/hooks/queryClient', () => ({
+  queryClient: { id: 'query-client' },
+}));
+jest.mock('../../src/hooks/invalidateExerciseCache', () => ({
+  invalidateExerciseCache: jest.fn(),
+}));
 jest.mock('../../src/services/recordingCues', () => ({
   beginRecordingCues: jest.fn(),
   endRecordingCues: jest.fn(),
@@ -23,6 +32,9 @@ jest.mock('../../src/services/recordingCues', () => ({
 }));
 
 import { captureStepCounterBaseline } from '../../src/services/stepCounter';
+import { deleteExerciseEntry } from '../../src/services/api/exerciseApi';
+import { ApiError } from '../../src/services/api/errors';
+import { invalidateExerciseCache } from '../../src/hooks/invalidateExerciseCache';
 import {
   beginRecordingCues,
   endRecordingCues,
@@ -45,6 +57,7 @@ import {
   startRecording,
   type RecordingSession,
   setRecordingAudioCues,
+  wasRecordingDiscarded,
   setRecordingAutoPause,
 } from '../../src/services/gpsRecordingService';
 
@@ -344,6 +357,73 @@ describe('finishing and discarding', () => {
     expect(
       await AsyncStorage.getItem('@SparkyFitness/gpsRecording/chunk/1')
     ).toBeNull();
+  });
+
+  describe('when the person discards a recording', () => {
+    const mockedDelete = jest.mocked(deleteExerciseEntry);
+
+    async function halfSaved(): Promise<string> {
+      await startRecording({ activity: 'run', notification });
+      await finishRecording();
+      // The save created the entry, then the route upload failed.
+      await markRecordingSaved('entry-1');
+      return (await storedSession())!.id;
+    }
+
+    it('deletes the entry a failed save left in the diary', async () => {
+      mockedDelete.mockResolvedValue(undefined);
+      const id = await halfSaved();
+
+      await discardRecording({ discarded: true });
+
+      expect(mockedDelete).toHaveBeenCalledWith('entry-1');
+      expect(invalidateExerciseCache).toHaveBeenCalledWith(
+        { id: 'query-client' },
+        expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/)
+      );
+      expect(await storedSession()).toBeNull();
+      expect(wasRecordingDiscarded(id)).toBe(true);
+    });
+
+    it('treats an entry that is already gone as deleted', async () => {
+      mockedDelete.mockRejectedValue(new ApiError('Not found', 404));
+      await halfSaved();
+
+      await discardRecording({ discarded: true });
+
+      expect(await storedSession()).toBeNull();
+    });
+
+    it('keeps the recording when the entry could not be deleted', async () => {
+      mockedDelete.mockRejectedValue(new ApiError('Server error', 500));
+      const id = await halfSaved();
+
+      await expect(discardRecording({ discarded: true })).rejects.toThrow(
+        'Server error'
+      );
+
+      expect((await storedSession())?.savedEntryId).toBe('entry-1');
+      expect(wasRecordingDiscarded(id)).toBe(false);
+    });
+
+    it('deletes nothing when no save got as far as the entry', async () => {
+      await startRecording({ activity: 'run', notification });
+      const id = (await storedSession())!.id;
+
+      await discardRecording({ discarded: true });
+
+      expect(mockedDelete).not.toHaveBeenCalled();
+      expect(wasRecordingDiscarded(id)).toBe(true);
+    });
+
+    it('never deletes the entry when clearing after a successful save', async () => {
+      const id = await halfSaved();
+
+      await discardRecording();
+
+      expect(mockedDelete).not.toHaveBeenCalled();
+      expect(wasRecordingDiscarded(id)).toBe(false);
+    });
   });
 
   it('removes leftover chunks when the restored track is incomplete', async () => {

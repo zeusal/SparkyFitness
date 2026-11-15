@@ -1730,8 +1730,6 @@ export function markRecordingSaved(
 ): Promise<void> {
   return enqueue(async () => {
     if (!session) return;
-    // An earlier Discard that failed part-way is undone by saving after all.
-    discardedSessionIds.delete(session.id);
     // Kept outside the session, which is cleared right after the save, so
     // Apple zones that arrive late can still find the diary entry.
     savedEntriesBySession.delete(session.id);

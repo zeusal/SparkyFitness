@@ -48,6 +48,7 @@ import {
   discardRecording,
   elapsedSeconds,
   finishRecording,
+  getGpsRecordingSnapshot,
   ingestFixes,
   markLap,
   markRecordingSaved,
@@ -342,6 +343,8 @@ describe('finishing and discarding', () => {
     await startRecording({ activity: 'walk', notification });
     await markRecordingSaved('entry-1');
     expect((await storedSession())?.savedEntryId).toBe('entry-1');
+    // Not finished until the screen says so.
+    expect((await storedSession())?.saveComplete).toBe(false);
   });
 
   it('clears the session and every chunk on discard', async () => {
@@ -428,7 +431,33 @@ describe('finishing and discarding', () => {
 
       expect(mockedDelete).not.toHaveBeenCalled();
       expect(await storedSession()).toBeNull();
-      expect(wasRecordingDiscarded(id)).toBe(true);
+      // The run stays in the diary, so the watch keeps its workout too.
+      expect(wasRecordingDiscarded(id)).toBe(false);
+    });
+
+    it('keeps the entry of a session saved by a build without saveComplete', async () => {
+      // Whether that save finished cannot be told, so it is kept, as before.
+      await AsyncStorage.setItem(
+        '@SparkyFitness/gpsRecording/session',
+        JSON.stringify({
+          id: 'rec-old',
+          activity: 'run',
+          status: 'finished',
+          startedAt: T0,
+          finishedAt: T0 + 60_000,
+          pausedAt: null,
+          pausedMs: 0,
+          seg: 0,
+          savedEntryId: 'entry-old',
+        })
+      );
+      resetRecordingStateForTests();
+
+      await discardRecording({ discarded: true });
+
+      expect(mockedDelete).not.toHaveBeenCalled();
+      expect(await storedSession()).toBeNull();
+      expect(wasRecordingDiscarded('rec-old')).toBe(false);
     });
 
     it('forgets the deleted entry before clearing the phone', async () => {
@@ -444,7 +473,10 @@ describe('finishing and discarding', () => {
         'disk'
       );
 
-      // A retried Save must create a new entry, not re-send to the deleted one.
+      // A retried Save must create a new entry, not re-send to the deleted
+      // one: the screen saves from the published session, and a restart
+      // reads the stored one.
+      expect(getGpsRecordingSnapshot().session?.savedEntryId).toBeNull();
       expect((await storedSession())?.savedEntryId).toBeNull();
     });
 

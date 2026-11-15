@@ -197,11 +197,14 @@ export interface RecordingSession {
    */
   savedForm?: FormMetrics | null;
   /**
-   * Set once every part of the save went through (the entry, its route and a
-   * fitness test). `savedEntryId` alone is also set by a save that failed
-   * half-way, so a Discard uses this to tell the two apart: it deletes a
-   * half-saved entry but never one that was saved in full, which a session
-   * left behind by a failed clear or an app killed after the save still holds.
+   * `false` from the moment the entry exists until every part of the save
+   * went through (the entry, its route and a fitness test), then `true`.
+   * `savedEntryId` alone is also set by a save that failed half-way, so a
+   * Discard uses this to tell the two apart: it deletes only an entry whose
+   * save is known to be unfinished (`false`), never one saved in full, which a
+   * session left behind by a failed clear or an app killed after the save
+   * still holds. Absent on a session saved by a build from before the flag:
+   * that one cannot be told apart, so it is kept, as it always was.
    */
   saveComplete?: boolean;
   /**
@@ -1733,7 +1736,12 @@ export function markRecordingSaved(
       const oldest = savedEntriesBySession.keys().next().value;
       if (oldest !== undefined) savedEntriesBySession.delete(oldest);
     }
-    session = { ...session, savedEntryId: entryId, savedForm: form };
+    session = {
+      ...session,
+      savedEntryId: entryId,
+      savedForm: form,
+      saveComplete: false,
+    };
     await persistSession();
     publish();
   });
@@ -1779,22 +1787,31 @@ async function deleteHalfSavedEntry(
  * `discarded` is the person throwing the recording away. A save that created
  * the diary entry and then failed (the route upload, say) leaves that entry
  * behind, so it is deleted first; if that fails the recording is kept and the
- * error thrown, so the discard can be retried. An entry whose save went through
- * in full (`saveComplete`) is never deleted. Clearing the store after a
- * successful save leaves `discarded` off.
+ * error thrown, so the discard can be retried. Only an entry whose save is
+ * known to be unfinished (`saveComplete === false`) is deleted; one saved in
+ * full is kept, and the watch is then told the recording was saved, not
+ * discarded, so it keeps its Apple Health workout too. Clearing the store
+ * after a successful save leaves `discarded` off.
  */
 export function discardRecording({
   discarded = false,
 }: { discarded?: boolean } = {}): Promise<void> {
   return enqueue(async () => {
     await hydrate();
-    if (discarded && session) {
-      if (session.savedEntryId && !session.saveComplete) {
+    // An entry saved in full (or by a build from before `saveComplete`) stays
+    // in the diary: the person is only clearing a leftover from the phone,
+    // and the watch is told it was saved.
+    const keepsSavedEntry =
+      session?.savedEntryId != null && session.saveComplete !== false;
+    if (discarded && session && !keepsSavedEntry) {
+      if (session.savedEntryId) {
         await deleteHalfSavedEntry(session.savedEntryId, session.startedAt);
-        // The entry is gone: if clearing the phone below fails, a retried
-        // Save must create a new one rather than re-send to the deleted id.
+        // The entry is gone. Published at once, because the screen saves from
+        // the published session: if clearing the phone below fails, a retried
+        // Save must create a new entry rather than re-send to the deleted id.
         session = { ...session, savedEntryId: null, savedForm: null };
         await persistSession();
+        publish();
       }
       savedEntriesBySession.delete(session.id);
       discardedSessionIds.add(session.id);

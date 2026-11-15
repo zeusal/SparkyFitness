@@ -417,7 +417,7 @@ describe('RecordActivityScreen fitness test', () => {
       await waitFor(() => expect(saveFitnessTest).toHaveBeenCalled());
       expect(discardRecording).not.toHaveBeenCalled();
       expect(navigation.replace).not.toHaveBeenCalled();
-      // Half-saved: a Discard must still be able to delete the entry (#3468).
+      // Half-saved: a Discard must still be able to delete the entry (#3470).
       expect(markRecordingSaveComplete).not.toHaveBeenCalled();
     });
 

@@ -260,8 +260,10 @@ let heartRate: StoredHeartRate = { samples: [], batchIds: [] };
 const savedEntriesBySession = new Map<string, string>();
 const MAX_SAVED_ENTRY_IDS = 5;
 // Recordings the person discarded, so the watch bridge can tell them from a
-// saved one after the session has left the store: a discard that removed a
-// half-saved entry still had `savedEntryId` set until the end.
+// saved one after the session has left the store. A discard that deletes a
+// half-saved entry publishes `savedEntryId: null` first, but the bridge does
+// not have to render in between, so this is what it relies on. A discard that
+// kept a fully saved entry is not in here: the watch is told it was saved.
 const discardedSessionIds = new Set<string>();
 /** Apple's zone group for the recording, held until the diary entry can take it. */
 let appleZonesForSession: {
@@ -1728,6 +1730,8 @@ export function markRecordingSaved(
 ): Promise<void> {
   return enqueue(async () => {
     if (!session) return;
+    // An earlier Discard that failed part-way is undone by saving after all.
+    discardedSessionIds.delete(session.id);
     // Kept outside the session, which is cleared right after the save, so
     // Apple zones that arrive late can still find the diary entry.
     savedEntriesBySession.delete(session.id);
@@ -1803,6 +1807,7 @@ export function discardRecording({
     // and the watch is told it was saved.
     const keepsSavedEntry =
       session?.savedEntryId != null && session.saveComplete !== false;
+    let discardedId: string | null = null;
     if (discarded && session && !keepsSavedEntry) {
       if (session.savedEntryId) {
         await deleteHalfSavedEntry(session.savedEntryId, session.startedAt);
@@ -1814,16 +1819,22 @@ export function discardRecording({
         publish();
       }
       savedEntriesBySession.delete(session.id);
-      discardedSessionIds.add(session.id);
-      if (discardedSessionIds.size > MAX_SAVED_ENTRY_IDS) {
-        const oldest = discardedSessionIds.values().next().value;
-        if (oldest !== undefined) discardedSessionIds.delete(oldest);
-      }
+      discardedId = session.id;
     }
     await stopUpdates();
     stopRecordingCues();
     await clearStoredPoints();
     await AsyncStorage.removeItem(HEART_RATE_KEY);
+    // Marked only once the phone is cleared: a discard that fails before this
+    // leaves the recording on screen, and saving it after all must reach the
+    // watch as saved.
+    if (discardedId) {
+      discardedSessionIds.add(discardedId);
+      if (discardedSessionIds.size > MAX_SAVED_ENTRY_IDS) {
+        const oldest = discardedSessionIds.values().next().value;
+        if (oldest !== undefined) discardedSessionIds.delete(oldest);
+      }
+    }
     session = null;
     points = [];
     heartRate = { samples: [], batchIds: [] };

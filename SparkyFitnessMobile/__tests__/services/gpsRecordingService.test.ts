@@ -480,6 +480,27 @@ describe('finishing and discarding', () => {
       expect((await storedSession())?.savedEntryId).toBeNull();
     });
 
+    it('reports a recording saved after a failed discard as saved', async () => {
+      mockedDelete.mockResolvedValue(undefined);
+      const id = await halfSaved();
+      jest
+        .mocked(AsyncStorage.removeItem)
+        .mockRejectedValueOnce(new Error('disk'));
+      await expect(discardRecording({ discarded: true })).rejects.toThrow(
+        'disk'
+      );
+      // Not marked: the recording is still on screen and can be saved.
+      expect(wasRecordingDiscarded(id)).toBe(false);
+
+      // The person saves it after all: a new entry, then the usual clear.
+      await markRecordingSaved('entry-2');
+      await markRecordingSaveComplete();
+      await discardRecording();
+
+      // The watch is told it was saved, so it keeps its workout.
+      expect(wasRecordingDiscarded(id)).toBe(false);
+    });
+
     it('never deletes the entry when clearing after a successful save', async () => {
       const id = await halfSaved();
 

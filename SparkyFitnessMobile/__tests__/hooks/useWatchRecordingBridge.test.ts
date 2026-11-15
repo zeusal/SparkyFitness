@@ -220,8 +220,9 @@ describe('useWatchRecordingBridge', () => {
   it('says a half-saved recording the person discarded was discarded', () => {
     setSnapshot({ ...baseSession, status: 'finished' });
     const { rerender } = renderHook(() => useWatchRecordingBridge(true));
-    // A save created the entry and then failed, so the id is on the session
-    // until the discard removes the entry and the session together.
+    // A save created the entry and then failed. The discard publishes the
+    // cleared id before the session leaves, but this render may never see it,
+    // so the bridge asks the service whether the recording was discarded.
     setSnapshot({
       ...baseSession,
       status: 'finished',

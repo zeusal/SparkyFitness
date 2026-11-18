@@ -1,0 +1,530 @@
+{
+ "features": [
+  {
+   "pr": 3531,
+   "batch": "ai-chat-1",
+   "name": "Tools from outside MCP servers in Sparky chat, with Allow / Deny approvals",
+   "description": "An admin can give Sparky chat the tools of another MCP server (Streamable HTTP, optional bearer token), choosing which of its tools chat may use; this setup is on the web only. Each person turns each server on for their own chat under 'Tools from outside servers', on the web and in the mobile app's AI settings; servers are off by default and never used in a family member's account. Chat now asks through an Allow / Deny card before any delete, and before any change that follows an outside result, on web, iOS and Android; replies that used an outside server get a line to delete that message or clear the chat.",
+   "web": "Yes",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "Admin setup (web only): SparkyFitnessFrontend/src/utils/settings.ts:78-84 (MCP tool server type offered only in admin mode), src/pages/Settings/ProviderSpecificFields.tsx:167, src/pages/Settings/McpServerFields.tsx:138 (Load tools), 221-250 (URL, token); per-person opt-in: SparkyFitnessFrontend/src/pages/Settings/AIServiceSettings.tsx:622 (ChatMcpServerSettings), SparkyFitnessMobile/src/screens/AiSettingsScreen.tsx:59, 137 (aiSettings.chatMcp); approvals: SparkyFitnessServer/ai/chatToolApproval.ts:33-54 (DESTRUCTIVE_ACTIONS, isDestructiveToolCall), 99 (needsOutsideApproval), SparkyFitnessFrontend/src/components/thread.tsx:501, 526 (ApprovalCard), SparkyFitnessMobile/src/screens/ChatScreen.tsx:345 (ApprovalCard); outside source line: thread.tsx:535, ChatScreen.tsx:360 (OutsideSourceLine); docs/src/features/ai-assistant.md:54-66"
+  },
+  {
+   "pr": 3613,
+   "batch": "checkin-meds-1",
+   "name": "Log a food by its cooked weight",
+   "description": "When adding or editing a diary food in a weight unit (g, kg, oz, lb), a 'Weighed it cooked' switch takes the raw and cooked weight of the batch and the cooked weight eaten, and logs the matching raw portion; the cooked weight is kept with the entry, the next entry of the same food reuses the last yield ('New batch' starts over), and editing reopens it. Same on web and the phone app; not offered for meals or meal plans. Its texts are English only on both.",
+   "web": "Yes",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "SparkyFitnessFrontend/src/pages/Diary/Diary.tsx:598 (showCookedWeight); SparkyFitnessFrontend/src/components/FoodUnitSelector.tsx:126,679 (only weight units),924; SparkyFitnessFrontend/src/components/FoodUnitSelector/CookedWeightSection.tsx:155 ('Weighed it cooked'); SparkyFitnessFrontend/src/pages/Diary/EditFoodEntryDialog.tsx:591; SparkyFitnessMobile/src/components/CookedWeightSection.tsx:182; SparkyFitnessMobile/src/screens/FoodEntryAddScreen.tsx:2200; SparkyFitnessMobile/src/screens/FoodEntryViewScreen.tsx:1198; SparkyFitnessServer/routes/foodEntryRoutes.ts:1224 (GET /api/food-entries/last-cooked); SparkyFitnessServer/db/migrations/*_add_cooked_quantity_to_food_entries.sql; shared/src/utils/cookedWeight.ts:14 (COOKED_WEIGHT_UNITS); foodUnitSelector.cooked.* and foodEntryAdd.cooked.* only in the en catalogs"
+  },
+  {
+   "pr": 3601,
+   "batch": "checkin-meds-1",
+   "name": "Read a barcode from a picture (web)",
+   "description": "On the web, the Scan Barcode dialog also reads a product barcode from an uploaded, dropped or pasted image, decoded in the browser, for computers without a camera; the code then goes through the normal lookup. The phone app only scans barcodes with the live camera.",
+   "web": "Yes",
+   "ios": "No",
+   "android": "No",
+   "watch": "none",
+   "evidence": "SparkyFitnessFrontend/src/components/FoodSearch/BarcodeScannerDialog.tsx:112 (BarcodeImageInput above the camera); SparkyFitnessFrontend/src/components/FoodSearch/BarcodeImageInput.tsx; SparkyFitnessFrontend/src/lib/scannerEngines/decodeBarcodeImage.ts:79; SparkyFitnessFrontend/src/components/FoodSearch/ImageSourceInput.tsx:57 (document paste listener),92-95; SparkyFitnessMobile/src/screens/FoodScanScreen.tsx (image library used only for label and photo modes, :514-522, :777-783)"
+  },
+  {
+   "pr": 3374,
+   "batch": "checkin-meds-1",
+   "name": "Lab results",
+   "description": "Keep blood work and other lab results: built-in and custom markers, each result with its unit and reference range and an in/out-of-range status, a chart and history per marker, manual entry, and import of a lab report PDF or photo read by the AI provider and reviewed before saving. On the web as a Lab results page (tab or + menu) and in the phone app under Library > Lab results, which also has a Dashboard card.",
+   "web": "Yes",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "SparkyFitnessFrontend/src/App.tsx:460 (labs route); SparkyFitnessFrontend/src/constants/webTabs.ts:39 (inPlusMenu); SparkyFitnessFrontend/src/pages/Labs/Labs.tsx; SparkyFitnessFrontend/src/pages/Labs/LabImportDialog.tsx:238-259 (PDF or photo); SparkyFitnessMobile/src/screens/LibraryScreen.tsx:460; SparkyFitnessMobile/src/screens/LabReportImportScreen.tsx:295-302; SparkyFitnessMobile/src/screens/LabResultDetailScreen.tsx:16 (LabHistoryChart); SparkyFitnessMobile/src/screens/DashboardScreen.tsx:967 (LabResultsCard); shared/src/utils/labResults.ts, shared/src/utils/labReportImport.ts; mobile PRs #3330 and #3355 (batch checkin-meds-2)"
+  },
+  {
+   "pr": 3355,
+   "batch": "checkin-meds-2",
+   "name": "Import lab results from a report (AI)",
+   "description": "From Lab results, 'Import from a report' reads a lab report PDF or a photo/screenshot of one with the user's configured AI provider and lists the results for review (correct values, include or leave out each, set the test date) before anything is saved; each result keeps the unit and reference range the report printed, units are not converted, and the report file is not stored. An import can be deleted as a whole from the screen's menu. Needs an AI provider. On the phone (iOS and Android: Choose a PDF, Choose a photo or screenshot, Take a photo); the web has the same import since #3374.",
+   "web": "Yes (since #3374, other batch)",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "SparkyFitnessMobile/src/screens/LabResultsScreen.tsx:93-110 (menu 'Delete imported results'), 150-166 ('Import from a report'); src/screens/LabReportImportScreen.tsx:286-321 (Reading your report..., intro text 'Your AI provider reads it... The report itself is not stored', Choose a PDF / Choose a photo or screenshot / Take a photo), 115-116 (units are not converted), 368-369 (review text), 497 ('Save {{count}} results'); src/services/labReportPicker.ts:20-23 (PDF via expo-document-picker), 78-98 (library, camera). SparkyFitnessServer/routes/v2/labReportRoutes.ts:117 (POST /scan); routes/v2/labResultRoutes.ts:595, 612, 652 (imports); services/labReportScanService.ts:33-39 (no_ai_configured, unreadable_pdf), 50-69 (PDF limits, 30 pages); SparkyFitnessServer.ts:872-873; db/migrations/20261031120000_create_lab_reports.sql. Web: SparkyFitnessFrontend/src/pages/Labs/LabImportDialog.tsx:228-248; src/pages/Labs/labFormat.ts:75-76"
+  },
+  {
+   "pr": 3330,
+   "batch": "checkin-meds-2",
+   "name": "Lab results (blood test markers)",
+   "description": "Record lab test results (HbA1c, LDL, vitamin D and other markers from a built-in catalog, or your own markers) with unit, reference range, test date and note, and follow each marker over time: list with latest value and status, a detail view with a range bar and history chart, edit and delete. On the phone it is under Library > Lab results with a Lab Results Dashboard card; the web has a Lab results page (tab and + menu) since #3374.",
+   "web": "Yes (since #3374, other batch)",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "SparkyFitnessMobile/src/screens/LibraryScreen.tsx:460-466 (Library > 'Lab results'); src/screens/LabResultsScreen.tsx:81-110 (header: Add lab result, menu), 168-200 (marker rows with latest date and range); src/screens/LabResultAddScreen.tsx:347-405 (Add lab result, 'Search markers (HbA1c, LDL, ...)', 'Add \"{{name}}\" as a new marker'), 495-618 (Result, Unit, Reference range (optional), Date of test, note); src/screens/LabResultDetailScreen.tsx:16-17, 214-247 (Latest, range bar, history chart), 119 ('Delete marker and all results'), 154-156 (delete a result); src/components/labs/LabResultsCard.tsx; src/screens/DashboardScreen.tsx:967; src/constants/dashboardCards.ts:22, 79-80; src/stores/appPreferencesStore.ts:131 (card visible by default); src/screens/DashboardSettingsScreen.tsx:161-162. Web: SparkyFitnessFrontend/src/pages/Labs/Labs.tsx; src/constants/webTabs.ts:39, 64-65"
+  },
+  {
+   "pr": 3197,
+   "batch": "checkin-meds-2",
+   "name": "Guided daily check-in",
+   "description": "On the phone, 'Daily Check-In' in the + menu walks through the day's check-in one screen after another: mood, then weight and body measurements, then progress photos, each showing 'Step N of 3' with Save & continue, Skip and Back; what is saved stays saved if you stop part-way, and reopening it the same day offers to continue or start over. It can be moved or hidden in Quick Actions. The web has no guided flow; its Check-In page shows the same areas as tabs.",
+   "web": "No",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "SparkyFitnessMobile/src/constants/addMenuItems.ts:17 ('checkIn'); src/components/AddSheet.tsx:511-517 (Daily Check-In item, label in src/localization/locales/en/translation.json:636); src/hooks/useAddSheetActions.ts:327-328 (startGuidedCheckIn for the diary day); src/hooks/useGuidedCheckIn.ts:22-26 (steps MoodLog, MeasurementsAdd, ProgressPhotos), 255-290 (Continue / Start over); src/components/GuidedCheckInStepIndicator.tsx, used in src/screens/MoodLogScreen.tsx:246, src/screens/MeasurementsAddScreen.tsx:1505, src/screens/ProgressPhotosScreen.tsx:528; src/hooks/useAddMenuItemAvailable.ts (no setting gate since #3323); docs/src/features/check-in.md:76-88. Web: SparkyFitnessFrontend/src/pages/CheckIn/CheckIn.tsx (tabs, no guided flow)"
+  },
+  {
+   "pr": 3597,
+   "batch": "food-1",
+   "name": "Estimated blood alcohol curve",
+   "description": "A rough blood alcohol estimate drawn from the alcohol in logged drinks, with a not-for-driving disclaimer and a list of the body data it still needs. Web: card in the Diary (dashboard layout); phone app: card on the Dashboard, the same on iOS and Android, which can be hidden in Dashboard settings. The estimate formula, elimination rate and display unit can be changed only in web Settings > Preferences. Sparky chat and MCP can answer with it too.",
+   "web": "Yes",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "SparkyFitnessFrontend/src/pages/Diary/Diary.tsx:536; src/pages/Diary/BloodAlcoholCard.tsx:140 (disclaimer); src/utils/dashboardLayout.ts:293,326,350,375; src/pages/Settings/PreferenceSettings.tsx:553-620 (bac_distribution_formula, bac_elimination_rate, bac_display_unit). SparkyFitnessMobile/src/screens/DashboardScreen.tsx:857; src/components/BloodAlcoholCard.tsx:50-65 (missing sex/weight/height/age), 72-76 (disclaimer); src/constants/dashboardCards.ts (bloodAlcohol); src/screens/DashboardSettingsScreen.tsx:111; no BAC settings in SparkyFitnessMobile/src (grep bac_). SparkyFitnessServer/routes/v2/nutritionKineticsRoutes.ts:137; ai/tools/bloodAlcoholTools.ts:81 (sparky_get_blood_alcohol); shared/src/nutrients/alcoholKinetics.ts"
+  },
+  {
+   "pr": 3528,
+   "batch": "food-1",
+   "name": "Copy a single logged food",
+   "description": "Log a food again by copying one diary entry to Now, Today, Tomorrow or a picked date and meal; Now uses the current time and the meal for that time of day. The copy keeps the entry's own nutrients, allergens and photos. Web: Copy button on each food in a Diary meal; phone app: Copy Food on a logged food's screen, the same on iOS and Android.",
+   "web": "Yes",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "SparkyFitnessFrontend/src/pages/Diary/MealCard.tsx:101,615-626,762-770; src/pages/Diary/CopyFoodEntryDialog.tsx:40,75-97; src/pages/Diary/Diary.tsx (handleCopySingleFood, copyingEntry dialog). SparkyFitnessMobile/src/screens/FoodEntryViewScreen.tsx:198-200,1651-1697; src/components/CopyMealSheet.tsx:26,86-148; src/hooks/useCopyFoodEntry.ts. shared/src/utils/foodEntryCopy.ts:81"
+  },
+  {
+   "pr": 3396,
+   "batch": "food-1",
+   "name": "Import Mealie recipes as ingredient meals, with nutrition sync",
+   "description": "Import a Mealie recipe as a saved meal with its own ingredients: match each ingredient to a food (search, suggestions or optional AI), check amounts, units and cooked weight, then save; remembered ingredient choices can be reviewed and forgotten. A saved meal can preview and push its per-serving nutrition back to the Mealie recipe after confirmation. Same on web (Meals) and the phone app (Meals library), on iOS and Android; the Mealie provider itself is still set up on the web.",
+   "web": "Yes",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "SparkyFitnessFrontend/src/pages/Foods/MealManagement.tsx:87-104,642,757-761; src/pages/Foods/RecipeImportDialog.tsx; src/pages/Foods/RecipeImportSyncConfirmation.tsx. SparkyFitnessMobile/src/screens/MealsLibraryScreen.tsx:259-261; src/screens/RecipeImportScreen.tsx; src/screens/MealDetailScreen.tsx:1-2,71 (RecipeImportSourcePanel); src/components/recipeImport/RecipeImportSourcePanel.tsx:7,20. SparkyFitnessServer/routes/v2/recipeImportRoutes.ts:152-252 (mappings, preview, suggest, save, source, sync-preview, sync-nutrition); docs/src/features/settings/external-providers.md (Mealie ingredient meals)"
+  },
+  {
+   "pr": 3570,
+   "batch": "health-1",
+   "name": "Settings > Features (turn optional features on or off)",
+   "description": "A Features section in Settings lists optional features by group with one switch each; turning one off hides its entry points (and, for cycle, its data shown elsewhere) without deleting anything. Cycle is the only feature so far, and its switch is one for the whole account. Web from #3570; the mobile app got its own Features screen in #3631.",
+   "web": "Yes",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "shared/src/features/optionalFeatures.ts:49-54 (registry, cycle defaultEnabled false); SparkyFitnessFrontend/src/pages/Settings/SettingsPage.tsx:186-188; src/pages/Settings/FeatureSettings.tsx:24-35 (groups), 43-98 (cycle row), 124-160; src/hooks/Settings/useWebFeatures.ts:16-49; SparkyFitnessMobile/src/screens/FeatureSettingsScreen.tsx and src/hooks/useMobileFeatures.ts (#3631)"
+  },
+  {
+   "pr": 3427,
+   "batch": "health-1",
+   "name": "Blood glucose (CGM) day timeline and glucose unit",
+   "description": "Individual glucose readings synced from Apple Health or Health Connect are shown one day at a time, zoomable, by source, with what else was logged around them (food and carbs, exercise, sleep, medications, stress, caffeine, alcohol, hydration). Web: a Blood glucose card at the top of Reports > Measurements. Phone: a timeline card in the Measurements report that can also show any numeric custom measurement. Glucose is shown in a saved unit (mg/dL or mmol/L) set in web Preferences or mobile App Settings. Readings reach the server only through the phone sync.",
+   "web": "Yes",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "SparkyFitnessFrontend/src/pages/Reports/Reports.tsx:284-289; src/pages/Reports/GlucoseCard.tsx:186-196 (layers), 261-351 (title, day, source, zoom); src/pages/Settings/PreferenceSettings.tsx:391-400 (Glucose Unit). SparkyFitnessMobile/src/screens/MeasurementsReportScreen.tsx:344-349; src/components/reports/MeasurementTimelineCard.tsx:108-148, 268-288; src/screens/AppSettingsScreen.tsx:166; src/components/GlucoseUnitSetting.tsx:18-42; src/services/shared/heartRateSamplesSync.ts:104, 522; SparkyFitnessServer/db/migrations/20261106000000_add_blood_glucose_samples.sql; shared/src/glucose/context.ts"
+  },
+  {
+   "pr": 3409,
+   "batch": "health-1",
+   "name": "Temperature unit",
+   "description": "Choose Celsius or Fahrenheit for temperatures. The choice is made only on the web Preferences page; the phone app has no picker but follows the saved unit for sleep skin temperature and the weather line of a cardio session (on a server that does not send it, °F with miles, else °C).",
+   "web": "Yes",
+   "ios": "Partial",
+   "android": "Partial",
+   "watch": "none",
+   "evidence": "SparkyFitnessFrontend/src/pages/Settings/PreferenceSettings.tsx:407-420 (Temperature Unit); SparkyFitnessMobile/src/utils/temperatureUnit.ts:5-22 (no setting screen references default_temperature_unit), used in src/screens/SleepDetailScreen.tsx:212, CardioSessionScreen.tsx:84, ActivityShareScreen.tsx:105; SparkyFitnessServer/db/migrations/20261104120000_add_default_temperature_unit.sql"
+  },
+  {
+   "pr": 3602,
+   "batch": "other-1",
+   "name": "Client certificate (mTLS) for the server connection",
+   "description": "Import a client certificate (.p12) into the phone app so a reverse proxy that requires mutual TLS lets it in; it is sent only to the saved servers' hostnames. Experimental. On iPhone the app must be closed and reopened after importing or removing it, and intermediate certificates are not sent; on Android the change applies at once. SSO and passkey sign-in also need the certificate installed in the phone's settings for the browser. English only. The web uses the browser's own certificate store, nothing in the web app.",
+   "web": "No",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/components/ClientCertificateSection.tsx:39 (isClientCertificateSupported), 82-83 (restart notice iOS only), 123 (pickClientCertificateFile), 143 (importClientCertificate); src/components/ServerConfigModal.tsx:1330; src/screens/OnboardingScreen.tsx:717, 736; src/services/clientCertificate.ts:44-45, 48 (hostsForServerUrls); modules/client-certificate/android/.../ClientCertificateStore.kt, modules/client-certificate/ios/ClientCertificateHooks.swift, ClientCertificateIdentity.swift; src/localization/locales/en/translation.json:990-1000 (auth.clientCertificate.*, absent from every other locale); docs/src/mobile-app/client-certificates.md (Limits; 'After importing or removing a certificate')"
+  },
+  {
+   "pr": 3596,
+   "batch": "other-1",
+   "name": "Choose whether the next set gets the keyboard when a rest ends",
+   "description": "In the phone app's Workout settings, a switch (on by default) decides whether a rest timer that runs out on its own moves the cursor to the next set's first value and opens the keyboard, or just makes the next set active. Minor; phone app only, same on iOS and Android.",
+   "web": "No",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/screens/WorkoutSettingsScreen.tsx:249-268 (restEndFocus switch); src/screens/ActiveWorkoutScreen.tsx:671 (focusNextSetOnRestEnd check); src/stores/appPreferencesStore.ts (focusNextSetOnRestEnd: true default); workoutSettings.restEndFocus only in locales en and pl"
+  },
+  {
+   "pr": 3526,
+   "batch": "other-1",
+   "name": "iPhone Duo vertical side bar layout",
+   "description": "On an iPhone Duo with iOS 27.1 or later, when the system shows the tab bar and header buttons as a vertical bar on one side, the app lays its screens out around it: content stays clear of the bar, the system's Add button replaces the Add tab, and the live workout, Diary date column, menus and photo viewers adapt. iPhone only; no Android counterpart.",
+   "web": "No",
+   "ios": "Yes",
+   "android": "No",
+   "watch": "none",
+   "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/hooks/useVerticalBar.ts:9-16 (iOS 27.1+ only), 82, 92; modules/side-bar-metrics/index.ts (verticalBarEdge, occlusion regions; ios/SideBarMetricsModule.swift); src/components/TabsLayout.tsx:94-110 (ScreenSideInsets), 290-294 (Add tab hidden on a confirmed vertical bar); src/screens/ActiveWorkoutScreen.tsx:118 (railBeside); src/screens/DiaryScreen.tsx:117-120, 220, 630"
+  },
+  {
+   "pr": 3503,
+   "batch": "other-1",
+   "name": "Show or hide the main web tabs",
+   "description": "In web Settings > Tabs, choose which main tabs show: Check-In, Medications, Labs, Reports, Foods, Exercises and Goals (Diary, Settings and Admin always show; Cycle has its own switch). A hidden tab also leaves the + menu and the Diary's links to it. Saved with the account; only the account owner can change it. Web only; the phone app's tabs cannot be hidden.",
+   "web": "Yes",
+   "ios": "No",
+   "android": "No",
+   "watch": "none",
+   "evidence": "/home/user/sf-main/shared/src/constants/webTabs.ts:1-30 (WEB_TABS_PAGE_KEY, WEB_HIDEABLE_TAB_IDS); SparkyFitnessFrontend/src/constants/webTabs.ts:36-43 (MODULE_TABS, inPlusMenu), 108-130 (visibleModuleTabs); src/pages/Settings/WebTabsSettings.tsx:37-57 (title 'Tabs', owner-only); src/pages/Settings/SettingsPage.tsx:189-191; src/layouts/MainLayout.tsx:100-103, 293; src/pages/Diary/DailyProgress.tsx:626; src/pages/Diary/RunProgramBanner.tsx:91; SparkyFitnessServer/services/dashboardLayoutService.ts; settings.webTabs in 5 of 40 public/locales"
+  },
+  {
+   "pr": 3242,
+   "batch": "other-2",
+   "name": "Arrange the + menu (Quick Actions)",
+   "description": "On mobile, Settings > Quick Actions lays out the + sheet: pick which items fill the four big cards, drag the other items into order, choose whether each shows as a full row, a compact half-width row or a button at the foot of the sheet, and switch off items you do not use. A preview shows the sheet as it will look. Items of a feature turned off in Settings > Features (Wellness while cycle tracking is off) are left out of the sheet wherever they are placed. The web add menu cannot be customised.",
+   "web": "No",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "SparkyFitnessMobile/src/screens/AddMenuSettingsScreen.tsx:43-50 (cards, drag to reorder, switch off to hide); src/screens/SettingsScreen.tsx:394-400 (Settings > Quick Actions row); src/constants/addMenuItems.ts:12-26 (items), 34-39 (feature-gated items), 41-49 (four card slots), 130-145 (row styles list/compact/action); src/stores/appPreferencesStore.ts:175, 318, 457 (hiddenAddMenuItems); src/components/AddSheet.tsx:119-125, 572-584 (sheet reads addMenuCards, addMenuOrder and hidden items); src/components/AddMenuPreview.tsx (preview); web: SparkyFitnessFrontend/src/layouts/MainLayout.tsx:125-199 (fixed addCompItems, no settings)"
+  },
+  {
+   "pr": 3631,
+   "batch": "settings-auth-family-1",
+   "name": "Settings -> Features: turn whole features on or off",
+   "description": "A Features screen in Settings on the web (#3570) and in the mobile app (#3631). Cycle & Pregnancy is the only feature so far, and its switch is one account-wide value shared by the website and the app. Turning it off hides the cycle tab/hub, the mobile Dashboard card and + menu row, the reproductive Health categories in measurement lists and reports, and cycle-hub symptoms in symptom lists; data is kept and syncs keep running. Only the account owner can change it. The server also stores per-platform choices for future features (#3555).",
+   "web": "Yes",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "SparkyFitnessMobile/src/screens/FeatureSettingsScreen.tsx:43-130,151-190; src/screens/SettingsScreen.tsx:320-329; src/hooks/useMobileFeatures.ts:27-118; src/hooks/useSymptoms.ts:165-199; src/screens/DiaryScreen.tsx:354-362; src/screens/MeasurementsAddScreen.tsx:331-336; SparkyFitnessFrontend/src/pages/Settings/FeatureSettings.tsx:43-49; SparkyFitnessFrontend/src/pages/Settings/SettingsPage.tsx:187; shared/src/features/optionalFeatures.ts:53-55 (only 'cycle' registered), 163-178, 196-237"
+  },
+  {
+   "pr": 3474,
+   "batch": "settings-auth-family-1",
+   "name": "Oral care tracking with brushing timer",
+   "description": "Log brushing, flossing, mouthwash, tongue cleaning or a named other type against a daily brushing goal (default twice a day for 2 minutes) with a streak; a brushing timer split into four quarters with chimes; an Oral care report. Web: Check-In -> Oral care, Reports -> Oral care. Mobile: + menu, optional Dashboard card, Oral care screen, Reports -> Oral care, brushing reminders (Settings -> Notifications), and a notification when the timer target is reached. iPhone only: smart-toothbrush brushes read from Apple Health (deduplicated against manual logs), writeback to Apple Health, and a Live Activity for the timer (Lock Screen, Dynamic Island, Apple Watch Smart Stack). Android has no health sync for it (Health Connect has no toothbrushing record). The assistant and MCP can read it but not log it.",
+   "web": "Yes",
+   "ios": "Yes",
+   "android": "Partial",
+   "watch": "none",
+   "evidence": "docs/src/features/oral-care.md; SparkyFitnessFrontend/src/pages/CheckIn/CheckIn.tsx:140-141,293-294; src/pages/CheckIn/OralCareSection.tsx; src/pages/CheckIn/BrushingTimerDialog.tsx; src/pages/Reports/Reports.tsx:339-342; src/pages/Reports/ReportsControls.tsx:61-62; SparkyFitnessMobile/src/components/AddSheet.tsx:553-559; src/constants/dashboardCards.ts:21,77-78; src/screens/OralCareScreen.tsx; src/screens/OralCareLogScreen.tsx; src/components/oralCare/BrushingTimerModal.tsx:43,83; src/screens/OralCareReportScreen.tsx; src/screens/NotificationSettingsScreen.tsx:200-226; src/services/brushingLiveActivity.ios.ts:65-69; src/HealthMetrics.ts:209-227; src/WritebackMetrics.ts:83-93; SparkyFitnessServer/routes/v2/oralCareRoutes.ts; SparkyFitnessServer/ai/tools/checkinTools.ts:113,282"
+  },
+  {
+   "pr": 3453,
+   "batch": "settings-auth-family-1",
+   "name": "Account emails in your language",
+   "description": "Password reset, email sign-in code (MFA) and magic link emails are written in the language chosen in the website's preferences, with English for any missing sentence. At this point the server has German, French, Polish and Brazilian Portuguese (Swedish in part). The mobile app's language choice is kept on the device and does not set it, so a mobile-only user gets the language last saved on the web (English by default).",
+   "web": "Yes",
+   "ios": "Partial",
+   "android": "Partial",
+   "watch": "none",
+   "evidence": "SparkyFitnessServer/auth.ts:18,441,938,996 (resolveEmailLanguage); SparkyFitnessServer/services/emailTranslations.ts:55-120,250-310; SparkyFitnessServer/locales/{de,fr,pl,pt-BR}/translation.json (others '{}'); mobile language stays local (SparkyFitnessMobile/src/localization/appLanguage.ts; row settings-pref-language notes it is not synced)"
+  },
+  {
+   "pr": 3625,
+   "batch": "watch-1",
+   "name": "New watch workout view (opt-in)",
+   "description": "A redesigned strength workout screen on both watches, turned on with Settings > Apple Watch / Wear OS > New workout view (off by default): a Log set button (also double tap on Apple Watch), Edit previous set, a More page with the set, exercise and workout actions and a Plates calculator, full-screen exercise demo pictures sent from the phone, a sound and tap for the last seconds of a rest or timed hold, a 3-2-1 Get ready before holds, a top line that switches between time and live heart rate/calories, and one summary at the end. On Wear OS it also brings per-set RPE 1 to 10, rest -15 s, confirmations before finishing or discarding, and volume, max heart rate and the 1-10 effort rating in the summary. Web has no watch app.",
+   "web": "No",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "both",
+   "evidence": "SparkyFitnessMobile/src/screens/WatchSettingsScreen.tsx:304-405 (New workout view switch on both platforms, Top line, countdown and Countdown before holds); SparkyFitnessMobile/src/stores/appPreferencesStore.ts:184 (watchNewWorkout defaults to false); SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/WorkoutScreens.kt:427-445 (Wear OS uses NewActiveWorkoutView when the setting is on); Wear OS SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/NewWorkoutScreens.kt:152,256,333,344,507,2179,2402,3048; SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/CountdownCues.kt; SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/ExerciseDemoStore.kt; Apple Watch (#3557) SparkyFitnessMobile/targets/watch/Presentation/WorkoutView.swift, SparkyFitnessMobile/targets/watch/Presentation/WorkoutMorePage.swift:112-141, SparkyFitnessMobile/targets/watch/Presentation/WorkoutView.swift:369-383 (demo), SparkyFitnessMobile/targets/watch/Domain/CheckInModels.swift:523-524,659"
+  },
+  {
+   "pr": 3250,
+   "batch": "watch-1",
+   "name": "Wear OS tiles",
+   "description": "Four tiles for the Wear OS tile carousel: Nutrition (calories left or over, burned, macros), Sleep Health (last night's sleep time, score, stages, resting heart rate, HRV, SpO2 and naps, with a Sleep detail page on the watch), Medications (today's doses taken, pending or skipped) and Exercise (steps, minutes, calories and today's workouts). Each opens its page in the watch app. The Apple Watch has no equivalent and no sleep page.",
+   "web": "No",
+   "ios": "No",
+   "android": "Yes",
+   "watch": "Wear OS",
+   "evidence": "SparkyFitnessMobile/targets/wearos/src/main/AndroidManifest.xml:195-244; SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/Tiles.kt:904-1260 (targetPageKey 905,1016,1126,1200); SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/Screens.kt:1578 (SleepDetailPage); SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/MainActivity.kt:98-110; SparkyFitnessMobile/targets/wearos/src/main/res/values/strings.xml:11-18,108-152; SparkyFitnessMobile/src/hooks/useWatchCheckInBridge.ts (sleep and exerciseSummary payload)"
+  },
+  {
+   "pr": 3411,
+   "batch": "widget-android-1",
+   "name": "NFC tags: log water, a food or a saved meal with a tap (same entry as #3316)",
+   "description": "Set up an NFC sticker from Settings > NFC tags, a water container, a food or a saved meal; one tap with the phone (app closed or open) logs the drink, food or meal saved with the tag, with Undo, optional 'Ask before logging', double-tap protection and meal type by time of day or fixed. The tag holds only a https://tag.sparkyfitness.com/t/<code> link; the action is stored on the user's server. iPhone (XS or later) shows a banner to tap; Android 15 and older opens the app directly, Android 16 may show a notification first; Android shows its own waiting card and asks to turn NFC on, iPhone uses the system sheet. Not on the web. Translated into de, fr, pl, pt-BR only.",
+   "web": "No",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "SparkyFitnessMobile/src/screens/SettingsScreen.tsx:62,408-417 (NFC tags row only with NFC hardware); SparkyFitnessMobile/App.tsx:480 (https://tag.sparkyfitness.com prefix), 510 (ActionTagScan 't/:code'), 781-795 (ActionTags, ActionTagForm, ActionTagScan screens); SparkyFitnessMobile/app.config.ts:140 (nfcLinks), 228 (iOS associatedDomains applinks), 245-258 (Android verified https intent filter), 316 (react-native-nfc-manager); SparkyFitnessMobile/plugins/withNfcTagIntent.ts (NDEF_DISCOVERED filter for Android 15 and older); SparkyFitnessMobile/plugins/withQuickActionLaunchGuard.ts (tag intents not replayed on restore); SparkyFitnessMobile/src/services/nfc/nfcService.ts:22-30 (Android reader mode), 52-58 (NFC switch Android only), 202-204 (iOS sheet message); SparkyFitnessMobile/src/components/NfcWaitingCard.tsx:23 (Android only); SparkyFitnessMobile/src/screens/ActionTagScanScreen.tsx:75-82 (Tap to undo); SparkyFitnessMobile/src/screens/FoodDetailScreen.tsx:581, MealDetailScreen.tsx:566, WaterContainerEditScreen.tsx:691 (Add NFC tag rows); shared/src/schemas/api/ActionTags.api.zod.ts:27-61 (water, food, meal actions; fixed or time-of-day meal type), 82 (ask_before_running); SparkyFitnessServer/SparkyFitnessServer.ts:881 (/api/v2/action-tags); SparkyFitnessTag/.well-known/apple-app-site-association, assetlinks.json; docs/src/features/nfc-tags.md; no action-tag code in SparkyFitnessFrontend/src; actionTags strings only in de, fr, pl, pt-BR of the 15 shipped locales"
+  },
+  {
+   "pr": 3316,
+   "batch": "widget-android-1",
+   "name": "NFC tags: log water, a food or a saved meal with a tap",
+   "description": "Set up an NFC sticker from Settings > NFC tags, a water container, a food or a saved meal; one tap with the phone (app closed or open) logs the drink, food or meal saved with the tag, with Undo, optional 'Ask before logging', double-tap protection and meal type by time of day or fixed. The tag holds only a https://tag.sparkyfitness.com/t/<code> link; the action is stored on the user's server. iPhone (XS or later) shows a banner to tap; Android 15 and older opens the app directly, Android 16 may show a notification first; Android shows its own waiting card and asks to turn NFC on, iPhone uses the system sheet. Not on the web. Translated into de, fr, pl, pt-BR only. (#3316 adds water tags; #3411 adds food and meal tags; #3420 fixes food tag units; #3310 adds the tag site; #3482 adds the What's New card).",
+   "web": "No",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "SparkyFitnessMobile/src/screens/SettingsScreen.tsx:62,408-417 (NFC tags row only with NFC hardware); SparkyFitnessMobile/App.tsx:480 (https://tag.sparkyfitness.com prefix), 510 (ActionTagScan 't/:code'), 781-795 (ActionTags, ActionTagForm, ActionTagScan screens); SparkyFitnessMobile/app.config.ts:140 (nfcLinks), 228 (iOS associatedDomains applinks), 245-258 (Android verified https intent filter), 316 (react-native-nfc-manager); SparkyFitnessMobile/plugins/withNfcTagIntent.ts (NDEF_DISCOVERED filter for Android 15 and older); SparkyFitnessMobile/plugins/withQuickActionLaunchGuard.ts (tag intents not replayed on restore); SparkyFitnessMobile/src/services/nfc/nfcService.ts:22-30 (Android reader mode), 52-58 (NFC switch Android only), 202-204 (iOS sheet message); SparkyFitnessMobile/src/components/NfcWaitingCard.tsx:23 (Android only); SparkyFitnessMobile/src/screens/ActionTagScanScreen.tsx:75-82 (Tap to undo); SparkyFitnessMobile/src/screens/FoodDetailScreen.tsx:581, MealDetailScreen.tsx:566, WaterContainerEditScreen.tsx:691 (Add NFC tag rows); shared/src/schemas/api/ActionTags.api.zod.ts:27-61 (water, food, meal actions; fixed or time-of-day meal type), 82 (ask_before_running); SparkyFitnessServer/SparkyFitnessServer.ts:881 (/api/v2/action-tags); SparkyFitnessTag/.well-known/apple-app-site-association, assetlinks.json; docs/src/features/nfc-tags.md; no action-tag code in SparkyFitnessFrontend/src; actionTags strings only in de, fr, pl, pt-BR of the 15 shipped locales"
+  },
+  {
+   "pr": 3626,
+   "batch": "workout-1",
+   "name": "Training calendar: planned against completed training, and load by sport",
+   "description": "A month or week calendar of run program workouts and scheduled workout plan sessions, each marked done, partly done, missed or upcoming against what was logged, plus extra unplanned workouts, with weekly totals and progress bars; a run program workout opens its own screen. Exercise Statistics adds a Load by sport card (training load split by sport for this week, this month and the last eight weeks) that opens the calendar. Phone app only, the same on iOS and Android.",
+   "web": "No",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "SparkyFitnessMobile/src/screens/TrainingCalendarScreen.tsx:45,77 (month/week), 283-300 (run program item opens RunProgramWorkout); src/screens/LibraryScreen.tsx:410-416 ('Training calendar'); src/screens/RunProgramsScreen.tsx:387-392; src/components/exerciseStats/SportLoadCard.tsx:90-162; src/screens/ExerciseStatisticsScreen.tsx:221-225. shared/src/schemas/api/TrainingCalendar.api.zod.ts:41-46; shared/src/utils/trainingCalendar.ts. SparkyFitnessServer/routes/reportRoutes.ts:447 (GET /training-calendar); services/trainingCalendarService.ts. No training-calendar in SparkyFitnessFrontend/src"
+  },
+  {
+   "pr": 3574,
+   "batch": "workout-1",
+   "name": "Write logged workouts to Apple Health and Health Connect",
+   "description": "Turn on Exercise under health write-back to send each workout made in SparkyFitness (one per diary session, with active calories and distance) to Apple Health or Health Connect; synced imports, calorie-linked and unfinished workouts are never written. Each exercise can set the health activity type used, or leave it on Automatic, in the exercise forms on the web and in the phone app. Writing happens only in the phone app: on iOS it skips the Apple Watch app's own workouts and workouts other apps saved at the same time; on Android each timed set becomes a segment and it needs permission to read exercise sessions.",
+   "web": "Partial",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "SparkyFitnessMobile/src/WritebackMetrics.ts:94-121; src/services/shared/exerciseWritebackPlan.ts:276-280, 335-336; src/services/healthkit/exerciseWriteback.ts:164, 236-287; src/services/healthconnect/exerciseWriteback.ts:30, 103-139; src/screens/ExerciseFormScreen.tsx:227-252 (activity type picker). Web: SparkyFitnessFrontend/src/components/HealthActivityTypeSelect.tsx:159-167, used in src/pages/Exercises/AddCustomExerciseForm.tsx:160, EditExerciseDialog.tsx:165, src/pages/Diary/EditExerciseDatabaseDialog.tsx:229. shared/src/constants/healthActivityTypes.ts; healthConnectSegments.ts; SparkyFitnessServer/db/migrations/20261113120000_add_exercise_health_activity_type.sql"
+  },
+  {
+   "pr": 3536,
+   "batch": "workout-1",
+   "name": "Use planned values as live workout placeholders",
+   "description": "An option in the phone app's Workout Settings, off by default, to have a live workout started from a plan or saved workout suggest its planned weight and reps instead of the last session's values. Phone app only, the same on iOS and Android; the web has no such setting.",
+   "web": "No",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "SparkyFitnessMobile/src/screens/WorkoutSettingsScreen.tsx:90-94, 272-283; src/hooks/useStartLiveWorkout.ts:378; src/stores/appPreferencesStore.ts (plannedValuesAsPlaceholders); src/utils/workoutSession.ts. No equivalent setting in SparkyFitnessFrontend/src/pages/Settings or the workout player"
+  },
+  {
+   "pr": 3510,
+   "batch": "workout-1",
+   "name": "Workout session status and edit conflicts",
+   "description": "Each grouped workout in the diary shows whether it is planned, in progress, partial or completed, and a newer edit made on another device or tab is no longer silently overwritten: the older one is refused with a notice. Same on web, iOS and Android.",
+   "web": "Yes",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "shared/src/constants/exercise.ts (WORKOUT_SESSION_STATUSES, deriveWorkoutSessionStatus). Web: SparkyFitnessFrontend/src/pages/Diary/ExercisePresetEntryDisplay.tsx:52-70, 308-316 (badge). Mobile: SparkyFitnessMobile/src/screens/WorkoutDetailScreen.tsx:118-122, 464-485 (409 conflict), 1074-1085 (badge); src/components/SwipeableExerciseRow.tsx:31-32, 174. SparkyFitnessServer/db/migrations/20261110120000_add_workout_session_lifecycle.sql"
+  },
+  {
+   "pr": 3466,
+   "batch": "workout-1",
+   "name": "Calorie cycling for training and rest days",
+   "description": "Spread the week's calories over the days: more on training days and less on rest days, or a custom percentage for each weekday, with the week still adding up to the daily target times seven and no day below the safety floor; carbs take the difference. Set it with an interactive week chart, and the diary marks high and low days. Same on web and the phone app; the web also shows the cycling step in the live preview and target breakdown.",
+   "web": "Yes",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "shared/src/utils/calorieCycling.ts; SparkyFitnessServer/services/goalService.ts; db/migrations/20261107120000_add_calorie_cycling.sql. Web: SparkyFitnessFrontend/src/pages/Settings/CalculationSettings.tsx:99-107 (CalorieCyclingSettings); src/components/CalorieCyclingChart.tsx; src/components/CalorieTargetBreakdown/TargetStep.tsx; src/pages/Diary/DailyProgress.tsx:319-330, 849. Mobile: SparkyFitnessMobile/src/screens/CalorieSettingsScreen.tsx:15, 40-41; src/components/CalorieCyclingCard.tsx; src/components/CalorieCyclingChart.tsx; src/components/DiaryCalorieMacroSummary.tsx:207-219"
+  },
+  {
+   "pr": 3348,
+   "batch": "workout-2",
+   "name": "Focus view for the live workout (one exercise at a time)",
+   "description": "An optional layout for the in-progress workout, chosen in Workout Settings > Workout view (List by default, or Focus), with Exercise photo set to Large or Small. Focus shows one exercise per page: numbered exercise chips, a large zoomable photo or GIF card, Swap and the exercise menu, muscle/equipment/best chips, a plan line and a last-time line, weight and reps steppers with an RPE/RIR cell, Previous/Next and swiping between exercises; it follows the current set and offers 'Back to current' after you move by hand. Only for standard-format workouts with guided mode off; the list's Previous column with tap-to-fill and the live heart rate and calories readouts are not in it. Same on iOS and Android; the web workout player has only its list. Its texts are translated into German, French, Polish and Brazilian Portuguese among the shipped languages.",
+   "web": "No",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "SparkyFitnessMobile/src/stores/appPreferencesStore.ts:189-190 (activeWorkoutView 'list', focusMediaDefault), 783-784; SparkyFitnessMobile/src/screens/WorkoutSettingsScreen.tsx:100-105, 293-340 (Workout view and Exercise photo rows, guided subtitle); SparkyFitnessMobile/src/screens/ActiveWorkoutScreen.tsx:155-161 (focusMode only for standard format with guided mode off); SparkyFitnessMobile/src/components/ActiveWorkoutFocusView.tsx, ActiveWorkoutFocusChips.tsx, ActiveWorkoutFocusMedia.tsx, ActiveWorkoutFocusSets.tsx; SparkyFitnessMobile/src/utils/focusView.ts:32 (FOCUS_FOLLOW_GRACE_MS), 52 (swipePageDelta); SparkyFitnessMobile/agent-docs/exercise-workouts-and-fasting.md 'Focus view' (not carried over: Previous column, cardio effort form, live HR and calories); no Platform gate apart from the weight keyboard type (ActiveWorkoutFocusSets.tsx:474); translations: activeWorkout.focus / workoutSettings.workoutView present in de, fr, pl, pt-BR (and bg, not shipped), absent from es, hu, it, lv, nb-NO, nl, ru, tr, yue-Hant, zh-Hans, zh-Hant (localeRegistry.json). Web has no equivalent: SparkyFitnessFrontend/src/pages/Diary/WorkoutPlaybackPage.tsx with WorkoutPlaybackExercisesList.tsx."
+  },
+  {
+   "pr": 3134,
+   "batch": "workout-2",
+   "name": "Grow percentage macro goals with exercise calories",
+   "description": "An optional switch, 'Adjust percentage macro goals with exercise calories', raises the protein, carbohydrate and fat targets in proportion when exercise adds calories to the day's budget, following the earn-back settings; goals entered in grams do not change, and a change applies from that day on. The switch is on the web (Settings > Calculation) and in the phone app (Calorie Settings), the same on iOS and Android, but macros can only be set as percentages on the web, so the phone app's switch only matters for goals set that way there.",
+   "web": "Yes",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "SparkyFitnessFrontend/src/pages/Settings/CalculationSettings.tsx:241, 483, 1650-1675 (switch and hint, always shown); SparkyFitnessMobile/src/screens/CalorieSettingsScreen.tsx:63, 744-772 (switch, saved with mutation adjust_macros_with_exercise); SparkyFitnessServer/services/goalService.ts:193, 563 (applies per day); SparkyFitnessServer/db/migrations/20261024170000_add_exercise_macro_adjustment.sql; shared/src/schemas/database/UserPreferences.zod.ts; mobile GoalsScreen.tsx has no grams/percent macro toggle (only stores protein_percentage etc. in presets, :190-201). Mobile translations: calorieSettings.adjustMacrosWithExercise in de, fr, pl, pt-BR only among shipped locales."
+  },
+  {
+   "pr": 3320,
+   "batch": "workout-2",
+   "name": "Heart rate from a Google Health tracker on logged workouts",
+   "description": "With Google Health connected, each sync fills in a workout logged in SparkyFitness (live workout, web workout player, or by hand with a start time) that has no heart rate yet with the tracker's readings from that time: average and max heart rate, time in each zone and the heart rate graph, as a paired Apple Watch gives. It waits until the tracker has uploaded readings past the workout's end and does not change calories. Google Health is connected from the web only; the filled-in heart rate then shows on the web and in the phone app on iOS and Android.",
+   "web": "Yes",
+   "ios": "Partial",
+   "android": "Partial",
+   "watch": "none",
+   "evidence": "SparkyFitnessServer/integrations/googlehealth/googleHealthWorkoutHeartRate.ts:29 (SETTLE_MS 5 min past the end), 80 (attachHeartRateToLoggedWorkouts), 139 (attachWatchTelemetryToExerciseEntry); SparkyFitnessServer/services/googleHealthService.ts:701 (called at the end of each sync); SparkyFitnessServer/models/workoutTelemetryRepository.ts:433 (getWorkoutEntriesWithoutHeartRate); shared/src/utils/workoutHeartRateSeries.ts (workoutClockWindow); docs/src/features/settings/google-health.md:79. Google Health setup is web-only (native-web-cloud-integrations); no Google Health settings in SparkyFitnessMobile/src/screens."
+  },
+  {
+   "pr": 3265,
+   "batch": "workout-3",
+   "name": "Training, run, plan and calorie target reviews in Sparky chat",
+   "description": "Ask Sparky how your training or running is going and it reads the last 4 weeks (7 to 90 days on request): for strength, sessions per week, lifts that have stalled, effort from logged RPE/RIR and muscle coverage; for running, runs per week, weekly distance and jumps, pace against the period before and training load with a recovery hint. It can also propose planned-weight changes for the active workout plan (add a step, lighten or hold, each with its reason) and apply only the ones you agree to, and check whether the calorie target fits your estimated maintenance and weight trend. These are chat tools on the server, so they work the same in web and phone chat and through MCP.",
+   "web": "Yes",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "/home/user/sf-main/SparkyFitnessServer/ai/tools/exerciseStatsTools.ts:206 (tool description), 281 (training_review), 297 (run_review); ai/tools/schemas/exerciseStats.ts:9-10, 77, 84; ai/tools/workoutPlanTools.ts:361-362, 685 (propose_plan_changes), 703 (apply_plan_changes, confirmed=true required); ai/tools/schemas/workoutPlans.ts:109-110, 207, 216; ai/tools/coachTools.ts:605 (sparky_review_calorie_target); shared/src/utils/trainingReview.ts, runReview.ts, planProposals.ts, calorieTargetReview.ts; docs/src/features/exercises/adaptive-coaching.md"
+  },
+  {
+   "pr": 3264,
+   "batch": "workout-3",
+   "name": "Weather for GPS-recorded activities",
+   "description": "With a weather provider of the type Weather (Open-Meteo compatible) added in web Settings > External Providers (or shared by the admin or a family member), the server looks up the temperature and conditions at the start of each new GPS-recorded walk, run or ride after its route is saved, sending only the start time and the start place rounded to about 1 km. Activities that already have weather, such as Garmin imports, keep it. The phone app shows it as a Weather tile on the activity's detail (in °F with imperial units) and the web shows it in the activity report. The provider can only be set up on the web; activities are GPS-recorded only in the phone app.",
+   "web": "Yes",
+   "ios": "Partial",
+   "android": "Partial",
+   "watch": "none",
+   "evidence": "/home/user/sf-main/SparkyFitnessFrontend/src/pages/Settings/ProviderSpecificFields.tsx:18, 184-185 (open_meteo -> WeatherProviderFields); src/pages/Settings/WeatherProviderFields.tsx; shared/src/constants/weatherProviderTypes.ts:6 (WEATHER_PROVIDER_TYPE = 'open_meteo'); SparkyFitnessServer/services/exerciseEntryService.ts:470 (attachGpsTrackToExerciseEntry), 597 (attachWeatherToExerciseEntry); services/weatherService.ts:233; db/migrations/*_add_open_meteo_weather_provider_type.sql; SparkyFitnessMobile/src/services/api/exerciseApi.ts:635 (only the phone uploads gps-track); src/utils/cardioSessionStats.ts:45, 197-205; SparkyFitnessFrontend/src/pages/Reports/ActivityReportVisualizer.tsx:401-407; docs/src/features/exercises/gps-activity-recording.md (## Weather)"
+  },
+  {
+   "pr": 3201,
+   "batch": "workout-3",
+   "name": "Zone 2 base running program",
+   "description": "A ten-week base-building program, 3 or 4 easy runs a week, where each run targets your Zone 2 heart rate range (from your heart rate zone settings) instead of a pace, with lighter weeks 4 and 8, strides in weeks 6, 7 and 9 and zone-check runs in weeks 4, 8 and 10. While recording, the phone shows the range and, with an Apple Watch or Wear OS watch supplying heart rate, says whether you are in, above or below Zone 2 and alerts when you stay outside it (allowing for warm-up and drift); without a watch it falls back to the talk test. A program run started on either watch holds the same range. The web lists and runs the program on its Training programs page and calendar but has no heart rate guidance and cannot record it.",
+   "web": "Partial",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "both",
+   "evidence": "/home/user/sf-main/shared/src/utils/runPrograms.ts:309 (ZONE2_CHECK_WEEKS), 612-613 (zone2Base, zone2Base4), 636; shared/src/utils/zone2Guidance.ts:17 (zone2HeartRateBand); shared/src/schemas/api/RunProgram.api.zod.ts (effort 'zone2'); SparkyFitnessMobile/src/hooks/useZone2HeartRateBand.ts; src/components/recording/IntervalCard.tsx:43-84 (target, talk test, in/above/below); src/utils/stepHeartRateGuidance.ts; src/components/recording/ZoneCheckNote.tsx; src/utils/watchRunPlans.ts:75-76 (hrMin/hrMax on watch steps); targets/watch/Adapters/ContextPayloadMapper.swift:206; targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/PayloadAdapters.kt:383, WatchStores.kt:3132 (step heart rate band alert); SparkyFitnessFrontend/src/constants/runProgramCopy.ts:100-113; SparkyFitnessServer/ai/tools/schemas/runProgram.ts; docs/src/features/exercises/zone-2-program.md"
+  },
+  {
+   "pr": 3192,
+   "batch": "workout-3",
+   "name": "Now card and quick exercise swap in the active workout",
+   "description": "An optional card (Workout Settings > Now card, off by default) pinned above the exercise list during a standard, non-guided strength workout: the set to do now, or 'Up next' during a rest, with 'Set 2 of 3' and a dot per set, the exercise photos or GIF, its target in large type and the next exercise. Its Swap button, and 'Do another exercise first…' in the current exercise's menu, list the upcoming exercises to do now (moving it, or its whole superset, ahead of the current one) or replace the exercise. Phone app only, the same on iOS and Android; the web workout player has neither.",
+   "web": "No",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/components/ActiveWorkoutNowCard.tsx:75, 93, 107; src/screens/ActiveWorkoutScreen.tsx:144, 613-615, 1264-1276, 1425; src/components/ActiveWorkoutOverflowSheet.tsx:96-120 (swap mode), 143 ('Do another exercise first…'); src/utils/workoutSession.ts:1070 (upcomingExercises); src/stores/activeWorkoutStore.ts:2794 (doExerciseNow); src/stores/appPreferencesStore.ts:188 (activeWorkoutNowCard: false); src/screens/WorkoutSettingsScreen.tsx:96, 371-374"
+  }
+ ],
+ "feature_changes": [
+  {
+   "pr": 3514,
+   "name_en": "Intervals.icu integration",
+   "change": "Add that it can also push daily nutrition totals (calories, protein, carbs, fat) to Intervals.icu each night, turned on with a switch on the web provider card only (SparkyFitnessFrontend/src/pages/Settings/ProviderCard.tsx:245,1073-1087; SparkyFitnessServer/integrations/intervals/intervalsNutritionPush.ts:2,28-44; services/backgroundJobScheduler.ts:10,50; routes/intervalsRoutes.ts:254; docs/src/features/settings/intervals.md:65). No Intervals.icu setting in SparkyFitnessMobile/src. Add PR 3514."
+  },
+  {
+   "pr": 3292,
+   "name_en": "Enter sodium as grams of salt",
+   "change": "Now on mobile too: the entry says 'The phone app only has the sodium field in mg' with ios/android No. Set ios Yes and android Yes (food form), add PR 3292, and say the mobile supplement nutrients editor still has only sodium in mg (no salt in SparkyFitnessMobile/src/components/medications/SupplementNutrientsEditor.tsx). Evidence: SparkyFitnessMobile/src/components/FoodForm.tsx:139-147 (SodiumEntryUnit, inline picker width), 316-330, 936-1030 (renderSodiumField: 'Salt (g)', 'Enter sodium as' picker with Sodium (mg) / Salt (g)), 1467; used by src/screens/foodForm/CreateFoodMode.tsx, EditFoodMode.tsx, AdjustNutritionMode.tsx and src/screens/FoodPhotoEstimateReviewScreen.tsx. Also fix the entry's evidence path: the helper is now shared/src/utils/saltSodium.ts (SparkyFitnessFrontend/src/utils/saltSodium.ts no longer exists); web grid SparkyFitnessFrontend/src/components/FoodSearch/NutrientFormGrid.tsx:15, 21-22."
+  },
+  {
+   "pr": 3408,
+   "name_en": "Heart Rate report",
+   "change": "Description 'the phone app has neither [24-hour and multi-day timelines]' is now wrong: the phone report has an average-by-day range timeline and a 24-hour day timeline with sleep and workout shading (SparkyFitnessMobile/src/screens/HeartRateReportScreen.tsx:352-372; src/components/reports/HeartRateRangeCard.tsx; src/components/reports/HeartRateDayTimelineCard.tsx:35-91; src/constants/reports.ts:135-136) and a Resting HR Trend figure (HeartRateReportScreen.tsx:196-220; src/hooks/useHeartRateReport.ts:176). Only the per-workout section (SparkyFitnessFrontend/src/pages/Reports/HeartRate/HeartRateWorkoutsSection.tsx) stays web only; the phone keeps 1-min recovery and insights. ios/android could move from Partial toward Yes."
+  },
+  {
+   "pr": 3407,
+   "name_en": "Heart Rate report",
+   "change": "The 24-hour and multi-day timelines now have data for people who sync from a phone: the sync uploads per-minute readings (SparkyFitnessMobile/src/services/shared/heartRateSamplesSync.ts:499), read by the web (SparkyFitnessFrontend/src/pages/Reports/HeartRate/useHeartRateData.ts:71) and mobile timelines (SparkyFitnessMobile/src/hooks/useHeartRateTimelines.ts:31)."
+  },
+  {
+   "pr": 3296,
+   "name_en": "Intervals.icu integration",
+   "change": "'synced for a chosen range or every hour' is now inaccurate: the scheduled sync follows the provider's Sync Frequency (Manual, Hourly or Daily) chosen on the web (/home/user/sf-main/SparkyFitnessServer/services/providerSyncScheduler.ts:214-219 Intervals.icu config, 230-238 isProviderSyncDue; /home/user/sf-main/SparkyFitnessFrontend/src/pages/Settings/ProviderSyncFrequencyFields.tsx:20-32, 'intervals' listed). Reword to 'synced for a chosen range, or hourly or daily'; update the evidence line reference (providerSyncScheduler.ts:127-134 is now 214-219)."
+  },
+  {
+   "pr": 3120,
+   "name_en": "Compare: before and since a habit started",
+   "change": "Still accurate and the same on web and mobile; optionally add that weight trend is not offered in since questions (shared/src/compare/metrics.ts:117,122-129; SparkyFitnessFrontend/src/pages/Reports/Compare/CompareSentence.tsx:64,98; SparkyFitnessMobile/src/components/compare/CompareSentence.tsx:10; docs/src/developer/mcp/compare.md:27) and that the test is stricter for slow-moving outcomes (shared/src/compare/since.ts:206-207)."
+  },
+  {
+   "pr": 3625,
+   "name_en": "Plate calculator",
+   "change": "Now also on both watches in the new workout view's More page (Plates), using the bars and plates the phone sends with the plan: Wear OS SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/NewWorkoutScreens.kt:344,2179; Apple Watch (#3557) SparkyFitnessMobile/targets/watch/Presentation/WorkoutMorePage.swift:112-130, SparkyFitnessMobile/targets/watch/Domain/WatchPlates.swift. watch: none -> both."
+  },
+  {
+   "pr": 3625,
+   "name_en": "Workout effort score (1-10)",
+   "change": "Wear OS (new view) now asks for it after a strength workout and the Android phone saves it (SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/NewWorkoutScreens.kt:3114-3190; SparkyFitnessMobile/src/hooks/useWatchWorkoutBridge.ts:789-805). Not after a Wear OS run. watch: Apple Watch -> both."
+  },
+  {
+   "pr": 3557,
+   "name_en": "Plate calculator",
+   "change": "Apple Watch new view has a Plates calculator: SparkyFitnessMobile/targets/watch/Presentation/WorkoutMorePage.swift:112-130; SparkyFitnessMobile/targets/watch/Domain/WatchPlates.swift (see #3625 for Wear OS)."
+  },
+  {
+   "pr": 3256,
+   "name_en": "Saved routes library",
+   "change": "Description 'on Android, drawing on a map needs a build with a Google Maps key' and evidence 'routeMapSupport.ts:15-21 (Android only with a Google Maps key)' are now wrong: Draw is offered on every Android build (OpenStreetMap without a key). Evidence: SparkyFitnessMobile/src/screens/RoutesScreen.tsx:78 (Draw when canShowRouteMap()); SparkyFitnessMobile/src/utils/routeMapSupport.ts:14-16"
+  },
+  {
+   "pr": 3256,
+   "name_en": "Route generation and route style",
+   "change": "'on Android this needs a build with a Google Maps key' is now wrong: Generate needs only a routing provider; keyless Android shows the generated route on OpenStreetMap. Evidence: SparkyFitnessMobile/src/screens/RoutesScreen.tsx:86 (canGenerate && canShowRouteMap()); SparkyFitnessMobile/src/screens/RouteGenerateScreen.tsx:31,261 (MapSurface); SparkyFitnessMobile/src/utils/routeMapSupport.ts:14-16"
+  },
+  {
+   "pr": 3256,
+   "name_en": "Edit a saved route on the map",
+   "change": "'hidden on Android builds without a Google Maps key' is now wrong: Edit route on map shows on every Android build; on a keyless Android build the map/satellite switch is hidden (no imagery), so satellite is iOS and keyed Android only. Evidence: SparkyFitnessMobile/src/screens/RouteDetailScreen.tsx:292-296; SparkyFitnessMobile/src/screens/RouteDrawScreen.tsx:238,267,294-296 (Satellite only when canShowSatelliteMap()); SparkyFitnessMobile/src/utils/routeMapSupport.ts:35-40"
+  },
+  {
+   "pr": 3483,
+   "name_en": "Link a logged workout to a synced workout",
+   "change": "The link is now also offered on workouts imported from Hevy, not only those logged in SparkyFitness: shared/src/utils/exerciseCalorieLink.ts:36-43 (isCalorieLinkWorkoutSource adds 'hevy'), used by web SparkyFitnessFrontend/src/pages/Diary/ExerciseEntryDisplay.tsx:431 and ExercisePresetEntryDisplay.tsx:209, and mobile SparkyFitnessMobile/src/screens/ActivityDetailScreen.tsx:116 and WorkoutDetailScreen.tsx:211. Same on web, iOS and Android; the description ('a workout logged in SparkyFitness') could add Hevy workouts."
+  },
+  {
+   "pr": 3567,
+   "name_en": "Plate calculator",
+   "change": "Web: in the workout player it now also shows for barbell exercises of a workout started from a preset, whose equipment was dropped before (SparkyFitnessFrontend/src/utils/workoutPlayback.ts:466; canCalculatePlates={usesBarbell(exercise.equipment)} in src/pages/Diary/WorkoutPlaybackExercisesList.tsx:287). The entry's description stays right."
+  },
+  {
+   "pr": 3538,
+   "name_en": "Link a logged workout to a synced workout",
+   "change": "A synced strength session made of several entries (Garmin) is now offered as a single candidate and linked as a whole (SparkyFitnessServer/services/exerciseCalorieLinkService.ts:96-98, 191-226). Same on web and mobile; the description stays right."
+  }
+ ],
+ "possible_issues": [
+  {
+   "pr": 3520,
+   "issue": "The project's Android release workflow (.github/workflows/android.yml) builds only the phone app and does not set SPARKY_EMBED_WEAROS_RELEASE, so the released APK and AAB do not include the Wear OS app.",
+   "change": "Out of date on main, but not because of #3520: #3293 (merge fb745cf4a, commit 984fe7836) added a 'Build Wear OS Release APK' step and attaches wearos-release.apk to the GitHub release (/home/user/sf-main/.github/workflows/android.yml:142-152, 169), and the EAS workflow builds and submits a separate wearos profile (/home/user/sf-main/SparkyFitnessMobile/.eas/workflows/production-build-submission.yml:8-11, 29-34). #3520 only fixed that Play submission's track name (/home/user/sf-main/SparkyFitnessMobile/eas.json:50-53, wear:WearAlpha). Attribute the fix to #3293 when the issue is removed."
+  },
+  {
+   "pr": 3625,
+   "issue": "Starting a fast from the Wear OS watch fails (16:8 sent, 16-8 expected)",
+   "change": "Still present: the watch still sends the label as presetId (SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/Screens.kt:1420-1433; SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/WatchStores.kt:656-672), the Android bridge passes it through (SparkyFitnessMobile/modules/watch-connectivity/android/src/main/java/expo/modules/watchconnectivity/WatchConnectivityModule.kt:1163-1181) and the phone still looks it up by id (SparkyFitnessMobile/src/hooks/useWatchFastingBridge.ts:42-43; SparkyFitnessMobile/src/constants/fasting.ts:21-49, ids 16-8/18-6/20-4, no OMAD). Not fixed."
+  },
+  {
+   "pr": 3625,
+   "issue": "Saved routes offered for a Wear OS watch run do not work",
+   "change": "Still present: Route picker shown whenever recording on the watch outdoors (SparkyFitnessMobile/src/screens/RecordActivityScreen.tsx:308-309), Start on watch / Send to watch shown whenever a watch is paired (SparkyFitnessMobile/src/screens/RouteDetailScreen.tsx:55,302-360), sendRouteToWatch calls WatchConnectivity.sendRoute (SparkyFitnessMobile/src/services/watchRouteSync.ts:14-27), which only iOS implements (SparkyFitnessMobile/modules/watch-connectivity/ios/WatchConnectivityModule.swift:755; no route handling in the Android module or SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/). Not fixed."
+  },
+  {
+   "pr": 3625,
+   "issue": "Wear OS runs saved without map, splits or laps, and with wrongly timed heart rate",
+   "change": "Still present: the watch still records route rows as [lat, lon, time] (SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/WatchStores.kt:2834-2836), laps as durations (SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/WatchStores.kt:2971-2977) and heart rate as [elapsed seconds, bpm] (SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/WatchStores.kt:2813-2818), sent as-is (SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/PayloadAdapters.kt:970-973; Android module normalizedRunEvent passes them through, WatchConnectivityModule.kt:1463-1466), while the phone needs rows of 6 starting with time (SparkyFitnessMobile/src/utils/watchRun.ts:108-109,145-158) and lap clock times inside startedAt..endedAt (SparkyFitnessMobile/src/utils/watchRun.ts:180-182). Not fixed."
+  },
+  {
+   "pr": 3625,
+   "issue": "Wear OS ignores the phone's Haptic Feedback switch (native-haptics note)",
+   "change": "Fixed by this PR: SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/WatchStores.kt:32-43; SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/WearSessionManager.kt:101."
+  },
+  {
+   "pr": 3305,
+   "issue": "Android release workflow does not build or bundle the Wear OS app (SPARKY_EMBED_WEAROS_RELEASE not set)",
+   "change": "Resolved another way (with #3293): SparkyFitnessMobile/.eas/workflows/production-build-submission.yml:8-12,29-34 and SparkyFitnessMobile/eas.json:33-55 build and submit a separate Wear OS AAB to the wear:WearAlpha Play track. The phone build still does not embed it (SparkyFitnessMobile/plugins/withWearOs.ts:149, flag still unset), which is no longer needed."
+  },
+  {
+   "pr": 3293,
+   "issue": "Android release workflow does not build or bundle the Wear OS app (SPARKY_EMBED_WEAROS_RELEASE not set)",
+   "change": "Fixed, differently: .github/workflows/android.yml:135-170 tests and builds :wearos:assembleRelease with the release key and attaches wearos-release.apk to the release; docs/src/mobile-app/watch-apps.md:10-21. The phone APK/AAB still do not embed the watch app (SPARKY_EMBED_WEAROS_RELEASE unset), but the watch app is now distributed as its own APK (adb install) and, via #3305, through Play's Wear track. The summary item should be removed or reworded."
+  },
+  {
+   "pr": 3228,
+   "issue": "Summary 'Still open' line: consumed and burned on the Android calories widget, and more sizes or resizing for the calories and macros widgets (#2050), with #3228 'not merged yet'",
+   "change": "Now done by #3228: drop it from Still open. Evidence: SparkyFitnessMobile/targets/android-widget/res/xml/sparky_calorie_widget_info.xml:10 and sparky_macro_widget_info.xml:10 (resizeMode horizontal|vertical); SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/CalorieWidget.kt.tmpl:92-94,267-269"
+  }
+ ]
+}

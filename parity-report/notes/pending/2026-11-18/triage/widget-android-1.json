@@ -1,0 +1,434 @@
+[
+  {
+    "pr": 3611,
+    "user_visible": true,
+    "surfaces": {
+      "web": true,
+      "ios": false,
+      "android": false,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "Web only: the CSV 'Map CSV Headers' dialog now shows a short type/unit description under each field (food, diary, exercise, workout history and health importers; the health importer uses its own descriptions where a field means something else, such as unit), linked to the select for screen readers. Mobile still has no CSV import, so the web-only rows are unchanged in substance.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null,
+    "evidence_note": "SparkyFitnessFrontend/src/components/CsvImport/CsvHeaderMappingDialog.tsx:39,66,92,122,139; SparkyFitnessFrontend/src/components/CsvImport/csvFieldDescriptions.ts:32,321; SparkyFitnessFrontend/src/pages/CheckIn/HealthDataImportCSV.tsx:45 (critic-csv-header-mapping stays web_only and accurate)"
+  },
+  {
+    "pr": 3482,
+    "user_visible": true,
+    "surfaces": {
+      "web": false,
+      "ios": true,
+      "android": true,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "Mobile What's New gains two cards at the top, Lab results (opens the Lab results screen) and NFC tags (its 'Set up NFC tags' button only on phones with NFC, like the Settings row), and the content version goes to 6 so the banner shows again. Same on iOS and Android apart from the NFC hardware check.",
+    "affected_rows": [
+      {
+        "id": "admin-whatsnew-static-screen",
+        "change": "The card list in the description is out of date: the screen now starts with Lab results and NFC tags cards, followed by running, routes, check-in, strength, heart rate, reports, watch, weekly goal, medications, cycle, workout, iOS (Liquid Glass), chat, widget and photo. The NFC card's button needs a phone with NFC; the watch card's button a paired watch; the Liquid Glass card only where it can be used. Evidence: SparkyFitnessMobile/src/screens/WhatsNewScreen.tsx:719-728 (canUseLiquidGlass, hasPairedWatch, nfcSupported), 732-775 (labResults card, nfcTags card with CTA only when nfcSupported), 776-1050 (remaining cards); SparkyFitnessMobile/src/services/whatsNewBanner.ts:7 (WHATS_NEW_CONTENT_VERSION = 6)"
+      }
+    ],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3464,
+    "user_visible": true,
+    "surfaces": {
+      "web": false,
+      "ios": false,
+      "android": true,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "Bug fix, Android (and iOS 26+ with Liquid Glass off): twelve pushed screens (run programs and calendar, workout/edit/race, fitness tests and result, personal records, lab results and detail, watch run live, run summary) drew their custom header under the status bar; they now pad it with the safe-area inset. Record activity rendered no header bar at all on that path (no title such as 'Outdoor run', no back button) and now renders it. No audit row describes this bug, and the header rows (screen-drawn header on Android, native on iOS) stay accurate.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null,
+    "evidence_note": "SparkyFitnessMobile/src/screens/RecordActivityScreen.tsx (renders the useScreenHeader bar with insets.top), SparkyFitnessMobile/__tests__/navigation/nativeHeaderContract.test.ts (contract test); rows plat-services-native-headers and missed-plat-components-report-screen-header unchanged in substance"
+  },
+  {
+    "pr": 3454,
+    "user_visible": true,
+    "surfaces": {
+      "web": true,
+      "ios": false,
+      "android": false,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "Web Reports > Nutrition (charts tab) is now a customizable widget grid (page key 'reports-nutrients', saved on the server per user): the weekly alcohol card, the hydration chart, the Nutrition Summary and one widget per nutrient chart can be dragged, resized, hidden/restored, maximized and reset. Which nutrient charts show is now chosen by hiding widgets; the 'Report (Chart)' group was removed from Settings > Nutrient Display, and an old Report (Chart) choice only seeds the hidden set until a layout is saved (otherwise calories, protein, carbs and fat show). Mobile unchanged.",
+    "affected_rows": [
+      {
+        "id": "reports-section-toggles",
+        "change": "Web is no longer limited to the Measurements grid and the medication report: the Nutrition charts tab now also lets you hide/restore each card and chart and reset the layout. Other web reports still have no section toggles, while mobile has them for every report. Evidence: SparkyFitnessFrontend/src/pages/Reports/Reports.tsx:274-282 (WidgetGrid pageKey='reports-nutrients'); SparkyFitnessFrontend/src/components/widgets/WidgetGrid.tsx:50,124-126 (defaultHidden, hidden set); SparkyFitnessServer/services/dashboardLayoutService.ts:10-15 ('reports-nutrients' allowed)"
+      },
+      {
+        "id": "reports-nutrition-charts-grid",
+        "change": "The per-nutrient charts are now widgets in the Nutrition tab's grid, alongside the alcohol, hydration and summary cards, and can be moved, resized, hidden and maximized; they are no longer filtered by the 'Report (Chart)' preference (it only seeds the initially hidden charts; default visible: calories, protein, carbs, fat). Mobile still shows one nutrient at a time. Evidence: SparkyFitnessFrontend/src/pages/Reports/NutritionChartsGrid.tsx:52-66 (nutrient: widget keys), 75 (generateReportsNutrientsDefaultLayouts), 352 (useNutritionChartWidgets), 498-545 (alcohol, hydration, summary and per-nutrient widgets); SparkyFitnessFrontend/src/pages/Reports/Reports.tsx:210-245 (legacy report_chart preference seeds defaultHidden), 274-282"
+      },
+      {
+        "id": "reports-nutrient-display-groups",
+        "change": "Web no longer has a 'Report (Chart)' group in Settings > Nutrient Display; it keeps only 'Report (Tabular)' for reports, and the charted nutrients are picked by hiding or restoring widgets in the Nutrition tab's grid (per user, not per desktop/mobile once saved). Mobile unchanged. Evidence: SparkyFitnessFrontend/src/pages/Settings/NutrientDisplaySettings.tsx:61-81 (five groups, no report_chart); SparkyFitnessFrontend/src/pages/Reports/Reports.tsx:210-212 (old report_chart preference read only as a default), 274-282"
+      },
+      {
+        "id": "settings-nutrient-display",
+        "change": "Web evidence is out of date: Nutrient Display now has five groups (Summary, Quick Info, Food Database, Goal, Report Tabular); 'Report Chart' was removed and replaced by hiding charts in the Nutrition report grid. Evidence: SparkyFitnessFrontend/src/pages/Settings/NutrientDisplaySettings.tsx:61-81"
+      },
+      {
+        "id": "reports-nutrition-fats-micros-custom",
+        "change": "Web evidence 'only appear as individual charts if enabled under Report (Chart)' is now wrong: those nutrient charts are widgets of the Nutrition grid, shown unless hidden there (hidden by default apart from calories and macros). Web still has no period-average cards for fats, micronutrients or chosen nutrients. Evidence: SparkyFitnessFrontend/src/pages/Reports/Reports.tsx:224-245; SparkyFitnessFrontend/src/pages/Reports/NutritionChartsGrid.tsx:540-545"
+      }
+    ],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3420,
+    "user_visible": true,
+    "surfaces": {
+      "web": false,
+      "ios": true,
+      "android": true,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "Fix to NFC food tags (#3411): when the amount screen switches a library food to a converted unit (oz on a gram food), the app first saves that unit as a serving of the food and points the tag at it, instead of producing a tag the server refuses; a serving edited to another unit asks for one of the food's servings. Part of the NFC tags feature (see #3316); no audit row.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null,
+    "evidence_note": "SparkyFitnessMobile/src/screens/FoodEntryAddScreen.tsx (action-tag mode saves a converted unit as a serving before returning it)"
+  },
+  {
+    "pr": 3411,
+    "user_visible": true,
+    "surfaces": {
+      "web": false,
+      "ios": true,
+      "android": true,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "NFC tags can now log a food or a saved meal, not only water: setup offers 'Water or drink' and 'Food or meal' (the logging search and amount screen), 'Add NFC tag' rows on food and meal details, 'Log to' by time of day or a fixed meal type, and Undo removes exactly the logged entry. Scanning or creating a food inside a picker (water container, tag) now returns it instead of logging it. Server runs the food/meal actions. Same on iOS and Android; not on the web. Extends the NFC tags new feature from #3316 (one entry).",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": {
+      "name": "NFC tags: log water, a food or a saved meal with a tap (same entry as #3316)",
+      "description": "Set up an NFC sticker from Settings > NFC tags, a water container, a food or a saved meal; one tap with the phone (app closed or open) logs the drink, food or meal saved with the tag, with Undo, optional 'Ask before logging', double-tap protection and meal type by time of day or fixed. The tag holds only a https://tag.sparkyfitness.com/t/<code> link; the action is stored on the user's server. iPhone (XS or later) shows a banner to tap; Android 15 and older opens the app directly, Android 16 may show a notification first; Android shows its own waiting card and asks to turn NFC on, iPhone uses the system sheet. Not on the web. Translated into de, fr, pl, pt-BR only.",
+      "web": "No",
+      "ios": "Yes",
+      "android": "Yes",
+      "watch": "none",
+      "evidence": "SparkyFitnessMobile/src/screens/SettingsScreen.tsx:62,408-417 (NFC tags row only with NFC hardware); SparkyFitnessMobile/App.tsx:480 (https://tag.sparkyfitness.com prefix), 510 (ActionTagScan 't/:code'), 781-795 (ActionTags, ActionTagForm, ActionTagScan screens); SparkyFitnessMobile/app.config.ts:140 (nfcLinks), 228 (iOS associatedDomains applinks), 245-258 (Android verified https intent filter), 316 (react-native-nfc-manager); SparkyFitnessMobile/plugins/withNfcTagIntent.ts (NDEF_DISCOVERED filter for Android 15 and older); SparkyFitnessMobile/plugins/withQuickActionLaunchGuard.ts (tag intents not replayed on restore); SparkyFitnessMobile/src/services/nfc/nfcService.ts:22-30 (Android reader mode), 52-58 (NFC switch Android only), 202-204 (iOS sheet message); SparkyFitnessMobile/src/components/NfcWaitingCard.tsx:23 (Android only); SparkyFitnessMobile/src/screens/ActionTagScanScreen.tsx:75-82 (Tap to undo); SparkyFitnessMobile/src/screens/FoodDetailScreen.tsx:581, MealDetailScreen.tsx:566, WaterContainerEditScreen.tsx:691 (Add NFC tag rows); shared/src/schemas/api/ActionTags.api.zod.ts:27-61 (water, food, meal actions; fixed or time-of-day meal type), 82 (ask_before_running); SparkyFitnessServer/SparkyFitnessServer.ts:881 (/api/v2/action-tags); SparkyFitnessTag/.well-known/apple-app-site-association, assetlinks.json; docs/src/features/nfc-tags.md; no action-tag code in SparkyFitnessFrontend/src; actionTags strings only in de, fr, pl, pt-BR of the 15 shipped locales"
+    }
+  },
+  {
+    "pr": 3329,
+    "user_visible": true,
+    "surfaces": {
+      "web": false,
+      "ios": false,
+      "android": true,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "Follow-up fixes to the keyless Android map (#3256): route line layer order and per-line color/width, padding and OSM attribution on the static route preview, and safe-area top insets on the route screens' headers. No row facts change beyond #3256.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null,
+    "evidence_note": "SparkyFitnessMobile/src/components/maps/maplibreMapSurface.tsx:149,255-257 (attribution, style); SparkyFitnessMobile/src/components/exerciseStats/RouteTileMap.tsx:65,101 (OSM credit badge)"
+  },
+  {
+    "pr": 3256,
+    "user_visible": true,
+    "surfaces": {
+      "web": false,
+      "ios": false,
+      "android": true,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "Android builds without a Google Maps key now draw cardio routes, saved routes, route drawing/editing and route generation over a real map: MapLibre with OpenStreetMap vector tiles from OpenFreeMap (no key, billing or Play Services); keyed builds keep Google Maps, iOS keeps Apple Maps. 'Draw', 'Edit route on map' and 'Generate' are therefore offered on every Android build. The keyless map has no satellite layer (the editor hides its Satellite button) and needs a network connection for tiles.",
+    "affected_rows": [
+      {
+        "id": "native-route-map",
+        "change": "Android now always draws the route over a real map: Google Maps when the build has GOOGLE_MAPS_ANDROID_API_KEY, otherwise MapLibre over keyless OpenStreetMap (OpenFreeMap) vector tiles with an OSM credit; iOS still uses Apple Maps. The plain line without a map is no longer used on either platform. Remaining difference: the OSM tiles need a network connection (blank map area offline) and have no satellite imagery. Evidence: SparkyFitnessMobile/src/utils/routeMapSupport.ts:14-16 (canShowRouteMap: ios or android), 23-28 (usesGoogleMapsOnAndroid), 35-40 (satellite only iOS or keyed Google Maps); SparkyFitnessMobile/src/components/maps/MapSurface.android.tsx:13-20; SparkyFitnessMobile/src/components/maps/mapStyles.ts:11-12 (OpenFreeMap styles); SparkyFitnessMobile/src/components/exerciseStats/RouteMap.tsx:16-17; SparkyFitnessMobile/src/components/exerciseStats/RouteTileMap.tsx:65,101 (OSM credit on keyless Android); SparkyFitnessMobile/app.config.ts:20-21,375"
+      },
+      {
+        "id": "reports-activity-route-map",
+        "change": "Android now always draws the route over a real map: Google Maps when the build has GOOGLE_MAPS_ANDROID_API_KEY, otherwise MapLibre over keyless OpenStreetMap (OpenFreeMap) vector tiles with an OSM credit; iOS still uses Apple Maps. The plain line without a map is no longer used on either platform. Remaining difference: the OSM tiles need a network connection (blank map area offline) and have no satellite imagery. Evidence: SparkyFitnessMobile/src/utils/routeMapSupport.ts:14-16 (canShowRouteMap: ios or android), 23-28 (usesGoogleMapsOnAndroid), 35-40 (satellite only iOS or keyed Google Maps); SparkyFitnessMobile/src/components/maps/MapSurface.android.tsx:13-20; SparkyFitnessMobile/src/components/maps/mapStyles.ts:11-12 (OpenFreeMap styles); SparkyFitnessMobile/src/components/exerciseStats/RouteMap.tsx:16-17; SparkyFitnessMobile/src/components/exerciseStats/RouteTileMap.tsx:65,101 (OSM credit on keyless Android); SparkyFitnessMobile/app.config.ts:20-21,375; used in SparkyFitnessMobile/src/screens/CardioSessionScreen.tsx:231"
+      },
+      {
+        "id": "exercise-route-map",
+        "change": "Android now always draws the route over a real map: Google Maps when the build has GOOGLE_MAPS_ANDROID_API_KEY, otherwise MapLibre over keyless OpenStreetMap (OpenFreeMap) vector tiles with an OSM credit; iOS still uses Apple Maps. The plain line without a map is no longer used on either platform. Remaining difference: the OSM tiles need a network connection (blank map area offline) and have no satellite imagery. Evidence: SparkyFitnessMobile/src/utils/routeMapSupport.ts:14-16 (canShowRouteMap: ios or android), 23-28 (usesGoogleMapsOnAndroid), 35-40 (satellite only iOS or keyed Google Maps); SparkyFitnessMobile/src/components/maps/MapSurface.android.tsx:13-20; SparkyFitnessMobile/src/components/maps/mapStyles.ts:11-12 (OpenFreeMap styles); SparkyFitnessMobile/src/components/exerciseStats/RouteMap.tsx:16-17; SparkyFitnessMobile/src/components/exerciseStats/RouteTileMap.tsx:65,101 (OSM credit on keyless Android); SparkyFitnessMobile/app.config.ts:20-21,375"
+      },
+      {
+        "id": "plat-native-route-map",
+        "change": "Android now always draws the route over a real map: Google Maps when the build has GOOGLE_MAPS_ANDROID_API_KEY, otherwise MapLibre over keyless OpenStreetMap (OpenFreeMap) vector tiles with an OSM credit; iOS still uses Apple Maps. The plain line without a map is no longer used on either platform. Remaining difference: the OSM tiles need a network connection (blank map area offline) and have no satellite imagery. Evidence: SparkyFitnessMobile/src/utils/routeMapSupport.ts:14-16 (canShowRouteMap: ios or android), 23-28 (usesGoogleMapsOnAndroid), 35-40 (satellite only iOS or keyed Google Maps); SparkyFitnessMobile/src/components/maps/MapSurface.android.tsx:13-20; SparkyFitnessMobile/src/components/maps/mapStyles.ts:11-12 (OpenFreeMap styles); SparkyFitnessMobile/src/components/exerciseStats/RouteMap.tsx:16-17; SparkyFitnessMobile/src/components/exerciseStats/RouteTileMap.tsx:65,101 (OSM credit on keyless Android); SparkyFitnessMobile/app.config.ts:20-21,375; used in SparkyFitnessMobile/src/screens/RunSummaryScreen.tsx:626, CardioSessionScreen.tsx:231, RecordActivityScreen.tsx:1840"
+      },
+      {
+        "id": "missed-plat-screens-route-map",
+        "change": "Android now always draws the route over a real map: Google Maps when the build has GOOGLE_MAPS_ANDROID_API_KEY, otherwise MapLibre over keyless OpenStreetMap (OpenFreeMap) vector tiles with an OSM credit; iOS still uses Apple Maps. The plain line without a map is no longer used on either platform. Remaining difference: the OSM tiles need a network connection (blank map area offline) and have no satellite imagery. Evidence: SparkyFitnessMobile/src/utils/routeMapSupport.ts:14-16 (canShowRouteMap: ios or android), 23-28 (usesGoogleMapsOnAndroid), 35-40 (satellite only iOS or keyed Google Maps); SparkyFitnessMobile/src/components/maps/MapSurface.android.tsx:13-20; SparkyFitnessMobile/src/components/maps/mapStyles.ts:11-12 (OpenFreeMap styles); SparkyFitnessMobile/src/components/exerciseStats/RouteMap.tsx:16-17; SparkyFitnessMobile/src/components/exerciseStats/RouteTileMap.tsx:65,101 (OSM credit on keyless Android); SparkyFitnessMobile/app.config.ts:20-21,375; used in SparkyFitnessMobile/src/screens/RecordActivityScreen.tsx:1840, RunSummaryScreen.tsx:626, CardioSessionScreen.tsx:231"
+      },
+      {
+        "id": "plat-services-route-map",
+        "change": "Android now always draws the route over a real map: Google Maps when the build has GOOGLE_MAPS_ANDROID_API_KEY, otherwise MapLibre over keyless OpenStreetMap (OpenFreeMap) vector tiles with an OSM credit; iOS still uses Apple Maps. The plain line without a map is no longer used on either platform. Remaining difference: the OSM tiles need a network connection (blank map area offline) and have no satellite imagery. Evidence: SparkyFitnessMobile/src/utils/routeMapSupport.ts:14-16 (canShowRouteMap: ios or android), 23-28 (usesGoogleMapsOnAndroid), 35-40 (satellite only iOS or keyed Google Maps); SparkyFitnessMobile/src/components/maps/MapSurface.android.tsx:13-20; SparkyFitnessMobile/src/components/maps/mapStyles.ts:11-12 (OpenFreeMap styles); SparkyFitnessMobile/src/components/exerciseStats/RouteMap.tsx:16-17; SparkyFitnessMobile/src/components/exerciseStats/RouteTileMap.tsx:65,101 (OSM credit on keyless Android); SparkyFitnessMobile/app.config.ts:20-21,375"
+      },
+      {
+        "id": "exercise-run-summary",
+        "change": "Platform note 'Real map on Android only with a Google Maps key' is no longer true: every Android build shows the route over a map (OpenStreetMap without a key). Evidence: SparkyFitnessMobile/src/screens/RunSummaryScreen.tsx:626; SparkyFitnessMobile/src/utils/routeMapSupport.ts:14-16; SparkyFitnessMobile/src/components/maps/MapSurface.android.tsx:13-20"
+      },
+      {
+        "id": "exercise-cardio-session-detail",
+        "change": "The current note's last sentence ('On Android the real map still needs a build with a Google Maps key') and the row's platform note are now wrong: Android without a key draws the route over OpenStreetMap with MapLibre. Evidence: SparkyFitnessMobile/src/screens/CardioSessionScreen.tsx:231; SparkyFitnessMobile/src/components/exerciseStats/RouteMap.tsx:16-17; SparkyFitnessMobile/src/utils/routeMapSupport.ts:14-16"
+      }
+    ],
+    "new_features_entries": [
+      {
+        "name_en": "Saved routes library",
+        "change": "Description 'on Android, drawing on a map needs a build with a Google Maps key' and evidence 'routeMapSupport.ts:15-21 (Android only with a Google Maps key)' are now wrong: Draw is offered on every Android build (OpenStreetMap without a key). Evidence: SparkyFitnessMobile/src/screens/RoutesScreen.tsx:78 (Draw when canShowRouteMap()); SparkyFitnessMobile/src/utils/routeMapSupport.ts:14-16"
+      },
+      {
+        "name_en": "Route generation and route style",
+        "change": "'on Android this needs a build with a Google Maps key' is now wrong: Generate needs only a routing provider; keyless Android shows the generated route on OpenStreetMap. Evidence: SparkyFitnessMobile/src/screens/RoutesScreen.tsx:86 (canGenerate && canShowRouteMap()); SparkyFitnessMobile/src/screens/RouteGenerateScreen.tsx:31,261 (MapSurface); SparkyFitnessMobile/src/utils/routeMapSupport.ts:14-16"
+      },
+      {
+        "name_en": "Edit a saved route on the map",
+        "change": "'hidden on Android builds without a Google Maps key' is now wrong: Edit route on map shows on every Android build; on a keyless Android build the map/satellite switch is hidden (no imagery), so satellite is iOS and keyed Android only. Evidence: SparkyFitnessMobile/src/screens/RouteDetailScreen.tsx:292-296; SparkyFitnessMobile/src/screens/RouteDrawScreen.tsx:238,267,294-296 (Satellite only when canShowSatelliteMap()); SparkyFitnessMobile/src/utils/routeMapSupport.ts:35-40"
+      }
+    ],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3316,
+    "user_visible": true,
+    "surfaces": {
+      "web": false,
+      "ios": true,
+      "android": true,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "New NFC tags (action tags): mobile screens to set up, list, rewrite and remove tags (Settings > NFC tags on phones with NFC, and 'Add NFC tag' on a water container), a tap that logs water with Undo, server table/routes (/api/v2/action-tags) with RLS. Tag links are https://tag.sparkyfitness.com/t/<code>: iOS through Associated Domains, Android through a verified https link (16+) or NDEF_DISCOVERED (15 and older). Android's launch guard now also drops a restored tag intent so a drink is not logged twice. Not on the web.",
+    "affected_rows": [
+      {
+        "id": "settings-hub",
+        "change": "The mobile Settings list now also has an 'NFC tags' row, shown on both iOS and Android only when the phone has NFC; web has no equivalent (tags are mobile-only). Evidence: SparkyFitnessMobile/src/screens/SettingsScreen.tsx:62,408-417; SparkyFitnessMobile/App.tsx:781-795"
+      },
+      {
+        "id": "native-deep-links",
+        "change": "The app now also opens https://tag.sparkyfitness.com/t/<code> links (route 't/:code' to the NFC tag scan screen) on both platforms, iOS through Associated Domains and Android through a verified https intent filter (Android 16+) or an NDEF_DISCOVERED filter (15 and older); on Android the launch guard also drops a tag link or NDEF intent when the app is restored, so a tap is not replayed. Evidence: SparkyFitnessMobile/App.tsx:480 (prefixes), 510 (ActionTagScan 't/:code'); SparkyFitnessMobile/app.config.ts:228,245-258; SparkyFitnessMobile/plugins/withNfcTagIntent.ts; SparkyFitnessMobile/plugins/withQuickActionLaunchGuard.ts:23-36 (TAG_HOST, NDEF_ACTION in LAUNCH_GUARD)"
+      }
+    ],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": {
+      "name": "NFC tags: log water, a food or a saved meal with a tap",
+      "description": "Set up an NFC sticker from Settings > NFC tags, a water container, a food or a saved meal; one tap with the phone (app closed or open) logs the drink, food or meal saved with the tag, with Undo, optional 'Ask before logging', double-tap protection and meal type by time of day or fixed. The tag holds only a https://tag.sparkyfitness.com/t/<code> link; the action is stored on the user's server. iPhone (XS or later) shows a banner to tap; Android 15 and older opens the app directly, Android 16 may show a notification first; Android shows its own waiting card and asks to turn NFC on, iPhone uses the system sheet. Not on the web. Translated into de, fr, pl, pt-BR only. (#3316 adds water tags; #3411 adds food and meal tags; #3420 fixes food tag units; #3310 adds the tag site; #3482 adds the What's New card).",
+      "web": "No",
+      "ios": "Yes",
+      "android": "Yes",
+      "watch": "none",
+      "evidence": "SparkyFitnessMobile/src/screens/SettingsScreen.tsx:62,408-417 (NFC tags row only with NFC hardware); SparkyFitnessMobile/App.tsx:480 (https://tag.sparkyfitness.com prefix), 510 (ActionTagScan 't/:code'), 781-795 (ActionTags, ActionTagForm, ActionTagScan screens); SparkyFitnessMobile/app.config.ts:140 (nfcLinks), 228 (iOS associatedDomains applinks), 245-258 (Android verified https intent filter), 316 (react-native-nfc-manager); SparkyFitnessMobile/plugins/withNfcTagIntent.ts (NDEF_DISCOVERED filter for Android 15 and older); SparkyFitnessMobile/plugins/withQuickActionLaunchGuard.ts (tag intents not replayed on restore); SparkyFitnessMobile/src/services/nfc/nfcService.ts:22-30 (Android reader mode), 52-58 (NFC switch Android only), 202-204 (iOS sheet message); SparkyFitnessMobile/src/components/NfcWaitingCard.tsx:23 (Android only); SparkyFitnessMobile/src/screens/ActionTagScanScreen.tsx:75-82 (Tap to undo); SparkyFitnessMobile/src/screens/FoodDetailScreen.tsx:581, MealDetailScreen.tsx:566, WaterContainerEditScreen.tsx:691 (Add NFC tag rows); shared/src/schemas/api/ActionTags.api.zod.ts:27-61 (water, food, meal actions; fixed or time-of-day meal type), 82 (ask_before_running); SparkyFitnessServer/SparkyFitnessServer.ts:881 (/api/v2/action-tags); SparkyFitnessTag/.well-known/apple-app-site-association, assetlinks.json; docs/src/features/nfc-tags.md; no action-tag code in SparkyFitnessFrontend/src; actionTags strings only in de, fr, pl, pt-BR of the 15 shipped locales"
+    }
+  },
+  {
+    "pr": 3310,
+    "user_visible": true,
+    "surfaces": {
+      "web": false,
+      "ios": true,
+      "android": true,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "Adds the static SparkyFitnessTag site (tag.sparkyfitness.com on Cloudflare): Apple's apple-app-site-association and Android's assetlinks.json so NFC tag links (/t/<code>) open the app, and a 'get the app' page when it is not installed. Infrastructure for the NFC tags feature (#3316); no app code and no audit row.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null,
+    "evidence_note": "SparkyFitnessTag/.well-known/apple-app-site-association, SparkyFitnessTag/.well-known/assetlinks.json, SparkyFitnessTag/index.html, SparkyFitnessTag/wrangler.jsonc"
+  },
+  {
+    "pr": 3228,
+    "user_visible": true,
+    "surfaces": {
+      "web": false,
+      "ios": false,
+      "android": true,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "Android calories, macros and water widgets become resizable (Glance SizeMode.Responsive); wider sizes add Diary and fasting shortcuts, the calories widget adds Goal/Food/Burned when wide and tall, the macros widget grams against goal and kcal eaten; the Android calorie snapshot gains food and burned. Notes for it are prepared in notes/pending/pr-3228.json (18 entries); later PRs make five of them wrong or outdated (see pending_notes_check).",
+    "affected_rows": [
+      {
+        "id": "native-widget-calories",
+        "change": "Closes the open note: the Android calories widget is resizable (default 2x1, horizontal|vertical, home screen only); every size keeps kcal left, the bar and Search/Scan; wide (230 dp) adds Diary and fasting shortcuts; wide and at least 160 dp tall adds Goal, Food and Burned like the iOS medium widget. Labels translated in de, es, fr, pl, pt-BR, ru only; kJ for kJ accounts (#3452). Lock Screen still iOS-only. Evidence: SparkyFitnessMobile/targets/android-widget/res/xml/sparky_calorie_widget_info.xml:5-6,10-14; SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WidgetSizes.kt:25,43,111; SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/CalorieWidget.kt.tmpl:66,91-94,120-131,267-269,381; SparkyFitnessMobile/targets/widget/widgets.swift:251-261,267-285,324-325"
+      },
+      {
+        "id": "native-widget-macros",
+        "change": "Closes the open note: resizable from 2x2; wide shows grams against each goal plus Diary/fasting shortcuts; wide and 255 dp tall adds the kcal eaten line. iOS ring still has no goals. Evidence: SparkyFitnessMobile/targets/android-widget/res/xml/sparky_macro_widget_info.xml:5-6,10-14; SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/MacroWidget.kt.tmpl:69,94-95,109-110,123-139,184-199,286-300; SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WidgetSizes.kt:63,111; SparkyFitnessMobile/targets/widget/macroWidget.swift:355-372,429-430"
+      },
+      {
+        "id": "plat-native-home-widgets",
+        "change": "Android widgets no longer fixed-size: resizable from 2x1/2x2 with richer wide/tall layouts; iOS keeps small/medium. Evidence: SparkyFitnessMobile/targets/android-widget/res/xml/sparky_calorie_widget_info.xml:10, sparky_macro_widget_info.xml:10; SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WidgetSizes.kt:25-113"
+      },
+      {
+        "id": "plat-services-widget-calories",
+        "change": "Android snapshot now has food and burned (shared buildCalorieWidgetSnapshot, also from the background refresh); shown when wide and tall. Evidence: SparkyFitnessMobile/src/services/calorieWidgetSnapshot.ts:23-37; SparkyFitnessMobile/src/services/androidWidgetSyncService.ts:93-104; SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/CalorieWidget.kt.tmpl:92-94,381"
+      },
+      {
+        "id": "plat-services-widget-macros",
+        "change": "Difference stays (bars vs ring); wide Android adds grams against goal and kcal eaten. Evidence: SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/MacroWidget.kt.tmpl:123-139,286-300"
+      },
+      {
+        "id": "diary-home-widgets",
+        "change": "Android widgets resizable with Diary/fasting shortcuts when wide. Evidence: SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/CalorieWidget.kt.tmpl:116-131; SparkyFitnessMobile/App.tsx:489,496"
+      },
+      {
+        "id": "goals-widgets",
+        "change": "Resizing and the Goal/Food/Burned and grams-against-goal figures. Evidence: SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/CalorieWidget.kt.tmpl:267-269; SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/MacroWidget.kt.tmpl:308-329"
+      },
+      {
+        "id": "native-widget-water",
+        "change": "Water widget resizable (one row to side-by-side). Evidence: SparkyFitnessMobile/targets/android-widget/res/xml/sparky_water_widget_info.xml:10-14; SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WaterWidget.kt.tmpl:72,119-120,153,205; SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WidgetSizes.kt:82,91,113"
+      },
+      {
+        "id": "plat-native-water-widget",
+        "change": "Same as native-widget-water. Evidence: SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WaterWidget.kt.tmpl:72,119-120"
+      },
+      {
+        "id": "plat-services-widget-water",
+        "change": "Resizable water widget; translations now wider (see pending_notes_check). Evidence: SparkyFitnessMobile/targets/android-widget/res/xml/sparky_water_widget_info.xml:10-14"
+      },
+      {
+        "id": "missed-plat-screens-water-widget",
+        "change": "Resizable; side-by-side like iOS medium when wide. Evidence: SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WaterWidget.kt.tmpl:119,153"
+      },
+      {
+        "id": "native-deep-links",
+        "change": "Diary and fasting links now used by the wider Android widgets. Evidence: SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/CalorieWidget.kt.tmpl:116-119; SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/MacroWidget.kt.tmpl:103-106; SparkyFitnessMobile/App.tsx:489,496"
+      },
+      {
+        "id": "native-native-surface-language",
+        "change": "New Android widget labels; their translation state changed after merge (see pending_notes_check). Evidence: SparkyFitnessMobile/targets/android-widget/res/values/widget_strings.xml:17-25"
+      },
+      {
+        "id": "plat-services-widget-background-refresh",
+        "change": "Background refresh also carries food and burned. Evidence: SparkyFitnessMobile/src/services/androidWidgetSyncService.ts:93-104,185-195"
+      }
+    ],
+    "new_features_entries": [],
+    "possible_issues": [
+      {
+        "issue": "Summary 'Still open' line: consumed and burned on the Android calories widget, and more sizes or resizing for the calories and macros widgets (#2050), with #3228 'not merged yet'",
+        "change": "Now done by #3228: drop it from Still open. Evidence: SparkyFitnessMobile/targets/android-widget/res/xml/sparky_calorie_widget_info.xml:10 and sparky_macro_widget_info.xml:10 (resizeMode horizontal|vertical); SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/CalorieWidget.kt.tmpl:92-94,267-269"
+      }
+    ],
+    "new_feature": null,
+    "pending_notes_check": [
+      {
+        "id": "native-widget-calories",
+        "status": "wrong",
+        "why": "Says the new Goal, Food and Burned labels and the shortcuts' screen reader labels are English in every other language. Now the labels #3228 added (widget_goal, widget_food, widget_burned, widget_kcal_eaten, widget_amount_of_goal, widget_open_diary, widget_open_fasting) are now in SparkyFitnessMobile/targets/android-widget/res/values-de/widget_strings.xml, SparkyFitnessMobile/targets/android-widget/res/values-es/widget_strings.xml, SparkyFitnessMobile/targets/android-widget/res/values-fr/widget_strings.xml, SparkyFitnessMobile/targets/android-widget/res/values-pl/widget_strings.xml, SparkyFitnessMobile/targets/android-widget/res/values-pt-rBR/widget_strings.xml, SparkyFitnessMobile/targets/android-widget/res/values-ru/widget_strings.xml (added by the Weblate sync #3435), and still missing from values-{hu,it,lv,nb-rNO,nl,tr,zh-rCN,zh-rTW,b+yue+Hant}. Also misses kJ: #3452 adds kJ: snapshots carry energyUnit and the widgets show 'kJ left' / 'kJ eaten' and convert food, burned, goal and remaining for kJ accounts. Evidence: SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/CalorieWidget.kt.tmpl:104 (energyLeftRes), 336-344 (isKjSnapshot, energyFromKcal, energyLeftRes), 366-385 (parseSnapshot converts); SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/MacroWidget.kt.tmpl:262-268,289-293 (kJ left / kJ eaten); SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/QuickSettingsTiles.kt.tmpl:116 (Calories left tile); SparkyFitnessMobile/targets/widget/SharedHelpers.swift:67-99 (WidgetEnergyUnit); SparkyFitnessMobile/targets/widget/widgets.swift:50-62,135,228,240,248; SparkyFitnessMobile/targets/widget/macroWidget.swift:8-13,188,199; SparkyFitnessMobile/src/services/calorieWidgetSnapshot.ts:20-37; SparkyFitnessMobile/src/services/androidWidgetSyncService.ts:93-118,185-195; SparkyFitnessMobile/targets/android-widget/res/values/widget_strings.xml:9-10,20 (widget_kj_left, widget_kj_left_empty, widget_kj_eaten: translated only in values-de, values-fr, values-pl, values-pt-rBR, via #3477, #3495, #3506; iOS widget.kj* also only de, fr, pl, pt-BR .lproj via #3477, #3495, #3506, #3552)"
+      },
+      {
+        "id": "native-widget-macros",
+        "status": "wrong",
+        "why": "Says the 'kcal eaten' text and the shortcut labels are English in every other language; now translated in de, es, fr, pl, pt-BR, ru (#3435). 'kcal left'/'kcal eaten' are now 'kJ left'/'kJ eaten' for kJ accounts, and the iOS ring centre shows kJ too (#3452). SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/MacroWidget.kt.tmpl:262-268,289-293; SparkyFitnessMobile/targets/widget/macroWidget.swift:188,199; the labels #3228 added (widget_goal, widget_food, widget_burned, widget_kcal_eaten, widget_amount_of_goal, widget_open_diary, widget_open_fasting) are now in SparkyFitnessMobile/targets/android-widget/res/values-de/widget_strings.xml, SparkyFitnessMobile/targets/android-widget/res/values-es/widget_strings.xml, SparkyFitnessMobile/targets/android-widget/res/values-fr/widget_strings.xml, SparkyFitnessMobile/targets/android-widget/res/values-pl/widget_strings.xml, SparkyFitnessMobile/targets/android-widget/res/values-pt-rBR/widget_strings.xml, SparkyFitnessMobile/targets/android-widget/res/values-ru/widget_strings.xml (added by the Weblate sync #3435), and still missing from values-{hu,it,lv,nb-rNO,nl,tr,zh-rCN,zh-rTW,b+yue+Hant}"
+      },
+      {
+        "id": "plat-native-home-widgets",
+        "status": "wrong",
+        "why": "Last clause 'the new Android labels (Goal, Food, Burned, kcal eaten) are in English in every other language for now' is wrong: the labels #3228 added (widget_goal, widget_food, widget_burned, widget_kcal_eaten, widget_amount_of_goal, widget_open_diary, widget_open_fasting) are now in SparkyFitnessMobile/targets/android-widget/res/values-de/widget_strings.xml, SparkyFitnessMobile/targets/android-widget/res/values-es/widget_strings.xml, SparkyFitnessMobile/targets/android-widget/res/values-fr/widget_strings.xml, SparkyFitnessMobile/targets/android-widget/res/values-pl/widget_strings.xml, SparkyFitnessMobile/targets/android-widget/res/values-pt-rBR/widget_strings.xml, SparkyFitnessMobile/targets/android-widget/res/values-ru/widget_strings.xml (added by the Weblate sync #3435), and still missing from values-{hu,it,lv,nb-rNO,nl,tr,zh-rCN,zh-rTW,b+yue+Hant}. Layout and size claims still hold (WidgetSizes.kt and the res/xml files are unchanged since #3228)."
+      },
+      {
+        "id": "plat-services-widget-calories",
+        "status": "ok",
+        "why": "Still correct (Goal = food + remaining at SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/CalorieWidget.kt.tmpl:381; iOS medium Goal = snapshot goal at SparkyFitnessMobile/targets/widget/widgets.swift:283; iOS foreground only). Optionally add that the snapshot now carries the kJ unit (#3452); line numbers moved."
+      },
+      {
+        "id": "plat-services-widget-macros",
+        "status": "ok",
+        "why": "Still correct; 'kcal eaten' is shown as kJ for kJ accounts on both platforms since #3452 (SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/MacroWidget.kt.tmpl:289-293, SparkyFitnessMobile/targets/widget/macroWidget.swift:188-199)."
+      },
+      {
+        "id": "diary-home-widgets",
+        "status": "ok",
+        "why": "No translation or unit claim; layouts, tiles and controls unchanged (SparkyFitnessMobile/targets/android-widget/res/xml/*.xml:10-14; App.tsx:489,496 now hold the diary and fasting links)."
+      },
+      {
+        "id": "goals-widgets",
+        "status": "ok",
+        "why": "Unchanged; only the energy unit label is new (#3452)."
+      },
+      {
+        "id": "native-widget-water",
+        "status": "ok",
+        "why": "SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WaterWidget.kt.tmpl and WidgetSizes.kt unchanged since #3228."
+      },
+      {
+        "id": "plat-native-water-widget",
+        "status": "ok",
+        "why": "Unchanged since #3228."
+      },
+      {
+        "id": "plat-services-widget-water",
+        "status": "wrong",
+        "why": "Says its texts are translated only into es, pl, pt-BR, yue-Hant, zh-Hans and zh-Hant on both platforms. Android water strings are now also complete in SparkyFitnessMobile/targets/android-widget/res/values-de/widget_strings.xml, SparkyFitnessMobile/targets/android-widget/res/values-fr/widget_strings.xml, SparkyFitnessMobile/targets/android-widget/res/values-ru/widget_strings.xml (18 of 18; #3251 fr/ru, #3435 de) and partial in SparkyFitnessMobile/targets/android-widget/res/values-nl/widget_strings.xml (11 of 18; #3297); iOS widget.water.* now also in SparkyFitnessMobile/targets/widget/de.lproj, fr.lproj, nl.lproj, ru.lproj. Untranslated now: hu, it, lv, nb-NO, tr (and nl partly on Android). The string counts in its evidence (37 per folder) are out of date."
+      },
+      {
+        "id": "missed-plat-screens-water-widget",
+        "status": "ok",
+        "why": "No translation claim; layout unchanged."
+      },
+      {
+        "id": "native-deep-links",
+        "status": "outdated",
+        "why": "Its claims hold (diary/fasting only used by Android; nothing produces settings/heart-rate-zones or routes/generate), but the route list is now incomplete: 't/:code' under the new https://tag.sparkyfitness.com prefix (#3316, both platforms), 'oral-care' (#3474, iOS Live Activity), 'training-calendar' (#3626) and 'meals/import-mealie' (#3396); and the Android launch guard now also drops a restored NFC tag link or NDEF intent (#3316). SparkyFitnessMobile/App.tsx:479-512; SparkyFitnessMobile/plugins/withQuickActionLaunchGuard.ts:23-36."
+      },
+      {
+        "id": "plat-services-widget-language",
+        "status": "ok",
+        "why": "Neither hook changed: SparkyFitnessMobile/src/hooks/useIOSWidgetLanguageRefresh.ts:51-83 (en/pl, calorie and macro only), SparkyFitnessMobile/src/hooks/useWidgetLanguageRefresh.ts:39-92."
+      },
+      {
+        "id": "native-native-surface-language",
+        "status": "wrong",
+        "why": "Several translation claims are out of date: (1) Android water widget texts and the Log water / Calories left tile names are now also in de, fr, ru (complete) and nl (tile names and 11 of 18 water strings) (#3251, #3297, #3435); (2) the Log water shortcut's long label (quickActions.logWaterInBackground) is now in 9 locales: de, es, fr, pl, pt-BR, ru, yue-Hant, zh-Hans, zh-Hant (SparkyFitnessMobile/src/localization/locales/*/translation.json; nl and tr lack only that key); (3) the labels #3228 added are translated in de, es, fr, pl, pt-BR, ru; (4) shortcut titles are now untranslated only in hu, it, lv, nb-NO (ru has them); (5) iOS water widget and controls are now also in de, fr, ru and nl (12 of 14 control strings), so not 'the same six'. Still true: Log water results hard-coded English (targets/android-background-water unchanged), Latvian widget strings empty (SparkyFitnessMobile/targets/android-widget/res/values-lv/widget_strings.xml, SparkyFitnessMobile/targets/widget/lv.lproj), iOS hook en/pl only, watch apps English. New: kJ labels translated only in de, fr, pl, pt-BR."
+      },
+      {
+        "id": "plat-services-widget-background-refresh",
+        "status": "ok",
+        "why": "Still correct; the refresh now also reads the energy unit preference (SparkyFitnessMobile/src/services/androidWidgetSyncService.ts:185-195, falls back to kcal)."
+      },
+      {
+        "id": "plat-native-widget-refresh",
+        "status": "ok",
+        "why": "Receivers, midnight alarm and background task unchanged."
+      },
+      {
+        "id": "native-widget-lockscreen",
+        "status": "ok",
+        "why": "Still widgetCategory home_screen (SparkyFitnessMobile/targets/android-widget/res/xml/sparky_*_widget_info.xml:14)."
+      },
+      {
+        "id": "plat-native-lockscreen-widgets",
+        "status": "ok",
+        "why": "Unchanged."
+      }
+    ]
+  }
+]

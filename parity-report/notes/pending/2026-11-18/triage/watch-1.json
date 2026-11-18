@@ -1,0 +1,393 @@
+[
+ {
+  "pr": 3642,
+  "user_visible": true,
+  "surfaces": {
+   "web": false,
+   "ios": true,
+   "android": false,
+   "watch": true,
+   "server_only": false
+  },
+  "summary": "Apple Watch only: the protein, carbs and fat complications now reload when the phone sends new nutrition, instead of showing stale values. A fix; no audit row describes the bug.",
+  "affected_rows": [],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": null
+ },
+ {
+  "pr": 3625,
+  "user_visible": true,
+  "surfaces": {
+   "web": false,
+   "ios": false,
+   "android": true,
+   "watch": true,
+   "server_only": false
+  },
+  "summary": "Wear OS gets the opt-in 'New workout view' (Settings > Wear OS > New workout view, off by default): Log set button, Edit previous set, More page (set type, Plates, add/delete set, Swap, skip, delete/add exercise, water, undo set, discard), full-screen exercise demo pictures sent by the phone, a plate calculator using the bars and plates sent with the plan, countdown sound and haptic for the end of rests and timed holds, a 'Get ready' countdown before holds, rest -15/+15, confirmations before finish, discard and deletes, per-set RPE 1 to 10, and a summary with volume, average/max heart rate and a 1-10 workout effort rating sent to the phone and saved. The Wear OS app also now follows the phone's Haptic Feedback switch. The classic Wear OS view is unchanged (RPE 5-10, no -15, no confirmations, no effort rating). Does not touch fasting, routes or run payloads: the Wear OS possible issues are all still present.",
+  "affected_rows": [
+   {
+    "id": "exercise-watch-strength",
+    "change": "Wear OS new workout view (opt-in) now has per-set RPE 1-10 (SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/NewWorkoutScreens.kt:2849-2856), volume, max HR and a 1-10 effort rating in the summary (SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/NewWorkoutScreens.kt:3048-3110,3186; SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/WatchStores.kt:2461-2467; SparkyFitnessMobile/src/hooks/useWatchWorkoutBridge.ts:789-805 saves it). Still Apple Watch only: double tap and saving to a health app; the classic Wear OS view keeps RPE 5-10 (SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/WorkoutScreens.kt:858,871). SparkyFitnessMobile/src/screens/WatchSettingsScreen.tsx:304-405 (New workout view switch on both platforms, Top line, countdown and Countdown before holds); SparkyFitnessMobile/src/stores/appPreferencesStore.ts:184 (watchNewWorkout defaults to false); SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/WorkoutScreens.kt:427-445 (Wear OS uses NewActiveWorkoutView when the setting is on)"
+   },
+   {
+    "id": "plat-native-watch-workout",
+    "change": "Wear OS new view adds RPE 1-10, confirmation before finishing or discarding (SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/NewWorkoutScreens.kt:454-455), volume/max HR/effort rating in the summary (SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/NewWorkoutScreens.kt:3048-3110,3186); classic view unchanged; still no double tap or Health Connect save. SparkyFitnessMobile/src/screens/WatchSettingsScreen.tsx:304-405 (New workout view switch on both platforms, Top line, countdown and Countdown before holds); SparkyFitnessMobile/src/stores/appPreferencesStore.ts:184 (watchNewWorkout defaults to false); SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/WorkoutScreens.kt:427-445 (Wear OS uses NewActiveWorkoutView when the setting is on)"
+   },
+   {
+    "id": "native-watch-workout-finish",
+    "change": "In the Wear OS new view the summary shows volume and average/max heart rate and asks the 1-10 'How hard?' effort rating, which the phone saves (SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/NewWorkoutScreens.kt:3048-3110,3114-3190; SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/WatchStores.kt:2461-2467; SparkyFitnessMobile/modules/watch-connectivity/android/src/main/java/expo/modules/watchconnectivity/WatchConnectivityModule.kt:1091-1097; SparkyFitnessMobile/src/hooks/useWatchWorkoutBridge.ts:789-805). Still not saved to Health Connect; classic view unchanged."
+   },
+   {
+    "id": "native-watch-workout-tracker",
+    "change": "Wear OS new view adds a -15 s rest button next to +15 (SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/NewWorkoutScreens.kt:1656; SparkyFitnessMobile/targets/wearos/src/main/res/values/strings.xml:296-297), countdown ticks/chime at the end of rests (SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/CountdownCues.kt; SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/WatchStores.kt:81-95), a Log set button and Edit previous set (SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/NewWorkoutScreens.kt:333,2402). Still no double tap on Wear OS."
+   },
+   {
+    "id": "native-watch-workout-start-edit",
+    "change": "Wear OS new view asks for confirmation before finish, discard and deleting a set or exercise (SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/NewWorkoutScreens.kt:454-455; strings.xml:347-352) and can move an upcoming exercise ahead (Swap / Do first, SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/NewWorkoutScreens.kt:367,3346). Replacing an exercise with a different one is still on neither watch."
+   },
+   {
+    "id": "native-haptics",
+    "change": "The Wear OS app now follows the phone's Haptic Feedback switch: Haptics.vibrate returns early when hapticsEnabledProvider is false (SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/WatchStores.kt:32-43), wired to watchContext.effectiveHapticsEnabled (SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/WearSessionManager.kt:101; SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/Models.kt:361,400; SparkyFitnessMobile/src/hooks/useWatchCheckInBridge.ts:281,901). Only the workout countdown ticks bypass it, governed by the separate countdown setting (SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/WatchStores.kt:81-95; WearSessionManager.kt:102). The existing note ('Wear OS does not follow it') is now wrong."
+   },
+   {
+    "id": "native-watch-settings",
+    "change": "The screen now also has 'New workout view' on both platforms, with Top line, Countdown sound & haptic and Countdown before holds when it is on (SparkyFitnessMobile/src/screens/WatchSettingsScreen.tsx:304-405). The Wear OS RPE description still says 5 to 10 (SparkyFitnessMobile/src/screens/WatchSettingsScreen.tsx:192-196; en translation.json:7176) although the new view uses 1-10."
+   },
+   {
+    "id": "exercise-watch-settings",
+    "change": "Same as native-watch-settings: New workout view and its options now on Android too (SparkyFitnessMobile/src/screens/WatchSettingsScreen.tsx:304-405)."
+   },
+   {
+    "id": "settings-app-apple-watch",
+    "change": "Same: New workout view and its options on both platforms (SparkyFitnessMobile/src/screens/WatchSettingsScreen.tsx:304-405)."
+   },
+   {
+    "id": "plat-native-watch-settings",
+    "change": "Same: New workout view and its options on both platforms (SparkyFitnessMobile/src/screens/WatchSettingsScreen.tsx:304-405)."
+   },
+   {
+    "id": "missed-plat-screens-watch-settings-options",
+    "change": "Same: New workout view and its options on both platforms (SparkyFitnessMobile/src/screens/WatchSettingsScreen.tsx:304-405)."
+   },
+   {
+    "id": "native-wearos",
+    "change": "Wear OS (new view, opt-in) now has the end-of-workout effort rating and per-set RPE 1-10 (SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/NewWorkoutScreens.kt:2849-2856,3186). Still missing: routes, jump rope, double tap, run effort rating (no runEffort sent by SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/), Health Connect save; fast start still fails (SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/Screens.kt:1420-1433)."
+   },
+   {
+    "id": "plat-native-apple-watch-app",
+    "change": "Same as native-wearos: the workout effort rating and 1-10 RPE exist on Wear OS in the opt-in new view (SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/NewWorkoutScreens.kt:2849-2856,3186)."
+   },
+   {
+    "id": "native-watch-app",
+    "change": "Same: the effort rating after a strength workout is no longer Apple Watch only (Wear OS new view, SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/NewWorkoutScreens.kt:3186); after a run it still is."
+   },
+   {
+    "id": "missed-plat-services-apple-watch-app",
+    "change": "Same: Wear OS new view asks for effort after a workout and RPE 1-10 (SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/NewWorkoutScreens.kt:2849-2856,3186)."
+   }
+  ],
+  "new_features_entries": [
+   {
+    "name_en": "Plate calculator",
+    "change": "Now also on both watches in the new workout view's More page (Plates), using the bars and plates the phone sends with the plan: Wear OS SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/NewWorkoutScreens.kt:344,2179; Apple Watch (#3557) SparkyFitnessMobile/targets/watch/Presentation/WorkoutMorePage.swift:112-130, SparkyFitnessMobile/targets/watch/Domain/WatchPlates.swift. watch: none -> both."
+   },
+   {
+    "name_en": "Workout effort score (1-10)",
+    "change": "Wear OS (new view) now asks for it after a strength workout and the Android phone saves it (SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/NewWorkoutScreens.kt:3114-3190; SparkyFitnessMobile/src/hooks/useWatchWorkoutBridge.ts:789-805). Not after a Wear OS run. watch: Apple Watch -> both."
+   }
+  ],
+  "possible_issues": [
+   {
+    "issue": "Starting a fast from the Wear OS watch fails (16:8 sent, 16-8 expected)",
+    "change": "Still present: the watch still sends the label as presetId (SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/Screens.kt:1420-1433; SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/WatchStores.kt:656-672), the Android bridge passes it through (SparkyFitnessMobile/modules/watch-connectivity/android/src/main/java/expo/modules/watchconnectivity/WatchConnectivityModule.kt:1163-1181) and the phone still looks it up by id (SparkyFitnessMobile/src/hooks/useWatchFastingBridge.ts:42-43; SparkyFitnessMobile/src/constants/fasting.ts:21-49, ids 16-8/18-6/20-4, no OMAD). Not fixed."
+   },
+   {
+    "issue": "Saved routes offered for a Wear OS watch run do not work",
+    "change": "Still present: Route picker shown whenever recording on the watch outdoors (SparkyFitnessMobile/src/screens/RecordActivityScreen.tsx:308-309), Start on watch / Send to watch shown whenever a watch is paired (SparkyFitnessMobile/src/screens/RouteDetailScreen.tsx:55,302-360), sendRouteToWatch calls WatchConnectivity.sendRoute (SparkyFitnessMobile/src/services/watchRouteSync.ts:14-27), which only iOS implements (SparkyFitnessMobile/modules/watch-connectivity/ios/WatchConnectivityModule.swift:755; no route handling in the Android module or SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/). Not fixed."
+   },
+   {
+    "issue": "Wear OS runs saved without map, splits or laps, and with wrongly timed heart rate",
+    "change": "Still present: the watch still records route rows as [lat, lon, time] (SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/WatchStores.kt:2834-2836), laps as durations (SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/WatchStores.kt:2971-2977) and heart rate as [elapsed seconds, bpm] (SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/WatchStores.kt:2813-2818), sent as-is (SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/PayloadAdapters.kt:970-973; Android module normalizedRunEvent passes them through, WatchConnectivityModule.kt:1463-1466), while the phone needs rows of 6 starting with time (SparkyFitnessMobile/src/utils/watchRun.ts:108-109,145-158) and lap clock times inside startedAt..endedAt (SparkyFitnessMobile/src/utils/watchRun.ts:180-182). Not fixed."
+   },
+   {
+    "issue": "Wear OS ignores the phone's Haptic Feedback switch (native-haptics note)",
+    "change": "Fixed by this PR: SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/WatchStores.kt:32-43; SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/WearSessionManager.kt:101."
+   }
+  ],
+  "new_feature": {
+   "name": "New watch workout view (opt-in)",
+   "description": "A redesigned strength workout screen on both watches, turned on with Settings > Apple Watch / Wear OS > New workout view (off by default): a Log set button (also double tap on Apple Watch), Edit previous set, a More page with the set, exercise and workout actions and a Plates calculator, full-screen exercise demo pictures sent from the phone, a sound and tap for the last seconds of a rest or timed hold, a 3-2-1 Get ready before holds, a top line that switches between time and live heart rate/calories, and one summary at the end. On Wear OS it also brings per-set RPE 1 to 10, rest -15 s, confirmations before finishing or discarding, and volume, max heart rate and the 1-10 effort rating in the summary. Web has no watch app.",
+   "web": "No",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "both",
+   "evidence": "SparkyFitnessMobile/src/screens/WatchSettingsScreen.tsx:304-405 (New workout view switch on both platforms, Top line, countdown and Countdown before holds); SparkyFitnessMobile/src/stores/appPreferencesStore.ts:184 (watchNewWorkout defaults to false); SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/WorkoutScreens.kt:427-445 (Wear OS uses NewActiveWorkoutView when the setting is on); Wear OS SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/NewWorkoutScreens.kt:152,256,333,344,507,2179,2402,3048; SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/CountdownCues.kt; SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/ExerciseDemoStore.kt; Apple Watch (#3557) SparkyFitnessMobile/targets/watch/Presentation/WorkoutView.swift, SparkyFitnessMobile/targets/watch/Presentation/WorkoutMorePage.swift:112-141, SparkyFitnessMobile/targets/watch/Presentation/WorkoutView.swift:369-383 (demo), SparkyFitnessMobile/targets/watch/Domain/CheckInModels.swift:523-524,659"
+  }
+ },
+ {
+  "pr": 3563,
+  "user_visible": false,
+  "surfaces": {
+   "web": false,
+   "ios": false,
+   "android": true,
+   "watch": true,
+   "server_only": false
+  },
+  "summary": "Follow-up to #3540: Wear OS tile and workout strings moved to strings.xml, unused strings removed. No visible change; the Wear OS app still ships only values/ (English).",
+  "affected_rows": [],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": null
+ },
+ {
+  "pr": 3557,
+  "user_visible": true,
+  "surfaces": {
+   "web": false,
+   "ios": true,
+   "android": false,
+   "watch": true,
+   "server_only": false
+  },
+  "summary": "Apple Watch gets the opt-in 'New workout view' (Settings > Apple Watch > New workout view, off by default): Log set button (double tap logs too), Edit previous set, More page with workout actions and a Plates calculator, exercise demo pictures sent by the phone, countdown sound and haptic, Get ready before holds, top line choice, single summary. The phone now sends equipment and bar/plates with the plan. Its Wear OS counterpart is #3625; the shared new-feature is recorded there.",
+  "affected_rows": [
+   {
+    "id": "native-watch-settings",
+    "change": "Apple Watch settings now have New workout view with Top line, Countdown sound & haptic and Countdown before holds (SparkyFitnessMobile/src/screens/WatchSettingsScreen.tsx:304-405); the Layout rows (metrics, Up Next) hide while it is on (SparkyFitnessMobile/src/screens/WatchSettingsScreen.tsx:248). Same change applies to exercise-watch-settings, settings-app-apple-watch, plat-native-watch-settings and missed-plat-screens-watch-settings-options (see #3625)."
+   }
+  ],
+  "new_features_entries": [
+   {
+    "name_en": "Plate calculator",
+    "change": "Apple Watch new view has a Plates calculator: SparkyFitnessMobile/targets/watch/Presentation/WorkoutMorePage.swift:112-130; SparkyFitnessMobile/targets/watch/Domain/WatchPlates.swift (see #3625 for Wear OS)."
+   }
+  ],
+  "possible_issues": [],
+  "new_feature": null
+ },
+ {
+  "pr": 3540,
+  "user_visible": false,
+  "surfaces": {
+   "web": false,
+   "ios": false,
+   "android": true,
+   "watch": true,
+   "server_only": false
+  },
+  "summary": "Wear OS refactor: hard-coded UI strings moved into res/values/strings.xml so they can be translated. No translations ship ({M}targets/wearos/src/main/res has only values/), so the Wear OS app is still English only; 'Both watch apps' own texts are in English only' remains true.",
+  "affected_rows": [],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": null
+ },
+ {
+  "pr": 3452,
+  "user_visible": true,
+  "surfaces": {
+   "web": true,
+   "ios": true,
+   "android": true,
+   "watch": true,
+   "server_only": false
+  },
+  "summary": "kJ support: mobile gets an Energy Unit selector (Settings > Calories & BMR) that writes energy_unit, and mobile screens, reports, goals inputs, Android/iOS widgets, the Apple Watch and the Wear OS app show (and inputs accept) kJ when chosen; web extends kJ to more screens (exercise dialogs, Compare, foods, fasting settings). Values stay stored in kcal.",
+  "affected_rows": [
+   {
+    "id": "goals-calc-energy-unit",
+    "change": "Mobile now has the selector: SparkyFitnessMobile/src/screens/CalorieSettingsScreen.tsx:627-657 (Calories (kcal) / Kilojoules (kJ), mutation.mutate({energy_unit}) at 358-363), reached from Settings > Calories & BMR (SparkyFitnessMobile/src/screens/SettingsScreen.tsx:290). Row becomes parity."
+   },
+   {
+    "id": "settings-pref-energy-unit",
+    "change": "Mobile now chooses the unit (SparkyFitnessMobile/src/screens/CalorieSettingsScreen.tsx:627-657) and applies it across screens via useEnergyUnit (SparkyFitnessMobile/src/hooks/useEnergyUnit.ts), e.g. FamilyDiaryScreen, widgets (SparkyFitnessMobile/src/hooks/useWidgetSync.ts:48; SparkyFitnessMobile/targets/android-widget/res/values/widget_strings.xml:9-20; SparkyFitnessMobile/targets/widget/SharedHelpers.swift:69) and both watches (SparkyFitnessMobile/src/hooks/useWatchCheckInBridge.ts:331,894; SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/Models.kt:845-857; SparkyFitnessMobile/targets/watch/Domain/CheckInModels.swift:498,800-808). Location differs: web Preferences, mobile Calories & BMR."
+   },
+   {
+    "id": "reports-energy-unit",
+    "change": "Mobile reports now follow it: SparkyFitnessMobile/src/screens/NutritionReportScreen.tsx:46,64-69; SparkyFitnessMobile/src/components/CaloriesBarChart.tsx:126-132,164-174; Compare copy (SparkyFitnessMobile/src/utils/compareCopy.ts). Mobile still has no exports."
+   },
+   {
+    "id": "goals-calories-daily",
+    "change": "Mobile calorie goal field is now labelled and entered in the chosen unit (SparkyFitnessMobile/src/screens/GoalsScreen.tsx:455-475,866-873 EnergyFormInput). Note: the Min/Max range inputs for calories are still plain kcal FormInputs (SparkyFitnessMobile/src/screens/GoalsScreen.tsx:808-838)."
+   }
+  ],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": null
+ },
+ {
+  "pr": 3351,
+  "user_visible": true,
+  "surfaces": {
+   "web": false,
+   "ios": true,
+   "android": false,
+   "watch": true,
+   "server_only": false
+  },
+  "summary": "Apple Watch: weight and reps typed on the watch are sent to the phone before the set is logged, so the phone's set row shows them live. No row describes this; no Wear OS counterpart.",
+  "affected_rows": [],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": null
+ },
+ {
+  "pr": 3347,
+  "user_visible": true,
+  "surfaces": {
+   "web": false,
+   "ios": true,
+   "android": false,
+   "watch": true,
+   "server_only": false
+  },
+  "summary": "Apple Watch classic workout view: the separate metrics page also shows the rest timer and next set; settings subtitle reworded. Minor; no row changes.",
+  "affected_rows": [],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": null
+ },
+ {
+  "pr": 3305,
+  "user_visible": true,
+  "surfaces": {
+   "web": false,
+   "ios": false,
+   "android": true,
+   "watch": true,
+   "server_only": false
+  },
+  "summary": "EAS production workflow now builds the Wear OS app as its own bundle and submits it to the Play Store's wear:WearAlpha track.",
+  "affected_rows": [],
+  "new_features_entries": [],
+  "possible_issues": [
+   {
+    "issue": "Android release workflow does not build or bundle the Wear OS app (SPARKY_EMBED_WEAROS_RELEASE not set)",
+    "change": "Resolved another way (with #3293): SparkyFitnessMobile/.eas/workflows/production-build-submission.yml:8-12,29-34 and SparkyFitnessMobile/eas.json:33-55 build and submit a separate Wear OS AAB to the wear:WearAlpha Play track. The phone build still does not embed it (SparkyFitnessMobile/plugins/withWearOs.ts:149, flag still unset), which is no longer needed."
+   }
+  ],
+  "new_feature": null
+ },
+ {
+  "pr": 3293,
+  "user_visible": true,
+  "surfaces": {
+   "web": false,
+   "ios": false,
+   "android": true,
+   "watch": true,
+   "server_only": false
+  },
+  "summary": "GitHub releases now carry wearos-release.apk, built and signed with the phone app's key, beside the phone APK/AAB; docs explain installing it with adb and that GitHub and Play builds cannot be mixed.",
+  "affected_rows": [],
+  "new_features_entries": [],
+  "possible_issues": [
+   {
+    "issue": "Android release workflow does not build or bundle the Wear OS app (SPARKY_EMBED_WEAROS_RELEASE not set)",
+    "change": "Fixed, differently: .github/workflows/android.yml:135-170 tests and builds :wearos:assembleRelease with the release key and attaches wearos-release.apk to the release; docs/src/mobile-app/watch-apps.md:10-21. The phone APK/AAB still do not embed the watch app (SPARKY_EMBED_WEAROS_RELEASE unset), but the watch app is now distributed as its own APK (adb install) and, via #3305, through Play's Wear track. The summary item should be removed or reworded."
+   }
+  ],
+  "new_feature": null
+ },
+ {
+  "pr": 3250,
+  "user_visible": true,
+  "surfaces": {
+   "web": false,
+   "ios": false,
+   "android": true,
+   "watch": true,
+   "server_only": false
+  },
+  "summary": "Wear OS gets four Tiles: Nutrition (calories left/over and burned, macros), Sleep Health (last night's sleep, score, stages, resting HR, HRV, SpO2, naps; opens a Sleep detail page), Medications (taken/pending/skipped counts, Log Dose) and Exercise (steps, minutes, calories, workouts, planned workout). The phone now sends sleep and an exercise summary to the watch. No Apple Watch equivalent.",
+  "affected_rows": [
+   {
+    "id": "missed-plat-services-watch-complications",
+    "change": "The current note ends 'and no Wear OS Tiles' - now wrong: Wear OS has Nutrition, Sleep Health, Medications and Exercise tiles (SparkyFitnessMobile/targets/wearos/src/main/AndroidManifest.xml:195-244; SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/Tiles.kt:904,1015,1125,1199)."
+   }
+  ],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": {
+   "name": "Wear OS tiles",
+   "description": "Four tiles for the Wear OS tile carousel: Nutrition (calories left or over, burned, macros), Sleep Health (last night's sleep time, score, stages, resting heart rate, HRV, SpO2 and naps, with a Sleep detail page on the watch), Medications (today's doses taken, pending or skipped) and Exercise (steps, minutes, calories and today's workouts). Each opens its page in the watch app. The Apple Watch has no equivalent and no sleep page.",
+   "web": "No",
+   "ios": "No",
+   "android": "Yes",
+   "watch": "Wear OS",
+   "evidence": "SparkyFitnessMobile/targets/wearos/src/main/AndroidManifest.xml:195-244; SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/Tiles.kt:904-1260 (targetPageKey 905,1016,1126,1200); SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/Screens.kt:1578 (SleepDetailPage); SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/MainActivity.kt:98-110; SparkyFitnessMobile/targets/wearos/src/main/res/values/strings.xml:11-18,108-152; SparkyFitnessMobile/src/hooks/useWatchCheckInBridge.ts (sleep and exerciseSummary payload)"
+  }
+ },
+ {
+  "pr": 3230,
+  "user_visible": true,
+  "surfaces": {
+   "web": false,
+   "ios": true,
+   "android": false,
+   "watch": true,
+   "server_only": false
+  },
+  "summary": "Apple Watch: the check-in crown now honors the Haptic Feedback switch, macro colors follow GoalPalette, remaining strings moved into Localizable.strings (only en.lproj ships, so still English), and run voice cues are spoken in the language they are written in. No row changes; the 'English only' statements stay true.",
+  "affected_rows": [],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": null
+ },
+ {
+  "pr": 3226,
+  "user_visible": true,
+  "surfaces": {
+   "web": false,
+   "ios": true,
+   "android": false,
+   "watch": true,
+   "server_only": false
+  },
+  "summary": "Apple Watch: long exercise names no longer cut off, and the iOS-only 'Larger text on the watch' setting now applies to every watch page (Goals, Water, Fasting, Steps...). Larger text stays iOS only.",
+  "affected_rows": [
+   {
+    "id": "native-watch-settings",
+    "change": "iOS-only options grew: 'Larger text on the watch' (SparkyFitnessMobile/src/screens/WatchSettingsScreen.tsx:286-303) plus the Layout rows 'Metrics on the set screen' and 'Up Next page' from #3191 (SparkyFitnessMobile/src/screens/WatchSettingsScreen.tsx:248-284), all hidden on Android. Applies equally to exercise-watch-settings, settings-app-apple-watch, plat-native-watch-settings, missed-plat-screens-watch-settings-options."
+   }
+  ],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": null
+ },
+ {
+  "pr": 3191,
+  "user_visible": true,
+  "surfaces": {
+   "web": false,
+   "ios": true,
+   "android": false,
+   "watch": true,
+   "server_only": false
+  },
+  "summary": "Apple Watch: Medications page laid out like Apple's app with Taken and Skipped buttons per dose and Log All as Taken; optional Up Next page with Swap (do an upcoming exercise first); option to move set-screen metrics to their own page; larger Goals/Water layouts; new watch icon. Wear OS has none of the medication changes.",
+  "affected_rows": [
+   {
+    "id": "meds-watch",
+    "change": "The Apple Watch can now skip a scheduled dose (Skipped button, sent as skipped:true when the phone advertises medicationSkip) and has Log All as Taken per time group: SparkyFitnessMobile/targets/watch/Presentation/MedicationsView.swift:4-11,78,245-251; SparkyFitnessMobile/targets/watch/Adapters/OutboundPayloads.swift:89-100; SparkyFitnessMobile/src/hooks/useWatchCheckInBridge.ts:912-913,1399-1445. Wear OS still cannot skip (its page has no skip; only its tile counts skipped doses, SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/Tiles.kt:350). Repeating an as-needed dose is still phone-only."
+   },
+   {
+    "id": "native-watch-medications-page",
+    "change": "Same as meds-watch: skipping is now possible on the Apple Watch, not on Wear OS (MedicationsView.swift:245-251)."
+   },
+   {
+    "id": "plat-native-watch-medications-page",
+    "change": "Same as meds-watch: 'Skipping is only possible from the phone' is no longer true for the Apple Watch (MedicationsView.swift:245-251); Wear OS still cannot."
+   },
+   {
+    "id": "native-watch-workout-start-edit",
+    "change": "The Apple Watch can now move an upcoming exercise ahead with Swap Exercise (Up Next page / exercise options, SparkyFitnessMobile/targets/watch/Presentation/WorkoutEditPages.swift:106-110; SparkyFitnessMobile/targets/watch/Presentation/WorkoutView.swift:994). This reorders, it does not replace with another exercise, so 'Replace exercise' is still unavailable."
+   }
+  ],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": null
+ }
+]

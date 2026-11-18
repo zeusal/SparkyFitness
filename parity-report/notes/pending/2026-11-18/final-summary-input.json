@@ -1,0 +1,161 @@
+{
+ "en_section": [
+  "## Updates since the analysis (2026-11-18)",
+  "",
+  "The analysis below reflects `main` @ `5364674f` and is left as it was. Rows that later work changes carry a note under them, labelled with the merged PRs that changed them (**Updated in PR …** or **Partly covered by PR …**), or **Still open** for work that was planned and has not been done. In the CSV the same notes are in two extra columns, `update_status` and `update_notes`. The counts in sections 0 to 3 are not recalculated.",
+  "",
+  "The notes cover everything merged into `main` up to `a7c6257bf` (18 Nov 2026): 448 pull requests since the analysis, translation syncs and maintenance included. 371 of them ship in releases up to v1.12.1 (9 Nov; v1.9.0, v1.10.0, v1.11.0 and v1.12.0 before it); the other 77 are on `main` but not in a release yet. 252 rows carry a note, and the 60 new features that no row covers are listed after this section. The main changes for parity:",
+  "",
+  "- **Wear OS app** ([#3052](https://github.com/CodeWithCJ/SparkyFitness/pull/3052), [#3250](https://github.com/CodeWithCJ/SparkyFitness/pull/3250), [#3625](https://github.com/CodeWithCJ/SparkyFitness/pull/3625)): Android has a watch app with the Apple Watch pages and complications plus four tiles (Nutrition, Sleep Health, Medications, Exercise). It ships as its own APK in each GitHub release and on Google Play's Wear OS track ([#3293](https://github.com/CodeWithCJ/SparkyFitness/pull/3293), [#3305](https://github.com/CodeWithCJ/SparkyFitness/pull/3305)). Both watches have an opt-in new workout view ([#3557](https://github.com/CodeWithCJ/SparkyFitness/pull/3557), [#3625](https://github.com/CodeWithCJ/SparkyFitness/pull/3625)). Still Apple Watch only: following saved routes, Jump Rope and double tap; both watch apps' own texts are English only.",
+  "- **Android widgets, quick access and maps:** the calorie, macro and water widgets can be resized and show goal, food and burned in larger sizes ([#3228](https://github.com/CodeWithCJ/SparkyFitness/pull/3228), closes #2050); quick actions, Quick Settings tiles and the water widget ([#2989](https://github.com/CodeWithCJ/SparkyFitness/pull/2989), [#3020](https://github.com/CodeWithCJ/SparkyFitness/pull/3020)); and maps work without a Google Maps key through OpenStreetMap ([#3256](https://github.com/CodeWithCJ/SparkyFitness/pull/3256)).",
+  "- **On every platform:** a kcal or kJ energy unit ([#3452](https://github.com/CodeWithCJ/SparkyFitness/pull/3452)); Settings > Features to hide features per platform ([#3570](https://github.com/CodeWithCJ/SparkyFitness/pull/3570), [#3631](https://github.com/CodeWithCJ/SparkyFitness/pull/3631)); lab results ([#3374](https://github.com/CodeWithCJ/SparkyFitness/pull/3374), [#3330](https://github.com/CodeWithCJ/SparkyFitness/pull/3330)); and many of the new features below.",
+  "- **The web catches up with mobile:** progress photo comparison and time-lapse ([#2965](https://github.com/CodeWithCJ/SparkyFitness/pull/2965)), run and walk training programs ([#2948](https://github.com/CodeWithCJ/SparkyFitness/pull/2948)) and fitness test results ([#3154](https://github.com/CodeWithCJ/SparkyFitness/pull/3154)).",
+  "- **Mobile catches up with the web:** custom measurement categories ([#3194](https://github.com/CodeWithCJ/SparkyFitness/pull/3194)), photos in Sparky chat ([#3068](https://github.com/CodeWithCJ/SparkyFitness/pull/3068)), the medication Adherence screen ([#3103](https://github.com/CodeWithCJ/SparkyFitness/pull/3103)), sodium as grams of salt ([#3292](https://github.com/CodeWithCJ/SparkyFitness/pull/3292)), copying a meal to a family member ([#3218](https://github.com/CodeWithCJ/SparkyFitness/pull/3218)), editing the goal weight ([#3598](https://github.com/CodeWithCJ/SparkyFitness/pull/3598)), the day's drink list ([#3352](https://github.com/CodeWithCJ/SparkyFitness/pull/3352)) and heart rate timelines ([#3408](https://github.com/CodeWithCJ/SparkyFitness/pull/3408)).",
+  "- **New features:** see the list below; each entry says where it is available and what differs.",
+  "- **Possible issues found while updating** (to be confirmed on a device):",
+  "  - Starting a fast from the Wear OS watch fails: the watch sends the preset as `16:8`, `18:6`, `20:4` or `OMAD`, but the phone looks presets up by id (`16-8`, `18-6`, `20-4`; no OMAD), so it rejects the request.",
+  "  - On Android with a Wear OS watch, the phone still offers saved routes for a watch run (\"Start on watch\", \"Send to watch\" and the Record screen's Route picker), but the Wear OS app cannot follow routes and \"Send to watch\" fails.",
+  "  - A walk or run recorded on the Wear OS watch is saved without a map, splits or laps, and its heart rate samples get the wrong times: the watch sends `[lat, lon, time]` rows, lap durations and seconds from the start, while the phone expects `[time, lat, lon, …]` rows and clock times.",
+  "  - On iOS an account change does not clear the widgets, which keep the previous account's figures until the app next writes them; Android clears them.",
+  "  - The web's backup restore warning still says a restore wipes all data and needs a manual server restart, while the server now keeps the previous database and swaps the restored one in.",
+  "- **Still open:** lock-screen widgets, Siri/Shortcuts and the Remove water, Start fast and End fast controls stay iOS-only.",
+  ""
+ ],
+ "es_section": [
+  "## Actualizaciones posteriores al análisis (18-11-2026)",
+  "",
+  "El análisis de abajo refleja `main` @ `5364674f` y se deja tal cual. Las filas que cambia el trabajo posterior llevan una nota debajo, con las PR fusionadas que las cambiaron (**Actualizado en la PR …** o **Cubierto en parte por la PR …**), o **Sigue pendiente** si lo previsto no se ha hecho. En el CSV las mismas notas están en dos columnas más, `estado_actualizacion` y `notas_actualizacion`. Las cifras de las secciones 0 a 3 no se recalculan.",
+  "",
+  "Las notas cubren todo lo fusionado en `main` hasta `a7c6257bf` (18-11-2026): 448 PR desde el análisis, incluidas las sincronizaciones de traducciones y el mantenimiento. 371 salen en versiones publicadas hasta la v1.12.1 (9 de noviembre; antes, v1.9.0, v1.10.0, v1.11.0 y v1.12.0); las otras 77 están en `main`, pero todavía no en una versión publicada. 252 filas llevan nota, y las 60 funcionalidades nuevas que no cubre ninguna fila se listan después de esta sección. Lo que más cambia la paridad:",
+  "",
+  "- **App de Wear OS** ([#3052](https://github.com/CodeWithCJ/SparkyFitness/pull/3052), [#3250](https://github.com/CodeWithCJ/SparkyFitness/pull/3250), [#3625](https://github.com/CodeWithCJ/SparkyFitness/pull/3625)): Android tiene app de reloj con las páginas y complicaciones del Apple Watch, más cuatro baldosas (Nutrición, Salud del sueño, Medicación y Ejercicio). Se distribuye como APK propio en cada versión de GitHub y en el canal de Wear OS de Google Play ([#3293](https://github.com/CodeWithCJ/SparkyFitness/pull/3293), [#3305](https://github.com/CodeWithCJ/SparkyFitness/pull/3305)). Los dos relojes tienen una vista nueva de entrenamiento opcional ([#3557](https://github.com/CodeWithCJ/SparkyFitness/pull/3557), [#3625](https://github.com/CodeWithCJ/SparkyFitness/pull/3625)). Siguen siendo solo del Apple Watch seguir rutas guardadas, la comba (Jump Rope) y el doble toque; los textos propios de las dos apps de reloj están solo en inglés.",
+  "- **Widgets, acceso rápido y mapas en Android:** los widgets de calorías, macros y agua se pueden redimensionar y muestran objetivo, comido y quemado en los tamaños grandes ([#3228](https://github.com/CodeWithCJ/SparkyFitness/pull/3228), cierra la #2050); acciones rápidas, baldosas de Ajustes rápidos y widget de agua ([#2989](https://github.com/CodeWithCJ/SparkyFitness/pull/2989), [#3020](https://github.com/CodeWithCJ/SparkyFitness/pull/3020)); y los mapas funcionan sin clave de Google Maps gracias a OpenStreetMap ([#3256](https://github.com/CodeWithCJ/SparkyFitness/pull/3256)).",
+  "- **En todas las plataformas:** unidad de energía en kcal o kJ ([#3452](https://github.com/CodeWithCJ/SparkyFitness/pull/3452)); Ajustes > Funciones para ocultar funciones por plataforma ([#3570](https://github.com/CodeWithCJ/SparkyFitness/pull/3570), [#3631](https://github.com/CodeWithCJ/SparkyFitness/pull/3631)); resultados de análisis clínicos ([#3374](https://github.com/CodeWithCJ/SparkyFitness/pull/3374), [#3330](https://github.com/CodeWithCJ/SparkyFitness/pull/3330)); y muchas de las funcionalidades nuevas de abajo.",
+  "- **La web alcanza al móvil:** comparación y time-lapse de las fotos de progreso ([#2965](https://github.com/CodeWithCJ/SparkyFitness/pull/2965)), programas de entrenamiento para correr y caminar ([#2948](https://github.com/CodeWithCJ/SparkyFitness/pull/2948)) y resultados de las pruebas de forma física ([#3154](https://github.com/CodeWithCJ/SparkyFitness/pull/3154)).",
+  "- **El móvil alcanza a la web:** categorías de mediciones personalizadas ([#3194](https://github.com/CodeWithCJ/SparkyFitness/pull/3194)), fotos en el chat de Sparky ([#3068](https://github.com/CodeWithCJ/SparkyFitness/pull/3068)), la pantalla de adherencia de la medicación ([#3103](https://github.com/CodeWithCJ/SparkyFitness/pull/3103)), el sodio como gramos de sal ([#3292](https://github.com/CodeWithCJ/SparkyFitness/pull/3292)), copiar una comida a un familiar ([#3218](https://github.com/CodeWithCJ/SparkyFitness/pull/3218)), editar el peso objetivo ([#3598](https://github.com/CodeWithCJ/SparkyFitness/pull/3598)), la lista de bebidas del día ([#3352](https://github.com/CodeWithCJ/SparkyFitness/pull/3352)) y las líneas de tiempo de la frecuencia cardiaca ([#3408](https://github.com/CodeWithCJ/SparkyFitness/pull/3408)).",
+  "- **Funcionalidades nuevas:** ver la lista de abajo; cada entrada indica dónde está disponible y qué cambia.",
+  "- **Posibles problemas vistos al actualizar** (por confirmar en un dispositivo):",
+  "  - Iniciar un ayuno desde el reloj Wear OS falla: el reloj envía el protocolo como `16:8`, `18:6`, `20:4` u `OMAD`, pero el móvil busca los protocolos por su id (`16-8`, `18-6`, `20-4`; sin OMAD), así que rechaza la petición.",
+  "  - En Android con un reloj Wear OS, el móvil sigue ofreciendo rutas guardadas para una carrera en el reloj («Start on watch», «Send to watch» y el selector de ruta de la pantalla de grabación), pero la app de Wear OS no puede seguir rutas y «Send to watch» falla.",
+  "  - Una caminata o carrera grabada en el reloj Wear OS se guarda sin mapa, parciales ni vueltas, y con las muestras de frecuencia cardiaca a horas erróneas: el reloj envía filas `[lat, lon, hora]`, duraciones de vuelta y segundos desde el inicio, mientras que el móvil espera filas `[hora, lat, lon, …]` y horas de reloj.",
+  "  - En iOS, al cambiar de cuenta no se vacían los widgets, que siguen mostrando las cifras de la cuenta anterior hasta que la app vuelve a escribirlas; Android sí los vacía.",
+  "  - El aviso de restaurar una copia de seguridad en la web sigue diciendo que se borran todos los datos y que hay que reiniciar el servidor a mano, cuando el servidor ahora conserva la base de datos anterior y cambia a la restaurada.",
+  "- **Sigue pendiente:** los widgets de pantalla de bloqueo, Siri/Atajos y los controles Quitar agua, Iniciar ayuno y Terminar ayuno siguen siendo solo de iOS.",
+  ""
+ ],
+ "en_anchors": [
+  {
+   "line": "  - Water widget with +/−, lock-screen widgets, Control Center controls (iOS 18+) and Siri/Shortcuts (water, fasting, weight).",
+   "label": "Partly covered by PRs #2989 and #3020 (merged)",
+   "text": "Android now has the water widget with − / + (PR #3020) and four Quick Settings tiles as the counterpart of the Control Center controls: Log water, Scan barcode, Search food and Calories left (PR #2989). Still iOS-only: lock-screen widgets, Siri/Shortcuts, and the Remove water, Start fast and End fast controls."
+  },
+  {
+   "line": "  - Four home-screen quick actions, versus one on Android.",
+   "label": "Updated in PR #2989 (merged)",
+   "text": "Android now has the same four: Scan food, Log food and Fasting, plus the native Log water shortcut, which logs without opening the app."
+  },
+  {
+   "line": "- Android's **\"Log water\"** launcher shortcut has a hard-coded English label, and the **Siri** phrases are English only.",
+   "label": "Updated in PRs #2989 and #3051 (merged)",
+   "text": "the shortcut's label now comes from the app's translatable strings and is translated into 10 of the 15 languages the app ships besides English; its longer description, \"Log water without opening the app\", into 6 (Spanish, Polish, Brazilian Portuguese, Cantonese, and Simplified and Traditional Chinese). The Siri phrases are unchanged and still English only."
+  },
+  {
+   "line": "- **Check-in:** custom category manager (including Hourly/All), custom moods, manual sleep logging with a stage editor, and editing or deleting sleep entries.",
+   "label": "Partly covered by PR #3194 (merged)",
+   "text": "mobile now has the custom category manager under Settings > Custom Measurements, where Hourly and All categories can be created, but mobile check-in still logs only Daily ones. Custom moods, and logging, editing or deleting sleep by hand, are still web only."
+  },
+  {
+   "line": "- **Medications and symptoms:** adherence, dose calendar, snoozing a dose, editing logged doses, a note when logging, effectiveness rating, pill photo, custom GLP-1 drug, Bristol stool scale, custom symptom fields, and the symptoms report and export.",
+   "label": "Partly covered by PRs #3005 and #3103 (merged)",
+   "text": "mobile now has the adherence figures, the dose calendar and editing logged doses (time, note, injection site and status, Snoozed included) on a new Adherence screen, opened from \"Adherence & log\" in Medications, and a \"Remind in\" button on medication reminders. The other items are still web only."
+  },
+  {
+   "line": "- **AI chat:** configuring personal AI providers (key, model, system prompt, vision), attaching images, editing messages and navigating branches, viewing reasoning, token statistics, and choosing tool categories and the Full/Core profile.",
+   "label": "Partly covered by PR #3068 (merged)",
+   "text": "the mobile chat can now attach photos, up to 5 per message, and shows them again in the history. The rest is still web only."
+  },
+  {
+   "line": "- **Running and GPS:** GPS recording from the phone (auto-pause, intervals, pace alerts and voice cues), indoor distance from steps, running programs with a calendar and race planning, GPX export and pace zones.",
+   "label": "Partly covered by PRs #2948 and #3154 (merged)",
+   "text": "the web now has the running programs with a month calendar, can start plans made on mobile, and shows fitness test results and their training paces read-only. Recording, indoor distance, race planning, creating or editing plans, GPX export and pace zones from recent runs are still mobile only."
+  },
+  {
+   "line": "- **Progress photos:** history per angle, before/after comparison, time-lapse and a zoomable viewer.",
+   "label": "Partly covered by PR #2965 (merged)",
+   "text": "the web now has the before/after comparison and the time-lapse. The history per angle and the zoomable viewer are still mobile only."
+  },
+  {
+   "line": "  - Full Apple Watch app: Goals, Water, Medications, Weight check-in, Fasting and Steps pages; complications; strength workouts on the wrist; standalone runs; live heart rate and heart-rate alerts while recording. There is no Wear OS app.",
+   "label": "Partly covered by PR #3052 (merged)",
+   "text": "Android now has a Wear OS app with the same pages and complications, strength workouts on the wrist, standalone runs and walks, and live heart rate and heart rate alerts while recording. Following saved routes, Jump Rope, double tap and the effort rating at the end of a workout are still Apple Watch only."
+  },
+  {
+   "line": "  - **HRV:** SDNN on iOS and RMSSD on Android; the values are not comparable.",
+   "label": "Updated in PRs #3019 and #3100 (merged)",
+   "text": "the same split now reaches sleep: synced nights carry an overnight HRV from SDNN on iOS and from RMSSD on Android, stored in one field that does not record which, so overnight HRV in the sleep reports is not comparable across platforms either."
+  },
+  {
+   "line": "- The \"Also use on my Apple Watch\" toggle for reference paces shows up on iPhones **without** a paired watch: only `Platform.OS === 'ios'` is checked.",
+   "label": "Updated in PR #3052 (merged)",
+   "text": "still the case, and now on Android too: the switch, worded \"Also use on my Wear OS watch\" there, shows on any iPhone or Android phone once a race time is saved, with or without a paired watch, because `RunProgramsScreen.tsx` only checks the platform."
+  }
+ ],
+ "es_anchors": [
+  {
+   "line": "  - Widget de agua con +/−, widgets de pantalla de bloqueo, Controles del Centro de Control (iOS 18+) y Siri/Atajos (agua, ayuno, peso).",
+   "label": "Cubierto en parte por las PR #2989 y #3020 (fusionadas)",
+   "text": "Android tiene ya el widget de agua con − / + (PR #3020) y cuatro baldosas de Ajustes rápidos como equivalente de los controles del Centro de control: Registrar agua, Escanear código, Buscar comida y Calorías restantes (PR #2989). Siguen siendo solo de iOS los widgets de pantalla de bloqueo, Siri/Atajos y los controles Quitar agua, Iniciar ayuno y Terminar ayuno."
+  },
+  {
+   "line": "  - Cuatro accesos rápidos en el icono, frente a uno en Android.",
+   "label": "Actualizado en la PR #2989 (fusionada)",
+   "text": "Android tiene ya los mismos cuatro: Escanear comida, Registrar comida y Ayuno, más el atajo nativo Registrar agua, que registra sin abrir la app."
+  },
+  {
+   "line": "- El atajo de lanzador **«Log water»** de Android tiene la etiqueta fija en inglés, y las frases de **Siri** solo están en inglés.",
+   "label": "Actualizado en las PR #2989 y #3051 (fusionadas)",
+   "text": "la etiqueta del atajo sale ahora de las cadenas traducibles de la app y está traducida a 10 de los 15 idiomas que incluye la app además del inglés; su descripción larga, «Log water without opening the app», a 6 (español, polaco, portugués de Brasil, cantonés y chino simplificado y tradicional). Las frases de Siri no cambian y siguen solo en inglés."
+  },
+  {
+   "line": "- **Check-in:** gestor de categorías personalizadas (incluidas Hourly/All), estados de ánimo personalizados, registro manual de sueño con editor de fases, y edición o borrado de registros de sueño.",
+   "label": "Cubierto en parte por la PR #3194 (fusionada)",
+   "text": "el móvil tiene ya el gestor de categorías personalizadas en Ajustes > Custom Measurements, donde se pueden crear categorías Hourly y All, pero el check-in del móvil sigue registrando solo las Daily. Los estados de ánimo personalizados y registrar, editar o borrar el sueño a mano siguen siendo solo de la web."
+  },
+  {
+   "line": "- **Medicación y síntomas:** adherencia, calendario de tomas, posponer dosis, editar dosis registradas, nota al registrar, valoración de eficacia, foto de pastilla, GLP-1 personalizado, escala de Bristol, campos personalizados de síntomas, e informe y exportación de síntomas.",
+   "label": "Cubierto en parte por las PR #3005 y #3103 (fusionadas)",
+   "text": "el móvil tiene ya las cifras de adherencia, el calendario de tomas y la edición de dosis registradas (hora, nota, zona de inyección y estado, incluido Snoozed) en una nueva pantalla Adherence, que se abre desde «Adherence & log» en Medicación, y un botón «Recordar en» en los recordatorios de medicación. Lo demás sigue siendo solo de la web."
+  },
+  {
+   "line": "- **Chat IA:** configurar proveedores de IA personales (clave, modelo, prompt de sistema, visión), adjuntar imágenes, editar mensajes y navegar por ramas, ver el razonamiento, estadísticas de tokens, y elegir categorías de herramientas y el perfil Full/Core.",
+   "label": "Cubierto en parte por la PR #3068 (fusionada)",
+   "text": "el chat del móvil ya permite adjuntar fotos, hasta 5 por mensaje, y las vuelve a mostrar en el historial. Lo demás sigue siendo solo de la web."
+  },
+  {
+   "line": "- **Running y GPS:** grabación GPS desde el teléfono (auto-pausa, intervalos, alertas de ritmo y avisos de voz), distancia en interior por pasos, programas de carrera con calendario y planificación, exportación GPX y zonas de ritmo.",
+   "label": "Cubierto en parte por las PR #2948 y #3154 (fusionadas)",
+   "text": "la web tiene ya los programas de carrera con calendario mensual, puede empezar planes creados en el móvil y muestra en modo lectura los resultados de las pruebas de forma física y sus ritmos de entrenamiento. Grabar, la distancia en interior, planificar una carrera, crear o editar planes, exportar GPX y las zonas de ritmo calculadas con las carreras recientes siguen siendo solo del móvil."
+  },
+  {
+   "line": "- **Fotos de progreso:** historial por ángulo, comparador antes/después, time-lapse y visor con zoom.",
+   "label": "Cubierto en parte por la PR #2965 (fusionada)",
+   "text": "la web tiene ya el comparador antes/después y el time-lapse. El historial por ángulo y el visor con zoom siguen siendo solo del móvil."
+  },
+  {
+   "line": "  - Apple Watch completo: páginas Objetivos, Agua, Medicación, Check-in de peso, Ayuno y Pasos; complicaciones; fuerza en la muñeca; carrera autónoma; FC en vivo y alertas de FC al grabar. No hay app de Wear OS.",
+   "label": "Cubierto en parte por la PR #3052 (fusionada)",
+   "text": "Android tiene ya una app de Wear OS con las mismas páginas y complicaciones, entrenos de fuerza en la muñeca, carreras y caminatas autónomas, y frecuencia cardiaca en directo y alertas de frecuencia cardiaca al grabar. Seguir rutas guardadas, la comba (Jump Rope), el doble toque y la valoración del esfuerzo al acabar un entreno siguen siendo solo del Apple Watch."
+  },
+  {
+   "line": "  - **HRV:** SDNN en iOS y RMSSD en Android, valores no comparables entre sí.",
+   "label": "Actualizado en las PR #3019 y #3100 (fusionadas)",
+   "text": "la misma diferencia llega ahora al sueño: las noches sincronizadas llevan una HRV nocturna calculada con SDNN en iOS y con RMSSD en Android, guardada en un mismo campo que no indica cuál, así que la HRV nocturna de los informes de sueño tampoco es comparable entre plataformas."
+  },
+  {
+   "line": "- El interruptor «Usar también en mi Apple Watch» de los ritmos de referencia aparece en iPhones **sin** reloj emparejado: solo se comprueba `Platform.OS === 'ios'`.",
+   "label": "Actualizado en la PR #3052 (fusionada)",
+   "text": "sigue pasando, y ahora también en Android: el interruptor, que allí dice «Also use on my Wear OS watch», aparece en cualquier iPhone o móvil Android en cuanto se guarda un tiempo de carrera, con o sin reloj emparejado, porque `RunProgramsScreen.tsx` solo comprueba la plataforma."
+  }
+ ],
+ "page_lede_html": "<strong>Update, 18 Nov 2026:</strong> rows changed by the work merged into <code>main</code> up to <code>a7c6257bf</code> (448 pull requests, among them the Android <a href=\"https://github.com/CodeWithCJ/SparkyFitness/pull/3052\">Wear OS app</a>, resizable Android widgets, the kcal/kJ unit, lab results and Settings &gt; Features) carry a note; the features that no row covers are listed on the <em>Executive summary</em> tab. List the notes with the <em>Updates</em> filter, and pick <em>Everything</em> under domains to include the iOS/Android sweep rows. The counts are still those of the original audit."
+}

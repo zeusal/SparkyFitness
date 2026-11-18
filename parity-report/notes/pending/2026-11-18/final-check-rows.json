@@ -1,0 +1,1208 @@
+[
+ {
+  "id": "native-native-surface-language",
+  "kind": "partial",
+  "prs": [
+   2989,
+   3020,
+   3025,
+   3051,
+   3052,
+   3228,
+   3251,
+   3297,
+   3435,
+   3452,
+   3477,
+   3495,
+   3506,
+   3552
+  ],
+  "note_en": "On Android the widgets, Quick Settings tiles and app icon shortcuts follow the app language and update when it changes; on iOS the hook still reduces the language to en/pl and reloads only the calorie and macro widgets. The water widget, tile names and iOS controls are translated into de, es, fr, pl, pt-BR, ru, yue-Hant, zh-Hans and zh-Hant (nl in part); the Goal, Food and Burned labels into de, es, fr, pl, pt-BR and ru on Android but into every shipped language except Latvian on iOS; and the kJ labels only into de, fr, pl and pt-BR. Latvian has no widget strings, and the Android Log water results, the shortcut titles in hu, it, lv and nb-NO and the Wear OS and Apple Watch apps' own texts are English only.",
+  "note_es": "En Android, los widgets, las baldosas de Ajustes rápidos y las acciones rápidas del icono siguen el idioma de la app y se actualizan cuando cambia; en iOS el hook aún reduce el idioma a en/pl y solo recarga los widgets de calorías y macros. El widget de agua, los nombres de las baldosas y los controles de iOS están traducidos al de, es, fr, pl, pt-BR, ru, yue-Hant, zh-Hans y zh-Hant (al nl en parte); las etiquetas Goal, Food y Burned, al de, es, fr, pl, pt-BR y ru en Android, pero a todos los idiomas incluidos salvo el letón en iOS; y las de kJ, solo al de, fr, pl y pt-BR. El letón no tiene cadenas de widgets, y los resultados de Registrar agua en Android, los títulos de las acciones rápidas en hu, it, lv y nb-NO y los textos propios de las apps de Wear OS y del Apple Watch están solo en inglés.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/targets/android-widget/res/values/widget_strings.xml (47 strings) vs values-{de,fr,pl,pt-rBR} (47), values-{es,ru} (44, no kJ), values-{b+yue+Hant,zh-rCN,zh-rTW} (37: water and tile strings, none of widget_goal/food/burned/kcal_eaten/open_diary/open_fasting/kj_*), values-nl (30: both tile names, 7 water strings missing), values-{hu,it,nb-rNO,tr} (17, calorie/macro only), values-lv (0); targets/widget/*.lproj: de, fr, pl, pt-BR 40 keys; es, ru, yue-Hant, zh-Hans, zh-Hant 36 (no kJ); nl 34; hu, it, tr 17 and nb-NO 10 (widget.goal/food/burned present in all but lv); lv empty; localeRegistry.json (16 locales incl. en); targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/LogWaterActivity.kt:190-201 (English results); src/localization/locales/{hu,it,lv,nb-NO}/translation.json: no quickActions; src/hooks/useWidgetLanguageRefresh.ts:39-72 (normalizeLanguage, reloads calorie, macro and water); src/hooks/useIOSWidgetLanguageRefresh.ts:51-76 (en/pl, calorie and macro only); targets/wearos/src/main/res/values only; targets/watch/en.lproj and targets/watch-widget/en.lproj only",
+  "why": "Original was four dense sentences spelling out every language; condensed to three with the same verified counts and language lists (all rechecked against the resource folders, lproj files and catalogs)."
+ },
+ {
+  "id": "plat-native-watch-goals-page",
+  "kind": "done",
+  "prs": [
+   3052
+  ],
+  "note_en": "The Wear OS app has the Goals page too: a calorie ring with what was eaten against the goal and the calories left or over, and below it the nutrients chosen and ordered in Settings > Wear OS on the phone (protein, carbs and fat by default). Unlike the Apple Watch, it does not show calories burned.",
+  "note_es": "La app de Wear OS también tiene la página de objetivos: un anillo de calorías con lo consumido frente al objetivo y las calorías restantes o el exceso y, debajo, los nutrientes elegidos y ordenados en Ajustes > Wear OS del teléfono (proteínas, carbohidratos y grasas por defecto). A diferencia del Apple Watch, no muestra las calorías quemadas.",
+  "evidence": "SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/Screens.kt:141-231 (GoalsSummaryPage: ring consumed / goal, goals_energy_left/over, snap.rows or protein/carbs/fat; caloriesBurned never drawn); PayloadAdapters.kt:104-111; src/screens/WatchSettingsScreen.tsx:99-140 (watchNutrientOrder, shownWatchNutrients, custom nutrients); src/constants/watchPages.ts:48 (DEFAULT_WATCH_NUTRIENTS); Apple: targets/watch/Presentation/GoalSummaryView.swift:44-51 (Eaten and Burned)",
+  "why": "Said 'the same Goals page', contradicting native-watch-goals-page, goals-watch and diary-apple-watch, which correctly say the Wear OS page does not show calories burned."
+ },
+ {
+  "id": "plat-native-watch-medications-page",
+  "kind": "done",
+  "prs": [
+   3052,
+   3191,
+   3250
+  ],
+  "note_en": "The Wear OS app has the Medications page: today's doses with a taken count, where a tap marks a dose taken or unmarks it (the phone deletes the entry), and a Medications tile with the counts. Only the Apple Watch can skip a dose from the wrist (scheduled doses, Skipped button); on Wear OS skipping stays on the phone, and the page draws a skipped dose like a pending one and does not show whether a tap is still syncing.",
+  "note_es": "La app de Wear OS tiene la página de medicación: las dosis de hoy con el recuento de tomadas, donde un toque marca una dosis como tomada o la desmarca (el teléfono borra la entrada), y una baldosa Medications con los recuentos. Solo el Apple Watch permite omitir una dosis desde el reloj (dosis programadas, botón Skipped); en Wear OS omitirla sigue haciéndose en el teléfono, y la página muestra una dosis omitida igual que una pendiente y no indica si un toque se está sincronizando todavía.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/Screens.kt:590-670 (MedicationListPage: only TAKEN styled, any other status shows the pending circle, no sync indicator); Models.kt:183-187 (PENDING, TAKEN, SKIPPED); WatchStores.kt:620-642; Tiles.kt:1125-1196; src/utils/watchMedications.ts:81-101; src/hooks/useWatchCheckInBridge.ts:912-913, 1394-1446; targets/watch/Presentation/MedicationsView.swift:34-45, 245-251",
+  "why": "'Does not show a skipped dose' suggested skipped doses are hidden; the page lists them with the pending style, as meds-watch says."
+ },
+ {
+  "id": "diary-water-log-edit",
+  "kind": "done",
+  "prs": [
+   3052,
+   3352
+  ],
+  "note_en": "The phone app now has the day's drink list on iOS and Android: History on the hydration card lists each drink with its time and amount, a manual drink can be deleted after a confirmation, and synced drinks show their source and cannot be deleted, as on the web. Both watches also list today's manual drinks and remove one after a confirmation; Wear OS shows the drinks already saved oldest first, and its Undo Last button removes one without asking (the day's earliest once taps have been saved). Only the web can change a drink's time.",
+  "note_es": "La app del teléfono tiene ya la lista de bebidas del día en iOS y Android: Historial en la tarjeta de hidratación muestra cada bebida con su hora y cantidad, una bebida manual se puede borrar tras confirmar, y las sincronizadas muestran su origen y no se pueden borrar, como en la web. Los dos relojes muestran también las bebidas manuales de hoy y quitan una tras confirmar; Wear OS muestra las ya guardadas de la más antigua a la más reciente, y su botón Undo Last quita una sin preguntar (la primera del día, una vez guardadas las tomas). Solo la web permite cambiar la hora de una bebida.",
+  "evidence": "SparkyFitnessMobile/src/components/HydrationGauge.tsx:48-49,186-197; src/screens/DashboardScreen.tsx:829-831; src/screens/WaterLogScreen.tsx:47-52,118-158 (delete with Alert),168-236 (isManualSource, getSourceLabel; no time edit); targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/Screens.kt:461-474 (Log, Undo Last),490-519 (remove confirmation),550 (entries.reversed()); WatchStores.kt:472-475 (deleteLastWaterEntry lastOrNull, no confirmation),592-608 (baseLog newest first + pendingLog); src/hooks/useWatchCheckInBridge.ts:585-600 (manual only, newest first); targets/watch/Presentation/WaterLogView.swift:36,96,120-154; SparkyFitnessFrontend/src/pages/Diary/WaterIntake.tsx:519,547-549,589-597",
+  "why": "The note used 'synced drinks' both for health-app drinks (not deletable and filtered out of the watch log) and for watch taps already saved on the phone, so 'Wear OS lists synced drinks' contradicted the watches listing only manual drinks; reworded to 'already saved'."
+ },
+ {
+  "id": "exercise-watch-settings",
+  "kind": "partial",
+  "prs": [
+   3052,
+   3191,
+   3226,
+   3557,
+   3625
+  ],
+  "note_en": "Android shows a Wear OS row in Settings once a Wear OS watch has connected; it opens the same screen with the per-set effort (RPE) switch, the New workout view switch with its top line and countdown options, and page order and visibility. Double-tap to log a set and the Keypad or Digital Crown choice stay iOS only, as do larger text and the set-screen layout options. The Wear OS RPE hint still describes a 5 to 10 scale, although the New workout view offers 1 to 10.",
+  "note_es": "Android muestra una fila Wear OS en Ajustes en cuanto un reloj Wear OS se ha conectado; abre la misma pantalla con el interruptor de esfuerzo (RPE) tras cada serie, el de la vista nueva de entrenamiento (New workout view) con sus opciones de línea superior y cuenta atrás, y el orden y la visibilidad de las páginas. El doble toque para registrar una serie y la elección entre teclado numérico y Digital Crown siguen siendo solo de iOS, igual que el texto más grande y las opciones de diseño de la pantalla de serie. El texto de ayuda del RPE para Wear OS sigue describiendo una escala de 5 a 10, aunque la vista nueva ofrece de 1 a 10.",
+  "evidence": "SparkyFitnessMobile/src/screens/SettingsScreen.tsx:62-65, 418-431; src/screens/WatchSettingsScreen.tsx:168 (double tap !isAndroid), 188-200 (rpeSubtitleWearOs 5 to 10), 212 (set input !isAndroid), 248-303 (metrics, Up Next, larger text !isAndroid), 305-405, 410-436; targets/wearos/.../WorkoutScreens.kt:858 (classic RPE coerceIn 5-10); NewWorkoutScreens.kt:2849-2856 (RPE 1-10); es catalog watchSettings.setInputKeypad 'Teclado numérico'",
+  "why": "Kind done changed to partial to match the other rows for the same watch settings screen, which still has iOS-only options (double tap, Keypad or Digital Crown). Spanish uses the app's 'teclado numérico' and 'entre ... y ...' instead of 'entre ... o ...'."
+ },
+ {
+  "id": "native-watch-settings",
+  "kind": "partial",
+  "prs": [
+   3052,
+   3191,
+   3226,
+   3557,
+   3625
+  ],
+  "note_en": "On Android a Wear OS row appears in Settings once a Wear OS watch has connected, and it opens the same screen with the RPE switch, the New workout view switch with its top line and countdown options, page order and visibility, and the Goals page nutrients. Double-tap to log a set, the Keypad or Digital Crown choice, larger text and the set-screen metrics and Up Next options are iOS only. The Wear OS RPE description still says 5 to 10 although the New workout view uses 1 to 10, and is translated in 5 of the 15 other shipped languages (the Apple Watch one in 8); the New workout view's title and options only in Polish, and its Wear OS description in none.",
+  "note_es": "En Android aparece una fila Wear OS en Ajustes en cuanto un reloj Wear OS se ha conectado, y abre la misma pantalla con el interruptor de RPE, el de la vista nueva de entrenamiento (New workout view) con sus opciones de línea superior y cuenta atrás, el orden y la visibilidad de las páginas y los nutrientes de la página Objetivos. El doble toque para registrar una serie, la elección entre teclado numérico y Digital Crown, el texto más grande y las opciones de métricas de la pantalla de serie y de Up Next son solo de iOS. La descripción del RPE para Wear OS sigue diciendo de 5 a 10 aunque la vista nueva usa de 1 a 10, y está traducida a 5 de los otros 15 idiomas incluidos (la del Apple Watch, a 8); el título y las opciones de la vista nueva, solo al polaco, y su descripción para Wear OS, a ninguno.",
+  "evidence": "SparkyFitnessMobile/src/screens/SettingsScreen.tsx:62-65, 418-431; src/screens/WatchSettingsScreen.tsx:168 (double tap !isAndroid), 188-200 (rpeSubtitleWearOs 5 to 10), 212 (set input !isAndroid), 248-284 (metrics, Up Next), 286-303 (larger text !isAndroid), 305-405 (New workout view, newWorkoutSubtitleWearOs on Android at 310-314, top line, countdown, holds), 410-462; localeRegistry.json (16 locales); watchSettings.rpeSubtitleWearOs in de, es, fr, pl, pt-BR; rpeSubtitle in de, es, fr, pl, pt-BR, yue-Hant, zh-Hans, zh-Hant; newWorkoutTitle, topLine*, countdown*, holdCountdown* only in pl; newWorkoutSubtitleWearOs in no shipped locale",
+  "why": "On Android the New workout view shows newWorkoutSubtitleWearOs, which no shipped locale translates, so 'the New workout view texts only in Polish' was not accurate for Android. Spanish 'y de página Up Next' was garbled; 'traducida a' matches the parallel 'solo al polaco'."
+ },
+ {
+  "id": "missed-plat-screens-watch-settings-options",
+  "kind": "partial",
+  "prs": [
+   3052,
+   3191,
+   3226,
+   3557,
+   3625
+  ],
+  "note_en": "On Android, Settings lists a 'Wear OS' row once a Wear OS watch has connected, and it opens the same screen with the per-set effort (RPE) prompt, the New workout view and its options, the page order and visibility, and the Goals page nutrients, all applied by the Wear OS app. 'Double-tap to log a set', the Keypad or Digital Crown choice, larger text and the set-screen layout options are hidden on Android. The Wear OS RPE description says 5 to 10 (the New workout view uses 1 to 10) and is translated in 5 of the 15 other shipped languages; the New workout view's title and options only in Polish, and its Wear OS description in none.",
+  "note_es": "En Android, Ajustes muestra una fila 'Wear OS' en cuanto un reloj Wear OS se ha conectado, y abre la misma pantalla con la petición de esfuerzo (RPE) tras cada serie, la vista nueva de entrenamiento (New workout view) y sus opciones, el orden y la visibilidad de las páginas y los nutrientes de la página Objetivos, que la app de Wear OS aplica. 'Doble toque para registrar una serie', la elección entre teclado numérico y Digital Crown, el texto más grande y las opciones de diseño de la pantalla de serie están ocultos en Android. La descripción del RPE para Wear OS dice de 5 a 10 (la vista nueva usa de 1 a 10) y está traducida a 5 de los otros 15 idiomas incluidos; el título y las opciones de la vista nueva, solo al polaco, y su descripción para Wear OS, a ninguno.",
+  "evidence": "SparkyFitnessMobile/src/screens/SettingsScreen.tsx:62-65, 418-431; src/screens/WatchSettingsScreen.tsx:168, 188-200, 212, 248-303, 305-405 (newWorkoutSubtitleWearOs on Android at 310-314), 410-462; watchSettings.rpeSubtitleWearOs in de, es, fr, pl, pt-BR; newWorkoutTitle, topLine*, countdown*, holdCountdown* only in pl; newWorkoutSubtitleWearOs in no shipped locale; localeRegistry.json (16 locales)",
+  "why": "The Android screen shows newWorkoutSubtitleWearOs, translated in no shipped locale, so saying the New workout view texts are translated in Polish was wrong for Android. Spanish 'traducida a' matches the parallel 'solo al polaco'."
+ },
+ {
+  "id": "settings-app-apple-watch",
+  "kind": "partial",
+  "prs": [
+   3052,
+   3191,
+   3226,
+   3557,
+   3625
+  ],
+  "note_en": "On Android a Wear OS row appears in Settings once a Wear OS watch has connected, and it opens the same screen: the effort (RPE) prompt after each set, the New workout view with its top line and countdown options, the order and visibility of the watch pages and the Goals page nutrients, all applied by the Wear OS app. Double-tap to log a set, the Keypad or Digital Crown choice, larger text and the set-screen metrics and Up Next options are Apple Watch only. The Wear OS RPE description still says 5 to 10 although the New workout view uses 1 to 10.",
+  "note_es": "En Android aparece una fila Wear OS en Ajustes en cuanto un reloj Wear OS se ha conectado, y abre la misma pantalla: la petición de esfuerzo (RPE) tras cada serie, la vista nueva de entrenamiento (New workout view) con sus opciones de línea superior y cuenta atrás, el orden y la visibilidad de las páginas del reloj y los nutrientes de la página Objetivos, que la app de Wear OS aplica. El doble toque para registrar una serie, la elección entre teclado numérico y Digital Crown, el texto más grande y las opciones de métricas de la pantalla de serie y de Up Next son solo del Apple Watch. La descripción del RPE para Wear OS sigue diciendo de 5 a 10 aunque la vista nueva usa de 1 a 10.",
+  "evidence": "SparkyFitnessMobile/src/screens/SettingsScreen.tsx:62-65, 418-431; src/screens/WatchSettingsScreen.tsx:168, 188-200, 212, 248-303, 305-405, 410-462; src/hooks/useWatchCheckInBridge.ts:896-908; targets/wearos/.../Models.kt:398-418 (newWorkout, countdown, hold countdown, top line applied); NewWorkoutScreens.kt:2849-2856",
+  "why": "Spanish 'las opciones de métricas en la pantalla de serie y de página Up Next' was garbled and did not match the English."
+ },
+ {
+  "id": "plat-screens-watch-companion-gates",
+  "kind": "done",
+  "prs": [
+   3052,
+   3065,
+   3090
+  ],
+  "note_en": "On Android the same bridges now run when Google Play services are present, so the Wear OS app also hands over weight and body fat, water, medications and fast endings (the phone rejects a fast started on the watch), starts and edits workouts, gets set targets, sends heart rate and the workout effort rating, ends workouts on the workout completed screen and records runs shown in WatchRunLive. Settings shows a 'Wear OS' row once a Wear OS watch has connected to the phone (remembered from then on), opening the same WatchSettings screen without the double-tap and Keypad/Digital Crown options. The effort rating after a run and the saved-route library are Apple Watch only: on Android the route screen still offers Send to watch, which fails, and Start on watch, which records the run without following the route.",
+  "note_es": "En Android los mismos puentes funcionan ya cuando hay Google Play services, así que la app de Wear OS también entrega el peso y la grasa corporal, el agua, los medicamentos y el fin de los ayunos (el teléfono rechaza los ayunos que se empiezan en el reloj), inicia y edita entrenamientos, recibe los objetivos de las series, envía la frecuencia cardiaca y la valoración del esfuerzo del entrenamiento, termina entrenamientos en la pantalla de entrenamiento completado y graba carreras que se ven en WatchRunLive. Ajustes muestra una fila 'Wear OS' en cuanto un reloj Wear OS se ha conectado al teléfono (y se recuerda desde entonces), que abre la misma pantalla WatchSettings sin las opciones de doble toque ni de teclado numérico/Digital Crown. La valoración del esfuerzo tras una carrera y la biblioteca de rutas guardadas son solo del Apple Watch: en Android la pantalla de la ruta sigue ofreciendo Send to watch, que falla, y Start on watch, que graba la carrera sin seguir la ruta.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/App.tsx:246-264 (WatchCheckInGate), 301-326 (WatchWorkoutGate, watchSupported = isSupported(), useWatchRouteBridge); modules/watch-connectivity/expo-module.config.json (platforms ios, android); modules/watch-connectivity/android/src/main/java/expo/modules/watchconnectivity/WatchConnectivityModule.kt:88-103 (isSupported = Google Play services), 203-239 (paired cached once a node connects), 1091-1112 (workoutEffort -> onWorkoutEffort, runEffort -> onRunEffort), 1837 (startRun; no sendRoute, removeRoute or latestRouteLibrary); targets/wearos/.../wear/PayloadAdapters.kt:799-800 and WatchStores.kt:2461-2464 (workoutEffort sent); no runEffort anywhere in targets/wearos/src/main; targets/wearos/.../wear/Screens.kt:1420-1433 and WatchStores.kt:656-668 (startFast sends '16:8' or 'OMAD' as presetId); src/constants/fasting.ts:21 ('16-8'); src/hooks/useWatchFastingBridge.ts:42-43 (unknown preset id throws); src/hooks/useWatchWorkoutBridge.ts:1187 (onWorkoutEffort); src/hooks/useWatchRouteBridge.ts:12-28; src/screens/SettingsScreen.tsx:62-65, 418-431; src/screens/WatchSettingsScreen.tsx:168, 212; src/screens/RouteDetailScreen.tsx:55, 97, 285-345; src/services/watchRouteSync.ts:14-27; Apple: targets/watch/Infrastructure/WatchRouteLibraryStorage.swift, WatchRouteStorage.swift",
+  "why": "The note said the effort rating was Apple Watch only, but the Wear OS New workout view sends workoutEffort, the Android module relays it as onWorkoutEffort and the phone handles it; only the run effort rating is missing on Wear OS."
+ },
+ {
+  "id": "native-wearos",
+  "kind": "done",
+  "prs": [
+   3052,
+   3065,
+   3090,
+   3127,
+   3250,
+   3293,
+   3305,
+   3625
+  ],
+  "note_en": "Android has a Wear OS companion app with the Apple Watch app's pages, strength workouts, runs and walks, a remote for the phone's GPS recording, the same seven complications as the Apple Watch and four tiles (Nutrition, Sleep Health, Medications, Exercise). It is a separate install: wearos-release.apk comes with each GitHub release, and the EAS production workflow builds it and submits it to Google Play's Wear OS track. Its opt-in New workout view adds RPE from 1 to 10 and the end-of-workout effort rating. Not on Wear OS: following saved routes, jump rope, double tap, the effort rating after a run and saving workouts to Health Connect from the watch; starting a fast from the watch fails (the phone rejects the plan id it sends), runs are saved without map, splits or laps, and both watch apps show their own texts in English only.",
+  "note_es": "Android tiene una app complementaria para Wear OS con las páginas de la app del Apple Watch, entrenamientos de fuerza, carreras y caminatas, control de la grabación GPS del móvil, las mismas siete complicaciones que el Apple Watch y cuatro baldosas (Nutrition, Sleep Health, Medications, Exercise). Se instala aparte: wearos-release.apk viene con cada versión de GitHub, y el flujo de producción de EAS la compila y la envía al canal de Wear OS de Google Play. Su vista nueva de entrenamiento (New workout view), opcional, añade RPE de 1 a 10 y la valoración del esfuerzo al terminar. En Wear OS no están el seguimiento de rutas guardadas, la comba, el doble toque, la valoración del esfuerzo tras una carrera ni el guardado de entrenamientos en Health Connect desde el reloj; empezar un ayuno desde el reloj falla (el móvil rechaza el id de plan que envía), las carreras se guardan sin mapa, parciales ni vueltas, y las dos apps de reloj muestran sus textos solo en inglés.",
+  "evidence": "SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/Models.kt:9-27; AndroidManifest.xml:66-183 (7 complications), 194-247 (4 tiles, labels tile_nutrition/sleep/medications/exercise); targets/watch-widget/*.swift (7 complication kinds, no tiles); NewWorkoutScreens.kt:2849-2856, 3056-3190; Screens.kt:1420-1433; src/constants/fasting.ts:21 ('16-8'); no runEffort, jump rope or route following in targets/wearos; .github/workflows/android.yml:152, 169 (wearos-release.apk in the release files); SparkyFitnessMobile/.eas/workflows/production-build-submission.yml:8-12, 29-34 and eas.json:33-39 (wearos profile); targets/wearos/src/main/res (only values/), targets/watch/en.lproj, targets/watch-widget/en.lproj only",
+  "why": "'the same seven complications and four tiles' implied the Apple Watch has tiles; it has the seven complications but no tiles."
+ },
+ {
+  "id": "plat-native-apple-watch-app",
+  "kind": "done",
+  "prs": [
+   3052,
+   3065,
+   3090,
+   3127,
+   3250,
+   3293,
+   3305,
+   3574,
+   3625
+  ],
+  "note_en": "Android has a Wear OS companion app (Wear OS 3 or later, a separate install, with its options under Settings → Wear OS) with the same pages and seven complications, plus four tiles. It logs water, weight and medications, ends fasts (starting one fails: the phone does not recognize the plan id the watch sends), runs strength workouts, with RPE 1 to 10 and an effort rating in the opt-in New workout view, and records walks and runs with its own GPS or on a treadmill, though those runs are saved without map, splits or laps. Only the Apple Watch has saved-route following, jump rope, double tap, the effort rating after a run and saving workouts to Apple Health from the watch (on Android the phone's exercise write-back can add them to Health Connect); Wear OS estimates calories from heart rate, and both watch apps' own texts are English only.",
+  "note_es": "Android tiene una app complementaria para Wear OS (Wear OS 3 o posterior, que se instala aparte, con sus opciones en Ajustes → Wear OS) con las mismas páginas y siete complicaciones, además de cuatro baldosas. Registra agua, peso y medicación, termina ayunos (empezar uno falla: el móvil no reconoce el id de plan que envía el reloj), hace entrenamientos de fuerza, con RPE de 1 a 10 y valoración del esfuerzo en la vista nueva de entrenamiento (New workout view), opcional, y graba caminatas y carreras con su propio GPS o en cinta, aunque esas carreras se guardan sin mapa, parciales ni vueltas. Solo el Apple Watch tiene seguimiento de rutas guardadas, comba, doble toque, valoración del esfuerzo tras una carrera y guardado de entrenamientos en Apple Health desde el reloj (en Android, la escritura de ejercicio del móvil puede añadirlos a Health Connect); Wear OS calcula las calorías a partir del pulso, y los textos propios de las dos apps de reloj están solo en inglés.",
+  "evidence": "SparkyFitnessMobile/targets/wearos/build.gradle.tmpl:13 (minSdkVersion 30); AndroidManifest.xml:66-183 (7 complications), 194-247 (4 tiles); targets/watch-widget/*.swift (7 complication kinds, no tiles); Screens.kt:1420-1433; src/constants/fasting.ts:21; NewWorkoutScreens.kt:2849-2856, 3056-3190; WearSessionManager.kt:674-680; src/services/healthconnect/exerciseWriteback.ts:29-34; .github/workflows/android.yml:152, 169; .eas/workflows/production-build-submission.yml:8-12; docs/src/mobile-app/watch-apps.md:8-21; targets/wearos/src/main/res (only values/), targets/watch/en.lproj",
+  "why": "'the same seven complications and four tiles' implied the Apple Watch has tiles; only the complications are shared."
+ },
+ {
+  "id": "native-watch-workout-tracker",
+  "kind": "done",
+  "prs": [
+   3052,
+   3625
+  ],
+  "note_en": "On Wear OS too, a workout started on the phone is sent to the watch and brings the app to the front; sets are logged with the rotating crown, +/− or a keypad, heart rate is read in a foreground service and sent to the phone, and a Now Playing page appears during the workout. Rests started, paused or ended on the phone also show on the watch, and the rest timer vibrates when it ends; the default view has +15 s and Skip, and the opt-in New workout view adds countdown ticks in the last seconds and a −15 s button. Wear OS has no double tap.",
+  "note_es": "En Wear OS también, un entrenamiento iniciado en el móvil se envía al reloj y pone la app en primer plano; las series se registran con la corona giratoria, +/− o un teclado, la FC se lee en un servicio en primer plano y se envía al móvil, y durante el entrenamiento aparece una página Now Playing. Los descansos iniciados, pausados o terminados en el móvil se ven también en el reloj, y el temporizador vibra al terminar; la vista por defecto tiene +15 s y Skip, y la vista nueva de entrenamiento (New workout view), opcional, añade avisos de cuenta atrás en los últimos segundos y un botón de −15 s. Wear OS no tiene doble toque.",
+  "evidence": "SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/WatchStores.kt:1521-1550 (phone rest Resting/Paused/Ready applied, added in #3625), 81-95 (countdown tick/end), 2557 (rest end: countdownEnd in new view, Haptics.start in classic); Models.kt:408-409 (countdown only in new view); WorkoutScreens.kt:842-843 (classic rest: workout_rest_add_15 and common_skip); res/values/strings.xml:39 (common_skip 'Skip'), 215 (+15s classic), 296-297 (−15/+15 new view); WearSessionManager.kt:100-102",
+  "why": "The Spanish translated the watch's 'Skip' button as 'Saltar', but the Wear OS app is English only (res/values only) and the button reads Skip."
+ },
+ {
+  "id": "exercise-watch-cardio",
+  "kind": "partial",
+  "prs": [
+   3052,
+   3065,
+   3069,
+   3090,
+   3127
+  ],
+  "note_en": "Wear OS now records runs and walks on its own too: outdoors with the watch GPS or indoors, free or following the program workout or an interval plan, with pace and heart rate alerts, auto-pause, spoken cues, laps and a treadmill distance correction; the phone can also start one there, follows it live and files it in the diary, but without its map, splits or laps, because the phone drops the GPS points and lap marks the Wear OS app sends. Still Apple Watch only: following a saved route (on Android the phone still offers one, but the Wear OS run ignores it and Send to watch fails), Jump Rope, setting the alert ranges on the watch (Wear OS uses the ranges last set on the phone, or a default), ending distance steps when the distance is covered (Wear OS uses their expected time), the effort rating after the run, the step count behind cadence and stride, and saving the workout to a health app from the watch.",
+  "note_es": "Wear OS graba ahora también carreras y caminatas por su cuenta: al aire libre con el GPS del reloj o en interior, libres o siguiendo el entreno del programa o un plan de intervalos, con avisos de ritmo y de frecuencia cardiaca, pausa automática, avisos por voz, vueltas y corrección de la distancia en cinta; el móvil también puede iniciarlas en el reloj, las sigue en directo y las guarda en el diario, pero sin mapa, parciales ni vueltas, porque descarta los puntos GPS y las marcas de vuelta que envía la app de Wear OS. Siguen siendo solo del Apple Watch seguir una ruta guardada (en Android el móvil sigue ofreciéndola, pero la sesión de Wear OS la ignora y enviarla al reloj con Send to watch da error), la comba (Jump Rope), ajustar los rangos de los avisos en el reloj (Wear OS usa los últimos fijados en el móvil o unos por defecto), terminar los tramos de distancia al cubrirla (Wear OS usa su tiempo previsto), valorar el esfuerzo al acabar, el recuento de pasos del que salen la cadencia y la zancada, y guardar el entreno en una app de salud desde el reloj.",
+  "evidence": "SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/WorkoutScreens.kt (Run/Walk, Outdoor/Indoor, plan, Pace/HR toggles, auto-pause, voice cues, treadmill distance); WatchStores.kt:61-80 (TextToSpeech), 2745-2790 (startLocalRun/startRun: alert bands from phone context or standard), 2835 (route rows [lat, lon, tsMs]), 2971-2981 (laps kept as durations), 3053-3055 (result without steps or effort), 3126-3175 (alerts), 3219-3236 (steps advance on seconds only); PayloadAdapters.kt:369-400, 402-427 (start request without route), 960-984 (runFinished, no steps); targets/wearos/build.gradle.tmpl:98-114 (no Health Services or Health Connect); targets/watch/Presentation/WorkoutView.swift; targets/watch/Presentation/WatchRunView.swift (effort picker); targets/watch/Domain/WatchRunModels.swift (steps); modules/watch-connectivity/android/.../WatchConnectivityModule.kt:1837 (startRun but no sendRoute/removeRoute); src/utils/watchRun.ts:86-108; src/services/watchRunSave.ts; src/services/watchRouteSync.ts:14-27; src/screens/RouteDetailScreen.tsx:55, 97, 285-345; src/screens/RecordActivityScreen.tsx:302-309; src/services/shared/exerciseWritebackPlan.ts:11-23",
+  "why": "Listing 'saving the workout to a health app' as Apple Watch only conflicted with the strength and app-level notes, which say the Android phone's exercise write-back can add saved workouts to Health Connect; what Wear OS lacks is saving from the watch."
+ },
+ {
+  "id": "missed-plat-services-apple-watch-app",
+  "kind": "partial",
+  "prs": [
+   3052,
+   3065,
+   3090,
+   3574,
+   3625
+  ],
+  "note_en": "Android has a Wear OS app with the same pages as the Apple Watch app: it logs and edits strength sets, records runs and walks with intervals, alerts, auto-pause and voice cues, controls the phone's GPS recording and follows the phone's page, haptics and rest alert settings; the phone shows a 'Wear OS' settings row and the watch option in Record Activity once one has connected. Its opt-in New workout view adds RPE 1 to 10 and an end-of-workout effort rating, while the default view keeps RPE 5 to 10 and asks for no rating. It still has no double tap or keypad-or-crown setting, estimates calories from heart rate, saves nothing to a health app from the watch, saves runs without map, splits or laps, and cannot follow saved routes although the phone still offers one; as on the Apple Watch, its own texts are English only.",
+  "note_es": "Android tiene una app de Wear OS con las mismas páginas que la del Apple Watch: registra y edita series de fuerza, graba carreras y caminatas con intervalos, avisos, pausa automática e indicaciones por voz, controla la grabación GPS del móvil y respeta los ajustes de páginas, vibración y aviso de descanso del móvil; el móvil muestra una fila de ajustes 'Wear OS' y la opción de grabar con el reloj en Registrar actividad en cuanto se ha conectado uno. Su vista nueva de entrenamiento (New workout view), opcional, añade RPE de 1 a 10 y valoración del esfuerzo al terminar, mientras que la vista por defecto mantiene el RPE de 5 a 10 y no la pide. Sigue sin doble toque ni ajuste de teclado numérico o corona, calcula las calorías a partir del pulso, no guarda nada en una app de salud desde el reloj, guarda las carreras sin mapa, parciales ni vueltas y no puede seguir rutas guardadas aunque el móvil sigue ofreciendo una; como en el Apple Watch, sus textos solo están en inglés.",
+  "evidence": "SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/WatchStores.kt:32-43 (haptics and rest buzz providers), 81-95, 2461-2464 (workoutEffort); Models.kt:361-362, 398-412 (hapticsEnabled, restAlertsEnabled); src/hooks/useWatchCheckInBridge.ts:281, 301, 901-902 (phone sends hapticsEnabled, restAlertsEnabled); WearSessionManager.kt:674-680; WorkoutScreens.kt:849-883 (classic RPE coerceIn 5-10, no effort rating); NewWorkoutScreens.kt:2849-2856, 3056-3190; src/screens/RecordActivityScreen.tsx:302-309 (watch option and route choice not gated by platform); src/screens/WatchSettingsScreen.tsx:168, 212; targets/wearos/src/main/res (only values/), targets/watch/en.lproj",
+  "why": "'the default view keeps RPE 5 to 10 and none' was unclear English; reworded so it says the default view asks for no effort rating, and the Spanish now uses the app's 'teclado numérico'."
+ },
+ {
+  "id": "settings-hub",
+  "kind": "done",
+  "prs": [
+   3052,
+   3242,
+   3316,
+   3570,
+   3631
+  ],
+  "note_en": "Both apps now have a Features entry for turning features on or off per platform (on web in the Profile & Account tab, on mobile as a row shown while connected). Mobile also adds a Quick Actions row for the + menu and an 'NFC tags' row shown only on phones with NFC, and its watch row appears on Android too, titled 'Wear OS', once a Wear OS watch has connected. On Android it opens the same watch settings screen without the double-tap, set input, set-screen metrics, Up Next page and larger text options. Otherwise the mobile list is the same on both platforms.",
+  "note_es": "Las dos apps tienen ya una entrada 'Features' para activar o desactivar funciones por plataforma (en la web, en la pestaña Perfil y cuenta; en el móvil, como fila visible mientras hay conexión). El móvil añade además una fila Acciones rápidas para el menú + y una fila 'NFC tags' que solo aparece en teléfonos con NFC, y su fila del reloj aparece también en Android, con el título 'Wear OS', en cuanto se ha conectado un reloj Wear OS. En Android abre la misma pantalla de ajustes del reloj, pero sin las opciones de doble toque, introducción de series, métricas en la pantalla de series, página Siguiente ni texto más grande. Por lo demás, la lista del móvil es igual en las dos plataformas.",
+  "evidence": "/home/user/sf-main/SparkyFitnessFrontend/src/pages/Settings/SettingsPage.tsx:61, 186-188; SparkyFitnessFrontend/src/pages/Settings/FeatureSettings.tsx:130 (settings.features.title, absent from public/locales/es, so 'Features'); /home/user/sf-main/SparkyFitnessMobile/src/screens/SettingsScreen.tsx:320-328 (settings.rows.features), 394-400 (addMenu = 'Acciones rápidas' in es), 408-417 (settings.rows.nfcTags, absent from es catalog, so 'NFC tags'), 418-430 (wearOs row); src/screens/WatchSettingsScreen.tsx:40, 168 (double tap), 212 (set input), 245 (Layout heading shown on both), 248 (set-screen metrics and Up Next page, !isAndroid), 286 (larger text, !isAndroid), 305 (New workout view shown on Android); es catalog: setInputTitle 'Introducción de series', setScreenMetricsTitle 'Métricas en la pantalla de series', upNextTitle 'Página Siguiente', largerTextTitle 'Texto más grande en el reloj'",
+  "why": "Android also lacks set-screen metrics, Up Next page and larger text, but the Layout section itself still shows on Android (with the New workout view switch), so 'no Layout' was wrong. The Spanish apps have no translation for the Features entry (web settings.features, mobile settings.rows.features) or settings.rows.nfcTags, so they show 'Features' and 'NFC tags'; the Spanish note now uses those names."
+ },
+ {
+  "id": "plat-services-watch-link-status",
+  "kind": "done",
+  "prs": [
+   3052
+  ],
+  "note_en": "The developer tools' watch link section now also shows on Android, titled 'Wear OS', and is still only in development builds. There the watch counts as paired once any Wear OS watch has connected, and stays paired. It counts as reachable whenever a Wear OS watch is connected, whether or not the watch app is open, although the row still says 'Watch app not in foreground' when none is connected.",
+  "note_es": "La sección del enlace con el reloj de las herramientas de desarrollo aparece ahora también en Android, con el título 'Wear OS', y sigue estando solo en las compilaciones de desarrollo. Allí el reloj figura como emparejado en cuanto se ha conectado cualquier reloj Wear OS, y sigue figurando así. Figura como accesible siempre que haya un reloj Wear OS conectado, esté abierta o no la app del reloj, aunque la fila sigue diciendo 'La app del reloj no está en primer plano' cuando no hay ninguno conectado.",
+  "evidence": "SparkyFitnessMobile/src/components/DevTools.tsx:113-117, :653-700; src/screens/SettingsScreen.tsx:444-447 (DevTools only with __DEV__ and a dev APP_VARIANT); src/hooks/useWatchConnectivity.ts:15-17, :38-41; modules/watch-connectivity/expo-module.config.json (ios, android); modules/watch-connectivity/android/src/main/java/expo/modules/watchconnectivity/WatchConnectivityModule.kt:66, :101, :203-222, :231, :309 (isPairedFlag only ever set true), :1738-1743 (isPaired); devTools.watch.notReachable in es 'La app del reloj no está en primer plano'",
+  "why": "Spanish 'ya no deja de estarlo' did not read naturally; reworded to match 'stays paired'. Code confirms the paired flag is never cleared."
+ },
+ {
+  "id": "native-android-water-shortcut",
+  "kind": "done",
+  "prs": [
+   2989,
+   3020,
+   3051,
+   3251,
+   3435
+  ],
+  "note_en": "Its short label comes from the app's quickActions strings, translated in 11 of the 15 other languages the app ships; the long label is translated into German, Spanish, French, Polish, Brazilian Portuguese, Russian, Cantonese and Simplified and Traditional Chinese. It sits beside Scan food, Log food and Fasting, never brings the app to the front, and a drink logged from it also updates a placed water widget. The result Toast is still English only and only shows while the app's notifications are on.",
+  "note_es": "Su etiqueta corta sale de las cadenas quickActions de la app, traducidas en 11 de los otros 15 idiomas que trae; la larga está traducida al alemán, español, francés, polaco, portugués de Brasil, ruso, cantonés y chino simplificado y tradicional. Aparece junto a Escanear comida, Registrar comida y Ayuno, nunca trae la app al frente y cada toma registrada con él actualiza también el widget de agua si hay uno colocado. El Toast de resultado sigue solo en inglés y únicamente se ve con las notificaciones de la app activadas.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/BackgroundWaterModule.kt:63-66 (English fallback labels); LogWaterActivity.kt:30-39 (no UI),71,95 (showTotalOnWaterWidget),122-131 (report; Toast needs the app's notifications unless the app is on screen),192-201 (hard-coded English results); src/hooks/useQuickActions.ts:29-69,168-170; src/localization/localeRegistry.json (15 non-English locales); quickActions absent only in hu, it, lv, nb-NO; logWaterInBackground in de, es, fr, pl, pt-BR, ru, yue-Hant, zh-Hans, zh-Hant (de and fr by Weblate #3251, ru by #3435); the only HyperOS mention (QuickSettingsTiles.kt.tmpl:82) is about the tile's subtitle, not the shortcut's Toast",
+  "why": "Removed the claim that on HyperOS the Toast also needs floating notifications: no code backs it (the only HyperOS note in the code is about tile subtitles)."
+ },
+ {
+  "id": "native-ios-controls",
+  "kind": "partial",
+  "prs": [
+   2989,
+   3020,
+   3452
+  ],
+  "note_en": "Android has four Quick Settings tiles as counterparts: Log water (logs a drink in the background, also from the lock screen), Scan barcode, Search food and Calories left (today's kcal or kJ left, following the energy unit setting; opens the diary), and the iOS Calories left control follows the same setting. Remove a drink, Start fast and End fast have no tile; on the phone, the only way to remove a drink without opening the app is the − button on the home screen water widget. The Log water tile does not show the day's total like the iOS control; on Android that total is on the water widget.",
+  "note_es": "Android tiene cuatro baldosas de Ajustes rápidos equivalentes: Registrar agua (registra una toma en segundo plano, también desde la pantalla de bloqueo), Escanear código, Buscar comida y Calorías restantes (kcal o kJ restantes de hoy, según la unidad de energía elegida; abre el diario), y el control Calorías restantes de iOS sigue el mismo ajuste. Eliminar toma, Iniciar ayuno y Terminar ayuno no tienen baldosa; en el móvil, la única forma de quitar una toma sin abrir la app es el botón − del widget de agua de la pantalla de inicio. La baldosa Registrar agua no muestra el total del día como el control de iOS; en Android ese total aparece en el widget de agua.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/plugins/withQuickSettingsTiles.ts:17-38; /home/user/sf-main/SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/QuickSettingsTiles.kt.tmpl:86-121 (energyLeftRes(snapshot.isKj) :116); CalorieWidget.kt.tmpl:343-344; /home/user/sf-main/SparkyFitnessMobile/targets/widget/Controls.swift:108-152 (RemoveWaterControl, CaloriesLeftControl); targets/widget/en.lproj/Localizable.strings:37 (widget.control.remove_water.name = Remove a drink), es.lproj/Localizable.strings:33 (Eliminar toma); /home/user/sf-main/SparkyFitnessMobile/targets/widget/index.swift:10-18; WaterWidget.kt.tmpl:53-66, 293-310; res/xml/sparky_water_widget_info.xml (home_screen)",
+  "why": "The iOS control is named 'Remove a drink' ('Eliminar toma' in the Spanish app), not 'Remove water'/'Quitar agua'; aligned with the app's names and with the diary-home-widgets note."
+ },
+ {
+  "id": "plat-native-control-center",
+  "kind": "partial",
+  "prs": [
+   2989,
+   3020,
+   3452
+  ],
+  "note_en": "Android has four Quick Settings tiles: Log water, Scan barcode, Search food and Calories left (shows today's kcal or kJ left, as set in the app, and opens the diary, like the iOS control). Still iOS-only: the Remove a drink, Start fast and End fast controls, the water amount on the Log water control, and the Action button; on Android the day's water and a − button to remove a drink are on the home screen water widget instead.",
+  "note_es": "Android tiene cuatro baldosas de Ajustes rápidos: Registrar agua, Escanear código, Buscar comida y Calorías restantes (muestra las kcal o kJ restantes de hoy, según lo elegido en la app, y abre el diario, como el control de iOS). Siguen siendo solo de iOS los controles Eliminar toma, Iniciar ayuno y Terminar ayuno, la cantidad de agua en el control Registrar agua y el botón Acción; en Android, el agua del día y un botón − para quitar una toma están en el widget de agua de la pantalla de inicio.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/plugins/withQuickSettingsTiles.ts:17-38; QuickSettingsTiles.kt.tmpl:106-121; /home/user/sf-main/SparkyFitnessMobile/targets/widget/Controls.swift:11-41, 108-152; targets/widget/en.lproj/Localizable.strings:37 (Remove a drink), es.lproj/Localizable.strings:33 (Eliminar toma); /home/user/sf-main/SparkyFitnessMobile/targets/widget/index.swift:10-18; WaterWidget.kt.tmpl:53-66, 293-310",
+  "why": "Used the iOS control's real name, 'Remove a drink' / 'Eliminar toma', in place of 'Remove water' / 'Quitar agua'."
+ },
+ {
+  "id": "missed-plat-screens-control-center-background",
+  "kind": "partial",
+  "prs": [
+   2989,
+   3020
+  ],
+  "note_en": "On Android the Log water Quick Settings tile logs a drink without opening the app, also from the lock screen, and puts the result in the notification list when the app's notifications are on. The home screen water widget's − and + buttons also remove or add a drink without opening the app, but there is no tile like the iOS Remove a drink control, and no tile or widget starts or ends a fast.",
+  "note_es": "En Android, la baldosa de Ajustes rápidos Registrar agua registra una toma sin abrir la app, también desde la pantalla de bloqueo, y deja el resultado en la lista de notificaciones si las notificaciones de la app están activadas. Los botones − y + del widget de agua de la pantalla de inicio también quitan o añaden una toma sin abrir la app, pero no hay baldosa como el control Eliminar toma de iOS, y ninguna baldosa ni widget inicia o termina un ayuno.",
+  "evidence": "SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/QuickSettingsTiles.kt.tmpl:77-98 (LogWaterTileService, enqueueLogWater fromTile = true); SparkyFitnessMobile/targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/LogWaterActivity.kt:47-61, 122-132 (tile result goes to a notification; the Toast fallback is dropped by Android for a background app while its notifications are off), 143-145 (notify returns false when notifications are off); SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WaterWidgetActions.kt:22-30 (WaterChangeAction); .../widget/WaterWidget.kt.tmpl:149-177, 227; SparkyFitnessMobile/targets/android-widget/res/xml/sparky_water_widget_info.xml:12 (home_screen only); SparkyFitnessMobile/plugins/withQuickSettingsTiles.ts:17-38 (Log water, Scan, Search, Calories left tiles only); targets/widget/en.lproj/Localizable.strings:37 and es.lproj/Localizable.strings:33 (Remove a drink / Eliminar toma); Wear OS fasting start/end is a watch app page, not a control: SparkyFitnessMobile/targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/Screens.kt:1358, 1383",
+  "why": "'Remove water' / 'Quitar agua' is not the iOS control's name; the app calls it 'Remove a drink' / 'Eliminar toma'."
+ },
+ {
+  "id": "plat-services-control-center-controls",
+  "kind": "partial",
+  "prs": [
+   2989,
+   3020
+  ],
+  "note_en": "Android has Quick Settings tiles for Calories left, Log water, Scan barcode and Search food, redrawn each time the panel opens (Calories left reads the calorie widget snapshot). The three that open the app use sparkyfitnessmobile:// links rather than the App Group handoff. Remove a drink, Start fast and End fast have no tile, and the Log water tile does not show the day's total. That total is on the water widget, which also picks up drinks logged from the tile and has a − button to remove one.",
+  "note_es": "Android tiene baldosas de Ajustes rápidos para Calorías restantes, Registrar agua, Escanear código y Buscar comida, que se vuelven a dibujar cada vez que se abre el panel (Calorías restantes lee la instantánea del widget de calorías). Las tres que abren la app usan enlaces sparkyfitnessmobile:// en lugar del traspaso por App Group. Eliminar toma, Iniciar ayuno y Terminar ayuno no tienen baldosa, y la baldosa Registrar agua no muestra el total del día. Ese total está en el widget de agua, que también recoge las tomas registradas desde la baldosa y tiene un botón − para quitar una.",
+  "evidence": "SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/QuickSettingsTiles.kt.tmpl:20-34 (refresh on onStartListening), :40-62 (openApp with sparkyfitnessmobile:// links), :65-75 (Scan/Search), :86-98 (Log water), :106-121 (Calories left reads CalorieWidget.loadSnapshot, opens diary); plugins/withQuickSettingsTiles.ts:17-38 (four tiles); targets/android-widget/res/values-es/widget_strings.xml (widget_scan_barcode = Escanear código); targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/LogWaterActivity.kt:64-76,95-107 (showTotalOnWaterWidget broadcast); targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WaterWidgetReceiver.kt.tmpl:36-57 (ACTION_WATER_TOTALS); src/hooks/useWidgetSync.ts:119 (iOS reloadControls), :157-170 (Android water snapshot push); src/hooks/useQuickActions.ts:201-209 (App Group handoff iOS only); targets/widget/Controls.swift:108-122 (RemoveWaterControl), en.lproj/Localizable.strings:37 and es.lproj/Localizable.strings:33 (Remove a drink / Eliminar toma)",
+  "why": "Named the iOS control as the app does ('Remove a drink' / 'Eliminar toma') instead of 'Remove water' / 'Quitar agua'."
+ },
+ {
+  "id": "native-widget-water",
+  "kind": "done",
+  "prs": [
+   3020,
+   3228
+  ],
+  "note_en": "Android has an interactive water widget too, with today's water against the goal, a bar, and − and + buttons that remove or add one drink of the Dashboard's container without opening the app. It is 2x2 by default and can be resized: one row tall, the amount sits above a row with the bar and smaller buttons, and wide enough, the amount and bar sit to the left of − and +, like the iOS medium widget. iOS instead offers fixed small and medium sizes with a ring, plus three Lock Screen shapes that Android lacks.",
+  "note_es": "Android también tiene un widget de agua interactivo, con el agua de hoy frente al objetivo, una barra y botones − y + que quitan o añaden una toma del recipiente elegido en el Panel sin abrir la app. Mide 2x2 por defecto y se puede redimensionar: con una sola fila de alto, la cantidad queda encima de una fila con la barra y botones más pequeños, y con anchura suficiente, la cantidad y la barra quedan a la izquierda de − y +, como en el widget mediano de iOS. iOS, en cambio, ofrece tamaños fijos pequeño y mediano con un anillo, además de tres formatos de pantalla de bloqueo que Android no tiene.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/targets/android-widget/res/xml/sparky_water_widget_info.xml:5-6 (2x2 target),10-12 (resizeMode horizontal|vertical, minResize 110x40 dp),14 (home_screen only); targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WidgetSizes.kt:71-124 (water steps: classic from 140 dp tall, side by side from 300 dp wide); WaterWidget.kt.tmpl:52-66,72 (SizeMode.Responsive),118-146 (layout per size); res/values-es/widget_strings.xml:31-32 (Añadir una toma / Quitar una toma); iOS: targets/widget/waterWidget.swift:175-216,260-263",
+  "why": "Spanish used 'bebida' where the Spanish app and the other notes say 'toma' (Añadir una toma / Quitar una toma)."
+ },
+ {
+  "id": "plat-native-water-widget",
+  "kind": "done",
+  "prs": [
+   3020,
+   3228
+  ],
+  "note_en": "Android has a Glance home-screen water widget whose − and + buttons remove or add one drink in the background (through WorkManager, with the same request as the Log water shortcut and tile) without opening the app, and it shows a short status line when a change fails. It is 2x2 by default and can be resized, keeping the buttons even one row tall and putting them beside the amount when wide, while iOS has fixed small and medium sizes. Unlike iOS it draws a bar instead of a ring and has no Lock Screen variants (accessoryCircular/Rectangular/Inline).",
+  "note_es": "Android tiene un widget de agua de pantalla de inicio con Glance cuyos botones − y + quitan o añaden una toma en segundo plano (con WorkManager y la misma petición que el atajo y la baldosa Registrar agua) sin abrir la app, y muestra una breve línea de estado cuando un cambio falla. Mide 2x2 por defecto y se puede redimensionar: conserva los botones incluso con una sola fila de alto y, si se ensancha, los coloca junto a la cantidad, mientras que iOS tiene tamaños fijos pequeño y mediano. A diferencia de iOS, muestra una barra en lugar de un anillo y no tiene variantes de pantalla de bloqueo (accessoryCircular/Rectangular/Inline).",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/WaterWidget.kt.tmpl:52-72 (WaterWidgetWorker, SizeMode.Responsive),118-146 (StatusLine); WaterWidgetActions.kt:11,52 (postWaterChange from LogWaterActivity.kt:228); WidgetSizes.kt:71-124; res/xml/sparky_water_widget_info.xml:10-14 (resizeMode horizontal|vertical, minResize 110x40 dp, home_screen only); res/values-es/widget_strings.xml:31-32 (toma); iOS: targets/widget/waterWidget.swift:175-193 (accessory variants),260-263",
+  "why": "Spanish 'bebida' changed to 'toma', the word the Spanish app and the other notes use for a drink."
+ },
+ {
+  "id": "plat-services-widget-water",
+  "kind": "done",
+  "prs": [
+   2989,
+   3020,
+   3228,
+   3251,
+   3297,
+   3435
+  ],
+  "note_en": "Android has its own water widget with − and + buttons, fed from the Dashboard through useWidgetSync like the iOS one; on Android the background sync also refreshes it, an account change clears it, and a drink logged from the Log water shortcut or Quick Settings tile updates its total. The Android widget is 2x2 by default and can be resized, while iOS has fixed small and medium sizes plus Lock Screen versions. On both platforms its texts are translated into German, Spanish, French, Polish, Brazilian Portuguese, Russian, Cantonese and Simplified and Traditional Chinese, and into Dutch fully on iOS but only in part on Android; Hungarian, Italian, Norwegian, Turkish and Latvian show English.",
+  "note_es": "Android tiene su propio widget de agua con botones − y +, alimentado desde el Panel mediante useWidgetSync igual que el de iOS; en Android, además, la sincronización en segundo plano lo actualiza, un cambio de cuenta lo vacía y una toma registrada desde el atajo Registrar agua o la baldosa de Ajustes rápidos actualiza su total. El widget de Android mide 2x2 por defecto y se puede redimensionar, mientras que iOS tiene tamaños fijos pequeño y mediano y versiones para la pantalla de bloqueo. En ambas plataformas sus textos están traducidos al alemán, español, francés, polaco, portugués de Brasil, ruso, cantonés y chino simplificado y tradicional, y al neerlandés por completo en iOS pero solo en parte en Android; en húngaro, italiano, noruego, turco y letón aparecen en inglés.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/hooks/useWidgetSync.ts:98-115,155-170; src/services/androidWidgetSyncService.ts:173-176 (clear),178-217 (background refresh pushes water); src/hooks/useAuth.ts:79; targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/LogWaterActivity.kt:71,95 (showTotalOnWaterWidget); res/xml/sparky_water_widget_info.xml:5-14; WaterWidget.kt.tmpl:118-146; iOS: targets/widget/waterWidget.swift:157-259 (only widget.water.* strings). Translations: Android water strings complete in values-{de,es,fr,pl,pt-rBR,ru,b+yue+Hant,zh-rCN,zh-rTW}; values-nl lacks 7 (description, unit_oz, add, pick_container, expired, unreachable, nothing_to_remove); none in values-{hu,it,nb-rNO,tr}; values-lv empty; iOS widget.water.* in de, es, fr, nl, pl, pt-BR, ru, yue-Hant, zh-Hans, zh-Hant .lproj, not hu, it, nb-NO, tr, lv. Added since 26 Oct by Weblate #3251 (Android fr, ru; iOS ru), #3297 (nl), #3435 (Android de; iOS de, fr); localeRegistry.json: 15 non-English locales",
+  "why": "Spanish 'una bebida registrada' changed to 'una toma registrada' to match the Spanish app's wording and the other notes."
+ },
+ {
+  "id": "plat-native-notification-channels",
+  "kind": "done",
+  "prs": [
+   2989,
+   3028,
+   3435,
+   3474,
+   3523
+  ],
+  "note_en": "Android also has 'Mood check-ins', 'Brushing reminders' and 'Meditation timer' channels (high importance, vibration) and a native 'Quick logging' channel (default importance, no sound or vibration) for the result of the Log water Quick Settings tile. The mood channel's name is translated in 6 of the 15 other shipped languages and the other two in 4; the Quick logging name and messages are hard-coded in English. iOS still has no channels.",
+  "note_es": "Android tiene además los canales 'Registros del estado de ánimo', 'Brushing reminders' y 'Meditation timer' (importancia alta, con vibración) y un canal nativo 'Quick logging' (importancia normal, sin sonido ni vibración) para el resultado de la baldosa Registrar agua de Ajustes rápidos. El nombre del canal de estado de ánimo está traducido en 6 de los otros 15 idiomas incluidos y los otros dos en 4; el nombre y los mensajes de Quick logging están escritos en inglés en el código nativo. iOS sigue sin canales.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/services/notifications.ts:25-31 (channel ids), 78-114 (Android JS channels), 206-216 (mood), 218-228 (oral care, #3474, created by oralCareReminderService.ts:56), 230-240 (mindfulness, #3523, used at 653-654); notifications.channels.moodCheckin in de, es, fr, pl, pt-BR, ru (#3435); oralCare and mindfulness in de, fr, pl, pt-BR only; localeRegistry.json (16 locales); android res values-es tile_log_water 'Registrar agua'; targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/LogWaterActivity.kt:148-151 (IMPORTANCE_DEFAULT, setName(\"Quick logging\"), no sound, no vibration), 192-201 (English messages)",
+  "why": "The note said the Mood check-ins channel name was translated into no other language, but the de, es, fr, pl, pt-BR and ru catalogs translate it, which contradicted plat-services-notification-channels. It also left out the oral care and meditation channels that exist on Android now. Spanish now uses the Spanish app's own channel name."
+ },
+ {
+  "id": "plat-services-notification-channels",
+  "kind": "done",
+  "prs": [
+   2989,
+   3005,
+   3028,
+   3435,
+   3474,
+   3506,
+   3523,
+   3552,
+   3588,
+   3628
+  ],
+  "note_en": "The channels created from JS now also include 'Mood check-ins', 'Brushing reminders' and 'Meditation timer' (high importance, vibration); the mood channel's name is translated into German, Spanish, French, Polish, Brazilian Portuguese and Russian, the other two only into German, French, Polish and Brazilian Portuguese, and 'Symptom reminders' has no translation. Medication reminders on both platforms have a snooze button ('Remind in N m'). A native 'Quick logging' channel, with default importance and no sound, vibration or pop-up, is created the first time the Log water Quick Settings tile posts its result, with its name and messages hard-coded in English; iOS still has no channels.",
+  "note_es": "Los canales creados desde JS incluyen ahora también 'Registros del estado de ánimo', 'Brushing reminders' y 'Meditation timer' (importancia alta, vibración); el nombre del canal de estado de ánimo está traducido al alemán, español, francés, polaco, portugués de Brasil y ruso, los otros dos solo al alemán, francés, polaco y portugués de Brasil, y 'Symptom reminders' no tiene traducción. Los recordatorios de medicación tienen en las dos plataformas un botón para posponerlos ('Recordar en N min'). Un canal nativo 'Quick logging', con importancia normal y sin sonido, vibración ni aviso emergente, se crea la primera vez que la baldosa de Ajustes rápidos Registrar agua publica su resultado, con el nombre y los mensajes escritos en inglés en el propio código; iOS sigue sin canales.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/services/notifications.ts:25-31 (channel ids),78-114 (Android channels),116-122 (remindInMinutes, used in both medication categories, not platform-gated),206-216 (mood),218-228 (oral care, #3474),230-240 (mindfulness, #3523),242-268 (medication, symptom); locales notifications.channels: moodCheckin in de, es ('Registros del estado de ánimo'), fr, pl, pt-BR, ru (Weblate #3435); oralCare in fr, pl (#3506), de (#3552), pt-BR (#3628); mindfulness in de, pl (#3552), fr (#3588), pt-BR (#3628); symptomReminders in no catalog (default 'Symptom reminders'); notifications.actions.remindInMinutes es 'Recordar en {{minutes}} min'; targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/LogWaterActivity.kt:122-131 (notify only from the tile),143-153 (setName(\"Quick logging\"), IMPORTANCE_DEFAULT),170,192-201 (English messages)",
+  "why": "Spanish quoted the mood channel by its English name although the Spanish app translates it as 'Registros del estado de ánimo'; aligned with the Spanish UI name."
+ },
+ {
+  "id": "checkin-add-menu-shortcuts",
+  "kind": "done",
+  "prs": [
+   3242,
+   3474
+  ],
+  "note_en": "The mobile + menu still opens Measurements, Progress photos, Mood, Mindfulness and Sync Health directly, and now Oral care too; each item can be moved to one of the four large cards, reordered or hidden in Settings > Quick Actions. The web add menu still only leads to whole pages such as Check-In, not to a single part of it.",
+  "note_es": "El menú + del móvil sigue abriendo directamente Medidas, Fotos del progreso, Estado de ánimo, Mindfulness y Sincronizar Salud, y ahora también Oral care; cada elemento se puede pasar a una de las cuatro tarjetas grandes, reordenar u ocultar en Ajustes > Acciones rápidas. El menú de añadir de la web sigue llevando solo a páginas completas como Check-in, no a una parte concreta.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/constants/addMenuItems.ts:12-26 (oralCare in ADD_MENU_ITEM_KEYS), 39-40 (four cards), 62-80 (labels: syncHealth uses addSheet.syncHealthShort); /home/user/sf-main/SparkyFitnessMobile/src/components/AddSheet.tsx:124-125, 553-559; /home/user/sf-main/SparkyFitnessMobile/src/screens/AddMenuSettingsScreen.tsx:45,63-89,118,218; SettingsScreen.tsx:396-399 (settings.rows.addMenu 'Quick Actions' / es 'Acciones rápidas'); mobile es addSheet: measurements 'Medidas', progressPhotos 'Fotos del progreso', mood 'Estado de ánimo', syncHealthShort 'Sincronizar Salud', oralCare not translated; web es nav.checkin 'Check-in'; /home/user/sf-main/SparkyFitnessFrontend/src/layouts/MainLayout.tsx:125-158",
+  "why": "The Spanish used names that are not the Spanish apps' own (Mediciones, Fotos de progreso, Sincronizar salud, Higiene bucal, Check-In): the Spanish mobile app shows Medidas, Fotos del progreso, Sincronizar Salud and leaves Oral care in English, and the Spanish web shows Check-in. Named the settings screen in both languages."
+ },
+ {
+  "id": "cycle-addsheet-quick-log",
+  "kind": "done",
+  "prs": [
+   3570,
+   3631
+  ],
+  "note_en": "On mobile the + menu row is left out while cycle is off in Settings > Features (Quick Actions settings marks it 'Not shown: turned off in Features'), and it opens the setup instead of the log until setup is done. The web's narrow-screen + menu also lists Cycle only while it is on, but it opens the Cycle page, not a log form.",
+  "note_es": "En el móvil, la fila del menú + se omite mientras el ciclo está desactivado en Ajustes > Features (los ajustes de Acciones rápidas la marcan con 'Not shown: turned off in Features'), y abre la configuración en lugar del registro hasta que esta se complete. El menú + de la web en pantallas estrechas también muestra Ciclo solo si está activado, pero abre la página de Ciclo, no un formulario de registro.",
+  "evidence": "SparkyFitnessMobile/src/constants/addMenuItems.ts:30-38; src/hooks/useAddMenuItemAvailable.ts:17-23; src/hooks/useAddSheetActions.ts:349-360 (CycleLogModal vs CycleOnboarding by onboarded_at); src/screens/AddMenuSettingsScreen.tsx:160-167; mobile es catalog has no screens.features / settings.rows.features or addMenuSettings.offInFeatures (shown in English); SparkyFitnessFrontend/src/constants/webTabs.ts:37, 106-122; src/layouts/MainLayout.tsx:99-103, 125-140; web es nav.cycle 'Ciclo'",
+  "why": "Spanish called the screen 'Funciones', but the Spanish mobile app does not translate Features and shows it in English. 'Abre el centro' read unnaturally; both languages now say it opens the Cycle page."
+ },
+ {
+  "id": "auth-magic-link",
+  "kind": "done",
+  "prs": [
+   3384
+  ],
+  "note_en": "The web Request Magic Link button now follows the server's magic link setting (admin switch or environment variables) and also shows when email and password sign-in is off; when the setting is off the server refuses magic link requests and verifications. Mobile still has no magic link sign-in.",
+  "note_es": "El botón Solicitar enlace mágico de la web sigue ahora el ajuste de enlace mágico del servidor (interruptor de administración o variables de entorno) y también aparece cuando el acceso con correo y contraseña está desactivado; con el ajuste desactivado, el servidor rechaza las solicitudes y verificaciones de enlace mágico. El móvil sigue sin inicio de sesión con enlace mágico.",
+  "evidence": "/home/user/sf-main/SparkyFitnessFrontend/src/pages/Auth/Auth.tsx:73, 627-661, 806-815; web es auth.requestMagicLink 'Solicitar enlace mágico'; /home/user/sf-main/SparkyFitnessServer/middleware/magicLinkLoginGuard.ts:9-10, 18-27 (blocks sign-in/magic-link and magic-link/verify); /home/user/sf-main/SparkyFitnessServer/utils/magicLinkLogin.ts:5-10; /home/user/sf-main/SparkyFitnessServer/SparkyFitnessServer.ts:350; no magic link in SparkyFitnessMobile/src",
+  "why": "Spanish named the button by its English label; the Spanish web shows 'Solicitar enlace mágico'."
+ },
+ {
+  "id": "missed-plat-screens-route-map",
+  "kind": "done",
+  "prs": [
+   3256,
+   3329
+  ],
+  "note_en": "Android now shows the real map in Record Activity, the activity summary and the cardio session in every build: Google Maps when the app was built with a key, otherwise OpenStreetMap through MapLibre, with no key and an © OpenStreetMap credit. iOS still uses Apple Maps. Only the keyless Android map falls back to the plain line, when it fails to load (for example offline).",
+  "note_es": "Android muestra ya el mapa real en Registrar actividad, el resumen de la actividad y la sesión de cardio en cualquier compilación: Google Maps si la app se compiló con clave y, si no, OpenStreetMap con MapLibre, sin clave y con el crédito © OpenStreetMap. iOS sigue usando Apple Maps. Solo el mapa de Android sin clave vuelve a la línea sola, cuando no consigue cargarse (por ejemplo, sin conexión).",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/utils/routeMapSupport.ts:14-28; /home/user/sf-main/SparkyFitnessMobile/src/components/exerciseStats/RouteMap.tsx:16-17; /home/user/sf-main/SparkyFitnessMobile/src/components/maps/MapSurface.android.tsx:13-20; /home/user/sf-main/SparkyFitnessMobile/src/components/exerciseStats/RouteTileMap.tsx:57-61, 65, 87-110; /home/user/sf-main/SparkyFitnessMobile/src/components/maps/maplibreMapSurface.tsx:272-273 (only surface firing onDidFailLoadingMap); RecordActivityScreen.tsx:1840, RunSummaryScreen.tsx:626, CardioSessionScreen.tsx:231; mobile screens.recordActivity 'Record Activity' / es 'Registrar actividad', screens.runSummary 'Activity saved' / es 'Actividad guardada'",
+  "why": "Spanish called the screen 'Grabar actividad', but the Spanish app names it 'Registrar actividad'; the summary screen is an activity summary ('Activity saved'), not only a run, so both languages were aligned to that."
+ },
+ {
+  "id": "diary-water-external-log",
+  "kind": "partial",
+  "prs": [
+   2989,
+   3020,
+   3228
+  ],
+  "note_en": "Android now logs water without opening the app from the launcher Log water shortcut, a Log water Quick Settings tile (also from the lock screen) and a home screen water widget whose − and + buttons remove or add one drink of the Dashboard's container. The widget is 2x2 by default and can be resized; when wide it puts the buttons beside the amount, like the iOS medium widget. Siri/Shortcuts, the Action button, the Remove a drink control and Lock Screen water widgets are still iOS-only.",
+  "note_es": "Android ya registra agua sin abrir la app desde el atajo Registrar agua del lanzador, una baldosa de Ajustes rápidos Registrar agua (también desde la pantalla de bloqueo) y un widget de agua para la pantalla de inicio, cuyos botones − y + quitan o añaden una bebida del recipiente elegido en el Panel. El widget es de 2x2 por defecto y se puede redimensionar; cuando es ancho pone los botones junto a la cantidad, como el widget mediano de iOS. Siri/Atajos, el botón Acción, el control Eliminar toma y los widgets de agua de la pantalla de bloqueo siguen siendo solo de iOS.",
+  "evidence": "SparkyFitnessMobile/targets/android-background-water/kotlin/com/sparkyapps/sparkyfitness/backgroundwater/LogWaterActivity.kt:34; .../backgroundwater/BackgroundWaterModule.kt:56-76 (launcher shortcut); SparkyFitnessMobile/targets/android-widget/kotlin/com/sparkyapps/sparkyfitness/widget/QuickSettingsTiles.kt.tmpl:77-98 (Log water tile, logs without unlocking); .../widget/WaterWidget.kt.tmpl:55-72 (2x2 by default, resizable, SizeMode.Responsive), 100-120 (wide side-by-side layout), 149-177, 205-241; .../widget/WidgetSizes.kt:71-104 (waterSizes); .../widget/WaterWidgetActions.kt:22-59; SparkyFitnessMobile/targets/android-widget/res/xml/sparky_water_widget_info.xml:3-13 (targetCell 2x2, resizeMode horizontal|vertical, home_screen only; merge 5625b4e6d, #3228); targets/android-widget/res/values-es/strings.xml tile_log_water 'Registrar agua'; SparkyFitnessMobile/src/services/androidWidgetSyncService.ts:35-49 (drink and canLog set by the Dashboard); SparkyFitnessMobile/targets/widget/waterWidget.swift:260-263 (systemSmall, systemMedium, accessory families); SparkyFitnessMobile/targets/widget/Controls.swift:111-124 (RemoveWaterControl, 'Remove a drink' / 'Eliminar toma' in en.lproj and es.lproj); SparkyFitnessMobile/targets/widget/ShortcutIntents.swift:6-8; SparkyFitnessMobile/src/localization/locales/es/translation.json (quickActions.logWater = Registrar agua, navigation.dashboard = Panel)",
+  "why": "The note said the Android water widget comes in one size only; #3228 made it resizable (resizeMode horizontal|vertical, responsive layouts), so the claim and the evidence were wrong and #3228 was missing from prs."
+ },
+ {
+  "id": "reports-hub-navigation",
+  "kind": "done",
+  "prs": [
+   3076,
+   3108,
+   3143,
+   3474
+  ],
+  "note_en": "Both now have a heart rate report, an Oral care report and Compare: web as three more tabs (Heart Rate Analytics, Oral care and Compare, 12 in all) and mobile as three more links on the Reports screen (Heart Rate, Oral care and Compare, 10 reports that can still be reordered or hidden). The rest is unchanged: web still has Fasting, Medications, Symptoms and Table View tabs that mobile lacks, and mobile still has separate Hydration and Caffeine and alcohol reports.",
+  "note_es": "Las dos tienen ahora un informe de frecuencia cardiaca, uno de Oral care y Comparar: la web como tres pestañas más (Análisis de frecuencia cardíaca, Oral care y Comparar, 12 en total) y el móvil como tres enlaces más en la pantalla Informes (Frecuencia cardíaca, Oral care y Comparar, 10 informes que se pueden seguir reordenando u ocultando). El resto no cambia: la web sigue teniendo las pestañas Ayuno, Medicamentos, Síntomas y Vista de tabla, que faltan en el móvil, y el móvil sigue teniendo informes propios de Hidratación y de Cafeína y alcohol.",
+  "evidence": "SparkyFitnessFrontend/src/pages/Reports/ReportsControls.tsx:39-101 (12 tabs: charts, measurements, heart-rate, fasting, oral-care, exercise-charts, sleep-analytics, stress-analytics, medications-reports, symptoms-reports, table, compare; 9 at 5364674f); SparkyFitnessFrontend/src/pages/Reports/Reports.tsx:339-342 (OralCareReport, #3474); SparkyFitnessFrontend/public/locales/en/translation.json (reports.heartRateTab 'Heart Rate Analytics', reports.tableTab 'Table View'); public/locales/es/translation.json (heartRateTab 'Análisis de frecuencia cardíaca', compareTab 'Comparar', tableTab 'Vista de tabla', no oralCareTab); SparkyFitnessMobile/src/constants/reports.ts:9-20 (10 REPORT_KEYS incl. heartRate, oralCare, compare; 7 at 5364674f); SparkyFitnessMobile/src/screens/ReportsScreen.tsx:43-136 (oralCare link 117-123, resolveKeyOrder); SparkyFitnessMobile/src/screens/ReportsSettingsScreen.tsx:307-309; mobile es reports.heartRate 'Frecuencia cardíaca', reports.compare 'Comparar', no reports.oralCare; shared/src/features/optionalFeatures.ts registers only cycle, so no report is gated",
+  "why": "Counts were wrong: #3474 added an Oral care tab on web and an Oral care report on mobile, so web has 12 tabs and mobile 10 reports, not 11 and 9; Spanish now uses the Spanish apps' names (Análisis de frecuencia cardíaca, Comparar, Vista de tabla)."
+ },
+ {
+  "id": "meds-adherence-stats",
+  "kind": "done",
+  "prs": [
+   3103
+  ],
+  "note_en": "Mobile now shows the same adherence overview on a new Adherence screen, opened from 'Adherence & log' in the Medications list: doses today, 14-day adherence, perfect days, the ring, the last-14-days bars and the streak, computed with the same shared code as the web. Its texts are translated in 5 of the 15 other shipped languages (German, Spanish, French, Polish and Brazilian Portuguese); the others show them partly or wholly in English.",
+  "note_es": "El móvil muestra ya el mismo resumen de adherencia en una pantalla nueva, Adherencia, que se abre desde «Adherencia y registro» en la lista de Medicación: dosis de hoy, adherencia a 14 días, días perfectos, el anillo, las barras de los últimos 14 días y la racha, calculados con el mismo código compartido que la web. Sus textos están traducidos en 5 de los otros 15 idiomas incluidos (alemán, español, francés, polaco y portugués de Brasil); en los demás aparecen total o parcialmente en inglés.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/components/medications/AdherenceOverviewCard.tsx:74-240 (tiles 105-134, ring 138-172, bars and streak 174-233); /home/user/sf-main/SparkyFitnessMobile/src/screens/MedicationAdherenceScreen.tsx:67-71 (title medications.adherence.screenTitle), 229-234; /home/user/sf-main/SparkyFitnessMobile/src/screens/MedicationsListScreen.tsx:247-269 ('Adherence & log'); /home/user/sf-main/SparkyFitnessMobile/src/hooks/useMedicationAdherence.ts:30-36,74-83 (shared computeAdherence); /home/user/sf-main/shared/src/medications/adherence.ts:111 (DEFAULT_ADHERENCE_WINDOW_DAYS = 14); /home/user/sf-main/SparkyFitnessFrontend/src/pages/Medications/TodayMedications.tsx:498-507 (web computeAdherence); translations: medications.adherence.* has all 28 en keys in de, es, fr, pl, pt-BR, 3 in ru, 0 in hu, it, lv, nb-NO, nl, tr, yue-Hant, zh-Hans, zh-Hant (localeRegistry.json lists these 15 non-English locales); es: medications.adherence.screenTitle 'Adherencia', openTitle 'Adherencia y registro', screens.medications 'Medicación'",
+  "why": "The note said the new texts are English in every other language; the mobile catalogs translate them fully in de, es, fr, pl and pt-BR. Spanish now uses the Spanish app's names (Adherencia, Adherencia y registro)."
+ },
+ {
+  "id": "reports-health-trends-pager",
+  "kind": "done",
+  "prs": [
+   3143,
+   3155
+  ],
+  "note_en": "The mobile carousel now also has a Resting Heart Rate page, shown only when there are readings, and with no synced VO2 max in the chosen range its VO2 max page plots an estimate from logged runs, titled as estimated. Web still has no carousel: its resting heart rate trend is in the new Heart Rate Analytics tab of Reports, and the Diary keeps its 14-day nutrition mini charts.",
+  "note_es": "El carrusel del móvil tiene ya también una página Frecuencia cardíaca en reposo, que solo aparece cuando hay lecturas, y, sin VO2 max sincronizado en el periodo elegido, su página de VO2 max muestra una estimación a partir de las carreras registradas, con un título que indica que es estimada. La web sigue sin carrusel: su tendencia de frecuencia cardiaca en reposo está en la nueva pestaña Análisis de frecuencia cardíaca de Informes, y el Diario mantiene sus minigráficos de nutrición de 14 días.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/constants/healthTrends.ts:11-19, 41-42; /home/user/sf-main/SparkyFitnessMobile/src/components/HealthTrendsPager.tsx:130-131, 153-165; /home/user/sf-main/SparkyFitnessMobile/src/hooks/useVo2MaxRange.ts:67-124 (run estimate when the window has no synced reading; merge 53d3e620a, #3155); /home/user/sf-main/SparkyFitnessMobile/src/components/Vo2MaxLineChart.tsx:153-170 ('VO2 max (estimated)'); /home/user/sf-main/SparkyFitnessFrontend/src/pages/Reports/ReportsControls.tsx:49-53 (heart-rate tab added by #3143); SparkyFitnessFrontend/public/locales/en/translation.json (reports.heartRateTab 'Heart Rate Analytics') and es (reports.heartRateTab 'Análisis de frecuencia cardíaca'); /home/user/sf-main/SparkyFitnessFrontend/src/pages/Reports/Reports.tsx:274-287; /home/user/sf-main/SparkyFitnessFrontend/src/pages/Reports/HeartRateAnalyticsCard.tsx:14, 153 (RestingHrTrendSection); /home/user/sf-main/SparkyFitnessFrontend/src/pages/Diary/NutritionSummaryCard.tsx:278 (MiniNutritionTrends); mobile charts.heartRate.title en 'Resting Heart Rate', es 'Frecuencia cardíaca en reposo'",
+  "why": "Spanish used the English names 'Resting Heart Rate' and 'Heart Rate Analytics', which both Spanish apps translate; the evidence wrongly said those keys had no Spanish translation."
+ },
+ {
+  "id": "checkin-dashboard-health-trends",
+  "kind": "done",
+  "prs": [
+   3143,
+   3155
+  ],
+  "note_en": "The mobile carousel now has a seventh chart, Resting Heart Rate, with daily resting heart rate and its average and min–max over 7, 30 or 90 days; it only appears when there are readings and can be reordered or hidden like the others. With no synced VO2 max in the chosen range, the VO2 max chart now plots an estimate from logged runs, titled as estimated. The web still has no such carousel; its resting heart rate trend is in Reports.",
+  "note_es": "El carrusel del móvil tiene ya un séptimo gráfico, Frecuencia cardíaca en reposo, con la frecuencia cardiaca en reposo diaria y su media y su mínimo–máximo en 7, 30 o 90 días; solo aparece si hay lecturas y se puede reordenar u ocultar como los demás. Sin VO2 max sincronizado en el periodo elegido, el gráfico de VO2 max muestra ahora una estimación a partir de las carreras registradas, con un título que indica que es estimada. La web sigue sin este carrusel; su tendencia de frecuencia cardiaca en reposo está en Informes.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/constants/healthTrends.ts:11-19, 41-42; /home/user/sf-main/SparkyFitnessMobile/src/components/HealthTrendsPager.tsx:130-131, 152-165; /home/user/sf-main/SparkyFitnessMobile/src/components/HeartRateLineChart.tsx:27-35, 136-160; /home/user/sf-main/SparkyFitnessMobile/src/hooks/useHealthTrends.ts:130-138, 207-211; /home/user/sf-main/SparkyFitnessMobile/src/hooks/useVo2MaxRange.ts:67-124 (needsEstimate only when the window has no synced reading; #3155); /home/user/sf-main/SparkyFitnessMobile/src/components/Vo2MaxLineChart.tsx:153-170 ('VO2 max (estimated)' title and note); /home/user/sf-main/SparkyFitnessMobile/src/screens/DashboardScreen.tsx:879-896; web: /home/user/sf-main/SparkyFitnessFrontend/src/App.tsx:383-470 (index route is Diary, no Dashboard page), no HealthTrends in SparkyFitnessFrontend/src; /home/user/sf-main/SparkyFitnessFrontend/src/pages/Reports/HeartRate/RestingHrTrendSection.tsx; web es nav.reports 'Informes'; mobile charts.heartRate.title es 'Frecuencia cardíaca en reposo'",
+  "why": "Spanish kept the English chart name 'Resting Heart Rate', which the Spanish mobile app translates; evidence wrongly said charts.heartRate.* was English only."
+ },
+ {
+  "id": "reports-pace-zones",
+  "kind": "partial",
+  "prs": [
+   3154
+  ],
+  "note_en": "Web now lists the five training pace ranges (Easy to Repetition) in a read-only 'Fitness tests' card on the Cardio view of Reports > Exercise Progress, but only when the person has a fitness test, which is recorded in the mobile app. Web still has no pace zones estimated from recent runs; the mobile Pace zones card uses the latest test first, then recent runs.",
+  "note_es": "La web muestra ya los rangos de las cinco zonas de ritmo de entrenamiento (de Suave a Repetición) en una tarjeta de solo lectura «Pruebas de condición física» en la vista Cardio de Informes > Progreso de ejercicio, pero solo si la persona tiene una prueba de aptitud física, que se registra en la app móvil. La web sigue sin zonas de ritmo estimadas a partir de las carreras recientes; la tarjeta Zonas de ritmo del móvil usa primero la última prueba y después las carreras recientes.",
+  "evidence": "/home/user/sf-main/SparkyFitnessFrontend/src/components/ExerciseCharts/FitnessTestsCard.tsx:33-46, 116-175; /home/user/sf-main/SparkyFitnessFrontend/src/pages/Reports/ExerciseReportsDashboard.tsx:929-938; /home/user/sf-main/SparkyFitnessFrontend/src/pages/Reports/ReportsControls.tsx:59-62 with public/locales/en/translation.json (exerciseProgressTab 'Exercise Progress') and public/locales/es/translation.json ('Progreso de ejercicio'); web es exerciseAnalytics.cardio.fitnessTests.title 'Pruebas de condición física', zone.easy 'Suave', zone.repetition 'Repetición'; mobile es fitnessTest 'Pruebas de aptitud física', fitnessTestResult 'Prueba de aptitud física', exerciseStatistics.paceZones.title 'Zonas de ritmo'; /home/user/sf-main/shared/src/utils/paceZones.ts:8-25; /home/user/sf-main/SparkyFitnessMobile/src/components/exerciseStats/PaceZonesCard.tsx:45-69; no fitness test creation in SparkyFitnessFrontend/src",
+  "why": "Spanish used the English card name 'Fitness tests' and 'Fácil' for the Easy zone, while the Spanish web shows 'Pruebas de condición física' and 'Suave'; the test itself is now called 'prueba de aptitud física', as in the Spanish mobile app, instead of 'test de forma física'."
+ },
+ {
+  "id": "reports-training-load",
+  "kind": "partial",
+  "prs": [
+   3108,
+   3155
+  ],
+  "note_en": "Web Reports > Exercise Progress now has the 'Readiness and Form' card that mobile's Exercise Statistics also gained: fitness, fatigue and form from the same heart-rate-weighted session load as the training load, and a readiness score (form, sleep, resting heart rate, HRV) with advice on whether to train hard or rest. As on mobile, Reports > Compare can also chart daily training load against another metric. Web still has no Training load card (this week against the previous four, with a verdict and rest advice) and no summary card like the mobile Dashboard's, which now also shows a readiness line.",
+  "note_es": "En la web, Informes > Progreso de ejercicio tiene ya la tarjeta «Preparación y estado de forma», que también se ha añadido a Estadísticas de ejercicios en el móvil (allí, «Preparación y Forma»): estado físico, fatiga y forma a partir de la misma carga por sesión ponderada por la frecuencia cardiaca que usa la carga de entrenamiento, y una puntuación de preparación (forma, sueño, frecuencia cardiaca en reposo y HRV) con un consejo sobre si entrenar fuerte o descansar. Como en el móvil, Informes > Comparar permite además comparar la carga de entrenamiento diaria con otra métrica. La web sigue sin la tarjeta Carga de entrenamiento (esta semana frente a las cuatro anteriores, con veredicto y consejo de descanso) y sin una tarjeta de resumen como la del Panel del móvil, que ahora muestra también una línea de preparación.",
+  "evidence": "/home/user/sf-main/SparkyFitnessFrontend/src/pages/Reports/FitnessFatigueCard.tsx:67-95, 98-148 (factors form, sleep, restingHeartRate, hrv), 150-160; /home/user/sf-main/SparkyFitnessFrontend/src/pages/Reports/ExerciseReportsDashboard.tsx:876; /home/user/sf-main/SparkyFitnessFrontend/src/pages/Reports/ReportsControls.tsx:59-62 with public/locales/en/translation.json ('Exercise Progress') and public/locales/es/translation.json ('Progreso de ejercicio'); web es fitnessFatigue.title 'Preparación y estado de forma', reports.compareTab 'Comparar'; mobile en/es exerciseStatistics.fitness.title 'Readiness and Form' / 'Preparación y Forma', exerciseStatistics.title 'Estadísticas de ejercicios', trainingLoadCard.title 'Carga de entrenamiento', navigation.dashboard 'Panel'; /home/user/sf-main/SparkyFitnessServer/services/reportService.ts:1003-1015 (getTrainingLoad), 1039-1063 (getFitnessFatigue uses the same getTrainingLoadSessions and zones); /home/user/sf-main/SparkyFitnessServer/services/compareService.ts:309-322; /home/user/sf-main/SparkyFitnessFrontend/src/pages/Reports/Compare/compareMetricLabels.ts:78-79 (#3108); /home/user/sf-main/SparkyFitnessMobile/src/constants/compareMetrics.ts:90-91; /home/user/sf-main/SparkyFitnessMobile/src/screens/ExerciseStatisticsScreen.tsx:137-142, 203-209, 518-524; /home/user/sf-main/SparkyFitnessMobile/src/components/exerciseStats/FitnessFatigueCard.tsx:293-295; /home/user/sf-main/SparkyFitnessMobile/src/components/TrainingLoadDashboardCard.tsx:51, 156-178 (readiness line); /home/user/sf-main/SparkyFitnessFrontend/src/App.tsx:383-470 (no web Dashboard page); the web Training Load tile in DailyHealthMetricsCard.tsx:94-95, 281-310 shows only device-synced acute/weekly load",
+  "why": "Spanish used English names ('Readiness and Form', 'Compare', 'Dashboard') that the Spanish apps translate (Preparación y estado de forma, Comparar, Panel); the Spanish mobile app names the card 'Preparación y Forma', so that is noted too."
+ },
+ {
+  "id": "reports-vo2max-trend",
+  "kind": "partial",
+  "prs": [
+   3155
+  ],
+  "note_en": "Reports > Exercise Progress on the web and Exercise Statistics on mobile now have the same Running Estimates card, with one estimated VO2 max ('≈', from runs in the last 6 weeks); it is a single figure, not a trend. When no VO2 max has been synced in the chosen range, the mobile Dashboard VO2 max trend now plots an estimate for each day with a run in those 6 weeks, titled 'VO2 max (estimated)'; a synced reading always replaces it, and the web has no such fallback.",
+  "note_es": "Informes > Progreso de ejercicio en la web y Estadísticas de ejercicios en el móvil tienen ya la misma tarjeta Estimaciones de carrera, con un único VO2 max estimado ('≈', a partir de las carreras de las últimas 6 semanas); es una sola cifra, no una tendencia. Cuando no se ha sincronizado ningún VO2 max en el periodo elegido, la tendencia de VO2 max del Panel del móvil muestra ahora una estimación por cada día con carrera de esas 6 semanas, con el título «VO2 máx. (estimado)»; una lectura sincronizada siempre la sustituye, y la web no tiene nada parecido.",
+  "evidence": "/home/user/sf-main/SparkyFitnessFrontend/src/pages/Reports/RunEstimatesCard.tsx:15-55 (single '≈' value, vo2Basis 'From {{count}} runs in the last 6 weeks', no chart); /home/user/sf-main/SparkyFitnessFrontend/src/pages/Reports/ExerciseReportsDashboard.tsx:877; /home/user/sf-main/SparkyFitnessFrontend/src/pages/Reports/ReportsControls.tsx:59-62 with public/locales/en/translation.json (exerciseProgressTab 'Exercise Progress') and public/locales/es/translation.json ('Progreso de ejercicio'); /home/user/sf-main/SparkyFitnessMobile/src/components/exerciseStats/RunEstimatesCard.tsx:20-115 and the web RunEstimatesCard.tsx both added by merge 53d3e620a (#3155), absent at 5364674f; /home/user/sf-main/SparkyFitnessMobile/src/screens/ExerciseStatisticsScreen.tsx:137-147, 525-529; /home/user/sf-main/SparkyFitnessMobile/src/hooks/useVo2MaxRange.ts:52-60, 107-119 (needsEstimate only when the window has no synced reading; synced reading wins); /home/user/sf-main/shared/src/utils/runningEstimates.ts:16 (VO2_WINDOW_DAYS = 42), 180-201; /home/user/sf-main/SparkyFitnessMobile/src/components/Vo2MaxLineChart.tsx:155-169 (estimateTitle); es: web runEstimates.title and mobile exerciseStatistics.runEstimates.title 'Estimaciones de carrera', mobile charts.vo2max.estimateTitle 'VO2 máx. (estimado)', exerciseStatistics.title 'Estadísticas de ejercicios', navigation.dashboard 'Panel'",
+  "why": "Spanish used English names ('Running Estimates', 'VO2 max (estimated)', 'Dashboard') that both Spanish apps translate; the evidence wrongly said those keys were English only."
+ },
+ {
+  "id": "diary-barcode-not-found",
+  "kind": "partial",
+  "prs": [
+   3126,
+   3601
+  ],
+  "note_en": "When a barcode is not found, the web keeps a 'No product found' message on the page with an Other sources button that checks the other enabled barcode providers; the same scan dialog now also has a Nutrition label tab, but the not-found message itself offers no label scan or add-manually button. The mobile No match card has Scan Nutrition Label and Add Food Manually but cannot check other sources.",
+  "note_es": "Cuando no se encuentra un código de barras, la web deja en la página un aviso de que no se encontró ningún producto con un botón «Otras fuentes» que consulta los demás proveedores de códigos de barras activos; el mismo diálogo de escaneo tiene ahora además una pestaña Nutrition label, pero el aviso en sí no ofrece escanear la etiqueta ni un botón para añadir el alimento a mano. La tarjeta del móvil para cuando no hay coincidencia tiene «Escanear etiqueta nutricional» y «Añadir alimento manualmente», pero no permite consultar otras fuentes.",
+  "evidence": "/home/user/sf-main/SparkyFitnessFrontend/src/components/FoodSearch/BarcodeSearchResult.tsx:150-165 (notFound text, Other sources; no label or manual action); src/components/FoodSearch/BarcodeScannerDialog.tsx:161-180 (foodSearch.scanModes.label 'Nutrition label', no es key); web es barcodeLookup.notFound 'No se encontró ningún producto…', barcodeLookup.otherSources 'Otras fuentes'; SparkyFitnessMobile/src/screens/FoodScanScreen.tsx:1203-1273 (mobile es foodScan.lookup.scanLabel 'Escanear etiqueta nutricional', addManually 'Añadir alimento manualmente'; no BarcodeSources on a miss)",
+  "why": "Spanish kept English button names (Other sources, Scan Nutrition Label, Add Food Manually) that the Spanish web and mobile apps translate."
+ },
+ {
+  "id": "diary-barcode-provider-pick",
+  "kind": "partial",
+  "prs": [
+   3126
+  ],
+  "note_en": "Mobile still has no provider picker in the scanner and looks the barcode up with the provider set in Food Settings. After a match, though, the add screen shows the result's source and an Other sources sheet with the other enabled providers' results, and picking one replaces the food for that entry. When the default lookup finds nothing, mobile offers no other source, while the web lets you pick the provider in the scanner and has the same Other sources comparison.",
+  "note_es": "El móvil sigue sin selector de proveedor en el escáner y busca el código con el proveedor fijado en Ajustes de comida. Sin embargo, tras una coincidencia, la pantalla de añadir muestra la fuente del resultado y una hoja «Otras fuentes» con los resultados de los demás proveedores activos, y al elegir uno sustituye el alimento de esa entrada. Si la búsqueda predeterminada no encuentra nada, el móvil no ofrece otra fuente, mientras que la web deja elegir el proveedor en el escáner y tiene la misma comparación de otras fuentes.",
+  "evidence": "SparkyFitnessMobile/src/screens/FoodSearchScreen.tsx:477-489 (no providerId passed to the scanner); SparkyFitnessMobile/src/screens/FoodSettingsScreen.tsx:291-316 (Barcode Provider setting; es screens.foodSettings 'Ajustes de comida'); SparkyFitnessMobile/src/screens/FoodScanScreen.tsx:247-266 (miss sets notFoundBarcode; match passes barcodeLookup source); SparkyFitnessMobile/src/screens/FoodEntryAddScreen.tsx:1604-1623 (BarcodeSources, replace on select); SparkyFitnessMobile/src/components/BarcodeSources.tsx:115-284 ('Source: …', Other sources sheet; es barcodeSources.otherSources 'Otras fuentes'); SparkyFitnessFrontend/src/components/FoodSearch/BarcodeScannerDialog.tsx:48-101 (Data Provider picker); SparkyFitnessFrontend/src/components/FoodSearch/FoodSearch.tsx:1775-1785; SparkyFitnessFrontend/src/components/FoodSearch/BarcodeSearchResult.tsx:149-208",
+  "why": "Spanish named the sheet 'Other sources', which the Spanish mobile app shows as 'Otras fuentes'; Food Settings now uses its Spanish screen name."
+ },
+ {
+  "id": "meds-symptom-update-severity",
+  "kind": "done",
+  "prs": [
+   3031,
+   3073
+  ],
+  "note_en": "On web, Update severity now also asks for the effect on the day and saves it with the reading when the episode or its symptom uses it. Mobile still has no dedicated reading action: a new severity or effect is saved only through a full edit of the episode, which the server adds to its severity and effect timelines.",
+  "note_es": "En la web, «Actualizar intensidad» también pide ahora el efecto en el día y lo guarda con la lectura cuando el episodio o su síntoma lo usan. El móvil sigue sin una acción propia para añadir lecturas: una nueva gravedad o un nuevo efecto solo se guardan editando el episodio entero, y el servidor los añade a sus historiales de gravedad y de efecto.",
+  "evidence": "SparkyFitnessFrontend/src/pages/Symptoms/EpisodeActions.tsx:54-70 (useAsksImpact), :78-151 (popover sends impact with severity); web es symptoms.episode.updateSeverity 'Actualizar intensidad'; shared/src/schemas/api/Symptoms.api.zod.ts (addSymptomSeverityBodySchema impact, from #3031); SparkyFitnessMobile/src/hooks/useSymptoms.ts:331 (addSeverity, not called from any screen); SparkyFitnessMobile/src/components/SymptomsCard.tsx:158-166 (banner opens full edit); SparkyFitnessServer/services/symptomService.ts:355-399 (severity_timeline and impact_timeline appends on update)",
+  "why": "Spanish kept the English button name 'Update severity'; the Spanish web shows it as 'Actualizar intensidad'."
+ },
+ {
+  "id": "meds-dose-notes",
+  "kind": "partial",
+  "prs": [
+   3103
+  ],
+  "note_en": "On mobile a note can be added or changed after logging, in 'Edit logged dose' (opened from the day log on the Adherence screen), and the day log shows every entry's notes. Logging a scheduled or as-needed dose still has no note field, unlike the web's 'Add note...' field on each dose.",
+  "note_es": "En el móvil se puede añadir o cambiar una nota después de registrar la dosis, en «Editar dosis registrada» (que se abre desde el registro del día de la pantalla Adherencia), y ese registro muestra las notas de todas las entradas. Al registrar una dosis programada o según necesidad sigue sin haber campo de nota, a diferencia del campo «Añadir nota...» que la web tiene en cada dosis.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/screens/MedicationEntryEditScreen.tsx:67,95-111 (notes saved), 255-267 (Notes field); /home/user/sf-main/SparkyFitnessMobile/src/screens/MedicationAdherenceScreen.tsx:67-71, 133-136; /home/user/sf-main/SparkyFitnessMobile/src/components/medications/MedicationDayLog.tsx:108-113,147-154 (site and notes shown); /home/user/sf-main/SparkyFitnessMobile/src/components/medications/MedicationDoseListCard.tsx:58-102 (DoseRow take/skip/PRN log, no note); /home/user/sf-main/SparkyFitnessFrontend/src/pages/Medications/TodayMedications.tsx:331-345 and 465-475 ('Add note...' on scheduled and PRN doses); es: mobile medications.entryEdit.title 'Editar dosis registrada', medications.adherence.screenTitle 'Adherencia'; web medications.today.addNote 'Añadir nota...'",
+  "why": "Spanish kept the English screen and field names ('Edit logged dose', 'Adherence', 'Add note...') that the Spanish apps translate."
+ },
+ {
+  "id": "meds-date-navigation",
+  "kind": "done",
+  "prs": [
+   3103
+  ],
+  "note_en": "The mobile Adherence screen has its own day, apart from the Diary date: it opens on today, and tapping a day in its month calendar moves the dose cards, checklist, adherence numbers and day log to that date, where doses can be logged, with a 'Back to today' link. There are no previous and next day arrows like the web's day navigator, and the Dashboard card, the medication detail and the GLP-1 tracker still follow the Diary/Dashboard date.",
+  "note_es": "La pantalla Adherencia del móvil tiene su propio día, aparte de la fecha del Diario: se abre en el día de hoy y, al tocar un día de su calendario mensual, las tarjetas de dosis, la lista del día, las cifras de adherencia y el registro del día pasan a esa fecha, en la que se pueden registrar dosis, con un enlace «Volver a hoy». No hay flechas de día anterior y siguiente como en el selector de días de la web, y la tarjeta del Panel, el detalle del medicamento y el Control de GLP-1 siguen usando la fecha del Diario/Panel.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/screens/MedicationAdherenceScreen.tsx:44 (useState(getTodayDate)), 50,61 (selectedDate drives useMedicationAdherence and useLogDose), 312-317 (calendar onSelectDate), 374-388 ('Viewing {{date}}', 'Back to today'); /home/user/sf-main/SparkyFitnessMobile/src/components/medications/MedicationLogCalendar.tsx:92-94,270-296 (month arrows), 360-364 (day tap); /home/user/sf-main/SparkyFitnessMobile/src/components/MedicationsCard.tsx:39, /home/user/sf-main/SparkyFitnessMobile/src/screens/MedicationDetailScreen.tsx:59 and /home/user/sf-main/SparkyFitnessMobile/src/screens/Glp1TrackerScreen.tsx:37 (useDiaryDateStore); /home/user/sf-main/SparkyFitnessFrontend/src/pages/Medications/Medications.tsx:292-296 (DayNavigator); mobile es: medications.adherence.screenTitle 'Adherencia', backToToday 'Volver a hoy', GLP-1 tracker title 'Control de GLP-1', navigation.dashboard 'Panel'",
+  "why": "Spanish kept English names ('Adherence', 'Back to today', 'Dashboard') and paraphrased the GLP-1 screen, while the Spanish mobile app shows Adherencia, Volver a hoy, Panel and Control de GLP-1."
+ },
+ {
+  "id": "meds-today-checklist",
+  "kind": "done",
+  "prs": [
+   3103
+  ],
+  "note_en": "Mobile now has an adherence screen, opened from the medications list, with a checklist progress card and separate Today's medications and Today's supplements cards that use the same log, skip and undo rows; it can also show another day picked on its calendar. The Dashboard card is still a single list.",
+  "note_es": "El móvil tiene ahora una pantalla Adherencia, que se abre desde la lista de Medicación, con una tarjeta de progreso de la lista del día y tarjetas separadas de medicamentos y de suplementos del día que usan las mismas filas para registrar, omitir y deshacer; también puede mostrar otro día elegido en su calendario. La tarjeta del Panel sigue siendo una sola lista.",
+  "evidence": "SparkyFitnessMobile/src/screens/MedicationAdherenceScreen.tsx:229-307 (AdherenceOverviewCard, MedicationChecklistCard, medications and supplements MedicationDoseListCard), :309-314 (MedicationLogCalendar); SparkyFitnessMobile/src/components/medications/MedicationDoseListCard.tsx:52-97 (DoseRow toggle/take/skip, PRN log); SparkyFitnessMobile/src/components/medications/DoseRow.tsx:16 (circle tap undoes a log); SparkyFitnessMobile/src/screens/MedicationsListScreen.tsx:249 (navigate to MedicationAdherence); SparkyFitnessMobile/src/components/MedicationsCard.tsx:109-160 (one combined list); mobile es medications.adherence.screenTitle 'Adherencia', medications.checklist.titleToday 'Lista de hoy', screens.medications 'Medicación', navigation.dashboard 'Panel'",
+  "why": "Spanish used 'checklist' and 'Dashboard' where the Spanish mobile app says 'Lista de hoy' and 'Panel', and did not name the Adherencia screen."
+ },
+ {
+  "id": "goals-adaptive-note",
+  "kind": "partial",
+  "prs": [
+   2984
+  ],
+  "note_en": "Web now keeps Goal Mode and the Adaptive method when goals are saved without changing calories (for example, macros only), but still switches to Maintain and Manual when calories are changed or a day's goals are reset to default; mobile keeps them in every case. The web goal editors still have no adaptive-mode notice and no 'Baseline calories' label.",
+  "note_es": "La web ya conserva el Modo de objetivo y el método Adaptativo al guardar objetivos sin cambiar las calorías (por ejemplo, solo macros), pero sigue pasando a Mantenimiento y Manual cuando se cambian las calorías o se restablecen los objetivos de un día; el móvil los conserva siempre. Los editores de objetivos de la web siguen sin el aviso de modo adaptativo y sin la etiqueta 'Baseline calories'.",
+  "evidence": "SparkyFitnessFrontend/src/pages/Goals/DailyGoals.tsx:154-167 (caloriesEdited check, resets to maintain/manual); SparkyFitnessFrontend/src/pages/Goals/EditGoalsForToday.tsx:99 (baseline captured at mount), 522-536 (caloriesEdited = clear || calories changed); no 'adaptive'/'baseline' UI under SparkyFitnessFrontend/src/pages/Goals/; SparkyFitnessMobile/src/screens/GoalsScreen.tsx:293 (reads goal_mode_calculation_method; no goal-mode write on save), 457-458 ('Baseline calories', no es key), 950-956 (adaptive notice); web es settings.goalMode.title 'Modo de objetivo', methodAdaptive 'Adaptativo', modeNames.maintain 'Mantenimiento', modeNames.manual 'Manual'",
+  "why": "Spanish kept the English names Goal Mode, Adaptive and Maintain that the Spanish web translates (Modo de objetivo, Adaptativo, Mantenimiento); the evidence wrongly said no merge had touched the mobile GoalsScreen (#3466 and #3598 did, without changing this)."
+ },
+ {
+  "id": "goals-calc-earnback-percent",
+  "kind": "done",
+  "prs": [
+   2940
+  ],
+  "note_en": "When the Goal Mode calculation method is Adaptive and a BMR is known, web and mobile both hide the earn-back percentage and show the same notice: adaptive targets already include activity, so exercise earn-back applies only to Manual targets. Otherwise the percentage works as before, the same on web, iOS and Android.",
+  "note_es": "Cuando el método de cálculo del Modo de objetivo es Adaptativo y se conoce el BMR, la web y el móvil ocultan el porcentaje de recuperación y muestran el mismo aviso: los objetivos adaptativos ya incluyen la actividad, así que la recuperación de calorías de ejercicio solo se aplica a los objetivos manuales. En los demás casos el porcentaje funciona como antes, igual en web, iOS y Android.",
+  "evidence": "shared/src/utils/calorieCalculations.ts:47-72 (isAdaptiveEarnBackSuppressed; the #3061 activity-separation exception applies only to Dynamic mode); SparkyFitnessFrontend/src/pages/Settings/CalculationSettings.tsx:472-478 (bmr > 0 && suppressed),986-1013,1248-1252; SparkyFitnessMobile/src/screens/CalorieSettingsScreen.tsx:234-244,449-452 (bmr > 0 && suppressed; showPercentage),608-614,662-686; es: web settings.goalMode.title 'Modo de objetivo', methodAdaptive 'Adaptativo'; mobile calorieSettings.goalMode.title 'Modo Objetivo', methodAdaptive 'Adaptativo'",
+  "why": "Spanish kept 'Goal Mode' and 'Adaptive', which both Spanish apps translate (Modo de objetivo / Modo Objetivo, Adaptativo)."
+ },
+ {
+  "id": "goals-calc-goal-mode",
+  "kind": "done",
+  "prs": [
+   3067
+  ],
+  "note_en": "Web and mobile now both offer an eighth Goal Mode, Weekly weight change, where you set how much to lose or gain each week. Mobile shows the estimated daily adjustment and a general note that the safety floor may limit loss, while web also states the largest weekly loss the floor allows. Mobile still does not mark unreachable modes or show the deficit ceiling.",
+  "note_es": "La web y el móvil ofrecen ahora un octavo modo de objetivo, «Cambio de peso semanal», en el que se indica cuánto perder o ganar cada semana. El móvil muestra el ajuste diario estimado y un aviso general de que el mínimo de seguridad de calorías puede limitar la pérdida, mientras que la web indica además la mayor pérdida semanal que permite ese mínimo. El móvil sigue sin marcar los modos inalcanzables y sin mostrar el techo de déficit.",
+  "evidence": "shared/src/schemas/database/UserPreferences.zod.ts:98-107 (eight goal_mode values incl. weekly); SparkyFitnessFrontend/src/pages/Settings/CalculationSettings.tsx:536-547 (isGoalModeUnreachable),1317-1319 (weekly option),1364-1395 (weekly and deficit ceiling hints),1426-1435 (WeeklyWeightGoalInput),1690-1730 (applied adjustment preview); SparkyFitnessFrontend/src/components/WeeklyWeightGoalInput.tsx:108-130,246; SparkyFitnessMobile/src/screens/CalorieSettingsScreen.tsx:123-129,805-830; SparkyFitnessMobile/src/components/WeeklyWeightGoalFields.tsx:312-330 (daily adjustment and estimateHint); no unreachable/ceiling logic in mobile CalorieSettingsScreen.tsx or WeeklyWeightGoalFields.tsx; es settings.goalMode.weekly / calorieSettings.goalMode.weekly 'Cambio de peso semanal'",
+  "why": "Spanish kept the English names 'Goal Mode' and 'Weekly weight change' though both Spanish apps show 'Cambio de peso semanal' and translate Goal Mode."
+ },
+ {
+  "id": "checkin-photos-compare",
+  "kind": "done",
+  "prs": [
+   2965,
+   3190
+  ],
+  "note_en": "The web now has it: Check-In > Photos has a Compare dialog with a Front/Back/Side toggle and Before and After panes (first and latest shoot of that angle by default). Each pane has a date picker limited to days with that angle and that day's weight or a Log weight link, with the weight change and days apart below. Remaining differences: a web pane opens a plain full-size view instead of the zoomable viewer, mobile picks the angle on the gallery before opening the comparison, and the mobile top padding now depends on whether the screen draws its own header (Android, and iOS 26 with Liquid Glass navigation off), not on the platform.",
+  "note_es": "La web ya lo tiene: Check-in > Fotos tiene un diálogo Comparar con un selector De frente/Espalda/Lateral y los paneles Antes y Después (por defecto, la primera y la última sesión de ese ángulo). Cada panel tiene un selector de fecha limitado a los días con ese ángulo y el peso de ese día o un enlace Registrar peso, con el cambio de peso y los días transcurridos debajo. Diferencias que quedan: en la web un panel abre la foto a tamaño completo sin el visor con zoom, en el móvil el ángulo se elige en la galería antes de abrir la comparación, y el margen superior del móvil depende ahora de si la pantalla dibuja su propia cabecera (Android, e iOS 26 con la navegación Liquid Glass desactivada), no de la plataforma.",
+  "evidence": "/home/user/sf-main/SparkyFitnessFrontend/src/pages/CheckIn/CheckInPhotos.tsx:179-186, 236-247, 290-296; /home/user/sf-main/SparkyFitnessFrontend/src/pages/CheckIn/ProgressPhotoCompareDialog.tsx:48-68, 96-137, 156-179; /home/user/sf-main/SparkyFitnessFrontend/src/pages/CheckIn/ProgressPhotoControls.tsx:61-95, 111-155; /home/user/sf-main/SparkyFitnessFrontend/src/pages/CheckIn/CheckIn.tsx:290-301 (photos tab); /home/user/sf-main/SparkyFitnessFrontend/src/components/ImageLightbox.tsx:131-147; web es nav.checkin 'Check-in', checkIn.photos.front 'De frente', back 'Espalda', side 'Lateral', compare 'Comparar'; mobile: /home/user/sf-main/SparkyFitnessMobile/src/screens/ProgressPhotosScreen.tsx:515 (angle passed as route param); /home/user/sf-main/SparkyFitnessMobile/src/screens/ProgressPhotoCompareScreen.tsx:56, 233, 246 (useNativeIOSHeadersActive, commit 9448c5d48 in #3190), 311-329 (ProgressPhotoViewer); /home/user/sf-main/SparkyFitnessMobile/src/services/nativeTabBarPreference.ts:23-27",
+  "why": "Spanish used 'Check-In' and 'Frente' where the Spanish web shows 'Check-in' and 'De frente'."
+ },
+ {
+  "id": "checkin-photos-timelapse",
+  "kind": "done",
+  "prs": [
+   2965
+  ],
+  "note_en": "The web now has it: a Time-lapse button opens a player with a Front/Back/Side toggle and the same windows as mobile (Last 30 days, Last 3 months by default, All time and a custom range; a preset with fewer than two photos widens to all time). It has the same Slow/Normal/Fast timings with a cross-fade, play/pause, previous/next frame and the arrow keys, and shows each frame's date, weight (or Log weight) and a frame counter. Both apps use the same window rules from @workspace/shared.",
+  "note_es": "La web ya lo tiene: un botón Time-lapse abre un reproductor con un selector De frente/Espalda/Lateral y los mismos intervalos que el móvil (Últimos 30 días, Últimos 3 meses por defecto, Histórico y un rango personalizado; un intervalo con menos de dos fotos se amplía a todo el histórico). Tiene las mismas velocidades Lento/Normal/Rápido con fundido, reproducir/pausa, fotograma anterior/siguiente y las teclas de flecha, y muestra la fecha, el peso (o Registrar peso) y un contador de fotogramas. Las dos apps usan las mismas reglas de intervalos de @workspace/shared.",
+  "evidence": "/home/user/sf-main/SparkyFitnessFrontend/src/pages/CheckIn/CheckInPhotos.tsx:248-257, 297-303; /home/user/sf-main/SparkyFitnessFrontend/src/pages/CheckIn/ProgressPhotoTimelapseDialog.tsx:57-61 (speeds), 89-94, 106-114, 154-178 (arrow keys), 198-213, 215-228, 391-409 (date, weight, frame counter); /home/user/sf-main/shared/src/utils/progressPhotos.ts:56-110 (framesInRange); /home/user/sf-main/SparkyFitnessMobile/src/screens/ProgressPhotoTimelapseScreen.tsx:54-57, 93, 111; web es checkIn.photos.front 'De frente', rangeAll 'Histórico', speedSlow 'Lento'",
+  "why": "Spanish used 'Frente' for the Front toggle, which the Spanish web shows as 'De frente'."
+ },
+ {
+  "id": "missed-reports-mood-notes",
+  "kind": "done",
+  "prs": [
+   3016,
+   3018
+  ],
+  "note_en": "Neither app now shows notes in the mood report chart: the web tooltip shows the mood value with its emoji and label and the number of check-ins that day. Instead, both show the start of each check-in's journal text (up to 120 characters) in the day's check-in list, on the web Check-In page and on the mobile Mood day screen.",
+  "note_es": "Ahora ninguna de las dos apps muestra notas en el gráfico del informe de estado de ánimo: el tooltip de la web muestra el valor del ánimo con su emoji y su etiqueta y el número de registros de ese día. En su lugar, las dos muestran el principio del texto de diario de cada registro (hasta 120 caracteres) en la lista de registros del día, en la página Check-in de la web y en la pantalla del día de Estado de ánimo del móvil.",
+  "evidence": "SparkyFitnessFrontend/src/pages/Reports/MoodChart.tsx:51-70, 217-247 (tooltip: date, mood value + emoji + label, check-in count; no notes); SparkyFitnessFrontend/src/pages/CheckIn/MoodCheckinList.tsx:26-33 (SNIPPET_MAX 120), 110, 191-195; SparkyFitnessFrontend/src/pages/CheckIn/CheckInTopRow.tsx:292; SparkyFitnessMobile/src/components/mood/MoodCheckinListItem.tsx:9-16 (SNIPPET_MAX 120), 41, 132-134; SparkyFitnessMobile/src/screens/MoodDayScreen.tsx:87 (mood.dayTitle; es 'Estado de ánimo'), 240; SparkyFitnessMobile/src/components/mood/MoodCard.tsx:90; SparkyFitnessMobile/src/screens/MoodReportScreen.tsx:44-54; web es nav.checkin 'Check-in'",
+  "why": "Spanish used 'Check-In' for the web page, which the Spanish web names 'Check-in'; the mobile day screen now carries its Spanish title."
+ },
+ {
+  "id": "meds-dose-snooze",
+  "kind": "partial",
+  "prs": [
+   3103
+  ],
+  "note_en": "On mobile a scheduled dose that is already logged can be switched to Snoozed in 'Edit logged dose', and snoozed entries show in the day log and the calendar. There is still no Snooze button when logging: the dose rows only log or skip, and the reminder's 'Remind in' button only shows the reminder again later, without recording the dose as snoozed.",
+  "note_es": "En el móvil, una dosis programada que ya está registrada se puede cambiar a Pospuesto en «Editar dosis registrada», y las entradas pospuestas aparecen en el registro del día y en el calendario. Sigue sin haber botón para posponer al registrar: las filas de dosis solo registran u omiten, y el botón «Recordar en» del recordatorio solo vuelve a mostrar el aviso más tarde, sin guardar la dosis como pospuesta.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/screens/MedicationEntryEditScreen.tsx:36-50 (EDITABLE_STATUSES incl. snoozed, not injections), 144-158 (Status options), 221-235 (Status picker); src/components/medications/MedicationDayLog.tsx:36-37,74-75; src/components/medications/MedicationLogCalendar.tsx:205-211 ('Snoozed only'); es catalog: medications.entryEdit.title 'Editar dosis registrada', medications.today.snoozed 'Pospuesto', notifications.actions.remindInMinutes 'Recordar en {{minutes}} min'",
+  "why": "The Spanish used the English screen and button names ('Edit logged dose', 'Snoozed', 'Remind in') although the Spanish app translates them as «Editar dosis registrada», «Pospuesto» and «Recordar en»."
+ },
+ {
+  "id": "meds-edit-logged-dose",
+  "kind": "done",
+  "prs": [
+   3103
+  ],
+  "note_en": "Mobile has 'Edit logged dose', opened from the day log on the Adherence screen: it changes the time, the notes, the site of an injection and, unlike the web, the status (taken, skipped or snoozed) of a scheduled dose that is not an injection. Only the time of day can change, so a dose cannot be moved to another day as with the web's date-and-time field. Its texts are translated into German, Spanish, French, Polish and Brazilian Portuguese (most also into Russian) and are in English in the other languages the app ships.",
+  "note_es": "El móvil tiene «Editar dosis registrada», que se abre desde el registro del día de la pantalla Adherencia: cambia la hora, las notas, la zona de una inyección y, a diferencia de la web, el estado (tomada, omitida o pospuesta) de una dosis programada que no sea una inyección. Solo se cambia la hora del día, así que una dosis no se puede pasar a otro día como con el campo de fecha y hora de la web. Sus textos están traducidos al alemán, español, francés, polaco y portugués de Brasil (la mayoría también al ruso) y salen en inglés en los demás idiomas que trae la app.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/screens/MedicationEntryEditScreen.tsx:36-50 (canEditStatus excludes injections), 62-67, 69-111 (entry_date kept, editedTakenAt), 200-267 (Taken at, Status, Injection site, Notes); SparkyFitnessFrontend/src/pages/Medications/TodayMedications.tsx:1226-1290 (web dialog: DateTimeInput, site, notes, no status); medications.entryEdit.* (8 keys) translated in mobile catalogs de, es, fr, pl, pt-BR, and 5 of 8 in ru (title, takenAt, setTime, status, site); es: 'Editar dosis registrada', medications.adherence.screenTitle 'Adherencia'",
+  "why": "The note said the screen's texts are still English in every other language; medications.entryEdit.* is now translated in de, es, fr, pl and pt-BR and 5 of its 8 keys in ru. Spanish also used the English names that the Spanish app translates."
+ },
+ {
+  "id": "meds-log-calendar",
+  "kind": "done",
+  "prs": [
+   3103
+  ],
+  "note_en": "Mobile has the month calendar on the Adherence screen, built on the same shared rules as the web: days coloured as all taken, partially taken, mostly skipped, all skipped or snoozed only, a count badge on days with more than one dose, side-effect and general symptom dots, a filter for all items or one medication, and the month's dose total; tapping a day selects it. The per-day counts and symptom names the web shows on hover are only in the screen-reader label on mobile. Its texts are translated into German, Spanish, French, Polish and Brazilian Portuguese (some also into Russian and Italian) and are in English in the other languages the app ships.",
+  "note_es": "El móvil tiene el calendario mensual en la pantalla Adherencia, con las mismas reglas compartidas que la web: días coloreados como todo tomado, tomado en parte, casi todo omitido, todo omitido o solo pospuesto, un número en los días con más de una dosis, puntos para síntomas de efecto secundario y generales, un filtro para verlo todo o un solo medicamento y el total de dosis del mes; al tocar un día se selecciona. Los recuentos por día y los nombres de síntomas que la web muestra al pasar el ratón solo están en la etiqueta del lector de pantalla en el móvil. Sus textos están traducidos al alemán, español, francés, polaco y portugués de Brasil (algunos también al ruso y al italiano) y salen en inglés en los demás idiomas que trae la app.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/components/medications/MedicationLogCalendar.tsx:5-16 (shared helpers), 43-59 (statuses), 117-168 (entries, symptoms, month total, filter), 205-211, 309-367 (day cells, accessibilityLabel with counts and symptoms); medications.calendar.* (28 keys) translated in de, es, fr, pt-BR, pl (all but the unused _other plural forms), 13 in ru, allTaken and sideEffect in it",
+  "why": "The note said the calendar texts are still English in every other language; medications.calendar.* is translated in de, es, fr, pl and pt-BR, about half in ru and two keys in it. Spanish now uses the app's name for the screen (Adherencia)."
+ },
+ {
+  "id": "meds-logged-activity",
+  "kind": "done",
+  "prs": [
+   3103
+  ],
+  "note_en": "Mobile has a day log on the Adherence screen ('Logged today', or 'Logged on {date}' for another day) that lists every scheduled, as-needed and injection entry of the day with its time, status, site and notes, with pencil and trash buttons to edit or delete it, like the web's 'Logged today' card. Delete asks for confirmation first. Its texts are translated into German, Spanish, French, Polish and Brazilian Portuguese (a few also into Russian) and are in English in the other languages the app ships.",
+  "note_es": "El móvil tiene un registro del día en la pantalla Adherencia («Registrado hoy», o «Registrado el {date}» en otro día) con todas las entradas programadas, según necesidad y de inyección del día, con su hora, estado, zona y notas, y botones de lápiz y papelera para editarlas o eliminarlas, como la tarjeta «Registrado hoy» de la web. Eliminar pide confirmación antes. Sus textos están traducidos al alemán, español, francés, polaco y portugués de Brasil (unos pocos también al ruso) y salen en inglés en los demás idiomas que trae la app.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/components/medications/MedicationDayLog.tsx:47-190; src/screens/MedicationAdherenceScreen.tsx:178-198 (Alert confirmation), 319-330 (medications.today.loggedActivity / medications.dayLog.titleDay); medications.dayLog.* in mobile catalogs de, es, fr, pl, pt-BR (deleteA11y, unknownMedication also ru); es 'Registrado hoy', 'Registrado el {{date}}'; web es medications.today.loggedActivity 'Registrado hoy'",
+  "why": "The note said the card's texts are still English in every other language; medications.dayLog.* is translated in de, es, fr, pl and pt-BR. Spanish now uses the translated names of the screen and card."
+ },
+ {
+  "id": "meds-reminder-actions",
+  "kind": "done",
+  "prs": [
+   2985,
+   3005,
+   3498
+  ],
+  "note_en": "Each reminder and the grouped one also have a 'Remind in' button (for example 'Remind in 30m') that shows the reminder again after the interval set in Settings without logging the dose; its label is translated in 10 of the 15 other languages the app ships. Both platforms now handle the buttons with the app in the background or closed (Android through a background task, iOS natively with the app's saved login), and a dose logged or skipped that cannot reach the server is saved and retried later.",
+  "note_es": "Cada recordatorio y el agrupado tienen también un botón «Recordar en» (por ejemplo «Recordar en 30 min») que vuelve a mostrar el aviso pasado el intervalo fijado en Ajustes, sin registrar la dosis; su etiqueta está traducida en 10 de los otros 15 idiomas que trae la app. Las dos plataformas atienden ya los botones con la app en segundo plano o cerrada (Android mediante una tarea en segundo plano, iOS de forma nativa con el inicio de sesión guardado de la app), y una toma u omisión que no llega al servidor se guarda y se reintenta más tarde.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/services/notifications.ts:116-180; modules/background-water/ios/MedicationNotificationActions.swift:36-40, 419-464; src/services/medicationNativeBridge.ts:36-45; src/services/medicationNotificationHandler.ts:238, 791, 992-993; notifications.actions.remindInMinutes translated in de, es ('Recordar en {{minutes}} min'), fr, nl, pl, pt-BR, ru, yue-Hant, zh-Hans, zh-Hant",
+  "why": "The Spanish gave the English label plus an extra Spanish example the English does not have; it now uses the Spanish app's label and matches the English."
+ },
+ {
+  "id": "meds-glp1-log-injection",
+  "kind": "partial",
+  "prs": [
+   3103
+  ],
+  "note_en": "The mobile log card has no time field: an injection logged for today takes the current time and one for a past day 12:00. The exact time can be set afterwards from the day log in Medications > 'Adherence & log', where the pencil on the entry opens 'Edit logged dose'.",
+  "note_es": "La tarjeta para registrar la inyección en el móvil no tiene campo de hora: una inyección de hoy toma la hora actual y una de un día pasado, las 12:00. La hora exacta se puede ajustar después desde el registro del día en Medicación > «Adherencia y registro», donde el lápiz de la entrada abre «Editar dosis registrada».",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/components/glp1/Glp1LogInjectionCard.tsx:119-123; src/screens/MedicationEntryEditScreen.tsx:48,62-64,95-102,200-217; src/components/medications/MedicationDayLog.tsx:156-167; src/screens/MedicationsListScreen.tsx:259 (medications.adherence.openTitle); es catalog: medications.adherence.openTitle 'Adherencia y registro', medications.entryEdit.title 'Editar dosis registrada'",
+  "why": "The Spanish used the English names 'Adherence & log' and 'Edit logged dose', which the Spanish app translates."
+ },
+ {
+  "id": "meds-glp1-recent-injections",
+  "kind": "partial",
+  "prs": [
+   3103
+  ],
+  "note_en": "The 'Recent injections' card in the mobile GLP-1 tracker still only lists and deletes. Injections also appear in the day log of Medications > 'Adherence & log', where the pencil opens 'Edit logged dose' to change their time, site and notes; the dose and the date can only be edited on the web.",
+  "note_es": "La tarjeta «Inyecciones recientes» del control de GLP-1 en el móvil sigue permitiendo solo verlas y eliminarlas. Las inyecciones también aparecen en el registro del día de Medicación > «Adherencia y registro», donde el lápiz abre «Editar dosis registrada» para cambiar su hora, su zona de inyección y sus notas; la dosis y la fecha solo se pueden editar en la web.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/components/glp1/Glp1RecentInjectionsCard.tsx:23-75; src/screens/MedicationEntryEditScreen.tsx:48,95-102,200-252; SparkyFitnessFrontend/src/pages/Medications/Glp1RecentInjections.tsx:51-83,167-226 (web edit with dose and date-time); es catalog: 'Inyecciones recientes', 'Adherencia y registro', 'Editar dosis registrada'",
+  "why": "The Spanish used the English names 'Adherence & log' and 'Edit logged dose', which the Spanish app translates."
+ },
+ {
+  "id": "meds-symptom-timing",
+  "kind": "partial",
+  "prs": [
+   3222
+  ],
+  "note_en": "Mobile now lets you pick any past date and time for an episode's start, besides the Now, -15m, -1h, -3h and new -1d shortcuts. It still cannot log an episode that has already ended: there is no end date and time, every episode is saved as ongoing and can only be ended later with 'End Episode Now'.",
+  "note_es": "El móvil permite ahora elegir cualquier fecha y hora pasadas como inicio del episodio, además de los atajos Ahora, -15m, -1h, -3h y el nuevo -1d. Sigue sin poder registrar un episodio que ya ha terminado: no hay fecha ni hora de fin, todo episodio se guarda como en curso y solo se puede terminar después con «Finalizar episodio ahora».",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/screens/SymptomLogScreen.tsx:508-510 ('Track as ongoing episode'), 528-560 (Now to -1d), 567-598 (Date, Time), 614-616 ('End Episode Now'); es catalog symptoms.endEpisodeNow 'Finalizar episodio ahora'; SparkyFitnessFrontend/src/pages/Symptoms/SymptomLogForm.tsx",
+  "why": "The Spanish used the English button name 'End Episode Now'; the Spanish app shows «Finalizar episodio ahora»."
+ },
+ {
+  "id": "meds-subtype-filter",
+  "kind": "done",
+  "prs": [
+   3103
+  ],
+  "note_en": "On mobile the All / Meds / Supplements filter also appears on the Adherence screen, where it narrows the dose cards, checklist, adherence numbers, calendar and day log, as on the web. The list and the Adherence screen each have their own filter, shown only when there is a supplement and not kept between visits, while the web shows it even without supplements and remembers one choice for the whole page.",
+  "note_es": "En el móvil, el filtro Todo / Medicamentos / Suplementos aparece también en la pantalla Adherencia, donde filtra las tarjetas de dosis, la lista de comprobación, las cifras de adherencia, el calendario y el registro del día, como en la web. La lista y la pantalla Adherencia tienen cada una su propio filtro, que solo aparece si hay algún suplemento y no se conserva de una visita a otra, mientras que la web lo muestra aunque no haya suplementos y recuerda una sola elección para toda la página.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/screens/MedicationAdherenceScreen.tsx:68 (medications.adherence.screenTitle), 80-97 (All / Meds / Supplements segments), 284; src/screens/MedicationsListScreen.tsx:124; es catalog: medications.adherence.screenTitle 'Adherencia', medications.filter {all 'Todo', meds 'Medicamentos', supplements 'Suplementos'}",
+  "why": "The Spanish used the English screen name 'Adherence'; the Spanish app titles it «Adherencia»."
+ },
+ {
+  "id": "reports-energy-unit",
+  "kind": "done",
+  "prs": [
+   3452
+  ],
+  "note_en": "Mobile reports follow the kcal/kJ choice: the Nutrition report, its calorie chart and the Compare report show energy in the chosen unit. Mobile has no report exports.",
+  "note_es": "Los informes del móvil siguen la elección de kcal/kJ: el informe de nutrición, su gráfico de calorías y el informe Comparar muestran la energía en la unidad elegida. El móvil no exporta informes.",
+  "evidence": "es mobile catalog: screens.compareReport 'Comparar', compareReport.title 'Comparar', reports.compare 'Comparar'",
+  "why": "The Spanish used the English report name 'Compare'; the Spanish app calls it «Comparar»."
+ },
+ {
+  "id": "reports-nutrient-display-groups",
+  "kind": "done",
+  "prs": [
+   3454
+  ],
+  "note_en": "Web no longer has a 'Report (Chart)' group in Settings > Nutrient Display; it keeps 'Report (Tabular)' for the report table, and the charted nutrients are chosen by hiding or restoring charts in the Nutrition tab's grid, saved to the account rather than per desktop or mobile. Mobile is unchanged: only the 'Nutrition report nutrients' picker in Customize Reports.",
+  "note_es": "La web ya no tiene el grupo «Informe (gráfico)» en Ajustes > Visualización de nutrientes; mantiene «Informe (tabular)» para la tabla del informe, y los nutrientes con gráfico se eligen ocultando o restaurando gráficos en la cuadrícula de la pestaña de Nutrición, y se guardan en la cuenta en lugar de por escritorio o móvil. El móvil no cambia: solo tiene el selector «Nutrientes del informe de nutrición» en Personalizar informes.",
+  "evidence": "/home/user/sf-main/SparkyFitnessFrontend/src/pages/Settings/NutrientDisplaySettings.tsx:59-80 (viewGroups ends with report_tabular, no report_chart); web es locale: settings.nutrientDisplay.groups.reportChart 'Informe (gráfico)', reportTabular 'Informe (tabular)', settings.nutrientDisplay.title 'Visualización de nutrientes'; mobile es: reportsSettings.nutrientsTitle 'Nutrientes del informe de nutrición', screens.reportsSettings 'Personalizar informes'",
+  "why": "The Spanish used the English group names 'Report (Chart)' and 'Report (Tabular)'; the Spanish web shows «Informe (gráfico)» and «Informe (tabular)»."
+ },
+ {
+  "id": "reports-nutrition-charts-grid",
+  "kind": "done",
+  "prs": [
+   3454
+  ],
+  "note_en": "On web the per-nutrient charts are now widgets of the Nutrition tab's grid, next to the alcohol, hydration and period summary cards, and can be moved, resized, hidden, restored and maximized. Calories, protein, carbs and fat show by default (or the nutrients of an older 'Report (Chart)' choice); the rest are restored from the grid. Mobile still shows one nutrient at a time.",
+  "note_es": "En la web, los gráficos por nutriente son ahora widgets de la cuadrícula de la pestaña de Nutrición, junto a las tarjetas de alcohol, hidratación y resumen del periodo, y se pueden mover, redimensionar, ocultar, restaurar y maximizar. Por defecto se ven calorías, proteínas, carbohidratos y grasas (o los nutrientes de una elección anterior en «Informe (gráfico)»); los demás se restauran desde la cuadrícula. El móvil sigue mostrando un nutriente cada vez.",
+  "evidence": "/home/user/sf-main/SparkyFitnessFrontend/src/pages/Reports/Reports.tsx:211 (older report_chart preferences still read); web es locale settings.nutrientDisplay.groups.reportChart 'Informe (gráfico)'",
+  "why": "The Spanish used the English group name 'Report (Chart)'; the Spanish web called it «Informe (gráfico)»."
+ },
+ {
+  "id": "reports-nutrition-fats-micros-custom",
+  "kind": "done",
+  "prs": [
+   3454
+  ],
+  "note_en": "On web the fat, vitamin, mineral and custom nutrient charts are now widgets of the Nutrition tab's grid, hidden by default apart from calories and the macros and restored from the grid, instead of being enabled under 'Report (Chart)'. Web still has no period-average cards for these nutrients with % of goal and change from the previous period, which mobile has.",
+  "note_es": "En la web, los gráficos de grasas, vitaminas, minerales y nutrientes personalizados son ahora widgets de la cuadrícula de la pestaña de Nutrición, ocultos por defecto salvo las calorías y los macros, y se restauran desde la cuadrícula en lugar de activarse en «Informe (gráfico)». La web sigue sin tarjetas con la media del periodo de estos nutrientes, el % del objetivo y el cambio respecto al periodo anterior, que el móvil sí tiene.",
+  "evidence": "/home/user/sf-main/SparkyFitnessFrontend/src/pages/Settings/NutrientDisplaySettings.tsx:59-80; web es locale settings.nutrientDisplay.groups.reportChart 'Informe (gráfico)'",
+  "why": "The Spanish used the English group name 'Report (Chart)'; the Spanish web called it «Informe (gráfico)»."
+ },
+ {
+  "id": "foods-label-scan",
+  "kind": "partial",
+  "prs": [
+   3601
+  ],
+  "note_en": "On the web a food can now be created from a nutrition label image: the scan dialog of the food search (diary, Foods page and the other food pickers that use it) has a Nutrition label tab that fills in a new food form with what the server AI reads. The web food form still has no 'Scan nutrition label' button to fill in an existing food, as mobile's edit form has, and the web takes an image file, drop or paste rather than a live camera view.",
+  "note_es": "En la web ya se puede crear un alimento a partir de la imagen de una etiqueta nutricional: el diálogo de escaneo de la búsqueda de alimentos (diario, página Alimentos y los demás selectores de alimentos que la usan) tiene una pestaña Nutrition label que rellena un formulario de alimento nuevo con lo que lee la IA del servidor. El formulario de alimento de la web sigue sin un botón para escanear la etiqueta y rellenar un alimento existente, como el botón «Escanear etiqueta nutricional» del formulario de edición del móvil, y la web toma un archivo de imagen, una imagen arrastrada o una pegada en lugar de una vista de cámara en directo.",
+  "evidence": "/home/user/sf-main/SparkyFitnessFrontend/src/components/FoodSearch/BarcodeScannerDialog.tsx:39,171 (foodSearch.scanModes.label, translated only in pl); SparkyFitnessMobile/src/screens/foodForm/ScanNutritionLabelButton.tsx:27 (foodForm.scanNutritionLabel, es 'Escanear etiqueta nutricional'); web es nav.foods 'Alimentos'",
+  "why": "The Spanish used the English names of the mobile button ('Scan nutrition label', translated in the Spanish app as «Escanear etiqueta nutricional») and of the web Foods page («Alimentos» in the Spanish web); the web tab name stays in English because the Spanish web shows it untranslated."
+ },
+ {
+  "id": "checkin-hub-tabs",
+  "kind": "done",
+  "prs": [
+   3474
+  ],
+  "note_en": "The web Check-In page now has seven tabs, with Oral care between Mindfulness and Sleep. Mobile still has no Check-In hub: oral care is its own screen, opened from the + menu or its Dashboard card, like the other check-in features.",
+  "note_es": "La página Check-in de la web tiene ahora siete pestañas, con la de higiene bucal entre Mindfulness y Sueño. El móvil sigue sin un centro de check-in: la higiene bucal es una pantalla propia que se abre desde el menú + o desde su tarjeta del Panel, como las demás funciones de check-in.",
+  "evidence": "/home/user/sf-main/SparkyFitnessFrontend/src/pages/CheckIn/CheckIn.tsx:122-158 (seven tabs, oralCare after mindfulness, no feature gate on the tabs); /home/user/sf-main/SparkyFitnessMobile/src/components/AddSheet.tsx:553-559; /home/user/sf-main/SparkyFitnessMobile/src/constants/addMenuItems.ts:23; /home/user/sf-main/SparkyFitnessMobile/src/constants/dashboardCards.ts:21,77-78; es names: web nav.checkin 'Check-in', checkIn.tabs mindfulness 'Mindfulness', sleep 'Sueño'; mobile navigation.dashboard 'Panel'; web checkIn.tabs.oralCare and mobile oralCare keys have no es translation (shown as 'Oral care')",
+  "why": "Spanish used 'Dashboard', but the Spanish mobile app calls it 'Panel', and the web's Spanish page name is 'Check-in'. 'Higiene bucal' was presented as the tab's name although neither app translates 'Oral care', so the Spanish now describes the tab instead of naming it."
+ },
+ {
+  "id": "diary-adaptive-tdee",
+  "kind": "partial",
+  "prs": [
+   3231
+  ],
+  "note_en": "Mobile still shows only the device projection (projected TDEE, Goal Mode target and source) and has no adaptive TDEE panel. The device total now comes from Health Connect, Garmin or Polar and is labelled 'Device total calories' on web and mobile (in 8 of the 15 shipped non-English mobile languages the label still names Health Connect), so Garmin and Polar users get the projection on iPhone too. Apple Health totals are not used, so an iPhone without Garmin or Polar data falls back to BMR plus active calories.",
+  "note_es": "El móvil sigue mostrando solo la proyección del dispositivo (TDEE proyectado, objetivo del Modo Objetivo y fuente) y no tiene panel de TDEE adaptativo. El total del dispositivo sale ahora de Health Connect, Garmin o Polar y aparece como 'Calorías totales del dispositivo' en la web y en el móvil (en 8 de los 15 idiomas del móvil distintos del inglés la etiqueta sigue nombrando Health Connect), así que quien use Garmin o Polar también tiene la proyección en el iPhone. Los totales de Apple Health no se usan, así que un iPhone sin datos de Garmin ni Polar recurre a la TMB más las calorías activas.",
+  "evidence": "/home/user/sf-main/SparkyFitnessServer/utils/deviceTotalCalories.ts:11-15 (order health_connect, garmin, polar; Apple Health left out); SparkyFitnessMobile/src/components/DiaryCalorieMacroSummary.tsx:326-330; SparkyFitnessFrontend/src/pages/Diary/DailyProgress.tsx:768-772; mobile locales it, nl, pl, ru, tr, yue-Hant, zh-Hans, zh-Hant diarySummary.healthConnectProjectionSource still name Health Connect; de, es, fr, pt-BR translated; hu, lv, nb-NO fall back to English (15 non-English locales in localeRegistry.json); mobile es calorieSettings.goalMode.title 'Modo Objetivo'",
+  "why": "Spanish 'objetivo del modo de objetivo' read awkwardly; the Spanish mobile app names the mode 'Modo Objetivo'. Translation count (8 of 15) and the source order were checked against the locales and server code and are correct."
+ },
+ {
+  "id": "missed-exercise-cardio-rpe",
+  "kind": "partial",
+  "prs": [
+   3065
+  ],
+  "note_en": "The phone app still has no RPE field when logging or editing a cardio activity. On iOS, a run or walk recorded on the Apple Watch can be rated from 1 to 10 on the watch, and ratings given in Apple Health are read with synced workouts; the app shows this as Effort n/10 but cannot change it. Android has no way to add one: Health Connect sync reads no rating and the Wear OS app does not ask after a run.",
+  "note_es": "La app del móvil sigue sin campo de RPE al registrar o editar una actividad de cardio. En iOS, una carrera o caminata grabada en el Apple Watch se puede valorar del 1 al 10 en el reloj, y las valoraciones hechas en Apple Health se leen con los entrenamientos sincronizados; la app la muestra como 'Esfuerzo n/10', pero no permite cambiarla. Android no tiene forma de añadirla: la sincronización con Health Connect no lee ninguna valoración y la app de Wear OS no la pide tras una carrera.",
+  "evidence": "SparkyFitnessMobile/targets/watch/Presentation/WatchRunView.swift:286; targets/watch/Presentation/WorkoutEffortPicker.swift:11; src/services/healthkit/workoutEffort.ts:1-20 (WorkoutEffortScore read by time window); src/screens/ActivityDetailScreen.tsx:489-496 (display only); src/utils/cardioSessionStats.ts:216-224; setExerciseEntryEffort only called from hooks/useWatchWorkoutBridge.ts:759 and services/watchRunQueue.ts:145; activityDetail.stats.effort translated in de, es ('Esfuerzo'), fr, pl, pt-BR (and ru for workoutEffort.value); no effort read in src/services/healthconnect/; Wear OS asks for a 1-10 effort only on the new-workout strength finish summary (targets/wearos/.../WorkoutScreens.kt:426-433, NewWorkoutScreens.kt:3048-3187 WorkoutFinishSummaryView), not after a run; web RPE on the cardio set: SparkyFitnessFrontend/src/pages/Diary/LogExerciseEntryDialog.tsx, EditExerciseEntryDialog.tsx",
+  "why": "The Spanish quoted the English label 'Effort n/10', but the Spanish app shows 'Esfuerzo' (activityDetail.stats.effort is translated into es); the evidence also wrongly said those keys were English only."
+ },
+ {
+  "id": "exercise-equipment-hub",
+  "kind": "done",
+  "prs": [
+   3186
+  ],
+  "note_en": "Equipment now holds more than shoes on both: a 'Plates & bars' section lists the bars and plates you own, which the plate calculator uses, the same on iOS and Android. On web that section is hidden while you manage another person's data.",
+  "note_es": "Equipamiento ya no contiene solo zapatillas en ninguna de las dos: una sección 'Discos y barras' recoge las barras y los discos que tienes, que usa la calculadora de discos, igual en iOS y Android. En la web esa sección se oculta mientras gestionas los datos de otra persona.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/screens/EquipmentScreen.tsx:42-60 (Shoes and 'Plates & bars' rows, no platform check); /home/user/sf-main/SparkyFitnessFrontend/src/pages/Exercises/EquipmentManager.tsx:185 (plates.title), 271, 373 (hidden when isActingOnBehalf); plates.title is 'Discos y barras' in both es catalogs; plate calculator: /home/user/sf-main/SparkyFitnessFrontend/src/components/PlateCalculator/PlateCalculatorDialog.tsx, /home/user/sf-main/SparkyFitnessMobile/src/components/PlateCalculatorSheet.tsx",
+  "why": "The English names the section 'Plates & bars' but the Spanish did not use the Spanish apps' name for it, 'Discos y barras'."
+ },
+ {
+  "id": "exercise-history",
+  "kind": "done",
+  "prs": [
+   3008
+  ],
+  "note_en": "Mobile's History tab now lists each session's sets with their RPE, adds an Effort card (average RPE of the last session, bars for up to the last ten sessions, and an estimated 1RM with effort next to the one from reps alone), and opens the workout a session came from. Web's 'Last N Entries' still shows only reps and weight, duration and distance per set, with no RPE, effort summary or link to the session. Same on iOS and Android.",
+  "note_es": "La pestaña Historial del móvil muestra ya las series de cada sesión con su RPE, añade una tarjeta 'Esfuerzo' (RPE medio de la última sesión, barras de hasta las diez últimas sesiones y un 1RM estimado con esfuerzo junto al calculado solo con las repeticiones) y abre el entreno del que viene cada sesión. 'Últimas N entradas' de la web sigue mostrando solo repeticiones y peso, duración y distancia por serie, sin RPE, resumen de esfuerzo ni enlace a la sesión. Igual en iOS y Android.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/components/ExerciseHistoryList.tsx:87-105, 186-187, 315-327, 419; /home/user/sf-main/SparkyFitnessMobile/src/components/ExerciseEffortCard.tsx:68 (exerciseEffort.title, es 'Esfuerzo'); /home/user/sf-main/SparkyFitnessMobile/src/utils/exerciseEffort.ts:9 (EFFORT_TREND_SESSIONS = 10); /home/user/sf-main/SparkyFitnessMobile/src/screens/ExerciseDetailScreen.tsx:381 (exerciseDetail.history, es 'Historial'); web /home/user/sf-main/SparkyFitnessFrontend/src/components/ExerciseHistoryDisplay.tsx:15-37, 81 (exercise.lastEntries, es 'Últimas {{limit}} entradas')",
+  "why": "The Spanish did not use the Spanish apps' own names: the web heading is 'Últimas N entradas' and the mobile card is 'Esfuerzo'."
+ },
+ {
+  "id": "exercise-stats-per-exercise-charts",
+  "kind": "partial",
+  "prs": [
+   3008
+  ],
+  "note_en": "Mobile's exercise page now also has an Effort card on the History tab: the last session's average RPE, bars for up to ten recent sessions, and, for weight-and-reps lifts, a best estimated 1RM counting the reps left next to the one from reps alone. Only sets logged with an RPE count. Mobile still has none of web's per-exercise trend charts (volume, max weight, 1RM trend, rep ranges, reps vs weight, time under tension, PR progression, per-set analysis), nor its filters or grouping.",
+  "note_es": "La ficha del ejercicio en el móvil tiene ahora también una tarjeta 'Esfuerzo' en la pestaña Historial: el RPE medio de la última sesión, barras de hasta diez sesiones recientes y, en los ejercicios de peso y repeticiones, el mejor 1RM estimado contando las repeticiones que quedaban, junto al calculado solo con las repeticiones. Solo cuentan las series registradas con RPE. El móvil sigue sin ninguna de las gráficas de evolución por ejercicio de la web (volumen, peso máximo, evolución del 1RM, rangos de repeticiones, repeticiones frente a peso, tiempo bajo tensión, evolución de los récords, análisis por serie) y sin sus filtros ni su agrupación.",
+  "evidence": "SparkyFitnessMobile/src/components/ExerciseHistoryList.tsx:371-380,419; SparkyFitnessMobile/src/components/ExerciseEffortCard.tsx:68 (title, es 'Esfuerzo'), 112-148; SparkyFitnessMobile/src/utils/exerciseEffort.ts:9,41-45,116; SparkyFitnessMobile/src/screens/ExerciseDetailScreen.tsx:381 (History tab, es 'Historial'); SparkyFitnessMobile/src/screens/ExerciseStatisticsScreen.tsx (no per-exercise charts); SparkyFitnessFrontend/src/pages/Reports/ExerciseReportsDashboard.tsx (chart cases unchanged)",
+  "why": "The Spanish said 'pestaña de historial' and 'tarjeta de esfuerzo' while the app names them 'Historial' and 'Esfuerzo'; aligned with the exercise-history note."
+ },
+ {
+  "id": "exercise-pace-zones-training-load",
+  "kind": "partial",
+  "prs": [
+   3154,
+   3155
+  ],
+  "note_en": "Web now shows training paces from the latest fitness test (which only the phone can run) and a Readiness and Form card with fitness, fatigue and form worked out from the same session load, a card mobile also has. Web still has no pace zones estimated from recent runs and no 4-week acute vs chronic load, which mobile also shows on its Dashboard. On mobile the pace zones now come from the latest fitness test when there is one.",
+  "note_es": "La web muestra ya los ritmos de entrenamiento de la última prueba de condición física (que solo se puede hacer con el móvil) y una tarjeta 'Preparación y estado de forma' con la forma física, la fatiga y el estado de forma calculados a partir de la misma carga por sesión, tarjeta que el móvil también tiene ('Preparación y Forma'). La web sigue sin zonas de ritmo estimadas a partir de las carreras recientes y sin la carga aguda frente a crónica de 4 semanas, que el móvil muestra también en su Panel. En el móvil, las zonas de ritmo salen ahora de la última prueba de condición física cuando la hay.",
+  "evidence": "/home/user/sf-main/SparkyFitnessFrontend/src/components/ExerciseCharts/FitnessTestsCard.tsx:120, 150-175 ('Retest in the mobile app', Training paces); /home/user/sf-main/SparkyFitnessFrontend/src/pages/Reports/FitnessFatigueCard.tsx:67, 154-162 (fitnessFatigue.title es 'Preparación y estado de forma'); /home/user/sf-main/shared/src/utils/fitnessFatigue.ts:1-11; /home/user/sf-main/SparkyFitnessMobile/src/components/exerciseStats/FitnessFatigueCard.tsx:294-296 (exerciseStatistics.fitness.title 'Readiness and Form', es 'Preparación y Forma'); /home/user/sf-main/SparkyFitnessMobile/src/screens/DashboardScreen.tsx:960 (TrainingLoadDashboardCard; navigation.dashboard es 'Panel'); no acute/chronic or pace-zones card in /home/user/sf-main/SparkyFitnessFrontend/src (only provider metrics in DailyHealthMetricsCard.tsx:281-317); /home/user/sf-main/SparkyFitnessMobile/src/components/exerciseStats/PaceZonesCard.tsx:45-69",
+  "why": "The Spanish used names the apps do not show: the web card is 'Preparación y estado de forma' with 'Estado de forma', the mobile card is 'Preparación y Forma', and the mobile Dashboard is 'Panel' in Spanish."
+ },
+ {
+  "id": "exercise-run-program-calendar",
+  "kind": "partial",
+  "prs": [
+   2948,
+   3626
+  ],
+  "note_en": "Web shows the program schedule as a month calendar on the Training programs page (done, next and planned days, finish date against the goal date, a 'Coming up' list and catch-up by skipping workouts), but no workout opens or starts from it. Mobile has a Training calendar instead, opened from Training programs, the Library or exercise statistics: month and week views of run program and workout plan sessions, each marked done, partial, missed or upcoming, with weekly totals and training load; a program workout opens from it, and the Schedule card on Training programs keeps the finish date and catch-up. The mobile Training calendar's texts are English only.",
+  "note_es": "La web muestra el calendario del programa como vista mensual en la página Programas de entrenamiento (días hechos, siguiente y previstos, fecha de fin frente a la fecha objetivo, una lista 'Próximamente' y la opción de ponerse al día saltando entrenamientos), pero desde él no se abre ni se empieza ningún entrenamiento. El móvil tiene en su lugar un calendario de entrenamiento ('Training calendar'), al que se llega desde Programas de entrenamiento, la Biblioteca o las estadísticas de ejercicio: vista mensual y semanal de las sesiones del programa de carrera y de los planes de entrenamiento, cada una marcada como hecha, parcial, perdida o próxima, con totales semanales y carga de entrenamiento; desde él se abre un entrenamiento del programa, y la tarjeta 'Programación' de Programas de entrenamiento conserva la fecha de fin y la puesta al día. Los textos de ese calendario del móvil solo están en inglés.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/screens/RunProgramsScreen.tsx:385-392, 412; src/components/recording/RunProgramCalendar.tsx:95 ('Schedule', es 'Programación'), 115-146; src/screens/TrainingCalendarScreen.tsx:45 (month | week), 77, 97 (screens.trainingCalendar), 248-273, 369, 701-731, 814-818; src/screens/LibraryScreen.tsx:410; src/screens/ExerciseStatisticsScreen.tsx:225; screens.trainingCalendar and trainingCalendar.* only in src/localization/locales/en/translation.json; SparkyFitnessFrontend/src/pages/Exercises/TrainingPrograms/TrainingProgramCalendar.tsx:163-174, 252, 302-310, 364 (no workout links; es 'Próximamente')",
+  "why": "The note ran to six sentences; condensed to three while keeping every backed claim, and used the Spanish web name 'Próximamente'; since the mobile calendar is not translated, the Spanish now also gives the name the Spanish app actually shows, 'Training calendar'."
+ },
+ {
+  "id": "exercise-stats-cardio",
+  "kind": "done",
+  "prs": [
+   3069,
+   3154
+  ],
+  "note_en": "Both still show the cardio session list, weekly distance, longest run, efficiency and race time estimates. Mobile's Cardio view adds a Running form card the web lacks: the latest run's cadence and stride length, the average for the range, the change against earlier runs and bars for up to the last 12 runs. The web's Cardio & GPS view adds a read-only Fitness tests card (the latest result, the training paces it set and up to four earlier tests); mobile shows the tests on its Training programs and Fitness tests screens, and its Cardio pace zones follow the latest test.",
+  "note_es": "Las dos siguen mostrando la lista de sesiones de cardio, la distancia semanal, la carrera más larga, la eficiencia y las estimaciones de tiempos de carrera. La vista Cardio del móvil añade una tarjeta 'Técnica de carrera' que la web no tiene: la cadencia y la longitud de zancada de la última carrera, la media del periodo, la diferencia con las carreras anteriores y barras de hasta las 12 últimas carreras. La vista 'Cardio y GPS' de la web añade una tarjeta de solo lectura 'Pruebas de condición física' (el último resultado, los ritmos de entrenamiento que fijó y hasta cuatro pruebas anteriores); el móvil muestra las pruebas en sus pantallas Programas de entrenamiento y Pruebas de aptitud física, y las zonas de ritmo de su vista Cardio siguen la última prueba.",
+  "evidence": "SparkyFitnessMobile/src/screens/ExerciseStatisticsScreen.tsx (RunningTrendsCard, PaceZonesCard, RunningFormCard, CardioSessionList); SparkyFitnessMobile/src/components/exerciseStats/RunningFormCard.tsx:13-18 (MAX_BARS = 12), 90-92 (exerciseStatistics.runningForm.title 'Running form', es 'Técnica de carrera'); SparkyFitnessMobile/src/utils/runningForm.ts:19-60; SparkyFitnessMobile/src/components/exerciseStats/PaceZonesCard.tsx:46-52; SparkyFitnessFrontend/src/pages/Reports/ExerciseReportsDashboard.tsx (cardio view: FitnessTestsCard, RunningTrendsCard, CardioSessionList); SparkyFitnessFrontend/public/locales/es/translation.json exerciseAnalytics.views.cardio 'Cardio y GPS', exerciseAnalytics.cardio.fitnessTests.title 'Pruebas de condición física'; SparkyFitnessFrontend/src/components/ExerciseCharts/FitnessTestsCard.tsx:120, 160-200 (tests.slice(1, 5)); SparkyFitnessMobile/src/screens/RunProgramsScreen.tsx (screens.runPrograms es 'Programas de entrenamiento'); SparkyFitnessMobile/src/screens/FitnessTestScreen.tsx (screens.fitnessTest es 'Pruebas de aptitud física')",
+  "why": "The Spanish described the cards and screens with generic words instead of the Spanish apps' names ('Técnica de carrera', 'Pruebas de condición física', 'Programas de entrenamiento', 'Pruebas de aptitud física')."
+ },
+ {
+  "id": "exercise-indoor-distance",
+  "kind": "done",
+  "prs": [
+   3572
+  ],
+  "note_en": "Still mobile only. Settings > Workout > Treadmill & stride shows the learned walking and running stride and lets you set it by hand, reset it or measure it over a known distance. It also stores a percent correction for a treadmill that reads long or short, used for treadmill distances typed on the phone or the watch, and shows and resets the watch's learned indoor distance factor (Apple Watch and Wear OS); the screen is translated only into Polish. Step counting still differs: Android subtracts the hardware step counter, while iOS queries the pedometer history.",
+  "note_es": "Sigue siendo solo del móvil. En Ajustes > Entrenamiento > 'Treadmill & stride' se ven las zancadas aprendidas al caminar y al correr, y se pueden fijar a mano, restablecer o medir sobre una distancia conocida. También se guarda una corrección en porcentaje para una cinta que marca de más o de menos, que se aplica a las distancias de cinta introducidas en el móvil o en el reloj, y se ve y se restablece el factor de distancia en interior que aprende el reloj (Apple Watch y Wear OS); la pantalla solo está traducida al polaco. El recuento de pasos sigue siendo distinto: Android resta el contador de pasos del hardware, mientras que iOS consulta el historial del podómetro.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/screens/WorkoutSettingsScreen.tsx:404-413; src/screens/SettingsScreen.tsx:403-405 (settings.rows.workout, es 'Entrenamiento'); src/screens/TreadmillSettingsScreen.tsx:132-140, 200-223, 551-586, 597-632, 714-730, 795-850; src/services/watchIndoorScale.ts; src/services/stepCounter.ts:41-90; treadmillSettings and workoutSettings.treadmillStride only in locales en and pl (of the 16 in localeRegistry.json)",
+  "why": "The Spanish path translated the row as 'Cinta y zancada', but that label is not translated into Spanish (only en and pl), so the Spanish app shows 'Treadmill & stride'."
+ },
+ {
+  "id": "exercise-resume-logged-workout",
+  "kind": "partial",
+  "prs": [
+   3510
+  ],
+  "note_en": "On the web, a partial or unfinished session can be resumed in the live player with the play button ('Resume Workout') on the diary card. It picks up from the sets already done. The web still cannot restart a finished workout live or start from a chosen set ('Start workout here'), which mobile can. Mobile also resumes a partial or unfinished session in place instead of starting a new one.",
+  "note_es": "En la web, una sesión parcial o sin terminar se puede reanudar en el reproductor en directo con el botón de reproducir ('Resume Workout') de la tarjeta del diario. Continúa a partir de las series ya hechas. La web sigue sin poder reiniciar en directo un entrenamiento terminado ni empezar desde una serie elegida ('Empezar entrenamiento aquí'), cosa que el móvil sí puede hacer. El móvil también reanuda en el mismo sitio una sesión parcial o sin terminar en lugar de empezar una nueva.",
+  "evidence": "/home/user/sf-main/SparkyFitnessFrontend/src/pages/Diary/ExercisePresetEntryDisplay.tsx:136-141, 143-185, 400-417 (icon button with Play icon; exerciseCard.resumeWorkoutButton is its tooltip, translated only in de, fr, pl, pt-BR, so English in the Spanish web); /home/user/sf-main/SparkyFitnessMobile/src/screens/WorkoutDetailScreen.tsx:394, 434-515, 545-546 (workoutDetail.actions.startHere, es 'Empezar entrenamiento aquí'), 1129-1142",
+  "why": "The Spanish quoted 'Reanudar entrenamiento', but the web text is not translated into Spanish and shows 'Resume Workout'; it is the tooltip of an icon-only play button, so both languages now say that; the mobile action is 'Empezar entrenamiento aquí' in the Spanish app."
+ },
+ {
+  "id": "exercise-run-program-custom",
+  "kind": "partial",
+  "prs": [
+   2948,
+   3436
+  ],
+  "note_en": "The web Training programs page lists plans made in the mobile app under 'Your plans'. You can start one and follow it like any program, including 'Mark as done'. Rating how hard a workout felt is mobile only. Only mobile can create and edit plans (workouts, steps, pace and heart rate targets, move, duplicate and delete).",
+  "note_es": "La página Programas de entrenamiento de la web muestra en 'Tus planes' los planes creados en la app móvil. Se puede empezar uno y seguirlo como cualquier programa, incluido 'Marcar como hecho'. Valorar lo duro que resultó un entreno solo se puede en el móvil. Solo el móvil permite crear y editar planes (entrenamientos, pasos, objetivos de ritmo y de frecuencia cardiaca, mover, duplicar y borrar).",
+  "evidence": "/home/user/sf-main/shared/src/schemas/api/RunProgram.api.zod.ts:128-134, 194, 216, 231; SparkyFitnessFrontend/src/pages/Exercises/TrainingPrograms/TrainingProgramPicker.tsx:151 ('Your plans', es 'Tus planes'); SparkyFitnessFrontend/src/pages/Diary/RunProgramBanner.tsx:118 ('Mark as done', es trainingPrograms.banner.markDone 'Marcar como hecho'); SparkyFitnessFrontend/src/api/Exercises/runPrograms.ts:28; no effort rating in SparkyFitnessFrontend/src/api/Exercises/runPrograms.ts or TrainingPrograms/ (effort_log only read in TrainingProgramCalendar.tsx:82); SparkyFitnessMobile/src/services/runProgramService.ts:206-210, 260; SparkyFitnessMobile/src/screens/RunProgramEditScreen.tsx",
+  "why": "The Spanish paraphrased the button as 'marcar el entreno como hecho'; the Spanish web shows 'Marcar como hecho', so both languages now quote the button."
+ },
+ {
+  "id": "exercise-live-structure-edit",
+  "kind": "done",
+  "prs": [
+   3102
+  ],
+  "note_en": "When replacing an exercise, mobile now keeps the sets if the new exercise is of the same type (planned values stay; notes, RPE/RIR, completion and PR marks are cleared) and resets to one default set otherwise. Web's workout player still only has 'Replace exercise', which always resets the exercise to one default set, and still cannot add, reorder or rename. Same on iOS and Android.",
+  "note_es": "Al reemplazar un ejercicio, el móvil conserva ya las series si el nuevo es del mismo tipo (se mantienen los valores previstos y se borran las notas, el RPE/RIR y las marcas de serie completada y de récord) y, si no, deja una serie por defecto. El reproductor de entrenos de la web sigue teniendo solo 'Reemplazar ejercicio', que siempre deja el ejercicio con una serie por defecto, y sigue sin poder añadir, reordenar ni renombrar. Igual en iOS y Android.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/stores/activeWorkoutStore.ts:2559-2590 (preserveSets on same modality; notes, rpe, rir, completed_at, is_pr cleared; else makeDefaultSet); /home/user/sf-main/SparkyFitnessMobile/src/components/ActiveWorkoutOverflowSheet.tsx:112-116 (workout.replaceWithOther, es 'Reemplazar con otro ejercicio…'); /home/user/sf-main/SparkyFitnessFrontend/src/utils/workoutPlayback.ts:1071-1125 (replaceExerciseInWorkoutDraft: one default set); /home/user/sf-main/SparkyFitnessFrontend/src/pages/Diary/WorkoutPlaybackExercisesList.tsx:149-162 (exercise.workoutPlaybackPage.replaceExercise, es 'Reemplazar ejercicio') and WorkoutPlaybackPage.tsx:1163-1178 (Replace is the only structure action)",
+  "why": "The Spanish called the action 'Sustituir', but both Spanish apps say 'Reemplazar' ('Reemplazar ejercicio' on web, 'Reemplazar con otro ejercicio…' on mobile); both languages now quote the web label."
+ },
+ {
+  "id": "exercise-cardio-session-detail",
+  "kind": "partial",
+  "prs": [
+   3014,
+   3022,
+   3065,
+   3078,
+   3135,
+   3256,
+   3264,
+   3329
+  ],
+  "note_en": "Mobile's session detail now also shows average cadence, stride length, the start weather (as web does) and the effort rating when the entry has them, a Splits card per km or mile worked out from the GPS track, and buttons to save the route to Routes and to share the session as an image; both apps say how the heart rate zones were worked out. Mobile still has no cadence or elevation charts and no table of the device's own laps, which web has. Android now draws the route over a real map in every build (OpenStreetMap through MapLibre without a Google Maps key), as iOS does with Apple Maps.",
+  "note_es": "El detalle de la sesión en el móvil muestra ya también la cadencia media, la longitud de zancada, el tiempo meteorológico al empezar (como la web) y la valoración del esfuerzo cuando la entrada los tiene, una tarjeta 'Parciales' por km o por milla calculada a partir del recorrido GPS y botones para guardar el recorrido en Rutas y para compartir la sesión como imagen; las dos apps indican cómo se calcularon las zonas de frecuencia cardiaca. Al móvil le siguen faltando las gráficas de cadencia y de altitud y la tabla de vueltas del propio dispositivo, que la web sí tiene. Android dibuja ya la ruta sobre un mapa real en cualquier compilación (OpenStreetMap con MapLibre si no hay clave de Google Maps), igual que iOS con Apple Maps.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/utils/cardioSessionStats.ts:179-225 (cadence, stride, weather, effort); /home/user/sf-main/SparkyFitnessMobile/src/screens/CardioSessionScreen.tsx:209-215, 231, 251-253, 283, 298-304 (exerciseStatistics.cardio.splits, es 'Parciales'), 335; screens.library.routes es 'Rutas'; /home/user/sf-main/SparkyFitnessFrontend/src/pages/Reports/ActivityReportVisualizer.tsx:401-407 (web weather); /home/user/sf-main/SparkyFitnessMobile/src/utils/routeMapSupport.ts:14-28; /home/user/sf-main/SparkyFitnessMobile/src/components/maps/MapSurface.android.tsx:13-20",
+  "why": "The Spanish said 'una tarjeta de parciales'; the Spanish app names the card 'Parciales', so it is now quoted as the card's name."
+ },
+ {
+  "id": "native-notif-medication",
+  "kind": "done",
+  "prs": [
+   2985,
+   3005,
+   3498
+  ],
+  "note_en": "On both platforms a single reminder has Log as taken, Skip and Remind in N m, and a grouped one Log all as taken, Skip all and Remind in N m, with the delay chosen in Notification settings. Both handle these buttons with the app in the background or closed: Android through a background task, iOS natively with the app's saved login; an action that fails is saved and retried later. The web still only sets the schedules and delivers no reminders.",
+  "note_es": "En las dos plataformas, un recordatorio suelto tiene los botones Registrar como tomada, Omitir y Recordar en N min, y uno agrupado Marcar todo como tomado, Omitir todo y Recordar en N min, con la espera elegida en los ajustes de Notificaciones. Las dos atienden estos botones con la app en segundo plano o cerrada: Android mediante una tarea en segundo plano e iOS de forma nativa con el inicio de sesión guardado de la app; una acción que falla se guarda y se reintenta más tarde. La web sigue limitándose a configurar los horarios, sin enviar recordatorios.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/services/notifications.ts:116-180 (logAsTaken, skip, logAllAsTaken, skipAll, remindInMinutes, opensAppToForeground false); src/localization/locales/es/translation.json notifications.actions (Registrar como tomada, Omitir, Marcar todo como tomado, Omitir todo, Recordar en {{minutes}} min); notificationSettings.title Notificaciones; modules/background-water/expo-module.config.json:2-5; modules/background-water/ios/MedicationNotificationActions.swift:9-30, 419-464; src/services/medicationNativeBridge.ts:36-45; src/services/medicationNotificationHandler.ts:238, 791, 992-993",
+  "why": "The buttons are not called Taken and Skip: the single reminder shows 'Log as taken', 'Skip' and 'Remind in Nm', the grouped one 'Log all as taken' and 'Skip all'; the Spanish now uses the Spanish app's names (Registrar como tomada, Omitir, Recordar en N min)."
+ },
+ {
+  "id": "missed-plat-native-actionable-notifications",
+  "kind": "done",
+  "prs": [
+   2985,
+   3005,
+   3498,
+   3580
+  ],
+  "note_en": "Medication reminders have Log as taken, Skip and 'Remind in N m' buttons (Log all as taken and Skip all when grouped) on both platforms, and both now handle them with the app closed: Android through a background notification task, iOS natively with the app's saved login (otherwise the app handles them as before); an action that fails is saved and sent again later. The symptom episode's 'End now' and 'Still ongoing' buttons now work on both platforms but open the app.",
+  "note_es": "Los recordatorios de medicación tienen en las dos plataformas los botones «Registrar como tomada», «Omitir» y «Recordar en N min» («Marcar todo como tomado» y «Omitir todo» si van agrupados), y ambas los atienden ya con la app cerrada: Android mediante una tarea de notificaciones en segundo plano e iOS de forma nativa con el inicio de sesión guardado de la app (si no, la app los atiende como antes); una acción que falla se guarda y se vuelve a enviar más tarde. Los botones «Finalizar ahora» y «Aún en curso» del episodio de síntoma funcionan ya en las dos plataformas, pero abren la app.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/services/notifications.ts:120-202 (button titles and opensAppToForeground); src/localization/locales/es/translation.json notifications.actions and symptoms.actions (Finalizar ahora, Aún en curso); modules/background-water/expo-module.config.json:2-5; modules/background-water/ios/MedicationNotificationActions.swift:9-30, 419-464; src/services/medicationNativeBridge.ts:36-45; src/services/medicationNotificationHandler.ts:238, 604-614, 791, 992-993; src/services/symptomNotificationHandler.ts:173-182",
+  "why": "The medication buttons were named Taken/Skip, which is not their label; the Spanish kept the English 'End now'/'Still ongoing' although the Spanish app translates them as 'Finalizar ahora'/'Aún en curso'."
+ },
+ {
+  "id": "native-notif-symptom",
+  "kind": "partial",
+  "prs": [
+   3580
+  ],
+  "note_en": "The 'End now' and 'Still ongoing' buttons now work on iOS and Android: they open the app, which ends the episode or asks again 24 hours later, and they are translated in 10 of the 15 shipped non-English languages. The reminder still has no switch of its own and still ignores the notifications master switch (it only checks the system permission); the web has no counterpart.",
+  "note_es": "Los botones «Finalizar ahora» y «Aún en curso» funcionan ya en iOS y en Android: abren la app, que termina el episodio o vuelve a preguntar 24 horas después, y están traducidos en 10 de los 15 idiomas distintos del inglés que trae la app. El aviso sigue sin interruptor propio y sigue sin tener en cuenta el interruptor general de notificaciones (solo comprueba el permiso del sistema); la web no tiene nada equivalente.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/services/notifications.ts:183-202; src/services/symptomReminderService.ts:30 (only hasNotificationPermission, no notificationsEnabled check); src/services/symptomNotificationHandler.ts:89-182; src/localization/localeRegistry.json (15 non-English locales); symptoms.actions.endNow/stillOngoing translated in de, es, fr, nl, pl, pt-BR, tr, yue-Hant, zh-Hans, zh-Hant (missing in hu, it, lv, nb-NO, ru); es: Finalizar ahora, Aún en curso",
+  "why": "The Spanish kept the English button names although the Spanish app translates them as 'Finalizar ahora' and 'Aún en curso'; the 10 of 15 count is correct."
+ },
+ {
+  "id": "cycle-symptoms-history-badge",
+  "kind": "done",
+  "prs": [
+   3570,
+   3631
+  ],
+  "note_en": "Still web only: the mobile symptom history has no 'Cycle' label. While cycle is turned off in Settings > Features, symptoms logged in the cycle hub are left out of the symptom history on both web and mobile, so the label only shows while cycle is on or was never turned off.",
+  "note_es": "Sigue siendo solo de la web: el historial de síntomas del móvil no tiene la etiqueta «Ciclo». Mientras el ciclo está desactivado en Ajustes > Features, los síntomas registrados desde el ciclo quedan fuera del historial de síntomas tanto en la web como en el móvil, así que la etiqueta solo aparece mientras el ciclo está activado o si nunca se desactivó.",
+  "evidence": "/home/user/sf-main/SparkyFitnessFrontend/src/hooks/useSymptoms.ts:83-98; src/pages/Symptoms/SymptomHistoryList.tsx:92-94 (symptoms.history.cycle; es 'Ciclo'); settings.features.title has no es translation (shows 'Features'); SparkyFitnessMobile/src/hooks/useSymptoms.ts:159-200; src/screens/SymptomHistoryScreen.tsx:77, 90",
+  "why": "The Spanish web shows the label as 'Ciclo' (symptoms.history.cycle), not 'Cycle'."
+ },
+ {
+  "id": "chat-food-photo-card",
+  "kind": "partial",
+  "prs": [
+   3068
+  ],
+  "note_en": "The mobile chat can now send a food photo, so Sparky can run the photo analysis from mobile too, but the result shows in the generic tool card (the tool name and, when expanded, the raw result data) instead of the interactive card. Mobile has no editing of the name, meal, date or ingredients, no save mode and no Open in Meal Builder or Log to diary buttons; to log the plate on mobile you ask Sparky in a follow-up message.",
+  "note_es": "El chat del móvil ya puede enviar una foto de comida, así que Sparky también puede analizarla desde el móvil, pero el resultado aparece en la tarjeta genérica de herramienta (el nombre de la herramienta y, al desplegarla, los datos en bruto del resultado) en lugar de la tarjeta interactiva. En el móvil no se pueden editar el nombre, la comida, la fecha ni los ingredientes, no hay modo de guardado ni botones «Abrir en el Creador de Comidas» o «Registrar en el diario»; para registrar el plato en el móvil hay que pedírselo a Sparky en otro mensaje.",
+  "evidence": "SparkyFitnessMobile/src/screens/ChatScreen.tsx:349 (tool parts go to ToolCallCard); SparkyFitnessMobile/src/constants/chat.ts (getToolDisplay from @workspace/shared, generic label); SparkyFitnessMobile/src/components/chat/ToolCallCard.tsx:110-150 (expandable card, non-string result shown raw); SparkyFitnessServer/ai/tools/visionTools.ts:294-345, 351-373; SparkyFitnessServer/services/chatService.ts:1915-1925; SparkyFitnessFrontend/src/components/ai/FoodPhotoEstimateToolUI.tsx:758-792 (foodPhoto.openInMealBuilder, foodPhoto.log; en catalog 'Open in Meal Builder', 'Log to diary'; es 'Abrir en el Creador de Comidas', 'Registrar en el diario'); SparkyFitnessFrontend/src/components/thread.tsx:419",
+  "why": "The Spanish web translates the card's buttons ('Abrir en el Creador de Comidas', 'Registrar en el diario'), so the Spanish note uses those names; the English catalog labels the second button 'Log to diary', so the English note follows it."
+ },
+ {
+  "id": "settings-nutrient-display",
+  "kind": "done",
+  "prs": [
+   3454
+  ],
+  "note_en": "Web's Nutrient Display now has five groups (Summary, Quick Info, Food Database, Goal, Report (Tabular)); the Report (Chart) group is gone, and the charted nutrients are picked by hiding or restoring charts in the Nutrition report. Mobile still offers only Food Database and Report (Tabular), with the summary set in its Dashboard and Diary settings, so Quick Info and Goal remain web-only.",
+  "note_es": "La visualización de nutrientes de la web tiene ahora cinco grupos (Resumen, Información rápida, Base de datos de alimentos, Objetivo e Informe (tabular)); el grupo Informe (gráfico) ha desaparecido, y los nutrientes con gráfico se eligen ocultando o restaurando gráficos en el informe de Nutrición. El móvil sigue ofreciendo solo Base de datos de alimentos e Informe (tabular), con el resumen configurado en sus ajustes del Panel y del Diario, así que Información rápida y Objetivo siguen siendo solo de la web.",
+  "evidence": "/home/user/sf-main/SparkyFitnessFrontend/src/pages/Settings/NutrientDisplaySettings.tsx:59-81; public/locales/es/translation.json settings.nutrientDisplay.title 'Visualización de nutrientes' and groups (Resumen, Información rápida, Base de datos de alimentos, Objetivo, Informe (tabular), Informe (gráfico)); /home/user/sf-main/SparkyFitnessFrontend/src/pages/Reports/Reports.tsx:210-245, 273-282; /home/user/sf-main/SparkyFitnessMobile/src/screens/NutrientDisplaySettingsScreen.tsx:33-41, 90-97 (es nutrientDisplay.groups: Base de datos de alimentos, Informe (tabular))",
+  "why": "Both Spanish apps translate the group names (Resumen, Información rápida, Base de datos de alimentos, Objetivo, Informe (tabular), Informe (gráfico)); the Spanish note kept the English names."
+ },
+ {
+  "id": "native-health-metrics-common",
+  "kind": "done",
+  "prs": [
+   3019,
+   3034,
+   3042,
+   3091,
+   3100
+  ],
+  "note_en": "Mindfulness sessions are now read on both platforms as a common metric: Android keeps the session type (meditation, breathwork, unguided or other), title and notes, while iOS sends every session as 'other' without notes. Sleep sessions now carry overnight HRV and resting heart rate on both platforms when those metrics are synced, and Android's daily heart rate average now gives each 5-minute stretch the same weight, while iOS keeps Apple Health's own daily average. Bone mass, wheelchair pushes and menstrual period still sync nothing on iOS.",
+  "note_es": "Las sesiones de mindfulness se leen ahora en ambas plataformas como métrica común: Android conserva el tipo de sesión (meditación, respiración, sin guía u otra), el título y las notas, mientras que iOS envía todas las sesiones como 'other' sin notas. Las sesiones de sueño llevan ahora la VFC nocturna y la frecuencia cardiaca en reposo en ambas plataformas cuando esas métricas se sincronizan, y la media diaria de frecuencia cardiaca de Android da ahora el mismo peso a cada tramo de 5 minutos, mientras que iOS mantiene la media diaria de Apple Health. Masa ósea, empujes de silla de ruedas y periodo menstrual siguen sin sincronizar nada en iOS.",
+  "evidence": "SparkyFitnessMobile/src/HealthMetrics.ts:46-53 (min-max-time-avg reads as min-max-avg-day), 105-119 (heartRate 'min-max-time-avg'), 190-208 (mindfulness, android and ios, Common), 514-525, 571-582, 744-756 (wheelchairPushes, boneMass, iOS menstruationPeriod); src/services/shared/dataAggregation.ts:1-31 (5-minute buckets, plain-mean fallback); src/services/healthconnect/provider.ts:75-84; src/services/healthconnect/dataTransformation.ts:555-570 (session types), 685-721 (title and notes); src/services/healthkit/index.ts:1120-1144 (discreteAverage day statistics), 305 (only MenstruationFlow; no BoneMass, WheelchairPushes or MenstruationPeriod type); src/services/healthkit/dataTransformation.ts:634-661 (every session 'other', no notes); src/services/healthkit/sleepBiometrics.ts:1-40, 150-245 (overnight HRV and RHR, gated by their sync preferences; #3100); src/services/healthconnect/index.ts:1631-1755 and provider.ts:103 (enrichSleepSessions; #3019)",
+  "why": "The evidence pointed the iOS mindfulness claim at the nutrition transformer (dataTransformation.ts:593-621) and cited stale HealthKit lines; the claims hold, so only the evidence is corrected to the code that backs them."
+ },
+ {
+  "id": "chat-tool-call-card",
+  "kind": "done",
+  "prs": [
+   3531
+  ],
+  "note_en": "Web and mobile now name each tool call with the same friendly label (such as Food or Exercise plus the action; tools from an outside MCP server as '<server>: <tool>'), and both mark a call whose result reports an error as failed. The web still shows it as 'Used tool: <label>' with only a status icon and expands every card to its arguments and result (JSON, or plain text for outside tools); mobile keeps its per-tool icons, lookups that do not expand and Markdown text results. The labels are translated in more languages on mobile (Spanish among them) than on the web (only German and Polish).",
+  "note_es": "La web y el móvil nombran ahora cada llamada a herramienta con la misma etiqueta legible (por ejemplo Food o Exercise más la acción; las herramientas de un servidor MCP externo como '<servidor>: <herramienta>'), y ambos marcan como fallida una llamada cuyo resultado indica un error. La web la sigue mostrando como 'Used tool: <etiqueta>' solo con un icono de estado y despliega cada tarjeta con sus argumentos y su resultado (en JSON, o en texto plano para las herramientas externas); el móvil mantiene los iconos de cada herramienta, las consultas que no se despliegan y los resultados de texto en Markdown. Las etiquetas están traducidas en más idiomas en el móvil (entre ellos el español, donde se ven como Comida o Ejercicio) que en la web (solo alemán y polaco).",
+  "evidence": "shared/src/utils/chatTools.ts:87-115 (chatToolLabel); SparkyFitnessFrontend/src/components/tool-fallback.tsx:110-150 (status icon only, 'Used tool' prefix), 290-336 (label 314, failed result 302-312, args/result 325-333); SparkyFitnessMobile/src/components/chat/ToolCallCard.tsx:36-44, 67, 75-95 (status icon plus tool icon), 104-165; web public/locales: chat.tools only in en, de, pl (es has no chat.tools and no toolfallback.used); mobile catalogs: chat.tools in es (Comida, Ejercicio), de, pl, fr, it, nl, pt-BR, ru, zh-Hans and others",
+  "why": "The Spanish web has no chat.tools translation, so it shows Food and Exercise, while the Spanish mobile app shows Comida and Ejercicio; saying 'the same label' with the Spanish mobile names was wrong for the web, so the note now names the English labels and states the translation gap."
+ },
+ {
+  "id": "settings-integrations-sync-frequency",
+  "kind": "done",
+  "prs": [
+   3139,
+   3236,
+   3296
+  ],
+  "note_en": "Still web only, and Intervals.icu now offers the same choices. Daily now syncs once a day, no sooner than 23 hours after the last sync, instead of on every hourly run; for Hevy it means once each evening from 21:00 in the user's timezone. A failed or partial sync no longer moves the last sync time forward.",
+  "note_es": "Sigue siendo solo de la web, e Intervals.icu ofrece ahora las mismas opciones. La opción diaria sincroniza ahora una vez al día, como pronto 23 horas después de la última sincronización, en lugar de en cada ejecución horaria; en Hevy significa una vez cada noche a partir de las 21:00 en la zona horaria del usuario. Una sincronización fallida o parcial ya no adelanta la hora de la última sincronización.",
+  "evidence": "SparkyFitnessServer/services/providerSyncScheduler.ts:42-58 (isHevySyncDue), 61-75 (updateLastSyncIfComplete), 222-238 (DAILY_SYNC_INTERVAL_MS, isProviderSyncDue: due once 23 h have passed), 263-265 (configs without isDue, Intervals.icu included, use isProviderSyncDue); SparkyFitnessFrontend/src/pages/Settings/ProviderSyncFrequencyFields.tsx:21-33 ('intervals' in SCHEDULED_PROVIDER_TYPES), 78-93",
+  "why": "'At most every 23 hours' misstated the rule. Intervals.icu (#3139) was added to the providers with a sync frequency and the row's provider list lacked it. In Spain 21:00 is 'noche', not 'tarde'."
+ },
+ {
+  "id": "cycle-dashboard-card",
+  "kind": "done",
+  "prs": [
+   3631
+  ],
+  "note_en": "Still mobile only. The card follows the cycle switch in Settings > Features: it is hidden while cycle is off, and Dashboard Settings keeps listing it with 'Not shown: turned off in Features' (named Wellness in discreet mode). The web still has no cycle card.",
+  "note_es": "Sigue siendo solo del móvil. La tarjeta sigue el interruptor de ciclo de Ajustes > Features: se oculta mientras el ciclo está desactivado, y Ajustes del panel la sigue mostrando con 'Not shown: turned off in Features' (llamada Wellness en modo discreto). La web sigue sin tarjeta de ciclo.",
+  "evidence": "SparkyFitnessMobile/src/components/CycleCard.tsx:200-204; src/screens/DashboardScreen.tsx:456-462; src/constants/dashboardCards.ts:27-36; src/screens/DashboardSettingsScreen.tsx:487-503; src/screens/SettingsScreen.tsx:322-326 (settings.rows.features); SparkyFitnessMobile/src/localization/locales/es/translation.json (no settings.rows.features, featureSettings, dashboardSettings.wellness or dashboardSettings.offInFeatures keys; screens.dashboardSettings = Ajustes del panel)",
+  "why": "The Spanish mobile app has no translation for the Features row or for the discreet card name in Dashboard Settings, so a Spanish user sees 'Features' and 'Wellness', not 'Funciones' and 'Bienestar'."
+ },
+ {
+  "id": "cycle-nav-hub-entry",
+  "kind": "done",
+  "prs": [
+   3570,
+   3631
+  ],
+  "note_en": "Both apps now handle cycle being off the same way: once set up, the hub shows a 'turned off' notice with Turn on and Open Features instead of the hub, and runs the setup only if it was never set up. Entry points are unchanged: a web tab while cycle is on, and on mobile only the Dashboard card.",
+  "note_es": "Las dos apps tratan ahora igual el ciclo desactivado: si ya se configuró, el centro muestra un aviso de desactivado con Turn on y Open Features en lugar del centro, y solo lanza la configuración si nunca se hizo. Los accesos no cambian: una pestaña en la web mientras el ciclo está activado y, en el móvil, solo la tarjeta del panel.",
+  "evidence": "SparkyFitnessMobile/src/screens/CycleHubScreen.tsx:45-55, 163-200 (Turn on, Open Features); src/components/CycleCard.tsx:200-204, 370 (only navigate('CycleHub')); SparkyFitnessFrontend/src/pages/Cycle/CycleOffNotice.tsx (Turn on button and Open Features link to /settings?section=features); src/pages/Cycle/CyclePage.tsx:58-71; src/constants/webTabs.ts:37, 106-122; no cycle.off, cycleHub.off or openFeatures keys in the es catalogs of either app",
+  "why": "The web off notice also has an Open Features button (CycleOffNotice.tsx), so it is not a mobile-only extra. The buttons are untranslated in Spanish in both apps, so the Spanish note keeps their English names."
+ },
+ {
+  "id": "cycle-onboarding-wizard",
+  "kind": "done",
+  "prs": [
+   3570,
+   3631
+  ],
+  "note_en": "On both apps the wizard now opens only when cycle was never set up (or its setup was reset); cycle that was set up and then turned off shows a Turn on notice instead. Turning cycle on for the first time in Settings > Features opens the wizard on both.",
+  "note_es": "En las dos apps el asistente se abre ahora solo si el ciclo nunca se configuró (o se restableció su configuración); un ciclo configurado y luego desactivado muestra en su lugar un aviso para activarlo. Activar el ciclo por primera vez en Ajustes > Features abre el asistente en ambas.",
+  "evidence": "SparkyFitnessMobile/src/screens/CycleHubScreen.tsx:45-55; src/hooks/useMobileFeatures.ts:86-97 (needsSetup, setOn opens CycleOnboarding); SparkyFitnessFrontend/src/pages/Cycle/CyclePage.tsx:58-71; src/hooks/Settings/useWebFeatures.ts:87-98; the Features section/row (web settings.features.*, mobile settings.rows.features and featureSettings) has no Spanish translation in either app",
+  "why": "The Features screen is not translated in Spanish in either app, so 'Funciones' is a name neither app shows."
+ },
+ {
+  "id": "plat-components-health-metrics-ios-only",
+  "kind": "done",
+  "prs": [
+   3409,
+   3474
+  ],
+  "note_en": "The Health Data to Sync card on iOS also offers Toothbrushing, Sleeping Wrist Temperature and Overnight Body Temperature toggles; Android does not show them.",
+  "note_es": "En iOS, la tarjeta Datos de salud a sincronizar ofrece también los interruptores de Toothbrushing, Sleeping Wrist Temperature y Overnight Body Temperature; Android no los muestra.",
+  "evidence": "SparkyFitnessMobile/src/HealthMetrics.ts:209-227, 296-333 (platforms ['ios']); SparkyFitnessMobile/src/localization/locales/es/translation.json healthSync.title = Datos de salud a sincronizar (healthMetrics.toothbrushing, sleepingWristTemperature and overnightBodyTemperature untranslated)",
+  "why": "The Spanish note paraphrased the card's name; the Spanish app calls it 'Datos de salud a sincronizar'."
+ },
+ {
+  "id": "plat-native-writeback",
+  "kind": "done",
+  "prs": [
+   3474,
+   3574
+  ],
+  "note_en": "Writeback now also sends workouts logged in SparkyFitness on both platforms (an HKWorkout on iOS, an ExerciseSession with a segment per timed set on Android, each with its active energy and distance), skipping unfinished sessions and ones another source already recorded; on Android this needs permission to read exercise sessions. Toothbrushing is written only on iOS, since Health Connect has no such record.",
+  "note_es": "La escritura envía ahora también los entrenamientos registrados en SparkyFitness en ambas plataformas (un HKWorkout en iOS y una ExerciseSession con un segmento por serie cronometrada en Android, cada uno con su energía activa y su distancia), y omite las sesiones sin terminar y las que otra fuente ya registró; en Android esto requiere permiso para leer las sesiones de ejercicio. Toothbrushing solo se escribe en iOS, porque Health Connect no tiene ese registro.",
+  "evidence": "SparkyFitnessMobile/src/WritebackMetrics.ts:80-121 (Android extra permissions 103-116); src/services/healthkit/exerciseWriteback.ts:25-75 (active energy and distance samples), 236-289, 314-335; src/services/healthconnect/exerciseWriteback.ts:101, 253-264, 317-332; src/services/healthconnect/writeback.ts:407-416; src/services/shared/exerciseWritebackPlan.ts:276-280; healthMetrics.toothbrushing has no Spanish translation",
+  "why": "The Spanish mobile app shows the option as 'Toothbrushing'. The iOS workout also carries active energy and distance samples, so attaching them only to Android was misleading."
+ },
+ {
+  "id": "plat-components-health-writeback",
+  "kind": "done",
+  "prs": [
+   3474,
+   3574
+  ],
+  "note_en": "The Write to <store> card now has an Exercise toggle on both platforms besides Nutrition and Hydration, and the delete menu also removes written workouts. A Toothbrushing toggle is offered only on iOS, so the options are no longer identical.",
+  "note_es": "La tarjeta Escribir en <almacén> tiene ahora un interruptor de Exercise en ambas plataformas además de Nutrición e Hidratación, y el menú de borrado elimina también los entrenamientos escritos. Solo iOS ofrece un interruptor de Toothbrushing, así que las opciones ya no son idénticas.",
+  "evidence": "SparkyFitnessMobile/src/WritebackMetrics.ts:60-121 (toothbrushing platforms ['ios'] 91; exercise 94-119); src/services/healthconnect/writeback.ts:425-428; src/services/healthkit/writeback.ts:743-753; SparkyFitnessMobile/src/localization/locales/es/translation.json healthSync.writeTitle = Escribir en {{store}}, healthMetrics.nutrition = Nutrición, healthMetrics.hydration = Hidratación (healthMetrics.exercise and toothbrushing untranslated)",
+  "why": "The Spanish app translates the card title and the Nutrition and Hydration toggles (Escribir en, Nutrición, Hidratación); only Exercise and Toothbrushing stay in English."
+ },
+ {
+  "id": "plat-screens-sync-writeback",
+  "kind": "done",
+  "prs": [
+   3474,
+   3574
+  ],
+  "note_en": "The writeback section now sends workouts too, not only nutrition and hydration, on both platforms, and deleting removes them as well. Toothbrushing is an extra option on iOS only.",
+  "note_es": "La sección de escritura envía ahora también entrenamientos, no solo nutrición e hidratación, en ambas plataformas, y el borrado también los elimina. Toothbrushing es una opción adicional solo en iOS.",
+  "evidence": "SparkyFitnessMobile/src/WritebackMetrics.ts:80-121; src/services/healthconnect/writeback.ts:407-428; src/services/healthkit/writeback.ts:743-753; healthMetrics.toothbrushing has no Spanish translation",
+  "why": "The Spanish app shows the option as 'Toothbrushing', so the Spanish note uses that name like the other notes."
+ },
+ {
+  "id": "settings-health-writeback",
+  "kind": "done",
+  "prs": [
+   3474,
+   3574
+  ],
+  "note_en": "Writing to Apple Health or Health Connect now covers Nutrition, Hydration and Exercise (each logged workout, with its active energy and distance) on iOS and Android, and Toothbrushing on iOS only, since Health Connect has no record for it. Removing written data, for all time or a date range, also removes the written workouts. The web still has nothing like it.",
+  "note_es": "La escritura en Apple Health o Health Connect cubre ahora Nutrición, Hidratación y Exercise (cada entrenamiento registrado, con su energía activa y su distancia) en iOS y Android, y Toothbrushing solo en iOS, porque Health Connect no tiene un registro para ello. Borrar los datos escritos, de todo el tiempo o de un intervalo de fechas, también borra los entrenamientos escritos. La web sigue sin nada parecido.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/WritebackMetrics.ts:14-15, 61-121 (toothbrushing platforms ['ios'], exercise with Android energy/distance extras), 157-170; /home/user/sf-main/SparkyFitnessMobile/src/services/healthkit/exerciseWriteback.ts:28-73 (active energy and distance samples); /home/user/sf-main/SparkyFitnessMobile/src/services/healthkit/writeback.ts:743-783 (removeExerciseData for all time or range); /home/user/sf-main/SparkyFitnessMobile/src/services/healthconnect/writeback.ts:404-432; no write-back in SparkyFitnessFrontend/src; es catalog: healthMetrics.nutrition = Nutrición, hydration = Hidratación, exercise and toothbrushing untranslated",
+  "why": "The Spanish used 'tienda de salud', which reads unnaturally, translated Exercise and Toothbrushing although the Spanish app shows them in English, and mixed 'entreno' with 'entrenamiento'. The English now names the stores like the Spanish."
+ },
+ {
+  "id": "auth-admin-login-methods",
+  "kind": "done",
+  "prs": [
+   3384
+  ],
+  "note_en": "The admin Login Management section now also has an Enable Magic Link Login switch, with the Managed by Env badge when environment variables set it. Enforce MFA for all users is still only saved, not enforced, and all of this remains web only.",
+  "note_es": "En administración, la sección Gestión de inicio de sesión tiene ahora también un interruptor Enable Magic Link Login, con la insignia Gestionado por Env cuando lo fijan variables de entorno. Exigir MFA para todos los usuarios sigue solo guardándose, sin aplicarse, y todo esto sigue siendo solo de la web.",
+  "evidence": "/home/user/sf-main/SparkyFitnessFrontend/src/pages/Admin/AuthenticationSettings.tsx:218-247, 275-286; is_mfa_mandatory appears only in SparkyFitnessServer/models/globalSettingsRepository.ts, config/swagger.ts and the web admin page/types; SparkyFitnessFrontend/public/locales/es/translation.json: admin.authenticationSettings.loginManagement.title = Gestión de inicio de sesión, enforceMfaForAllUsers = Exigir MFA para todos los usuarios, admin.oidcSettings.envConfigured = Gestionado por Env (enableMagicLinkLogin untranslated)",
+  "why": "The Spanish web translates Login Management, Managed by Env and Enforce MFA for all users; only Enable Magic Link Login is still in English. Reworded to avoid 'de ... de administración', and dropped a route file from the evidence that does not reference is_mfa_mandatory."
+ },
+ {
+  "id": "settings-family-copy-to",
+  "kind": "done",
+  "prs": [
+   3218
+  ],
+  "note_en": "Mobile now has it too: Copy to family on a meal sends it to a member who has given you copy access, after a review where you can pick foods and quantities and the recipient's date and meal. The web dialog copies the whole meal.",
+  "note_es": "El móvil también lo tiene ahora: Copiar a la familia en una comida la envía a un miembro que te ha dado permiso para copiar, tras una revisión en la que puedes elegir alimentos y cantidades, y la fecha y la comida del destinatario. El diálogo de la web copia la comida entera.",
+  "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/screens/MealTypeDetailScreen.tsx:277-290; /home/user/sf-main/SparkyFitnessMobile/src/screens/FamilyMembersScreen.tsx:39-41; /home/user/sf-main/SparkyFitnessMobile/src/services/api/familyApi.ts:44; /home/user/sf-main/SparkyFitnessMobile/src/screens/FamilyCopyReviewScreen.tsx:61-138; es catalog familyDiary.copyToFamily = Copiar a la familia; SparkyFitnessFrontend/src/pages/Diary/CopyFamilyEntryDialog.tsx (whole meal, source and target date and meal); docs/src/features/family-friends-sharing.md:30-44",
+  "why": "'The reverse flow' only makes sense next to the copy-from-family row; this row is copying to a family member, so the note now says plainly that mobile has it."
+ }
+]

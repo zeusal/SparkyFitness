@@ -50,7 +50,7 @@
   "affected_rows": [
    {
     "id": "goals-goal-weight-edit",
-    "change": "Mobile now sets and clears the goal weight: Goals screen 'Goal weight' section (SparkyFitnessMobile/src/screens/GoalsScreen.tsx:1085-1090; src/components/GoalWeightSection.tsx:13-14 max 999.99 kg, 21-24 kg/lbs from default_weight_unit, 37-42 validation, 103 Save, 114-116 Clear; src/services/api/profileApi.ts:18-27 PUT /api/onboarding/target-weight; src/hooks/useProfile.ts:25-26). Same on iOS and Android. Remaining difference: web enters stone users' goal in lbs too, and also offers it in onboarding; mobile shows it only on Goals (hidden in preset mode, GoalsScreen.tsx:1085)."
+    "change": "Mobile now sets and clears the goal weight: Goals screen 'Goal weight' section (SparkyFitnessMobile/src/screens/GoalsScreen.tsx:1085-1090; src/components/GoalWeightSection.tsx:13-14 max 999.99 kg, 21-24 kg/lbs from default_weight_unit, 37-42 validation, 103 Save, 114-116 Clear; src/services/api/profileApi.ts:18-27 PUT /api/onboarding/target-weight; src/hooks/useProfile.ts:25-26). Same on iOS and Android. Both enter it in kg or lbs (stone users in lbs). Remaining difference: web also asks for it in onboarding (SparkyFitnessFrontend/src/components/Onboarding/OnBoardingSteps.tsx:366-400)."
    },
    {
     "id": "goals-goal-weight-display",

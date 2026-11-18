@@ -94,7 +94,7 @@
       "watch": false,
       "server_only": false
     },
-    "summary": "Mobile: the reminder for a still-open symptom episode now has working 'End now' and 'Still ongoing' buttons. Before, the category was registered with untranslated undefined titles (Android dropped the buttons) and no handler acted on a press. Now both buttons open the app; End now ends the episode and Still ongoing schedules the next nudge 24 h later. Nudges are tied to the server they were scheduled for, and the button titles are translated in all 15 non-English locales.",
+    "summary": "Mobile: the reminder for a still-open symptom episode now has working 'End now' and 'Still ongoing' buttons. Before, the category was registered with untranslated undefined titles (Android dropped the buttons) and no handler acted on a press. Now both buttons open the app; End now ends the episode and Still ongoing schedules the next nudge 24 h later. Nudges are tied to the server they were scheduled for, and the End now / Still ongoing titles are translated in 10 of the 15 shipped non-English locales (not hu, it, lv, nb-NO, ru).",
     "affected_rows": [
       {
         "id": "native-notif-symptom",

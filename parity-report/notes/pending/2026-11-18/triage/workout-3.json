@@ -1,0 +1,211 @@
+[
+  {
+    "pr": 3279,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "Server only: the COROS daily FIT file download budget is now kept in the database (new columns on external_data_providers) instead of an in-memory count that reset on every restart and was not shared between server instances. No change to what a user sees in either app.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3278,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "Internal rename in @workspace/shared: the run goals API schema becomes runGoalsResponseSchema and the database schema takes the name runGoalsSchema, so the API schema no longer shadows the database one. No behaviour change.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3265,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": true, "android": true, "watch": false, "server_only": true},
+    "summary": "Server-side Sparky chat (and MCP) tools, so the same on web, iOS and Android chat: a training review (training_review: sessions per week, stalled lifts, RPE/RIR effort, muscle coverage) and a run review (run_review: runs per week, weekly distance and jumps over 10%, pace against the period before, training load and recovery) in the exercise stats tool; propose_plan_changes / apply_plan_changes in the workout plan tool (planned-weight changes with reasons, applied only after the user confirms); and sparky_review_calorie_target (read-only check of the calorie target against adaptive TDEE and weight trend). No app UI changes and no audit row covers these tools.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": {
+      "name": "Training, run, plan and calorie target reviews in Sparky chat",
+      "description": "Ask Sparky how your training or running is going and it reads the last 4 weeks (7 to 90 days on request): for strength, sessions per week, lifts that have stalled, effort from logged RPE/RIR and muscle coverage; for running, runs per week, weekly distance and jumps, pace against the period before and training load with a recovery hint. It can also propose planned-weight changes for the active workout plan (add a step, lighten or hold, each with its reason) and apply only the ones you agree to, and check whether the calorie target fits your estimated maintenance and weight trend. These are chat tools on the server, so they work the same in web and phone chat and through MCP.",
+      "web": "Yes",
+      "ios": "Yes",
+      "android": "Yes",
+      "watch": "none",
+      "evidence": "/home/user/sf-main/SparkyFitnessServer/ai/tools/exerciseStatsTools.ts:206 (tool description), 281 (training_review), 297 (run_review); ai/tools/schemas/exerciseStats.ts:9-10, 77, 84; ai/tools/workoutPlanTools.ts:361-362, 685 (propose_plan_changes), 703 (apply_plan_changes, confirmed=true required); ai/tools/schemas/workoutPlans.ts:109-110, 207, 216; ai/tools/coachTools.ts:605 (sparky_review_calorie_target); shared/src/utils/trainingReview.ts, runReview.ts, planProposals.ts, calorieTargetReview.ts; docs/src/features/exercises/adaptive-coaching.md"
+    }
+  },
+  {
+    "pr": 3264,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Weather for GPS-recorded activities. A new external provider type, Weather (Open-Meteo compatible), is added on the web in Settings > External Providers (server URL, optional API key, privacy and free-tier notes). When the phone app uploads an activity's GPS track the server looks up the temperature and conditions at the start (rounded start place and time) and stores them on the entry, unless it already has weather (e.g. from Garmin). The phone app's activity detail (cardio session stats) gains a Weather tile (°F with the miles/imperial setting); the web activity report already showed weather when present. Configuring the provider is web-only.",
+    "affected_rows": [
+      {
+        "id": "reports-activity-stats-grid",
+        "change": "Mobile's activity detail now also shows a Weather stat (temperature and conditions at the start) when the entry has weather, from Garmin or from the new weather provider lookup: /home/user/sf-main/SparkyFitnessMobile/src/utils/cardioSessionStats.ts:45 (weatherText), 197-205 (key 'weather'), used by src/screens/CardioSessionScreen.tsx; values from SparkyFitnessServer/services/exerciseStatsService.ts (weather_temp_celsius, weather_condition) and shared/src/schemas/api/ExerciseStats.api.zod.ts (weatherTempCelsius, weatherCondition). Web shows it in ActivityStatsGrid (SparkyFitnessFrontend/src/components/ExerciseCharts/ActivityStatsGrid.tsx:230-239; ActivityReportVisualizer.tsx:401-407, 628). Mobile still lacks the row's other web-only stats (moving/elapsed time split, min/max elevation, gear, event, course, water loss)."
+      }
+    ],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": {
+      "name": "Weather for GPS-recorded activities",
+      "description": "With a weather provider of the type Weather (Open-Meteo compatible) added in web Settings > External Providers (or shared by the admin or a family member), the server looks up the temperature and conditions at the start of each new GPS-recorded walk, run or ride after its route is saved, sending only the start time and the start place rounded to about 1 km. Activities that already have weather, such as Garmin imports, keep it. The phone app shows it as a Weather tile on the activity's detail (in °F with imperial units) and the web shows it in the activity report. The provider can only be set up on the web; activities are GPS-recorded only in the phone app.",
+      "web": "Yes",
+      "ios": "Partial",
+      "android": "Partial",
+      "watch": "none",
+      "evidence": "/home/user/sf-main/SparkyFitnessFrontend/src/pages/Settings/ProviderSpecificFields.tsx:18, 184-185 (open_meteo -> WeatherProviderFields); src/pages/Settings/WeatherProviderFields.tsx; shared/src/constants/weatherProviderTypes.ts:6 (WEATHER_PROVIDER_TYPE = 'open_meteo'); SparkyFitnessServer/services/exerciseEntryService.ts:470 (attachGpsTrackToExerciseEntry), 597 (attachWeatherToExerciseEntry); services/weatherService.ts:233; db/migrations/*_add_open_meteo_weather_provider_type.sql; SparkyFitnessMobile/src/services/api/exerciseApi.ts:635 (only the phone uploads gps-track); src/utils/cardioSessionStats.ts:45, 197-205; SparkyFitnessFrontend/src/pages/Reports/ActivityReportVisualizer.tsx:401-407; docs/src/features/exercises/gps-activity-recording.md (## Weather)"
+    }
+  },
+  {
+    "pr": 3247,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Mobile What's New screen refreshed (content version 5, so the banner shows again): new cards for running/training programs, routes, check-in, strength, heart rate zones, reports, the watch app (Apple Watch & Wear OS, with an 'Open watch settings' button only when a watch is paired) and weekly goal, ahead of the older medications, cycle, workout, Liquid Glass (iOS 26+ only), chat, widget and photo cards. useWatchConnectivity now also asks the native module whether it is supported (false on Android without Google Play services).",
+    "affected_rows": [
+      {
+        "id": "admin-whatsnew-static-screen",
+        "change": "The card list in the description is out of date: the screen now opens with cards for running programs (button to RunPrograms), routes (Routes), check-in, strength (WorkoutSettings), heart rate (HeartRateZonesSettings), reports (Reports), the watch app and weekly goal (CalorieSettings), before the medications, cycle, workout, Liquid Glass, chat, widget and photo cards (later PRs added lab results and NFC tags cards too): /home/user/sf-main/SparkyFitnessMobile/src/screens/WhatsNewScreen.tsx:776, 795, 814, 838, 857, 876, 895, 920; CTAs at 791, 810, 853, 872, 891 (navigate calls). The watch card's 'Open watch settings' button only appears with a paired watch, on iOS or Android (WhatsNewScreen.tsx:725, 908-925; hooks/useWatchConnectivity.ts); the routes card says route following is on Apple Watch (WhatsNewScreen.tsx:803). The iOS/Android difference stays: the Liquid Glass card only on iOS 26+ (WhatsNewScreen.tsx:719, 983)."
+      }
+    ],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3235,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": true, "android": false, "watch": true, "server_only": false},
+    "summary": "iOS/Apple Watch permission fix. On the watch, the workout effort score permission is no longer requested when a workout starts; it is checked right before the rating is written and requested then if Health does not report it granted, so the 1-10 rating is saved instead of refused. The watch run asks for the workout route permission only while it is not granted. On the iPhone, the workout route type (like the effort type) is no longer counted as an unrequested Health permission, so the permission sheet stops reappearing on every visit. No audit row or note changes in substance; it makes the Apple Watch effort rating in the 'Workout effort score (1-10)' new feature actually save.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3231,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Device Projection (TDEE) now uses one device total-calorie figure per day from Health Connect, Garmin or Polar, in that fixed order (never summed; zero totals skipped), instead of Health Connect only. Apple Health totals are still left out on purpose. The labels on web and mobile change from 'Health Connect total calories' to 'Device total calories' and the settings texts name Health Connect, Garmin or Polar.",
+    "affected_rows": [
+      {
+        "id": "diary-adaptive-tdee",
+        "change": "The platform note ('Health Connect total calories' source only applies to Android data) is out of date: the projection's device total now comes from Health Connect, Garmin or Polar, so Garmin or Polar users get it on iPhone and on the web too; Apple Health totals are still not used, so an iPhone without Garmin/Polar still falls back to BMR + active calories. Labelled 'Device total calories' on both: /home/user/sf-main/SparkyFitnessServer/utils/deviceTotalCalories.ts:11-15 (DEVICE_TOTAL_SOURCE_ORDER = ['health_connect','garmin','polar']; Apple Health excluded); models/genericHealthRepository.ts:552 (getDeviceTotalCaloriesByDateRange); services/dailySummaryService.ts:120; SparkyFitnessFrontend/src/pages/Diary/DailyProgress.tsx:772; SparkyFitnessMobile/src/components/DiaryCalorieMacroSummary.tsx:329."
+      },
+      {
+        "id": "goals-calc-adjustment-mode",
+        "change": "The Device Projection text no longer names only Health Connect on iOS: it now reads 'device total calories (Health Connect, Garmin or Polar)' on web and mobile. The device total used is Health Connect, then Garmin, then Polar; the iPhone's HealthKit total is not used (contrary to the platform note), so on iOS the mode needs Garmin or Polar data or falls back to BMR + active calories: /home/user/sf-main/SparkyFitnessServer/utils/deviceTotalCalories.ts:11-15; SparkyFitnessMobile/src/screens/CalorieSettingsScreen.tsx:515, 686; SparkyFitnessFrontend/src/pages/Settings/CalculationSettings.tsx:1191, 1368, 1481; services/goalService.ts:213, DashboardService.ts:85, dailySummaryRangeService.ts:161."
+      },
+      {
+        "id": "goals-calc-diary-breakdown",
+        "change": "The platform note (source labelled 'Health Connect total calories' on iOS even with HealthKit data) no longer holds: the label is now 'Device total calories' on web and mobile, and the figure can come from Health Connect, Garmin or Polar (not Apple Health): /home/user/sf-main/SparkyFitnessMobile/src/components/DiaryCalorieMacroSummary.tsx:329; SparkyFitnessFrontend/src/pages/Diary/DailyProgress.tsx:772; SparkyFitnessServer/utils/deviceTotalCalories.ts:11-15."
+      }
+    ],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3227,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": false, "android": false, "watch": false, "server_only": false},
+    "summary": "Web preset editor: the per-exercise 'Exercise Notes / Cues (Optional)' field and its help text are removed from SortableExerciseItem, and the server stops validating exercise notes on presets. The mobile preset form already stored no per-exercise notes (WorkoutFormExerciseList.tsx:119-124), so this aligns the two; no audit row mentions the field.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3201,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": true, "android": true, "watch": true, "server_only": false},
+    "summary": "New Zone 2 Base running program (ten weeks, 3 or 4 runs a week, ids zone2Base / zone2Base4) whose runs target the person's Zone 2 heart rate range instead of a pace, with zone-check runs in weeks 4, 8 and 10. Phone: the Record screen's interval card shows the target range and, with a watch supplying heart rate, in/above/below cues and the off-range alert (talk-test text without one); the program card and Diary banner mark zone checks; the program workout sent to the watch carries the heart rate range (both watches parse it). The shared catalog also lists it on the web's Training programs page (copy in runProgramCopy.ts), without heart rate guidance since the web cannot record. Sparky chat can start it.",
+    "affected_rows": [
+      {
+        "id": "exercise-run-programs",
+        "change": "The built-in catalog (on mobile and on the web's Training programs page) now includes Zone 2 base and Zone 2 base (4 runs a week): /home/user/sf-main/shared/src/utils/runPrograms.ts:612-613, 636, 664 (PICKER_PROGRAMS); SparkyFitnessFrontend/src/constants/runProgramCopy.ts:100-113; SparkyFitnessFrontend/src/pages/Exercises/TrainingPrograms/TrainingProgramPicker.tsx:41. Its heart rate target and zone-check notes are mobile-only: SparkyFitnessMobile/src/components/recording/IntervalCard.tsx:43-84; RunProgramCard.tsx:591 and RunProgramBanner.tsx:220 (ZoneCheckNote); src/hooks/useZone2HeartRateBand.ts; src/screens/RecordActivityScreen.tsx:459. Same on iOS and Android (live cues with an Apple Watch or Wear OS watch, RecordActivityScreen.tsx:302-303, 1884-1888)."
+      }
+    ],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": {
+      "name": "Zone 2 base running program",
+      "description": "A ten-week base-building program, 3 or 4 easy runs a week, where each run targets your Zone 2 heart rate range (from your heart rate zone settings) instead of a pace, with lighter weeks 4 and 8, strides in weeks 6, 7 and 9 and zone-check runs in weeks 4, 8 and 10. While recording, the phone shows the range and, with an Apple Watch or Wear OS watch supplying heart rate, says whether you are in, above or below Zone 2 and alerts when you stay outside it (allowing for warm-up and drift); without a watch it falls back to the talk test. A program run started on either watch holds the same range. The web lists and runs the program on its Training programs page and calendar but has no heart rate guidance and cannot record it.",
+      "web": "Partial",
+      "ios": "Yes",
+      "android": "Yes",
+      "watch": "both",
+      "evidence": "/home/user/sf-main/shared/src/utils/runPrograms.ts:309 (ZONE2_CHECK_WEEKS), 612-613 (zone2Base, zone2Base4), 636; shared/src/utils/zone2Guidance.ts:17 (zone2HeartRateBand); shared/src/schemas/api/RunProgram.api.zod.ts (effort 'zone2'); SparkyFitnessMobile/src/hooks/useZone2HeartRateBand.ts; src/components/recording/IntervalCard.tsx:43-84 (target, talk test, in/above/below); src/utils/stepHeartRateGuidance.ts; src/components/recording/ZoneCheckNote.tsx; src/utils/watchRunPlans.ts:75-76 (hrMin/hrMax on watch steps); targets/watch/Adapters/ContextPayloadMapper.swift:206; targets/wearos/src/main/java/com/sparkyapps/sparkyfitness/wear/PayloadAdapters.kt:383, WatchStores.kt:3132 (step heart rate band alert); SparkyFitnessFrontend/src/constants/runProgramCopy.ts:100-113; SparkyFitnessServer/ai/tools/schemas/runProgram.ts; docs/src/features/exercises/zone-2-program.md"
+    }
+  },
+  {
+    "pr": 3208,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "Server only: each backup is built in a private work directory and published whole, so a crash or overlapping run no longer leaves partial archives that retention counted as backups. The admin backup settings and actions are unchanged.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3207,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "Server only: the /mfa-factors per-IP rate limit (5 per 30 s) now uses the shared makeIpRateLimit factory, so its window resets when it ends instead of the inline limiter's sweep-dependent reset. Sign-in screens are unchanged.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3203,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "Server only: on shutdown the server lets running cron jobs and bulk imports finish and releases provider sync claims (gracefulShutdown, shutdownHooks, providerSyncClaim), so a restart no longer leaves syncs stuck as claimed. No UI change.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3199,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": true, "android": false, "watch": true, "server_only": false},
+    "summary": "iOS/Apple Watch: stop asking for the workout effort permission repeatedly. The iPhone's unrequested-permission check ignores the effort type (HealthKit always reports it as never requested), and the watch asked for it only once. The watch part was replaced the next day by #3235 (ask right before writing the rating); the iPhone filter remains (services/healthkit/index.ts). No row changes.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3192,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Mobile active workout: an optional Now card (Workout Settings > Now card, off by default; standard format, not in guided mode) pinned under the exercise rail with the set to do now or 'Up next' during rest, 'Set 2 of 3', the exercise photos/GIF, its target in large type and the next exercise, plus a Swap button. Swap, and a new 'Do another exercise first…' item in the current exercise's overflow sheet, list the upcoming exercises to do now (moving it, or its superset, ahead of the current one) and 'Replace with another exercise…'. The shared mobile image lightbox (food, meal, diary entry, exercise and chat images) gains pinch to zoom up to 4x, pan and double-tap to 2x; the progress photo viewer now uses the same ZoomableView with unchanged behaviour. Same on iOS and Android.",
+    "affected_rows": [
+      {
+        "id": "diary-entry-image-lightbox",
+        "change": "Both still open the image full screen, but mobile's viewer now zooms (pinch up to 4x, drag to pan, double-tap to 2x; paging is paused while zoomed) and web's does not: /home/user/sf-main/SparkyFitnessMobile/src/components/ImageLightbox.tsx:63-65, 145, 168-181; src/components/ZoomableView.tsx:11-13, 30-33. Web: SparkyFitnessFrontend/src/components/ImageLightbox.tsx:137-146 (plain img, max-h-[85vh], object-contain). Same on iOS and Android."
+      },
+      {
+        "id": "foods-images-thumbnail-lightbox",
+        "change": "Same shared mobile ImageLightbox: food and meal images now zoom on mobile (pinch, pan, double-tap) while the web lightbox has no zoom: /home/user/sf-main/SparkyFitnessMobile/src/components/ImageLightbox.tsx:145, 168-181; src/components/ZoomableView.tsx:30-33; SparkyFitnessFrontend/src/components/ImageLightbox.tsx:137-146."
+      }
+    ],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": {
+      "name": "Now card and quick exercise swap in the active workout",
+      "description": "An optional card (Workout Settings > Now card, off by default) pinned above the exercise list during a standard, non-guided strength workout: the set to do now, or 'Up next' during a rest, with 'Set 2 of 3' and a dot per set, the exercise photos or GIF, its target in large type and the next exercise. Its Swap button, and 'Do another exercise first…' in the current exercise's menu, list the upcoming exercises to do now (moving it, or its whole superset, ahead of the current one) or replace the exercise. Phone app only, the same on iOS and Android; the web workout player has neither.",
+      "web": "No",
+      "ios": "Yes",
+      "android": "Yes",
+      "watch": "none",
+      "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/components/ActiveWorkoutNowCard.tsx:75, 93, 107; src/screens/ActiveWorkoutScreen.tsx:144, 613-615, 1264-1276, 1425; src/components/ActiveWorkoutOverflowSheet.tsx:96-120 (swap mode), 143 ('Do another exercise first…'); src/utils/workoutSession.ts:1070 (upcomingExercises); src/stores/activeWorkoutStore.ts:2794 (doExerciseNow); src/stores/appPreferencesStore.ts:188 (activeWorkoutNowCard: false); src/screens/WorkoutSettingsScreen.tsx:96, 371-374"
+    }
+  }
+]

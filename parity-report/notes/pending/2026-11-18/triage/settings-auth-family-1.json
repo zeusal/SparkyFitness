@@ -1,0 +1,416 @@
+[
+  {
+    "pr": 3631,
+    "user_visible": true,
+    "surfaces": {
+      "web": false,
+      "ios": true,
+      "android": true,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "Mobile app gets Settings -> Features, where cycle tracking is now turned on or off (the same account-wide cycle_settings.enabled switch as the web's Settings -> Features from #3570). Settings -> Cycle & Pregnancy only shows the state and links there (plus Set up when not finished). While cycle is off, the Dashboard cycle card and the + menu cycle row are left out (Dashboard and Quick Actions settings keep them, marked 'Not shown: turned off in Features'); the Cycle Hub shows a 'Cycle tracking is turned off' notice with Turn on / Open Features once set up, and the setup the first time; reproductive Health categories are hidden from measurement entry, the Measurements timeline report and the Diary, and cycle-hub symptoms from symptom lists. The + menu cycle row opens the setup until it is done. Same on iOS and Android.",
+    "affected_rows": [
+      {
+        "id": "cycle-settings-enable",
+        "change": "On mobile the switch moved from Settings -> Cycle & Pregnancy to the new Settings -> Features screen (SparkyFitnessMobile/src/screens/FeatureSettingsScreen.tsx:48,102-118; row in src/screens/SettingsScreen.tsx:320-329); CycleSettingsScreen now only shows 'Turned on/Turned off' with a link to Features and a Set up row (src/screens/CycleSettingsScreen.tsx:43-50,355-390). Web does the same since #3570 (SparkyFitnessFrontend/src/pages/Settings/FeatureSettings.tsx:43-49, SettingsPage.tsx:187; CycleSettings.tsx:205-230 only links to Features). Still parity, but the row's evidence (CycleSettingsScreen.tsx:344-357, CycleSettings.tsx:205-235 toggles) is now wrong; turning it on the first time opens the setup (src/hooks/useMobileFeatures.ts:71-110)."
+      },
+      {
+        "id": "cycle-dashboard-card",
+        "change": "The card is now also hidden while cycle is off in Settings -> Features (SparkyFitnessMobile/src/components/CycleCard.tsx:200-206; DashboardScreen.tsx:455-462 filters by DASHBOARD_CARD_FEATURES, constants/dashboardCards.ts:27-36); Dashboard Settings keeps listing it with 'Not shown: turned off in Features' and names it Wellness in discreet mode (src/screens/DashboardSettingsScreen.tsx:485-503). Web still has no cycle card."
+      },
+      {
+        "id": "cycle-addsheet-quick-log",
+        "change": "The + menu cycle row is left out while cycle is off in Features (SparkyFitnessMobile/src/constants/addMenuItems.ts:34-38; src/hooks/useAddMenuItemAvailable.ts:12-21; Quick Actions settings marks it 'Not shown: turned off in Features', src/screens/AddMenuSettingsScreen.tsx:163-167), and opens the cycle setup instead of the log until setup is done (src/hooks/useAddSheetActions.ts:350-359)."
+      },
+      {
+        "id": "cycle-nav-hub-entry",
+        "change": "Mobile hub now handles cycle being off: once set up, it shows 'Cycle tracking is turned off' (or 'Wellness is turned off') with Turn on and Open Features instead of the hub, and runs the setup only when never set up (SparkyFitnessMobile/src/screens/CycleHubScreen.tsx:47-55,163-200), matching the web's CycleOffNotice (SparkyFitnessFrontend/src/pages/Cycle/CyclePage.tsx:59-71). Entry points unchanged: still only the Dashboard card (CycleCard.tsx:370)."
+      },
+      {
+        "id": "cycle-onboarding-wizard",
+        "change": "The 'shown automatically if tracking is not enabled' part is no longer true on either side: the wizard opens when cycle was never set up (or its setup was reset); a set-up cycle that is off shows a Turn on notice instead (SparkyFitnessMobile/src/screens/CycleHubScreen.tsx:47-55,163-200; SparkyFitnessFrontend/src/pages/Cycle/CyclePage.tsx:59-71). Turning cycle on for the first time in Features opens the setup (SparkyFitnessMobile/src/hooks/useMobileFeatures.ts:94-103)."
+      }
+    ],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": {
+      "name": "Settings -> Features: turn whole features on or off",
+      "description": "A Features screen in Settings on the web (#3570) and in the mobile app (#3631). Cycle & Pregnancy is the only feature so far, and its switch is one account-wide value shared by the website and the app. Turning it off hides the cycle tab/hub, the mobile Dashboard card and + menu row, the reproductive Health categories in measurement lists and reports, and cycle-hub symptoms in symptom lists; data is kept and syncs keep running. Only the account owner can change it. The server also stores per-platform choices for future features (#3555).",
+      "web": "Yes",
+      "ios": "Yes",
+      "android": "Yes",
+      "watch": "none",
+      "evidence": "SparkyFitnessMobile/src/screens/FeatureSettingsScreen.tsx:43-130,151-190; src/screens/SettingsScreen.tsx:320-329; src/hooks/useMobileFeatures.ts:27-118; src/hooks/useSymptoms.ts:165-199; src/screens/DiaryScreen.tsx:354-362; src/screens/MeasurementsAddScreen.tsx:331-336; SparkyFitnessFrontend/src/pages/Settings/FeatureSettings.tsx:43-49; SparkyFitnessFrontend/src/pages/Settings/SettingsPage.tsx:187; shared/src/features/optionalFeatures.ts:53-55 (only 'cycle' registered), 163-178, 196-237"
+    }
+  },
+  {
+    "pr": 3607,
+    "user_visible": true,
+    "surfaces": {
+      "web": true,
+      "ios": false,
+      "android": false,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "Web only: the importer dialogs in Settings -> Data Import (Food DB, Food Diary, Check-in & Health, Exercise DB, Workout History, FIT activities) ask 'are you sure' on close only while they hold unsaved changes, not when pristine or after a completed import (DialogContent confirmWhen prop). Polishing of an existing web behaviour; mobile has no importers.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3566,
+    "user_visible": true,
+    "surfaces": {
+      "web": true,
+      "ios": false,
+      "android": false,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "Web Preferences (and the web onboarding date-of-birth format selector) add the DD.MM.YYYY date format (dd.MM.yyyy). Mobile only widens its preference type; it still has no date format selector and uses the device locale.",
+    "affected_rows": [
+      {
+        "id": "settings-pref-date-format",
+        "change": "Web now offers six formats, adding dd.MM.yyyy (25.12.2024) (SparkyFitnessFrontend/src/pages/Settings/PreferenceSettings.tsx:221-256; list in shared/src/schemas/database/UserPreferences.zod.ts SUPPORTED_DATE_FORMATS). Mobile still has no selector (date_format only typed in SparkyFitnessMobile/src/types/preferences.ts:31-37 and read in src/services/diagnosticReportService.ts:96); the row stays web-only."
+      }
+    ],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3565,
+    "user_visible": true,
+    "surfaces": {
+      "web": true,
+      "ios": false,
+      "android": false,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "Web fix: while acting on behalf of a family member, the web never opens that person's onboarding wizard, never offers Complete Setup, and Goals hides Reset Onboarding; the server refuses onboarding submit/skip/reset/goal-weight from a delegate with 403. Before, the wizard replaced the whole app with no way back. Mobile has no acting-on-behalf mode and no onboarding wizard.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3555,
+    "user_visible": false,
+    "surfaces": {
+      "web": false,
+      "ios": false,
+      "android": false,
+      "watch": false,
+      "server_only": true
+    },
+    "summary": "Server and shared groundwork for optional features (#3487): user_preferences.feature_choices ({web, mobile}), GET/PATCH /api/user-preferences/features (owner-only PATCH), and the shared registry shared/src/features/optionalFeatures.ts. No screen by itself; the web (#3570) and mobile (#3631) Features screens use it. Cycle keeps its own cycle_settings.enabled switch.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3474,
+    "user_visible": true,
+    "surfaces": {
+      "web": true,
+      "ios": true,
+      "android": true,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "New oral care tracking (brushing, flossing, mouthwash, tongue cleaning, custom types) with a daily brushing goal and streak. Web: Check-In -> Oral care tab, brushing timer dialog, Reports -> Oral care. Mobile (iOS and Android): + menu Oral care row, optional Dashboard card, Oral care screen and log form, brushing timer modal (haptics, keep-awake, a notification when the target is reached), Reports -> Oral care, and brushing reminders under Settings -> Notifications. iOS only: Toothbrushing read from Apple Health (Hygiene category) and written back, and a brushing Live Activity (Lock Screen, Dynamic Island, mirrored to the Apple Watch Smart Stack); Health Connect has no toothbrushing record. Assistant/MCP can read it (get_oral_care_summary).",
+    "affected_rows": [
+      {
+        "id": "native-health-metrics-ios-only",
+        "change": "Adds Toothbrushing (Apple Health ToothbrushingEvent, new 'Hygiene' category) to the Apple Health-only metrics (SparkyFitnessMobile/src/HealthMetrics.ts:209-227, platforms: ['ios']; Android has no Health Connect record)."
+      },
+      {
+        "id": "plat-native-health-metrics-ios-only",
+        "change": "Toothbrushing is a new iOS-only sync type (SparkyFitnessMobile/src/HealthMetrics.ts:209-227, platforms: ['ios'], category 'Hygiene')."
+      },
+      {
+        "id": "plat-components-health-metrics-ios-only",
+        "change": "The Health Data to Sync card offers a Toothbrushing toggle only on iOS (SparkyFitnessMobile/src/HealthMetrics.ts:209-227)."
+      },
+      {
+        "id": "plat-screens-sync-metrics-ios-only",
+        "change": "Toothbrushing joins the iOS-only metric toggles, under a new Hygiene category (SparkyFitnessMobile/src/HealthMetrics.ts:209-227, 1174, 1437-1438)."
+      },
+      {
+        "id": "native-health-metric-selection",
+        "change": "Category list gains 'Hygiene' (iOS only, Toothbrushing) (SparkyFitnessMobile/src/HealthMetrics.ts:1174, 1437-1438)."
+      },
+      {
+        "id": "plat-native-writeback",
+        "change": "Writeback now also includes Toothbrushing, iOS only (ToothbrushingEvent samples): SparkyFitnessMobile/src/WritebackMetrics.ts:83-93 (platforms: ['ios']); src/services/healthkit/writeback.ts; Android skips it (src/services/healthconnect/writeback.ts:407). Only brushes logged in SparkyFitness are written."
+      },
+      {
+        "id": "plat-components-health-writeback",
+        "change": "The Write to <store> card's options now differ: Toothbrushing is offered only on iOS (SparkyFitnessMobile/src/WritebackMetrics.ts:83-93, platforms: ['ios']), so 'same options on both platforms' is no longer exact."
+      },
+      {
+        "id": "plat-screens-sync-writeback",
+        "change": "The writeback section is no longer just nutrition and hydration and no longer identical: a Toothbrushing toggle exists only on iOS (SparkyFitnessMobile/src/WritebackMetrics.ts:83-93; src/services/healthconnect/writeback.ts:407)."
+      },
+      {
+        "id": "settings-health-writeback",
+        "change": "Toothbrushing writeback added on iOS only (SparkyFitnessMobile/src/WritebackMetrics.ts:83-93); the row says iOS & Android with the same UI."
+      },
+      {
+        "id": "checkin-hub-tabs",
+        "change": "Web Check-In gains an 'Oral care' tab (SparkyFitnessFrontend/src/pages/CheckIn/CheckIn.tsx:140-141,293-294); on mobile oral care is its own screen opened from the + menu or the Dashboard card (SparkyFitnessMobile/src/components/AddSheet.tsx:553-559; src/constants/dashboardCards.ts:21)."
+      },
+      {
+        "id": "checkin-add-menu-shortcuts",
+        "change": "The mobile + menu also opens Oral care directly (SparkyFitnessMobile/src/components/AddSheet.tsx:553-559; src/constants/addMenuItems.ts:23,76); the web add menu still only leads to Check-In."
+      }
+    ],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": {
+      "name": "Oral care tracking with brushing timer",
+      "description": "Log brushing, flossing, mouthwash, tongue cleaning or a named other type against a daily brushing goal (default twice a day for 2 minutes) with a streak; a brushing timer split into four quarters with chimes; an Oral care report. Web: Check-In -> Oral care, Reports -> Oral care. Mobile: + menu, optional Dashboard card, Oral care screen, Reports -> Oral care, brushing reminders (Settings -> Notifications), and a notification when the timer target is reached. iPhone only: smart-toothbrush brushes read from Apple Health (deduplicated against manual logs), writeback to Apple Health, and a Live Activity for the timer (Lock Screen, Dynamic Island, Apple Watch Smart Stack). Android has no health sync for it (Health Connect has no toothbrushing record). The assistant and MCP can read it but not log it.",
+      "web": "Yes",
+      "ios": "Yes",
+      "android": "Partial",
+      "watch": "none",
+      "evidence": "docs/src/features/oral-care.md; SparkyFitnessFrontend/src/pages/CheckIn/CheckIn.tsx:140-141,293-294; src/pages/CheckIn/OralCareSection.tsx; src/pages/CheckIn/BrushingTimerDialog.tsx; src/pages/Reports/Reports.tsx:339-342; src/pages/Reports/ReportsControls.tsx:61-62; SparkyFitnessMobile/src/components/AddSheet.tsx:553-559; src/constants/dashboardCards.ts:21,77-78; src/screens/OralCareScreen.tsx; src/screens/OralCareLogScreen.tsx; src/components/oralCare/BrushingTimerModal.tsx:43,83; src/screens/OralCareReportScreen.tsx; src/screens/NotificationSettingsScreen.tsx:200-226; src/services/brushingLiveActivity.ios.ts:65-69; src/HealthMetrics.ts:209-227; src/WritebackMetrics.ts:83-93; SparkyFitnessServer/routes/v2/oralCareRoutes.ts; SparkyFitnessServer/ai/tools/checkinTools.ts:113,282"
+    }
+  },
+  {
+    "pr": 3459,
+    "user_visible": false,
+    "surfaces": {
+      "web": false,
+      "ios": false,
+      "android": false,
+      "watch": false,
+      "server_only": true
+    },
+    "summary": "Refactor: the email HTML layout moves into code and the server translation catalogs keep only plain text (SparkyFitnessServer/services/emailTranslations.ts), plus translation-sync automation tweaks. No visible change beyond #3453.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3453,
+    "user_visible": true,
+    "surfaces": {
+      "web": false,
+      "ios": false,
+      "android": false,
+      "watch": false,
+      "server_only": true
+    },
+    "summary": "The server sends the password reset, email MFA code and magic link emails in the recipient's language, taken from user_preferences.language (the language set on the website; the mobile app's language is local and not saved there), falling back to English per string. Server catalogs at main hold translations for de, fr, pl and pt-BR (sv in part); other locales are empty and fall back to English.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": {
+      "name": "Account emails in your language",
+      "description": "Password reset, email sign-in code (MFA) and magic link emails are written in the language chosen in the website's preferences, with English for any missing sentence. At this point the server has German, French, Polish and Brazilian Portuguese (Swedish in part). The mobile app's language choice is kept on the device and does not set it, so a mobile-only user gets the language last saved on the web (English by default).",
+      "web": "Yes",
+      "ios": "Partial",
+      "android": "Partial",
+      "watch": "none",
+      "evidence": "SparkyFitnessServer/auth.ts:18,441,938,996 (resolveEmailLanguage); SparkyFitnessServer/services/emailTranslations.ts:55-120,250-310; SparkyFitnessServer/locales/{de,fr,pl,pt-BR}/translation.json (others '{}'); mobile language stays local (SparkyFitnessMobile/src/localization/appLanguage.ts; row settings-pref-language notes it is not synced)"
+    }
+  },
+  {
+    "pr": 3416,
+    "user_visible": true,
+    "surfaces": {
+      "web": true,
+      "ios": true,
+      "android": true,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "German-only text fix: Compare sentences keep the capital letter of German nouns in metric names, on web and mobile alike (compareCopy.ts in both). No parity change.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3384,
+    "user_visible": true,
+    "surfaces": {
+      "web": true,
+      "ios": false,
+      "android": false,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "Admins get an 'Enable Magic Link Login' switch under Admin -> Authentication -> Login Management (with SPARKY_FITNESS_DISABLE_MAGIC_LINK_LOGIN / SPARKY_FITNESS_FORCE_MAGIC_LINK_LOGIN, a Managed by Env badge and a fail-safe line). The web login page shows Request Magic Link only when it is on, now also when email/password login is off; the server refuses sending or verifying links when off. The unused Better Auth email OTP plugin is removed (email MFA codes still go through twoFactor). Mobile still has no magic link and no admin UI.",
+    "affected_rows": [
+      {
+        "id": "auth-magic-link",
+        "change": "The row's note ('always shown whenever email login is enabled, without checking a specific magic link setting') is now wrong: the button follows the server's magic_link.enabled setting and also shows when email/password login is off (SparkyFitnessFrontend/src/pages/Auth/Auth.tsx:74,625-662,806-830; SparkyFitnessServer/routes/auth/authCoreRoutes.ts:99,120; middleware/magicLinkLoginGuard.ts blocks request and verify when off, mounted at SparkyFitnessServer.ts:350). Still web only: mobile has no magic link."
+      },
+      {
+        "id": "auth-admin-login-methods",
+        "change": "The admin Login Management toggles now include 'Enable Magic Link Login' with the Managed by Env badge (SparkyFitnessFrontend/src/pages/Admin/AuthenticationSettings.tsx:218-247). Still web only."
+      },
+      {
+        "id": "admin-auth-emergency-failsafe",
+        "change": "The emergency block now also lists SPARKY_FITNESS_FORCE_MAGIC_LINK_LOGIN=true (SparkyFitnessFrontend/src/pages/Admin/AuthenticationSettings.tsx:453-458), besides the email and passkey variables (444, 451)."
+      },
+      {
+        "id": "admin-auth-login-methods-applied",
+        "change": "The web sign-in screen now also applies the magic link setting (SparkyFitnessFrontend/src/pages/Auth/Auth.tsx:74,625-662,806-830); mobile reads /api/auth/settings but has no magic link, so nothing changes there."
+      }
+    ],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3377,
+    "user_visible": true,
+    "surfaces": {
+      "web": false,
+      "ios": true,
+      "android": true,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "Mobile Import Full History (both platforms): a 30-day window whose health read times out is split into 7-day and then 1-day windows instead of being retried at the same size, and a single day that still times out is retried once with workout telemetry limited to 10 workouts, so a busy history no longer stalls the import. No change to what the screen offers.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3353,
+    "user_visible": false,
+    "surfaces": {
+      "web": false,
+      "ios": false,
+      "android": false,
+      "watch": false,
+      "server_only": true
+    },
+    "summary": "Server: an OIDC provider configured through environment variables keeps its issuer URL exactly as written (no trailing slash stripped), fixing providers whose issuer ends in '/'. No client change.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3342,
+    "user_visible": false,
+    "surfaces": {
+      "web": false,
+      "ios": false,
+      "android": false,
+      "watch": false,
+      "server_only": true
+    },
+    "summary": "Server: an in-app backup restore is loaded into a database beside the live one and swapped in only when complete, with writes fenced during the swap, so a failed restore leaves the live data intact. The admin's web restore form is unchanged.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3266,
+    "user_visible": true,
+    "surfaces": {
+      "web": true,
+      "ios": false,
+      "android": false,
+      "watch": false,
+      "server_only": true
+    },
+    "summary": "Server: an in-app restore is refused (with an error the admin sees on the web restore form) while other server instances are connected to the same database. Admin-only safety check; no parity change.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3245,
+    "user_visible": false,
+    "surfaces": {
+      "web": false,
+      "ios": false,
+      "android": false,
+      "watch": false,
+      "server_only": true
+    },
+    "summary": "Server: IP rate-limit windows for auth routes are stored in a rate_limit_windows table so several server instances share one budget. No client change.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3218,
+    "user_visible": true,
+    "surfaces": {
+      "web": false,
+      "ios": true,
+      "android": true,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "Mobile (iOS and Android) can now copy food to a family member's diary: open a meal in your diary, choose Copy to family, pick a member who granted Manage Diary + View Food Library, choose all or some foods and adjust quantities, pick the destination date and one of the recipient's meal types (custom ones included), confirm, and the app opens their diary. New server routes copy-reviewed-to-user / copy-selected-to-user recheck permissions and a fingerprint of the source. Web keeps its whole-meal Copy To Family tab.",
+    "affected_rows": [
+      {
+        "id": "diary-family-copy-to",
+        "change": "Now on mobile too: 'Copy to family' in the meal detail (SparkyFitnessMobile/src/screens/MealTypeDetailScreen.tsx:277-283) -> recipient list limited to members with copy access (src/screens/FamilyMembersScreen.tsx:27-55,139-153) -> review with per-food selection, quantities, recipient's date and meal (src/screens/FamilyCopyReviewScreen.tsx:59-61,208-212,285); server SparkyFitnessServer/routes/foodEntryRoutes.ts:640,715. Mobile is more granular than web, which copies a whole meal type (SparkyFitnessFrontend/src/pages/Diary/CopyFamilyEntryDialog.tsx)."
+      },
+      {
+        "id": "settings-family-copy-to",
+        "change": "Mobile now has the reverse flow (Copy to family): SparkyFitnessMobile/src/screens/MealTypeDetailScreen.tsx:277-283, FamilyMembersScreen.tsx:39-41,150-153, FamilyCopyReviewScreen.tsx:59-61,208-212; same permissions as web (Manage Diary + View Food Library, rechecked on confirm; docs/src/features/family-friends-sharing.md:29-44). Mobile lets you pick foods and quantities; web copies the whole meal."
+      }
+    ],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3215,
+    "user_visible": false,
+    "surfaces": {
+      "web": false,
+      "ios": false,
+      "android": false,
+      "watch": false,
+      "server_only": true
+    },
+    "summary": "Server: when a backup starts, leftover .tmp work folders older than a day are removed from the backup directory. No client change.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3120,
+    "user_visible": true,
+    "surfaces": {
+      "web": true,
+      "ios": true,
+      "android": true,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "Compare 'since a habit started': a stricter, bias-corrected count of independent days for slow-moving outcomes (fewer false 'changed' answers), and weight trend is no longer offered as a metric in since questions on web, mobile, or the Compare MCP/assistant tool (refused there). Same on web and mobile.",
+    "affected_rows": [],
+    "new_features_entries": [
+      {
+        "name_en": "Compare: before and since a habit started",
+        "change": "Still accurate and the same on web and mobile; optionally add that weight trend is not offered in since questions (shared/src/compare/metrics.ts:117,122-129; SparkyFitnessFrontend/src/pages/Reports/Compare/CompareSentence.tsx:64,98; SparkyFitnessMobile/src/components/compare/CompareSentence.tsx:10; docs/src/developer/mcp/compare.md:27) and that the test is stricter for slow-moving outcomes (shared/src/compare/since.ts:206-207)."
+      }
+    ],
+    "possible_issues": [],
+    "new_feature": null
+  }
+]

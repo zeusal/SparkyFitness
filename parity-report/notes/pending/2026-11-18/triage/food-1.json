@@ -1,0 +1,216 @@
+[
+  {
+    "pr": 3608,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": true, "android": true, "watch": false, "server_only": true},
+    "summary": "Server search ordering: local food, meal, exercise and workout preset searches now rank exact name, then name prefix, then whole word, then substring matches. Same results order on web and both mobile platforms; no client change.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3597,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "New estimated blood alcohol (BAC) curve from logged drinks: a Blood Alcohol card in the web Diary layout and on the mobile Dashboard (hideable in Dashboard settings), with a rough-estimate disclaimer and missing-input prompts (sex, weight, height, age). The formula, elimination rate and display unit are set only in web Preferences. Also a Sparky chat/MCP tool (sparky_get_blood_alcohol). The existing caffeine card was refactored onto the same kinetics chart; no caffeine row changes in substance.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": {
+      "name": "Estimated blood alcohol curve",
+      "description": "A rough blood alcohol estimate drawn from the alcohol in logged drinks, with a not-for-driving disclaimer and a list of the body data it still needs. Web: card in the Diary (dashboard layout); phone app: card on the Dashboard, the same on iOS and Android, which can be hidden in Dashboard settings. The estimate formula, elimination rate and display unit can be changed only in web Settings > Preferences. Sparky chat and MCP can answer with it too.",
+      "web": "Yes",
+      "ios": "Yes",
+      "android": "Yes",
+      "watch": "none",
+      "evidence": "SparkyFitnessFrontend/src/pages/Diary/Diary.tsx:536; src/pages/Diary/BloodAlcoholCard.tsx:140 (disclaimer); src/utils/dashboardLayout.ts:293,326,350,375; src/pages/Settings/PreferenceSettings.tsx:553-620 (bac_distribution_formula, bac_elimination_rate, bac_display_unit). SparkyFitnessMobile/src/screens/DashboardScreen.tsx:857; src/components/BloodAlcoholCard.tsx:50-65 (missing sex/weight/height/age), 72-76 (disclaimer); src/constants/dashboardCards.ts (bloodAlcohol); src/screens/DashboardSettingsScreen.tsx:111; no BAC settings in SparkyFitnessMobile/src (grep bac_). SparkyFitnessServer/routes/v2/nutritionKineticsRoutes.ts:137; ai/tools/bloodAlcoholTools.ts:81 (sparky_get_blood_alcohol); shared/src/nutrients/alcoholKinetics.ts"
+    }
+  },
+  {
+    "pr": 3528,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Copy one logged food to another day/meal on web (Copy button on each food in a Diary meal) and on mobile (Copy Food on the logged food's screen), with quick Now/Today/Tomorrow targets next to the date picker. Meal and whole-day copies also get Today/Tomorrow quick targets (not Now). The copy keeps the entry's snapshot (nutrients, allergens, photos) via the shared buildFoodEntryCopyPayload.",
+    "affected_rows": [
+      {"id": "diary-copy-meal-to-date", "change": "Both sides now also offer quick Today and Tomorrow targets next to the date picker when copying a meal (web CopyFoodEntryDialog.tsx:78-80; mobile CopyMealSheet.tsx:26,137-140), and both can now copy a single logged food (with an extra Now target): web MealCard.tsx:615-626,762-770 -> Diary.tsx CopyFoodEntryDialog for one entry; mobile FoodEntryViewScreen.tsx:1651-1664 (Copy Food), 1689-1697 (CopyMealSheet). On mobile the whole-meal copy is still only on the meal detail screen."}
+    ],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": {
+      "name": "Copy a single logged food",
+      "description": "Log a food again by copying one diary entry to Now, Today, Tomorrow or a picked date and meal; Now uses the current time and the meal for that time of day. The copy keeps the entry's own nutrients, allergens and photos. Web: Copy button on each food in a Diary meal; phone app: Copy Food on a logged food's screen, the same on iOS and Android.",
+      "web": "Yes",
+      "ios": "Yes",
+      "android": "Yes",
+      "watch": "none",
+      "evidence": "SparkyFitnessFrontend/src/pages/Diary/MealCard.tsx:101,615-626,762-770; src/pages/Diary/CopyFoodEntryDialog.tsx:40,75-97; src/pages/Diary/Diary.tsx (handleCopySingleFood, copyingEntry dialog). SparkyFitnessMobile/src/screens/FoodEntryViewScreen.tsx:198-200,1651-1697; src/components/CopyMealSheet.tsx:26,86-148; src/hooks/useCopyFoodEntry.ts. shared/src/utils/foodEntryCopy.ts:81"
+    }
+  },
+  {
+    "pr": 3593,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": false, "android": false, "watch": false, "server_only": false},
+    "summary": "Web CSV importers (food diary, check-in/health data) normalize headers and map common aliases (e.g. MyFitnessPal exports), match meal-type and unit values to the dropdowns, refuse energy-labelled columns for gram fields, accept per-meal aggregate rows (meal totals without food names) in the food diary import, and require an explicit unit for measurements when no Units column is mapped. Web-only importers stay web-only; no row changes in substance.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3553,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Mobile: before logging a saved meal, ingredients can be adjusted (quantity, unit among saved portions, remove an ingredient except the last, add foods), from the meal detail (Log Meal) and on the add screen, with live nutrition and a Reset to template. Edits go only to the diary entry; the saved meal is unchanged.",
+    "affected_rows": [
+      {"id": "diary-log-meal-template", "change": "Mobile no longer offers servings only: the add screen and meal detail let you change each ingredient's quantity and unit, remove ingredients and add foods before logging, with a Reset to the saved meal; the edits are logged to that entry only (SparkyFitnessMobile/src/screens/FoodEntryAddScreen.tsx:358-395,2341-2346 (Reset),2444-2450 (Add Food),2505 (IngredientQuantityModal); src/screens/MealDetailScreen.tsx:502-509,543,609; src/components/IngredientQuantityModal.tsx:37,412-416 (remove)). Remaining difference: on mobile the unit choices are the food's saved portions only, and the last ingredient cannot be removed."}
+    ],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3396,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Mealie recipes can be imported as editable meals with separate ingredients (web Meal Management and mobile Meals library 'Import Mealie ingredients', or from a Mealie food without declared nutrition): match each ingredient to a food (manual search, suggestions, optional AI), review amounts/units and cooked weight, save; remembered ingredient choices can be managed; and a saved meal's nutrition can be previewed and synced back to Mealie. Same on web, iOS and Android. Provider setup is still web-only (settings-providers-recipe-servers unchanged).",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": {
+      "name": "Import Mealie recipes as ingredient meals, with nutrition sync",
+      "description": "Import a Mealie recipe as a saved meal with its own ingredients: match each ingredient to a food (search, suggestions or optional AI), check amounts, units and cooked weight, then save; remembered ingredient choices can be reviewed and forgotten. A saved meal can preview and push its per-serving nutrition back to the Mealie recipe after confirmation. Same on web (Meals) and the phone app (Meals library), on iOS and Android; the Mealie provider itself is still set up on the web.",
+      "web": "Yes",
+      "ios": "Yes",
+      "android": "Yes",
+      "watch": "none",
+      "evidence": "SparkyFitnessFrontend/src/pages/Foods/MealManagement.tsx:87-104,642,757-761; src/pages/Foods/RecipeImportDialog.tsx; src/pages/Foods/RecipeImportSyncConfirmation.tsx. SparkyFitnessMobile/src/screens/MealsLibraryScreen.tsx:259-261; src/screens/RecipeImportScreen.tsx; src/screens/MealDetailScreen.tsx:1-2,71 (RecipeImportSourcePanel); src/components/recipeImport/RecipeImportSourcePanel.tsx:7,20. SparkyFitnessServer/routes/v2/recipeImportRoutes.ts:152-252 (mappings, preview, suggest, save, source, sync-preview, sync-nutrition); docs/src/features/settings/external-providers.md (Mealie ingredient meals)"
+    }
+  },
+  {
+    "pr": 3514,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": false, "android": false, "watch": false, "server_only": false},
+    "summary": "Intervals.icu: a 'Push daily nutrition to Intervals.icu' switch on the web provider card sends daily calories, protein, carbs and fat to Intervals.icu wellness each night (last three days, only when changed). The switch is web-only; the push is server-side so it covers food logged anywhere.",
+    "affected_rows": [],
+    "new_features_entries": [
+      {"name_en": "Intervals.icu integration", "change": "Add that it can also push daily nutrition totals (calories, protein, carbs, fat) to Intervals.icu each night, turned on with a switch on the web provider card only (SparkyFitnessFrontend/src/pages/Settings/ProviderCard.tsx:245,1073-1087; SparkyFitnessServer/integrations/intervals/intervalsNutritionPush.ts:2,28-44; services/backgroundJobScheduler.ts:10,50; routes/intervalsRoutes.ts:254; docs/src/features/settings/intervals.md:65). No Intervals.icu setting in SparkyFitnessMobile/src. Add PR 3514."}
+    ],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3505,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": true, "android": false, "watch": false, "server_only": false},
+    "summary": "Fixes a crash of the mobile Calorie Settings screen on iOS caused by the calorie cycling percent field (Intl formatToParts missing in Hermes on iOS). Calorie cycling itself came in #3466 (after the audit), so no audit row is affected.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3461,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Mobile: when creating a new food while logging (from search or a barcode scan), the form now prefills the entry time and has an editable Time row (Now/Clear), and passes the meal and time through, so the logged entry gets that time. Bug fix; web already went through the logging form with a time. No row changes in substance (SparkyFitnessMobile/src/screens/foodForm/CreateFoodMode.tsx:255,928,951,1211).",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3442,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": false, "android": false, "watch": false, "server_only": false},
+    "summary": "Web provider nutrient viewer: the nutrient name in the 'Standard:' badge is now translated. The viewer stays web-only (foods-provider-nutrient-viewer unchanged in substance).",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3405,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Fixes mobile food edit and Adjust nutrition not saving custom nutrient changes when nothing else was changed (plus a server fix in foodCoreService). Bug fix; no row changes in substance.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3389,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Swiss Food Composition Database results now import water and alcohol; Swiss Food and Livsmedelsverket send a nutrient-code map so the web provider nutrient viewer marks Standard fields in any API language. Import values change on all clients; the badge is web-only. No row changes in substance.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3428,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": false, "android": false, "watch": false, "server_only": false},
+    "summary": "Web: the food search dialog can use up to 90% of the window height on desktop. Layout only; no row changes.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3394,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Mobile barcode scanner recovers in place: a 'Looking up barcode' state with Scan again, Retry lookup on errors, a Restart camera button when the camera is unavailable, and the No match card now also offers Scan again; the server cancels abandoned barcode lookups. Same on iOS and Android (expo-camera patch). Existing rows and notes (diary-barcode-not-found, native-camera-barcode) stay correct.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3383,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Open Food Facts search ranks brand searches and relevant foods first (server foodRanking/openFoodFactsService), and mobile drops duplicate products that come back on a later page. No row changes in substance.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3352,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Mobile: a History link on the Dashboard hydration card opens the day's drinks (newest first, time, amount, source label, food-linked icon); manual drinks can be deleted after a confirmation, synced ones cannot. No time editing.",
+    "affected_rows": [
+      {"id": "diary-water-log-edit", "change": "The phone app now has the day's drink list on iOS and Android: History on the hydration card opens it, listing each drink with its time and amount, and a manual drink can be deleted after a confirmation; synced drinks show their source and cannot be deleted, as on the web (SparkyFitnessMobile/src/components/HydrationGauge.tsx:49,186-197; src/screens/DashboardScreen.tsx:829-831; src/screens/WaterLogScreen.tsx:47-52,118-158,170-236; web WaterIntake.tsx:547-597). Still different: only the web can change a drink's time (WaterIntake.tsx:519). The existing partial #3052 note ('The phone app still has no drink list on either platform') becomes wrong."}
+    ],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3359,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "Server: CNF and Livsmedelsverket bulk import progress is kept in a bulk_imports table under a per-user lock, so any server instance reports it and two never run the same import. The web progress UI is unchanged; settings-providers-bulk-import unchanged in substance.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3309,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": true, "android": false, "watch": false, "server_only": false},
+    "summary": "iPhone: new 'Use Move ring for active calories' switch in Calories & BMR (off by default, saved to the account) makes Apple Health sync read active calories from the Move ring (Activity summaries) instead of the Active Energy total, falling back to Active Energy on days with a 0 ring. iOS only; Android unchanged.",
+    "affected_rows": [
+      {"id": "plat-services-metric-calories", "change": "On iOS active calories can now come from the Move ring instead of the Active Energy sum when the iPhone-only 'Use Move ring for active calories' switch is on, keeping Active Energy for days whose ring is 0 (SparkyFitnessMobile/src/services/healthkit/index.ts:769-830 (queryMoveRingActiveByDay, activeEnergyByDay); src/screens/CalorieSettingsScreen.tsx:58,410,1195-1213 (Platform.OS === 'ios')). Android still uses Health Connect active calories with the total minus basal fallback, so the sources differ further."}
+    ],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  }
+]

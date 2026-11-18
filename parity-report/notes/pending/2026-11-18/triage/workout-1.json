@@ -1,0 +1,400 @@
+[
+ {
+  "pr": 3626,
+  "user_visible": true,
+  "surfaces": {
+   "web": false,
+   "ios": true,
+   "android": true,
+   "watch": false,
+   "server_only": false
+  },
+  "summary": "Mobile gets a Training calendar (month and week views) that matches run program workouts and scheduled workout plan sessions against logged workouts (done, partly done, missed, upcoming, plus extra unplanned work), with weekly totals and progress, opened from Library, the Training programs screen and Exercise Statistics. It replaces the old run-program-only calendar screen. Exercise Statistics adds a 'Load by sport' card (this week, this month and eight weeks of training load split by sport). Backed by GET /api/reports/training-calendar. Nothing on the web.",
+  "affected_rows": [
+   {
+    "id": "exercise-run-program-calendar",
+    "change": "Mobile's program calendar (RunProgramCalendarScreen and ProgramMonthGrid, the row's evidence) is removed; 'Open the training calendar' on Training programs now opens the Training calendar (SparkyFitnessMobile/src/screens/RunProgramsScreen.tsx:387-392), a month/week view (src/screens/TrainingCalendarScreen.tsx:45,77) that shows the run program together with workout plan sessions, each with a done/partial/missed/upcoming status (shared/src/schemas/api/TrainingCalendar.api.zod.ts:41-46) and weekly totals. A run program item still opens its workout screen (TrainingCalendarScreen.tsx:283-300); a workout plan item does not open anything. Web keeps its program-only month calendar (SparkyFitnessFrontend/src/pages/Exercises/TrainingPrograms/TrainingProgramCalendar.tsx) with no workout plans and no planned-vs-done statuses for plans; the existing note's description of mobile should be reworded."
+   }
+  ],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": {
+   "name": "Training calendar: planned against completed training, and load by sport",
+   "description": "A month or week calendar of run program workouts and scheduled workout plan sessions, each marked done, partly done, missed or upcoming against what was logged, plus extra unplanned workouts, with weekly totals and progress bars; a run program workout opens its own screen. Exercise Statistics adds a Load by sport card (training load split by sport for this week, this month and the last eight weeks) that opens the calendar. Phone app only, the same on iOS and Android.",
+   "web": "No",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "SparkyFitnessMobile/src/screens/TrainingCalendarScreen.tsx:45,77 (month/week), 283-300 (run program item opens RunProgramWorkout); src/screens/LibraryScreen.tsx:410-416 ('Training calendar'); src/screens/RunProgramsScreen.tsx:387-392; src/components/exerciseStats/SportLoadCard.tsx:90-162; src/screens/ExerciseStatisticsScreen.tsx:221-225. shared/src/schemas/api/TrainingCalendar.api.zod.ts:41-46; shared/src/utils/trainingCalendar.ts. SparkyFitnessServer/routes/reportRoutes.ts:447 (GET /training-calendar); services/trainingCalendarService.ts. No training-calendar in SparkyFitnessFrontend/src"
+  }
+ },
+ {
+  "pr": 3606,
+  "user_visible": true,
+  "surfaces": {
+   "web": false,
+   "ios": true,
+   "android": false,
+   "watch": false,
+   "server_only": false
+  },
+  "summary": "iOS layout fix: on iPhones with a status strip/cluster (Duo, Live Activity, folding), the active workout header, reorder, location, rename, ingredient quantity and plate calculator sheets stay inside the safe area, and the Dashboard/Diary date buttons collapse without overlapping Add. Workout reordering from the live workout now opens a WorkoutReorder screen. No parity change.",
+  "affected_rows": [],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": null
+ },
+ {
+  "pr": 3483,
+  "user_visible": true,
+  "surfaces": {
+   "web": true,
+   "ios": true,
+   "android": true,
+   "watch": false,
+   "server_only": false
+  },
+  "summary": "Hevy imports keep each workout's and exercise's identity across repeated syncs, so edits to imported Hevy workouts (sets, telemetry, durations) and calorie links survive a resync. Hevy-imported workouts can now be linked to the matching Apple Health / Health Connect session with the 'Link a synced workout' action on web and mobile, so calories count once.",
+  "affected_rows": [],
+  "new_features_entries": [
+   {
+    "name_en": "Link a logged workout to a synced workout",
+    "change": "The link is now also offered on workouts imported from Hevy, not only those logged in SparkyFitness: shared/src/utils/exerciseCalorieLink.ts:36-43 (isCalorieLinkWorkoutSource adds 'hevy'), used by web SparkyFitnessFrontend/src/pages/Diary/ExerciseEntryDisplay.tsx:431 and ExercisePresetEntryDisplay.tsx:209, and mobile SparkyFitnessMobile/src/screens/ActivityDetailScreen.tsx:116 and WorkoutDetailScreen.tsx:211. Same on web, iOS and Android; the description ('a workout logged in SparkyFitness') could add Hevy workouts."
+   }
+  ],
+  "possible_issues": [],
+  "new_feature": null
+ },
+ {
+  "pr": 3574,
+  "user_visible": true,
+  "surfaces": {
+   "web": true,
+   "ios": true,
+   "android": true,
+   "watch": false,
+   "server_only": false
+  },
+  "summary": "New 'Exercise' write-back metric on mobile: workouts made in SparkyFitness are written to Apple Health (HKWorkout) or Health Connect (ExerciseSession with a segment per timed set, plus active calories and distance), one per diary session; imports, calorie-linked and unfinished sessions are skipped, and 'Delete SparkyFitness data' also removes them. Exercises get an optional health activity type (Automatic by default) in the web and mobile exercise forms. iOS skips the Apple Watch app's own sessions and workouts other apps saved over the same time; Android needs exercise read access for its duplicate check.",
+  "affected_rows": [
+   {
+    "id": "settings-health-writeback",
+    "change": "Write-back now covers workouts too: an 'Exercise' metric (SparkyFitnessMobile/src/WritebackMetrics.ts:94-121) on both iOS and Android, and the delete (all or by range) also removes written workouts (src/services/healthkit/writeback.ts:753; src/services/healthconnect/writeback.ts:426-429). Still nothing on the web."
+   },
+   {
+    "id": "plat-native-writeback",
+    "change": "Beyond nutrition and hydration, workouts logged in SparkyFitness are now written: iOS as an HKWorkout with energy and distance, gym activities marked indoor, skipping the Apple Watch app's sessions and overlapping workouts from other sources (src/services/healthkit/exerciseWriteback.ts:164, 236-287); Android as an ExerciseSession with one segment per timed set plus ActiveCaloriesBurned and Distance, and only with ExerciseSession read access (src/services/healthconnect/exerciseWriteback.ts:30, 103-139; src/WritebackMetrics.ts:105-117)."
+   },
+   {
+    "id": "plat-components-health-writeback",
+    "change": "The write-back card now lists an Exercise toggle besides Nutrition and Hydration on both platforms (SparkyFitnessMobile/src/WritebackMetrics.ts:94-121); the delete menu removes written workouts too."
+   },
+   {
+    "id": "plat-screens-sync-writeback",
+    "change": "The writeback section now also sends workouts (one per diary session), not only nutrition and hydration, on both platforms (SparkyFitnessMobile/src/WritebackMetrics.ts:94-121; services/shared/exerciseWritebackPlan.ts:276-280 skips unfinished and calorie-linked sessions)."
+   }
+  ],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": {
+   "name": "Write logged workouts to Apple Health and Health Connect",
+   "description": "Turn on Exercise under health write-back to send each workout made in SparkyFitness (one per diary session, with active calories and distance) to Apple Health or Health Connect; synced imports, calorie-linked and unfinished workouts are never written. Each exercise can set the health activity type used, or leave it on Automatic, in the exercise forms on the web and in the phone app. Writing happens only in the phone app: on iOS it skips the Apple Watch app's own workouts and workouts other apps saved at the same time; on Android each timed set becomes a segment and it needs permission to read exercise sessions.",
+   "web": "Partial",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "SparkyFitnessMobile/src/WritebackMetrics.ts:94-121; src/services/shared/exerciseWritebackPlan.ts:276-280, 335-336; src/services/healthkit/exerciseWriteback.ts:164, 236-287; src/services/healthconnect/exerciseWriteback.ts:30, 103-139; src/screens/ExerciseFormScreen.tsx:227-252 (activity type picker). Web: SparkyFitnessFrontend/src/components/HealthActivityTypeSelect.tsx:159-167, used in src/pages/Exercises/AddCustomExerciseForm.tsx:160, EditExerciseDialog.tsx:165, src/pages/Diary/EditExerciseDatabaseDialog.tsx:229. shared/src/constants/healthActivityTypes.ts; healthConnectSegments.ts; SparkyFitnessServer/db/migrations/20261113120000_add_exercise_health_activity_type.sql"
+  }
+ },
+ {
+  "pr": 3572,
+  "user_visible": true,
+  "surfaces": {
+   "web": false,
+   "ios": true,
+   "android": true,
+   "watch": true,
+   "server_only": false
+  },
+  "summary": "New mobile Settings > Workout > Treadmill & stride screen: see the learned walking and running stride, set it by hand, reset it or calibrate it from a known distance, set a percent correction for a treadmill display that reads long or short (applied to treadmill figures typed on the Record screen, the run summary or the watch), and see/reset what the watch has learned about indoor distance. Cadence and stride are backfilled on watch runs whose steps reached Apple Health late.",
+  "affected_rows": [
+   {
+    "id": "exercise-indoor-distance",
+    "change": "Stride is now visible and editable: Settings > Workout > 'Treadmill & stride' (SparkyFitnessMobile/src/screens/WorkoutSettingsScreen.tsx:404-413) shows the learned walk/run stride, lets you set it by hand, reset it or calibrate it from a known distance (src/screens/TreadmillSettingsScreen.tsx:200-221, 275, 550), adds a stored percent correction for a treadmill that reads long or short, applied to treadmill distances typed on the Record screen, the run summary or the watch (TreadmillSettingsScreen.tsx:799; src/screens/RunSummaryScreen.tsx:170; src/screens/RecordActivityScreen.tsx:59), and shows and resets the watch's learned indoor distance factor (TreadmillSettingsScreen.tsx:816-840; src/services/watchIndoorScale.ts, sent to both Apple Watch and Wear OS). Still mobile only."
+   }
+  ],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": null
+ },
+ {
+  "pr": 3576,
+  "user_visible": false,
+  "surfaces": {
+   "web": false,
+   "ios": false,
+   "android": false,
+   "watch": false,
+   "server_only": true
+  },
+  "summary": "Adds SparkyFitnessExerciseLibrary/: an exercise dataset schema, taxonomy, validation/build scripts and an animated WebP media pipeline, with a few sample exercises. Not wired into the web or mobile apps or the server; no user-facing change.",
+  "affected_rows": [],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": null
+ },
+ {
+  "pr": 3568,
+  "user_visible": true,
+  "surfaces": {
+   "web": true,
+   "ios": true,
+   "android": true,
+   "watch": false,
+   "server_only": false
+  },
+  "summary": "Mobile workout plan management: a plan detail screen (days or sessions, assignments, per-set summary, activation switch, delete), an activation switch on each plan in the list, and the plan form can now add single exercises with reps, weight and rest per set and reorder assignments within a day or session. Server: plan updates and deletes are transactional and never remove generated diary sessions that were started or finished; web and mobile show when refreshing the diary after a save failed.",
+  "affected_rows": [
+   {
+    "id": "exercise-plans-list",
+    "change": "Mobile can now activate or deactivate a plan straight from the list (Switch at SparkyFitnessMobile/src/screens/WorkoutPlansScreen.tsx:162-166, saving at 91) and from a new plan detail screen opened by tapping a plan (WorkoutPlansScreen.tsx:335; src/screens/WorkoutPlanDetailScreen.tsx), so the row's note that this is only in the form is no longer true."
+   },
+   {
+    "id": "exercise-plans-editor",
+    "change": "The mobile form can now add single exercises next to saved workouts, with editable reps, weight and rest per set, add/remove sets and move assignments up or down within a day or session (SparkyFitnessMobile/src/screens/WorkoutPlanFormScreen.tsx:294-295, 519-563, 569-661; src/utils/workoutPlanForm.ts:220-294). Still missing compared with the web: copy/paste of assignments, reordering sessions, and per-set type, duration and progression settings (web SparkyFitnessFrontend/src/pages/Exercises/SortableExerciseItem.tsx:104-117; AddWorkoutPlanDialog.tsx:453-459, 536-557)."
+   },
+   {
+    "id": "critic-exercise-plan-copy-paste-reorder",
+    "change": "Mobile now reorders assignments within a day or session (SparkyFitnessMobile/src/screens/WorkoutPlanFormScreen.tsx:531-550, moveDraftAssignment in src/utils/workoutPlanForm.ts:294), but still has no copy/paste between days and cannot move sequential sessions up or down (no moveSession in WorkoutPlanFormScreen.tsx); the web's 'Move session up/down' (AddWorkoutPlanDialog.tsx:536-557) stays web-only."
+   }
+  ],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": null
+ },
+ {
+  "pr": 3567,
+  "user_visible": true,
+  "surfaces": {
+   "web": true,
+   "ios": false,
+   "android": false,
+   "watch": false,
+   "server_only": false
+  },
+  "summary": "Web workout player keeps each exercise's equipment when a workout is started from a preset, so the plate calculator button now appears for barbell exercises in preset-based workouts (it was hidden before).",
+  "affected_rows": [],
+  "new_features_entries": [
+   {
+    "name_en": "Plate calculator",
+    "change": "Web: in the workout player it now also shows for barbell exercises of a workout started from a preset, whose equipment was dropped before (SparkyFitnessFrontend/src/utils/workoutPlayback.ts:466; canCalculatePlates={usesBarbell(exercise.equipment)} in src/pages/Diary/WorkoutPlaybackExercisesList.tsx:287). The entry's description stays right."
+   }
+  ],
+  "possible_issues": [],
+  "new_feature": null
+ },
+ {
+  "pr": 3538,
+  "user_visible": true,
+  "surfaces": {
+   "web": true,
+   "ios": true,
+   "android": true,
+   "watch": false,
+   "server_only": false
+  },
+  "summary": "'Link a synced workout' now offers synced strength sessions stored as several entries (e.g. a Garmin strength workout) as one candidate with summed calories and duration, and links all its entries; before, it said no synced workouts were found. Server change, visible on web and mobile.",
+  "affected_rows": [],
+  "new_features_entries": [
+   {
+    "name_en": "Link a logged workout to a synced workout",
+    "change": "A synced strength session made of several entries (Garmin) is now offered as a single candidate and linked as a whole (SparkyFitnessServer/services/exerciseCalorieLinkService.ts:96-98, 191-226). Same on web and mobile; the description stays right."
+   }
+  ],
+  "possible_issues": [],
+  "new_feature": null
+ },
+ {
+  "pr": 3536,
+  "user_visible": true,
+  "surfaces": {
+   "web": false,
+   "ios": true,
+   "android": true,
+   "watch": false,
+   "server_only": false
+  },
+  "summary": "Mobile Workout Settings gets 'Use planned values as placeholders' (off by default): a live workout started from a plan or saved workout suggests the planned weight and reps instead of last session's.",
+  "affected_rows": [],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": {
+   "name": "Use planned values as live workout placeholders",
+   "description": "An option in the phone app's Workout Settings, off by default, to have a live workout started from a plan or saved workout suggest its planned weight and reps instead of the last session's values. Phone app only, the same on iOS and Android; the web has no such setting.",
+   "web": "No",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "SparkyFitnessMobile/src/screens/WorkoutSettingsScreen.tsx:90-94, 272-283; src/hooks/useStartLiveWorkout.ts:378; src/stores/appPreferencesStore.ts (plannedValuesAsPlaceholders); src/utils/workoutSession.ts. No equivalent setting in SparkyFitnessFrontend/src/pages/Settings or the workout player"
+  }
+ },
+ {
+  "pr": 3535,
+  "user_visible": false,
+  "surfaces": {
+   "web": false,
+   "ios": false,
+   "android": false,
+   "watch": false,
+   "server_only": true
+  },
+  "summary": "Server stores an optional started_at on each exercise set (next to completed_at) and returns it; no client sends or shows it yet.",
+  "affected_rows": [],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": null
+ },
+ {
+  "pr": 3510,
+  "user_visible": true,
+  "surfaces": {
+   "web": true,
+   "ios": true,
+   "android": true,
+   "watch": false,
+   "server_only": false
+  },
+  "summary": "Grouped workout sessions get a derived status (planned, in progress, partial, completed) and a revision check so a stale tab or device cannot overwrite newer edits (409 conflict notice). Web diary shows a status badge per session and a 'Resume Workout' action for partial or in-progress sessions that reopens the workout player; mobile workout cards and the detail screen show the status and turn Start into Resume for those sessions.",
+  "affected_rows": [
+   {
+    "id": "exercise-resume-logged-workout",
+    "change": "Web can now resume a partial or unfinished session in the live player: 'Resume Workout' on the diary session card (SparkyFitnessFrontend/src/pages/Diary/ExercisePresetEntryDisplay.tsx:137-141, 400-417), seeded from the completed sets. It is limited to partial and in-progress sessions; web still cannot restart a completed workout live or start from a given set ('Start workout here'), which mobile does. Mobile now resumes partial/in-progress sessions in place instead of starting a new one (SparkyFitnessMobile/src/screens/WorkoutDetailScreen.tsx:433-440, 1129-1130)."
+   }
+  ],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": {
+   "name": "Workout session status and edit conflicts",
+   "description": "Each grouped workout in the diary shows whether it is planned, in progress, partial or completed, and a newer edit made on another device or tab is no longer silently overwritten: the older one is refused with a notice. Same on web, iOS and Android.",
+   "web": "Yes",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "shared/src/constants/exercise.ts (WORKOUT_SESSION_STATUSES, deriveWorkoutSessionStatus). Web: SparkyFitnessFrontend/src/pages/Diary/ExercisePresetEntryDisplay.tsx:52-70, 308-316 (badge). Mobile: SparkyFitnessMobile/src/screens/WorkoutDetailScreen.tsx:118-122, 464-485 (409 conflict), 1074-1085 (badge); src/components/SwipeableExerciseRow.tsx:31-32, 174. SparkyFitnessServer/db/migrations/20261110120000_add_workout_session_lifecycle.sql"
+  }
+ },
+ {
+  "pr": 3523,
+  "user_visible": true,
+  "surfaces": {
+   "web": false,
+   "ios": true,
+   "android": true,
+   "watch": false,
+   "server_only": false
+  },
+  "summary": "Mobile meditation timer keeps time from the wall clock, so it no longer freezes while the screen is locked (Android suspended it), and a 'Meditation complete' notification fires when a countdown ends in the background. Parity with web unchanged.",
+  "affected_rows": [],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": null
+ },
+ {
+  "pr": 3525,
+  "user_visible": true,
+  "surfaces": {
+   "web": false,
+   "ios": true,
+   "android": true,
+   "watch": false,
+   "server_only": false
+  },
+  "summary": "A cardio exercise logged inside a mobile live workout now gets a start time (first completed set's completion minus its duration), so heart rate from a synced tracker can attach to it.",
+  "affected_rows": [
+   {
+    "id": "missed-exercise-entry-start-time",
+    "change": "Minor: the note's list of automatic sources is incomplete. Besides GPS recordings and watch runs, the live workout fills in each exercise's start time, cardio included now (SparkyFitnessMobile/src/utils/workoutSession.ts:1803-1855, used at 1678). There is still no editable start time field on mobile, so the row stays partial."
+   }
+  ],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": null
+ },
+ {
+  "pr": 3480,
+  "user_visible": true,
+  "surfaces": {
+   "web": true,
+   "ios": false,
+   "android": false,
+   "watch": false,
+   "server_only": false
+  },
+  "summary": "Mostly server refactoring (Nutritionix lookups through the shared provider access check, unused password route removed). On the web, turning email MFA off now asks for the current password (left blank for SSO accounts), and the family sharing help text says the check-in and reports permissions include lab results.",
+  "affected_rows": [
+   {
+    "id": "auth-mfa-email-toggle",
+    "change": "The row says the email factor toggle does not ask for the password; turning it off now does, through the confirm-password prompt (SparkyFitnessFrontend/src/pages/Settings/MFASettings.tsx:63, 123-135, 280-282, 440; server SparkyFitnessServer/routes/auth/userProfileRoutes.ts:568, services/authService.ts:182), except for SSO-only accounts. Turning it on still does not. Still web only."
+   }
+  ],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": null
+ },
+ {
+  "pr": 3466,
+  "user_visible": true,
+  "surfaces": {
+   "web": true,
+   "ios": true,
+   "android": true,
+   "watch": false,
+   "server_only": false
+  },
+  "summary": "Calorie cycling: spread the weekly calorie budget over the weekdays (Training/rest days or a custom per-day pattern, -40% to +40%), keeping the weekly total and the safety floor, with carbs taking the change. Web Calculation Settings and mobile Calories & BMR settings get the section with an interactive week chart; both diaries show a 'High day / Low day' label; goal forms speak of base calories. Paused while exercise calories are added back and on days a weekly goal plan sets.",
+  "affected_rows": [],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": {
+   "name": "Calorie cycling for training and rest days",
+   "description": "Spread the week's calories over the days: more on training days and less on rest days, or a custom percentage for each weekday, with the week still adding up to the daily target times seven and no day below the safety floor; carbs take the difference. Set it with an interactive week chart, and the diary marks high and low days. Same on web and the phone app; the web also shows the cycling step in the live preview and target breakdown.",
+   "web": "Yes",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "shared/src/utils/calorieCycling.ts; SparkyFitnessServer/services/goalService.ts; db/migrations/20261107120000_add_calorie_cycling.sql. Web: SparkyFitnessFrontend/src/pages/Settings/CalculationSettings.tsx:99-107 (CalorieCyclingSettings); src/components/CalorieCyclingChart.tsx; src/components/CalorieTargetBreakdown/TargetStep.tsx; src/pages/Diary/DailyProgress.tsx:319-330, 849. Mobile: SparkyFitnessMobile/src/screens/CalorieSettingsScreen.tsx:15, 40-41; src/components/CalorieCyclingCard.tsx; src/components/CalorieCyclingChart.tsx; src/components/DiaryCalorieMacroSummary.tsx:207-219"
+  }
+ },
+ {
+  "pr": 3447,
+  "user_visible": true,
+  "surfaces": {
+   "web": false,
+   "ios": true,
+   "android": false,
+   "watch": false,
+   "server_only": true
+  },
+  "summary": "Server rounds fractional values for integer workout telemetry columns (e.g. a HealthKit swim's stroke count), which made a whole health sync chunk fail; mainly fixes iOS syncs. No parity change.",
+  "affected_rows": [],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": null
+ },
+ {
+  "pr": 3455,
+  "user_visible": false,
+  "surfaces": {
+   "web": false,
+   "ios": false,
+   "android": false,
+   "watch": false,
+   "server_only": true
+  },
+  "summary": "CI/translation workflow: server email template catalogs (SparkyFitnessServer/locales) join the Weblate sync; no app change.",
+  "affected_rows": [],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": null
+ }
+]

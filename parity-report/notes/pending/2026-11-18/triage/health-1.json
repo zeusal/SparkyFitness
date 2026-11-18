@@ -1,0 +1,290 @@
+[
+ {
+  "pr": 3570,
+  "user_visible": true,
+  "surfaces": {
+   "web": true,
+   "ios": false,
+   "android": false,
+   "watch": false,
+   "server_only": false
+  },
+  "summary": "Web: new Settings > Features section (in the Profile & Account settings) lists optional features from the shared registry with one switch each; cycle is the only one and its switch (cycle_settings.enabled, one for the account, so it also shows or hides cycle in the mobile app) moved there from Settings > Cycle & Pregnancy, which now only says whether cycle is on and links to Features (plus a Set up prompt while on but not set up). The cycle tab and + menu entry go through the shared feature filter. While cycle is turned off on purpose, the web also hides cycle data elsewhere: reproductive Health categories in check-in and Reports, symptoms logged in the Cycle tab in symptom history and calendars, and the cycle_phase column of the symptoms CSV. /cycle shows a turned-off notice instead of the setup wizard once cycle was set up. The mobile counterpart (Settings > Features, switch moved out of Cycle & Pregnancy) came later in #3631 (other batch).",
+  "affected_rows": [
+   {
+    "id": "cycle-settings-enable",
+    "change": "Web evidence is now wrong: the on/off switch is no longer in Cycle & Pregnancy but in Settings > Features (SparkyFitnessFrontend/src/pages/Settings/SettingsPage.tsx:186-188; src/pages/Settings/FeatureSettings.tsx:43-98, scope text 'One switch for the website and the mobile app' at 85-89); Cycle & Pregnancy only reports the state and links to Features (src/pages/Settings/CycleSettings.tsx:211-232). Mobile did the same later in #3631 (SparkyFitnessMobile/src/screens/CycleSettingsScreen.tsx:44-46, 360-372 navigate('FeatureSettings')), so parity holds on both; the web tab and + menu entry now go through filterByFeature fed by useWebFeatures (src/hooks/Settings/useWebFeatures.ts:25-49)."
+   },
+   {
+    "id": "cycle-symptoms-history-badge",
+    "change": "Web: while cycle is turned off on purpose, symptoms logged in the Cycle tab are left out of the symptom lists (history and calendars), so the 'Cycle' badge only appears while cycle is on or was never turned off (SparkyFitnessFrontend/src/hooks/useSymptoms.ts:83-98 useCycleHubSymptomsFilter; badge still at src/pages/Symptoms/SymptomHistoryList.tsx:92-96). Still web only."
+   },
+   {
+    "id": "cycle-symptoms-csv-phase",
+    "change": "Web: the cycle_phase column is dropped from the Reports > Symptoms CSV while cycle is turned off on purpose (SparkyFitnessFrontend/src/pages/Symptoms/SymptomsReport.tsx:91, 214). Still web only."
+   }
+  ],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": {
+   "name": "Settings > Features (turn optional features on or off)",
+   "description": "A Features section in Settings lists optional features by group with one switch each; turning one off hides its entry points (and, for cycle, its data shown elsewhere) without deleting anything. Cycle is the only feature so far, and its switch is one for the whole account. Web from #3570; the mobile app got its own Features screen in #3631.",
+   "web": "Yes",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "shared/src/features/optionalFeatures.ts:49-54 (registry, cycle defaultEnabled false); SparkyFitnessFrontend/src/pages/Settings/SettingsPage.tsx:186-188; src/pages/Settings/FeatureSettings.tsx:24-35 (groups), 43-98 (cycle row), 124-160; src/hooks/Settings/useWebFeatures.ts:16-49; SparkyFitnessMobile/src/screens/FeatureSettingsScreen.tsx and src/hooks/useMobileFeatures.ts (#3631)"
+  }
+ },
+ {
+  "pr": 3598,
+  "user_visible": true,
+  "surfaces": {
+   "web": false,
+   "ios": true,
+   "android": true,
+   "watch": false,
+   "server_only": false
+  },
+  "summary": "Mobile Goals screen gets a Goal weight section (set or clear, in the user's weight unit, converted to kg, up to 999.99 kg, saved through PUT /api/onboarding/target-weight), so the goal weight is no longer web-only to edit. The daily steps goal is rounded to a whole number before saving (decimals used to fail).",
+  "affected_rows": [
+   {
+    "id": "goals-goal-weight-edit",
+    "change": "Mobile now sets and clears the goal weight: Goals screen 'Goal weight' section (SparkyFitnessMobile/src/screens/GoalsScreen.tsx:1085-1090; src/components/GoalWeightSection.tsx:13-14 max 999.99 kg, 21-24 kg/lbs from default_weight_unit, 37-42 validation, 103 Save, 114-116 Clear; src/services/api/profileApi.ts:18-27 PUT /api/onboarding/target-weight; src/hooks/useProfile.ts:25-26). Same on iOS and Android. Remaining difference: web enters stone users' goal in lbs too, and also offers it in onboarding; mobile shows it only on Goals (hidden in preset mode, GoalsScreen.tsx:1085)."
+   },
+   {
+    "id": "goals-goal-weight-display",
+    "change": "Row note 'Read-only on mobile: the value is set on web' is now wrong: mobile sets it on the Goals screen (SparkyFitnessMobile/src/components/GoalWeightSection.tsx:16-124; src/screens/GoalsScreen.tsx:1090)."
+   },
+   {
+    "id": "missed-goals-weight-goal-chart",
+    "change": "Row note 'On mobile the target weight can only be viewed, not edited' is now wrong (SparkyFitnessMobile/src/components/GoalWeightSection.tsx:16-124; src/screens/GoalsScreen.tsx:1090). The web chart difference (no goal line) is unchanged by this PR."
+   },
+   {
+    "id": "goals-screen-entry",
+    "change": "Row note says web additionally groups Goal weight on the Goals page; mobile Goals now has a Goal weight section too (SparkyFitnessMobile/src/screens/GoalsScreen.tsx:1085-1090). Reset onboarding is still web only."
+   }
+  ],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": null
+ },
+ {
+  "pr": 3573,
+  "user_visible": true,
+  "surfaces": {
+   "web": false,
+   "ios": false,
+   "android": false,
+   "watch": true,
+   "server_only": false
+  },
+  "summary": "Apple Watch only: an indoor run's corrected treadmill distance now reaches Apple Health. The watch holds the HealthKit workout in a paused session while the treadmill question is up, then writes the final distance and finishes it, with recovery after a relaunch and retries for refused writes. Before, Health kept the motion estimate. No change to what either platform offers; the treadmill correction already existed on both watches.",
+  "affected_rows": [],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": null
+ },
+ {
+  "pr": 3427,
+  "user_visible": true,
+  "surfaces": {
+   "web": true,
+   "ios": true,
+   "android": true,
+   "watch": false,
+   "server_only": false
+  },
+  "summary": "Blood glucose (CGM) readings: the mobile sync now uploads individual glucose readings from Apple Health / Health Connect (with the all-day heart rate phase) to new blood glucose samples on the server. Web Reports > Measurements gets a Blood glucose card: one zoomable day of readings by source with context layers (food/carbs, exercise, sleep, medications, stress, caffeine, alcohol, hydration) and an events list. Mobile Measurements report gets a Measurement timeline card with the same day view for CGM glucose and also for any numeric custom measurement category. A saved glucose unit (mg/dL or mmol/L) is set in web Preferences and mobile App Settings.",
+  "affected_rows": [
+   {
+    "id": "reports-custom-category-report",
+    "change": "Mobile now charts custom measurement categories in a report, in part: the Measurements report's timeline card offers every non-text custom category in its Measurement picker and draws one day of its readings with zoom, source and context layers (SparkyFitnessMobile/src/screens/MeasurementsReportScreen.tsx:344-349; src/components/reports/MeasurementTimelineCard.tsx:108-148; src/hooks/useMeasurementTimeline.ts:17-60). Web still has the per-category charts over the period with notes (CustomCategoryReport); mobile has a one-day view only. Same on iOS and Android."
+   },
+   {
+    "id": "checkin-health-sync",
+    "change": "Sync now also uploads individual blood glucose readings (CGM) on both platforms, after the main upload (SparkyFitnessMobile/src/services/shared/heartRateSamplesSync.ts:104-150 glucoseReadingsFromRecords, 417 device 'Apple Health'/'Health Connect', 522 syncAllDayGlucose; src/services/shared/healthSyncEngine.ts:594-615)."
+   }
+  ],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": {
+   "name": "Blood glucose (CGM) day timeline and glucose unit",
+   "description": "Individual glucose readings synced from Apple Health or Health Connect are shown one day at a time, zoomable, by source, with what else was logged around them (food and carbs, exercise, sleep, medications, stress, caffeine, alcohol, hydration). Web: a Blood glucose card at the top of Reports > Measurements. Phone: a timeline card in the Measurements report that can also show any numeric custom measurement. Glucose is shown in a saved unit (mg/dL or mmol/L) set in web Preferences or mobile App Settings. Readings reach the server only through the phone sync.",
+   "web": "Yes",
+   "ios": "Yes",
+   "android": "Yes",
+   "watch": "none",
+   "evidence": "SparkyFitnessFrontend/src/pages/Reports/Reports.tsx:284-289; src/pages/Reports/GlucoseCard.tsx:186-196 (layers), 261-351 (title, day, source, zoom); src/pages/Settings/PreferenceSettings.tsx:391-400 (Glucose Unit). SparkyFitnessMobile/src/screens/MeasurementsReportScreen.tsx:344-349; src/components/reports/MeasurementTimelineCard.tsx:108-148, 268-288; src/screens/AppSettingsScreen.tsx:166; src/components/GlucoseUnitSetting.tsx:18-42; src/services/shared/heartRateSamplesSync.ts:104, 522; SparkyFitnessServer/db/migrations/20261106000000_add_blood_glucose_samples.sql; shared/src/glucose/context.ts"
+  }
+ },
+ {
+  "pr": 3409,
+  "user_visible": true,
+  "surfaces": {
+   "web": true,
+   "ios": true,
+   "android": true,
+   "watch": false,
+   "server_only": false
+  },
+  "summary": "Mobile sleep detail's Overnight Biometrics card now shows overnight HRV and (iOS only, from Apple's sleeping wrist temperature or a ring's overnight Body Temperature) skin temperature and its deviation from the 14-night baseline; tapping a row opens a 30-night trend chart (main sleep only). Two new iOS-only sync metrics: Sleeping Wrist Temperature and Overnight Body Temperature. New account preference default_temperature_unit (°C/°F): set only on the web Preferences page; mobile follows it (sleep skin temperature, cardio weather line), falling back to the miles rule.",
+  "affected_rows": [
+   {
+    "id": "checkin-sleep-detail",
+    "change": "Mobile sleep detail now shows overnight HRV too, plus skin temperature and 'Skin temp. vs usual' when synced, and tapping a biometric row opens a 30-night trend (SparkyFitnessMobile/src/components/SleepBiometrics.tsx:67-74, 131-160, 175-182; src/components/SleepBiometricTrendChart.tsx; src/screens/SleepDetailScreen.tsx:208-213). The row note 'web shows overnight HRV and stress' is now only true of stress. Skin temperature is iOS only (sync metrics platforms ['ios'], src/HealthMetrics.ts:296-332)."
+   },
+   {
+    "id": "plat-screens-sync-metrics-ios-only",
+    "change": "Two more iOS-only metric toggles: Sleeping Wrist Temperature and Overnight Body Temperature, both uploaded as skin_temperature (SparkyFitnessMobile/src/HealthMetrics.ts:296-332, platforms ['ios']; src/services/healthkit/index.ts:256-280, 2246-2304)."
+   },
+   {
+    "id": "checkin-health-sync",
+    "change": "iOS now also syncs overnight skin temperature (sleeping wrist temperature and overnight body temperature), Android does not (SparkyFitnessMobile/src/HealthMetrics.ts:296-332)."
+   }
+  ],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": {
+   "name": "Temperature unit",
+   "description": "Choose Celsius or Fahrenheit for temperatures. The choice is made only on the web Preferences page; the phone app has no picker but follows the saved unit for sleep skin temperature and the weather line of a cardio session (on a server that does not send it, °F with miles, else °C).",
+   "web": "Yes",
+   "ios": "Partial",
+   "android": "Partial",
+   "watch": "none",
+   "evidence": "SparkyFitnessFrontend/src/pages/Settings/PreferenceSettings.tsx:407-420 (Temperature Unit); SparkyFitnessMobile/src/utils/temperatureUnit.ts:5-22 (no setting screen references default_temperature_unit), used in src/screens/SleepDetailScreen.tsx:212, CardioSessionScreen.tsx:84, ActivityShareScreen.tsx:105; SparkyFitnessServer/db/migrations/20261104120000_add_default_temperature_unit.sql"
+  }
+ },
+ {
+  "pr": 3408,
+  "user_visible": true,
+  "surfaces": {
+   "web": false,
+   "ios": true,
+   "android": true,
+   "watch": false,
+   "server_only": false
+  },
+  "summary": "Mobile Heart Rate report gains a Resting HR Trend figure (the web's half-vs-half delta moved to a shared helper), an 'average heart rate by day' range timeline (touching a day opens it) and a 24-hour day timeline with sleep and workout shading and day figures, each a toggleable report section. The web per-workout heart rate section is still web only.",
+  "affected_rows": [],
+  "new_features_entries": [
+   {
+    "name_en": "Heart Rate report",
+    "change": "Description 'the phone app has neither [24-hour and multi-day timelines]' is now wrong: the phone report has an average-by-day range timeline and a 24-hour day timeline with sleep and workout shading (SparkyFitnessMobile/src/screens/HeartRateReportScreen.tsx:352-372; src/components/reports/HeartRateRangeCard.tsx; src/components/reports/HeartRateDayTimelineCard.tsx:35-91; src/constants/reports.ts:135-136) and a Resting HR Trend figure (HeartRateReportScreen.tsx:196-220; src/hooks/useHeartRateReport.ts:176). Only the per-workout section (SparkyFitnessFrontend/src/pages/Reports/HeartRate/HeartRateWorkoutsSection.tsx) stays web only; the phone keeps 1-min recovery and insights. ios/android could move from Partial toward Yes."
+   }
+  ],
+  "possible_issues": [],
+  "new_feature": null
+ },
+ {
+  "pr": 3407,
+  "user_visible": true,
+  "surfaces": {
+   "web": true,
+   "ios": true,
+   "android": true,
+   "watch": false,
+   "server_only": false
+  },
+  "summary": "When Heart Rate sync is on, the phone now also uploads all-day heart rate readings (one per minute) from Apple Health / Health Connect to /api/generic-health/samples, after the main upload, best effort, from a per-server cursor; stopped on account change. These feed the heart rate timelines on web and mobile for phone-only users.",
+  "affected_rows": [
+   {
+    "id": "checkin-health-sync",
+    "change": "Heart Rate sync now also uploads per-minute all-day heart rate readings on both platforms (SparkyFitnessMobile/src/services/shared/heartRateSamplesSync.ts:153 downsampleHeartRate, 417, 499 syncAllDayHeartRate; src/services/shared/healthSyncEngine.ts:594-605)."
+   }
+  ],
+  "new_features_entries": [
+   {
+    "name_en": "Heart Rate report",
+    "change": "The 24-hour and multi-day timelines now have data for people who sync from a phone: the sync uploads per-minute readings (SparkyFitnessMobile/src/services/shared/heartRateSamplesSync.ts:499), read by the web (SparkyFitnessFrontend/src/pages/Reports/HeartRate/useHeartRateData.ts:71) and mobile timelines (SparkyFitnessMobile/src/hooks/useHeartRateTimelines.ts:31)."
+   }
+  ],
+  "possible_issues": [],
+  "new_feature": null
+ },
+ {
+  "pr": 3360,
+  "user_visible": false,
+  "surfaces": {
+   "web": false,
+   "ios": false,
+   "android": false,
+   "watch": false,
+   "server_only": true
+  },
+  "summary": "Server: a sleep sync that omits a measurement (e.g. HRV) keeps the stored value; only an explicit null clears it. Data-correctness fix, no feature change.",
+  "affected_rows": [],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": null
+ },
+ {
+  "pr": 3300,
+  "user_visible": false,
+  "surfaces": {
+   "web": false,
+   "ios": false,
+   "android": false,
+   "watch": false,
+   "server_only": true
+  },
+  "summary": "Server: readiness endpoint used by the Docker health check (database, auth schema, restore guard). Deployment only, no app feature.",
+  "affected_rows": [],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": null
+ },
+ {
+  "pr": 3294,
+  "user_visible": true,
+  "surfaces": {
+   "web": true,
+   "ios": false,
+   "android": false,
+   "watch": false,
+   "server_only": false
+  },
+  "summary": "Sleep science (server) and the web Sleep report now read one row per day: a day's naps count toward sleep debt with its night instead of being treated as a separate night, and bed/wake times come from the main sleep in its own time zone (table, CSV, consistency chart). Correctness fix on web-only features; no parity change.",
+  "affected_rows": [],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": null
+ },
+ {
+  "pr": 3243,
+  "user_visible": true,
+  "surfaces": {
+   "web": false,
+   "ios": false,
+   "android": false,
+   "watch": false,
+   "server_only": true
+  },
+  "summary": "Server: a nap synced with the same wake date and source as the night is now stored as its own sleep entry instead of being merged into the night (unique index dropped, per-session upsert; Withings too). Naps from sync therefore show separately on web and in the mobile Naps card. Correctness fix; no parity change.",
+  "affected_rows": [],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": null
+ },
+ {
+  "pr": 3180,
+  "user_visible": true,
+  "surfaces": {
+   "web": true,
+   "ios": false,
+   "android": true,
+   "watch": false,
+   "server_only": false
+  },
+  "summary": "A night recorded by two sources counts once: server sleep analytics, sleep science, coach, compare and cycle queries and the web Sleep report and cycle daily log take one sleep per night (shared sleepSameNight rule). On Android, Health Connect sync now uploads only the most detailed session when two apps wrote the same night; iOS does not do this.",
+  "affected_rows": [
+   {
+    "id": "checkin-health-sync",
+    "change": "New iOS/Android difference: Android uploads one sleep session per night, keeping the more detailed one when two apps wrote the same night (SparkyFitnessMobile/src/services/healthconnect/provider.ts:104-107; src/services/healthconnect/index.ts:1745-1800 keepMostDetailedSleepSessions); iOS has no such step (SparkyFitnessMobile/AGENTS.md:155 'iOS does not do this yet')."
+   }
+  ],
+  "new_features_entries": [],
+  "possible_issues": [],
+  "new_feature": null
+ }
+]

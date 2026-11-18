@@ -1,0 +1,367 @@
+[
+  {
+    "pr": 3613,
+    "user_visible": true,
+    "surfaces": {
+      "web": true,
+      "ios": true,
+      "android": true,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "New 'Weighed it cooked' switch when logging or editing a diary food on web and mobile (g, kg, oz, lb only): enter the raw and cooked weight of the batch and the cooked weight eaten, and the raw portion and its nutrition are logged; the cooked weight is stored on the entry (food_entries.cooked_quantity), the next entry of the same food pre-fills the yield from the last cooked entry, and editing reopens it. Meals, meal components and meal plans do not get it. The new texts are English only on both.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": {
+      "name": "Log a food by its cooked weight",
+      "description": "When adding or editing a diary food in a weight unit (g, kg, oz, lb), a 'Weighed it cooked' switch takes the raw and cooked weight of the batch and the cooked weight eaten, and logs the matching raw portion; the cooked weight is kept with the entry, the next entry of the same food reuses the last yield ('New batch' starts over), and editing reopens it. Same on web and the phone app; not offered for meals or meal plans. Its texts are English only on both.",
+      "web": "Yes",
+      "ios": "Yes",
+      "android": "Yes",
+      "watch": "none",
+      "evidence": "SparkyFitnessFrontend/src/pages/Diary/Diary.tsx:598 (showCookedWeight); SparkyFitnessFrontend/src/components/FoodUnitSelector.tsx:126,679 (only weight units),924; SparkyFitnessFrontend/src/components/FoodUnitSelector/CookedWeightSection.tsx:155 ('Weighed it cooked'); SparkyFitnessFrontend/src/pages/Diary/EditFoodEntryDialog.tsx:591; SparkyFitnessMobile/src/components/CookedWeightSection.tsx:182; SparkyFitnessMobile/src/screens/FoodEntryAddScreen.tsx:2200; SparkyFitnessMobile/src/screens/FoodEntryViewScreen.tsx:1198; SparkyFitnessServer/routes/foodEntryRoutes.ts:1224 (GET /api/food-entries/last-cooked); SparkyFitnessServer/db/migrations/*_add_cooked_quantity_to_food_entries.sql; shared/src/utils/cookedWeight.ts:14 (COOKED_WEIGHT_UNITS); foodUnitSelector.cooked.* and foodEntryAdd.cooked.* only in the en catalogs"
+    }
+  },
+  {
+    "pr": 3601,
+    "user_visible": true,
+    "surfaces": {
+      "web": true,
+      "ios": false,
+      "android": false,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "Web food search: the scan button is now 'Scan Barcode or Label'. The barcode tab also reads a barcode from an uploaded, dropped or pasted image (decoded in the browser), and a new Nutrition label tab sends a label image (upload, drop or paste; no in-dialog camera) to the server's /api/foods/scan-label with the user's vision AI and opens the food form pre-filled for review. Mobile is unchanged except that its label scan result type now comes from the shared contract. The new web texts are in en and pl only.",
+    "affected_rows": [
+      {
+        "id": "diary-label-scan-server",
+        "change": "Web goes from Partial to Yes for creating a food from a label: the food search's scan dialog has a Nutrition label tab that reads an uploaded, dropped or pasted image through POST /api/foods/scan-label and opens the food form pre-filled for review (SparkyFitnessFrontend/src/components/FoodSearch/BarcodeScannerDialog.tsx:161-176; FoodSearch.tsx:1298,1782-1786; NutritionLabelImageInput.tsx; hooks/Foods/useNutritionLabelScan.ts:11-17; ImageSourceInput.tsx:57,92-95 accept='image/*', paste listener). Remaining difference: the web takes an existing picture (no camera capture inside the dialog), mobile takes or picks a photo and crops it; the web texts are only in en and pl."
+      },
+      {
+        "id": "native-camera-label-scan",
+        "change": "The web now has a label scanning flow that fills the food form with what the server AI reads, from an image file, drop or paste rather than the camera (SparkyFitnessFrontend/src/components/FoodSearch/BarcodeScannerDialog.tsx:161-176; FoodSearch.tsx:1782-1786; SparkyFitnessServer/routes/foodCrudRoutes.ts:735 scan-label, now also returning a failure code)."
+      },
+      {
+        "id": "chat-label-scan-server",
+        "change": "The row's statement that the web has no scanner and label photos only work through the chat tool is no longer true: the web food search's scan dialog has a Nutrition label tab that pre-fills the food form (SparkyFitnessFrontend/src/components/FoodSearch/BarcodeScannerDialog.tsx:161-176; FoodSearch.tsx:1298,1782-1786)."
+      },
+      {
+        "id": "foods-label-scan",
+        "change": "Web goes from No to Partial: a food can now be created from a label image in the food search scan dialog (Foods page 'add food' search and diary search both use EnhancedFoodSearch; SparkyFitnessFrontend/src/components/FoodSearch/FoodSearch.tsx:1298,1782-1786). The web food form itself (CustomFoodForm.tsx:641, barcode only) still has no 'Scan nutrition label' button to re-fill an existing food, as mobile's edit form has."
+      },
+      {
+        "id": "diary-barcode-not-found",
+        "change": "Its note says the web offers no nutrition label scan; the 'No product found' result still has none, but the same scan dialog now has a Nutrition label tab one click away (SparkyFitnessFrontend/src/components/FoodSearch/BarcodeScannerDialog.tsx:161-176; BarcodeSearchResult.tsx has no label action). Worth qualifying the note."
+      }
+    ],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": {
+      "name": "Read a barcode from a picture (web)",
+      "description": "On the web, the Scan Barcode dialog also reads a product barcode from an uploaded, dropped or pasted image, decoded in the browser, for computers without a camera; the code then goes through the normal lookup. The phone app only scans barcodes with the live camera.",
+      "web": "Yes",
+      "ios": "No",
+      "android": "No",
+      "watch": "none",
+      "evidence": "SparkyFitnessFrontend/src/components/FoodSearch/BarcodeScannerDialog.tsx:112 (BarcodeImageInput above the camera); SparkyFitnessFrontend/src/components/FoodSearch/BarcodeImageInput.tsx; SparkyFitnessFrontend/src/lib/scannerEngines/decodeBarcodeImage.ts:79; SparkyFitnessFrontend/src/components/FoodSearch/ImageSourceInput.tsx:57 (document paste listener),92-95; SparkyFitnessMobile/src/screens/FoodScanScreen.tsx (image library used only for label and photo modes, :514-522, :777-783)"
+    }
+  },
+  {
+    "pr": 3589,
+    "user_visible": true,
+    "surfaces": {
+      "web": false,
+      "ios": true,
+      "android": true,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "Mobile: the Adjust nutrition screen for a diary entry now has the same 'Scan nutrition label' button as the food edit form, and the scanned values fill it (shared ScanNutritionLabelButton). Mobile-only addition to a flow the web already lacks; no row changes in substance.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3580,
+    "user_visible": true,
+    "surfaces": {
+      "web": false,
+      "ios": true,
+      "android": true,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "Mobile: the reminder for a still-open symptom episode now has working 'End now' and 'Still ongoing' buttons. Before, the category was registered with untranslated undefined titles (Android dropped the buttons) and no handler acted on a press. Now both buttons open the app; End now ends the episode and Still ongoing schedules the next nudge 24 h later. Nudges are tied to the server they were scheduled for, and the button titles are translated in all 15 non-English locales.",
+    "affected_rows": [
+      {
+        "id": "native-notif-symptom",
+        "change": "The 'End now' and 'Still ongoing' actions now work on iOS and Android: the category is registered with fallback titles alongside the other categories and a handler ends the episode or reschedules the nudge 24 h later (SparkyFitnessMobile/src/services/notifications.ts:183-200; src/services/symptomNotificationHandler.ts:96-97,129,155,173; src/hooks/useAppStartup.ts:83; src/services/symptomReminderService.ts:19-33). Before this, Android showed the nudge without buttons and no code handled a press. Still no dedicated switch and no web counterpart."
+      },
+      {
+        "id": "missed-plat-native-actionable-notifications",
+        "change": "The symptom episode buttons now open the app (opensAppToForeground: true) and are handled there, so the row's 'run without opening the app' no longer holds for End now / Still ongoing; the existing note's 'symptom category unchanged' evidence is outdated (SparkyFitnessMobile/src/services/notifications.ts:183-200; src/services/symptomNotificationHandler.ts:173)."
+      }
+    ],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3509,
+    "user_visible": true,
+    "surfaces": {
+      "web": true,
+      "ios": false,
+      "android": false,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "Web Reports: the body measurements CSV export now converts weight and lengths to the user's units (and stones and feet as the table shows them); before, headers said lbs/inches while values were kg/cm. Web-only fix; the row stays web-only.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3486,
+    "user_visible": true,
+    "surfaces": {
+      "web": true,
+      "ios": true,
+      "android": true,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "Adaptive TDEE estimator rewritten on the server (gradual, stability-filtered estimate that fades back to the formula baseline as evidence ages), so adaptive calorie targets change for both apps. The web Calculation settings and calorie breakdown are reworded and reorganised (estimate status, education text, fallback checklist with new tips); the mobile Calorie settings hint is reworded with the ±500 kcal band from a shared constant.",
+    "affected_rows": [
+      {
+        "id": "goals-calc-adaptive-tdee",
+        "change": "Still web only, but the description's calibration tips are outdated: the 'Awaiting Adaptive TDEE Calibration' notice now says a fallback is used while usable history is collected and its tips are to log weights at consistent times and food as completely as possible, not '3-4 times a week' and 'daily' (SparkyFitnessFrontend/src/pages/Settings/CalculationSettings.tsx:2037-2046 'Measured Adaptive TDEE', 2363-2376). Mobile still shows no TDEE value or status (SparkyFitnessMobile/src/screens/CalorieSettingsScreen.tsx only rewords the activity hint)."
+      }
+    ],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3498,
+    "user_visible": true,
+    "surfaces": {
+      "web": false,
+      "ios": true,
+      "android": false,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "iOS: Taken, Skip and Snooze on medication reminders are now handled by a native notification delegate, so they work with the app closed, using the stored Keychain login (the same as the Siri/Shortcuts actions); JavaScript applies the results on next run and handles presses the native side does not claim (no stored login, another account or server). Android keeps its background notification task. Both platforms now handle the buttons with the app closed.",
+    "affected_rows": [
+      {
+        "id": "native-notif-medication",
+        "change": "The note says only Android handles Taken, Skip and snooze with the app in the background or closed; iOS now does too, natively (SparkyFitnessMobile/modules/background-water/expo-module.config.json:2-5 MedicationNotificationSubscriber; modules/background-water/ios/MedicationNotificationActions.swift:38-40,415,660; src/services/medicationNativeBridge.ts:36-40; src/services/medicationNotificationHandler.ts:604-614 skips natively claimed presses). Note should be rewritten."
+      },
+      {
+        "id": "meds-reminder-actions",
+        "change": "The note's 'On Android a background task handles the buttons when the app is in the background or closed' is now true of both: on iOS a native delegate logs Taken/Skip and schedules Snooze with the app closed when a background login is stored (SparkyFitnessMobile/modules/background-water/ios/MedicationNotificationActions.swift:415,660; src/services/medicationNativeBridge.ts:36-40)."
+      },
+      {
+        "id": "missed-plat-native-actionable-notifications",
+        "change": "The note's 'Only Android also runs the medication actions in a background notification task... iOS relies on the app's notification listener' is outdated: iOS now handles them natively with the app closed (SparkyFitnessMobile/modules/background-water/expo-module.config.json:4; modules/background-water/ios/MedicationNotificationActions.swift:415-660; src/services/medicationNotificationHandler.ts:604-614,992 Android task kept)."
+      }
+    ],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3491,
+    "user_visible": true,
+    "surfaces": {
+      "web": false,
+      "ios": true,
+      "android": true,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "Mobile label scan: the photo is now taken with the scan screen's own camera and cropped in an in-app cropper (LabelPhotoCropper) before downscaling, instead of the system camera's edit step; picking from the library still uses the system crop. Same on iOS and Android; no row changes in substance.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3476,
+    "user_visible": true,
+    "surfaces": {
+      "web": true,
+      "ios": true,
+      "android": true,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "Fasting fixes: ending an auto-calculated fast (auto-* id) no longer fails on the server, auto-calculation stops reviving ended fasts and tolerates clock skew; web dashboard fasting card and mobile Fasting detail get a 'Log Meal to End Fast' button for auto-calculated fasts next to End Fast; mobile refreshes the active fast on focus and after batch food adds. Same on both sides; no parity change.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3473,
+    "user_visible": true,
+    "surfaces": {
+      "web": false,
+      "ios": false,
+      "android": false,
+      "watch": false,
+      "server_only": true
+    },
+    "summary": "Server: personal records and the Best Effort card ignore times faster than the sport's speed ceiling (run 12, walk 7, ride 30, swim 5 m/s), so a stopped test saved as a full-distance run no longer becomes a record. Both apps read the same records; no parity change.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3433,
+    "user_visible": true,
+    "surfaces": {
+      "web": false,
+      "ios": true,
+      "android": true,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "Mobile Add Food shows the weight of an Open Food Facts serving ('1 serving (100 g)') instead of a bare '1 serving'; the server adds the household serving ('2 cookies') only when it matches the metric serving, so logging it no longer logs 100 g. Bug fixes; no row changes in substance.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3446,
+    "user_visible": true,
+    "surfaces": {
+      "web": false,
+      "ios": true,
+      "android": false,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "iOS: 'Choose from library' (and Take photo) on Improve estimate now opens the picker after the add-image sheet has closed; before, on iOS the picker never appeared. Bug fix; no row changes in substance.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3441,
+    "user_visible": true,
+    "surfaces": {
+      "web": true,
+      "ios": true,
+      "android": true,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "Lab report imports and result saves carry a client request id, so a retried save after a dropped connection is stored once (web and mobile); the import review locks while a save is pending. Part of the lab results feature (see #3374).",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3414,
+    "user_visible": true,
+    "surfaces": {
+      "web": true,
+      "ios": false,
+      "android": false,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "Web Reports > Symptoms: recent episodes show the peak effect on the day, and the CSV export gains peak_impact and impact_timeline columns. The symptom report stays web-only.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3418,
+    "user_visible": true,
+    "surfaces": {
+      "web": false,
+      "ios": false,
+      "android": false,
+      "watch": false,
+      "server_only": true
+    },
+    "summary": "Server: symptom severity and effect timeline points are stored with times PostgreSQL parses correctly and keep their order, so the charts on both apps place them right. No parity change.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3374,
+    "user_visible": true,
+    "surfaces": {
+      "web": true,
+      "ios": false,
+      "android": false,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "New Lab results page on the web (/labs, in the tab bar and the + menu): marker list with latest result and range status, a marker's chart and history, add/edit/delete results and markers, and import of a lab report PDF or photo read by the user's AI provider and reviewed before saving. The mobile app already had lab results (Library > Lab results, #3330/#3355, batch checkin-meds-2); range, unit and import helpers move to shared so both judge results the same way.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": {
+      "name": "Lab results",
+      "description": "Keep blood work and other lab results: built-in and custom markers, each result with its unit and reference range and an in/out-of-range status, a chart and history per marker, manual entry, and import of a lab report PDF or photo read by the AI provider and reviewed before saving. On the web as a Lab results page (tab or + menu) and in the phone app under Library > Lab results, which also has a Dashboard card.",
+      "web": "Yes",
+      "ios": "Yes",
+      "android": "Yes",
+      "watch": "none",
+      "evidence": "SparkyFitnessFrontend/src/App.tsx:460 (labs route); SparkyFitnessFrontend/src/constants/webTabs.ts:39 (inPlusMenu); SparkyFitnessFrontend/src/pages/Labs/Labs.tsx; SparkyFitnessFrontend/src/pages/Labs/LabImportDialog.tsx:238-259 (PDF or photo); SparkyFitnessMobile/src/screens/LibraryScreen.tsx:460; SparkyFitnessMobile/src/screens/LabReportImportScreen.tsx:295-302; SparkyFitnessMobile/src/screens/LabResultDetailScreen.tsx:16 (LabHistoryChart); SparkyFitnessMobile/src/screens/DashboardScreen.tsx:967 (LabResultsCard); shared/src/utils/labResults.ts, shared/src/utils/labReportImport.ts; mobile PRs #3330 and #3355 (batch checkin-meds-2)"
+    }
+  },
+  {
+    "pr": 3381,
+    "user_visible": true,
+    "surfaces": {
+      "web": true,
+      "ios": false,
+      "android": false,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "Server fix seen on the web: account switching and the x-on-behalf-of-user-id header now use one grant check that includes symptoms, so a family member granted only symptoms access can switch to that account, and the header no longer rejects most grants (no client sends it). The profile switcher stays web-only; no row changes in substance.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3336,
+    "user_visible": true,
+    "surfaces": {
+      "web": true,
+      "ios": true,
+      "android": true,
+      "watch": false,
+      "server_only": false
+    },
+    "summary": "Mobile episode severity chart now draws the effect-on-the-day band (impact_timeline) under the severity line with the web's colours and a legend, and lists the levels in its accessibility label; the window and band maths move to shared/src/symptoms/severityWindow.ts and the web chart uses them too, so a late effect change stays inside the chart on both.",
+    "affected_rows": [
+      {
+        "id": "meds-symptom-severity-chart",
+        "change": "The note's 'The mobile chart has no such band and the episode detail shows only the current effect as a label' is no longer true: the mobile chart draws the impact band with a legend, same colours as web (SparkyFitnessMobile/src/components/symptoms/SymptomSeverityChart.tsx:79-99,162-195; src/screens/SymptomEpisodeDetailScreen.tsx:144-155 chip plus chart; shared/src/symptoms/severityWindow.ts used by SparkyFitnessFrontend/src/pages/Symptoms/SeverityChart.tsx). Remaining difference: mobile still has no dedicated Update severity action (see meds-symptom-update-severity)."
+      }
+    ],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  }
+]

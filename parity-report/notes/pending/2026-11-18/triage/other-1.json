@@ -1,0 +1,229 @@
+[
+  {
+    "pr": 3602,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Mobile app (iOS and Android) can hold one client certificate (.p12/.pfx, mTLS, marked experimental) and present it to the user's saved servers, for reverse proxies that require one. Imported under Advanced options on the welcome screen and in the server modal; shows name and expiry, Replace and Remove. Key kept in Android Keystore / iOS Keychain. Differences: on iPhone an import or removal only takes effect after the app is fully closed and reopened (a popup says so), while Android applies it at once; the iPhone app does not send intermediate certificates. The section's texts are English only (auth.clientCertificate.* exists only in the en catalog). No web change (the browser uses its own certificate store). The existing rows on self-signed server certificates / custom CAs (auth-lan-selfsigned, plat-native-network-security) are about trusting the server's certificate and are not changed.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": {
+      "name": "Client certificate (mTLS) for the server connection",
+      "description": "Import a client certificate (.p12) into the phone app so a reverse proxy that requires mutual TLS lets it in; it is sent only to the saved servers' hostnames. Experimental. On iPhone the app must be closed and reopened after importing or removing it, and intermediate certificates are not sent; on Android the change applies at once. SSO and passkey sign-in also need the certificate installed in the phone's settings for the browser. English only. The web uses the browser's own certificate store, nothing in the web app.",
+      "web": "No",
+      "ios": "Yes",
+      "android": "Yes",
+      "watch": "none",
+      "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/components/ClientCertificateSection.tsx:39 (isClientCertificateSupported), 82-83 (restart notice iOS only), 123 (pickClientCertificateFile), 143 (importClientCertificate); src/components/ServerConfigModal.tsx:1330; src/screens/OnboardingScreen.tsx:717, 736; src/services/clientCertificate.ts:44-45, 48 (hostsForServerUrls); modules/client-certificate/android/.../ClientCertificateStore.kt, modules/client-certificate/ios/ClientCertificateHooks.swift, ClientCertificateIdentity.swift; src/localization/locales/en/translation.json:990-1000 (auth.clientCertificate.*, absent from every other locale); docs/src/mobile-app/client-certificates.md (Limits; 'After importing or removing a certificate')"
+    }
+  },
+  {
+    "pr": 3582,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "The Oxford BMR option now uses Henry (2005) weight-only equations by age band (18-30, 30-60, 60+) in the shared calculation, so the server (goals, calorie balance, adaptive TDEE, reports) and the web's own BMR copy and calorie target breakdown text change; the phone app shows server-computed figures and has no Oxford option of its own (its local calculateBmr only knows Mifflin-St Jeor and Harris-Benedict). No row describes the Oxford formula, so no row changes; the new explanation keys are English only for now.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3596,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Mobile Settings > Workout gets 'Focus the next set when a rest ends' (on by default). With it off, a rest timer that runs out no longer puts the cursor in the next set and opens the keyboard. Same on iOS and Android. The web player has no such auto-focus, and no row describes the auto-focus, so no row changes. Strings are in en and pl only.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": {
+      "name": "Choose whether the next set gets the keyboard when a rest ends",
+      "description": "In the phone app's Workout settings, a switch (on by default) decides whether a rest timer that runs out on its own moves the cursor to the next set's first value and opens the keyboard, or just makes the next set active. Minor; phone app only, same on iOS and Android.",
+      "web": "No",
+      "ios": "Yes",
+      "android": "Yes",
+      "watch": "none",
+      "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/screens/WorkoutSettingsScreen.tsx:249-268 (restEndFocus switch); src/screens/ActiveWorkoutScreen.tsx:671 (focusNextSetOnRestEnd check); src/stores/appPreferencesStore.ts (focusNextSetOnRestEnd: true default); workoutSettings.restEndFocus only in locales en and pl"
+    }
+  },
+  {
+    "pr": 3571,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Mobile bug fix in guided fitness tests: a treadmill 5K stopped before it has a result (for example after a few seconds) is now saved as the ordinary run that was measured, instead of being logged as 5 km and sent as a test the server rejects. Does not change the 'Guided running fitness tests' new-features entry or any row.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3577,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": false},
+    "summary": "Adds an agent skill (.agents/skills/pr-bot-loop, .claude/skills/pr-bot-loop) for maintainers' PR review loops. Repository tooling only.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3575,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "Docker frontend image: nginx also listens on IPv6 (docker/nginx.conf, docker-entrypoint.sh) and the install docs explain it. Deployment only; no app feature changes.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3569,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": false, "android": false, "watch": false, "server_only": false},
+    "summary": "Web workout player bug fix: when progressing working sets from the last session it now skips warm-up sets (it read set_type while the stats API sends setType, so warm-up loads were 'progressed'). Behaviour fix only; exercise-preset-progression and the other rows stay correct.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3554,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": false, "android": false, "watch": false, "server_only": false},
+    "summary": "Web bug fix: resuming a workout from the Diary no longer opens the player (or saves the draft) when another account or profile took over the page, or the person left the Diary, while the server was answering. No row changes.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3549,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": false, "android": false, "watch": false, "server_only": false},
+    "summary": "Web fix for shared browsers: the query cache is cleared when a different account replaces the current one (another tab's sign-in, a sign-in over another account), and the workout player draft and the birth plan / hospital bag lists in localStorage are now kept per person (older unowned copies are dropped). The birth plan is still browser-only localStorage, so cycle-care-birth-prep and native-local-persistence stay correct; the existing possible issue about iOS widgets after an account change is mobile and unaffected.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3526,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": true, "android": false, "watch": false, "server_only": false},
+    "summary": "iOS only: on iPhone Duo with iOS 27.1+, where the system shows the tab bar and header buttons as a vertical side bar, the app keeps screens clear of it, hides its own Add tab in favour of the system's detached Add button (only once the system confirms the vertical bar), moves the active workout rail beside the content, collapses the Diary date column and repositions menus, sheets and the photo viewers. Older iOS and Android are unchanged. Layout adaptation for a new device; no existing row describes it.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": {
+      "name": "iPhone Duo vertical side bar layout",
+      "description": "On an iPhone Duo with iOS 27.1 or later, when the system shows the tab bar and header buttons as a vertical bar on one side, the app lays its screens out around it: content stays clear of the bar, the system's Add button replaces the Add tab, and the live workout, Diary date column, menus and photo viewers adapt. iPhone only; no Android counterpart.",
+      "web": "No",
+      "ios": "Yes",
+      "android": "No",
+      "watch": "none",
+      "evidence": "/home/user/sf-main/SparkyFitnessMobile/src/hooks/useVerticalBar.ts:9-16 (iOS 27.1+ only), 82, 92; modules/side-bar-metrics/index.ts (verticalBarEdge, occlusion regions; ios/SideBarMetricsModule.swift); src/components/TabsLayout.tsx:94-110 (ScreenSideInsets), 290-294 (Add tab hidden on a confirmed vertical bar); src/screens/ActiveWorkoutScreen.tsx:118 (railBeside); src/screens/DiaryScreen.tsx:117-120, 220, 630"
+    }
+  },
+  {
+    "pr": 3547,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": false},
+    "summary": "CI fix in .github/workflows/release-please.yml (empty release PR output). Not user-facing.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3503,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": false, "android": false, "watch": false, "server_only": false},
+    "summary": "Web Settings gets a 'Tabs' section to show or hide the main tabs Check-In, Medications, Labs, Reports, Foods, Exercises and Goals (Diary, Settings and Admin always show; Cycle keeps its own switch and is shown there read-only). Hidden tabs leave the tab bar and the + menu, and Diary links into them (Check-In from the lean-mass BMR hint, the run program banner's Exercises link) disappear. Stored per account as a Customize layout row (user_dashboard_layouts, page key 'web-tabs'); only the owner can change it, not someone acting on their behalf. The phone app has no equivalent (its own dashboard card, quick action and watch page settings). Strings translated in 5 of 40 web locales. Note: on main the later Settings > Features (optional features, useWebFeatures) also gates tabs; the triage of that PR should reconcile the two.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": {
+      "name": "Show or hide the main web tabs",
+      "description": "In web Settings > Tabs, choose which main tabs show: Check-In, Medications, Labs, Reports, Foods, Exercises and Goals (Diary, Settings and Admin always show; Cycle has its own switch). A hidden tab also leaves the + menu and the Diary's links to it. Saved with the account; only the account owner can change it. Web only; the phone app's tabs cannot be hidden.",
+      "web": "Yes",
+      "ios": "No",
+      "android": "No",
+      "watch": "none",
+      "evidence": "/home/user/sf-main/shared/src/constants/webTabs.ts:1-30 (WEB_TABS_PAGE_KEY, WEB_HIDEABLE_TAB_IDS); SparkyFitnessFrontend/src/constants/webTabs.ts:36-43 (MODULE_TABS, inPlusMenu), 108-130 (visibleModuleTabs); src/pages/Settings/WebTabsSettings.tsx:37-57 (title 'Tabs', owner-only); src/pages/Settings/SettingsPage.tsx:189-191; src/layouts/MainLayout.tsx:100-103, 293; src/pages/Diary/DailyProgress.tsx:626; src/pages/Diary/RunProgramBanner.tsx:91; SparkyFitnessServer/services/dashboardLayoutService.ts; settings.webTabs in 5 of 40 public/locales"
+    }
+  },
+  {
+    "pr": 3519,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Mobile bug fix, same on iOS and Android: the live workout's interval/Tabata/EMOM timer now uses each set's planned work duration (read back from the plan on a live start, including legacy duration-in-reps rows) instead of falling back to the default, and interval presets keep the cardio set's rest as the rest phase. exercise-interval-hud stays correct.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3520,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": false},
+    "summary": "Release tooling: the EAS production workflow submits the phone, Wear OS and iOS builds with the free plan (iOS back to the submit job, TestFlight group manual) and sends the Wear OS app to the one-word Play track wear:WearAlpha (the old 'wear:WearOS Track' was cut at the space). Not a feature change. It bears on the summary's possible issue that releases do not include the Wear OS app, but that issue was addressed by #3293 (not in this batch): .github/workflows/android.yml now builds and attaches wearos-release.apk.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [
+      {
+        "issue": "The project's Android release workflow (.github/workflows/android.yml) builds only the phone app and does not set SPARKY_EMBED_WEAROS_RELEASE, so the released APK and AAB do not include the Wear OS app.",
+        "change": "Out of date on main, but not because of #3520: #3293 (merge fb745cf4a, commit 984fe7836) added a 'Build Wear OS Release APK' step and attaches wearos-release.apk to the GitHub release (/home/user/sf-main/.github/workflows/android.yml:142-152, 169), and the EAS workflow builds and submits a separate wearos profile (/home/user/sf-main/SparkyFitnessMobile/.eas/workflows/production-build-submission.yml:8-11, 29-34). #3520 only fixed that Play submission's track name (/home/user/sf-main/SparkyFitnessMobile/eas.json:50-53, wear:WearAlpha). Attribute the fix to #3293 when the issue is removed."
+      }
+    ],
+    "new_feature": null
+  },
+  {
+    "pr": 3497,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "Server fix for family access: adaptive TDEE results computed for a delegate are no longer cached or served from the owner's cache, and /api/adaptive-tdee also requires check-in read access; weight trends in the breakdown need check-in or report access. Permission hardening only; no parity row changes.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3386,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Mobile: screens that could not reach a configured server (offline, restarting, 5xx, 429) said 'No server configured'; a shared ServerGate now shows 'Can't reach your server' with Try again and Go to Settings, re-checks the connection automatically after network failures, and reloads screen data on reconnect. Same on iOS and Android. No row describes this message, so none changes.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3296,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "Server scheduler: the 'Daily' sync frequency is now honoured (before, every non-manual provider was synced on each hourly run); a daily provider runs when its last sync is at least 23 h old (Hevy keeps its own evening rule). last_sync_at is no longer moved forward when a sync fails or saves only part of its data (Oura, Strava, COROS, Google Health, Hevy, Liftosaur, Intervals.icu), so the next run retries the gap. The frequency is still chosen only on the web.",
+    "affected_rows": [
+      {
+        "id": "settings-integrations-sync-frequency",
+        "change": "Still web-only, but the 'daily' choice now takes effect: the scheduler skips a daily provider until 23 h after its last sync (/home/user/sf-main/SparkyFitnessServer/services/providerSyncScheduler.ts:226-238 isProviderSyncDue, 263-272), where before it synced on every hourly run. Intervals.icu is also offered the choice now (/home/user/sf-main/SparkyFitnessFrontend/src/pages/Settings/ProviderSyncFrequencyFields.tsx:20-32, 'intervals' in SCHEDULED_PROVIDER_TYPES). A failed or partial sync no longer advances the last sync time shown on the provider card (providerSyncScheduler.ts updateLastSyncIfComplete). Optional note; no parity change."
+      }
+    ],
+    "new_features_entries": [
+      {
+        "name_en": "Intervals.icu integration",
+        "change": "'synced for a chosen range or every hour' is now inaccurate: the scheduled sync follows the provider's Sync Frequency (Manual, Hourly or Daily) chosen on the web (/home/user/sf-main/SparkyFitnessServer/services/providerSyncScheduler.ts:214-219 Intervals.icu config, 230-238 isProviderSyncDue; /home/user/sf-main/SparkyFitnessFrontend/src/pages/Settings/ProviderSyncFrequencyFields.tsx:20-32, 'intervals' listed). Reword to 'synced for a chosen range, or hourly or daily'; update the evidence line reference (providerSyncScheduler.ts:127-134 is now 214-219)."
+      }
+    ],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3331,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": false, "android": false, "watch": false, "server_only": false},
+    "summary": "Web bug fix: stones/pounds and feet/inches displays and inputs round before splitting, so 13 st or 6 ft no longer come back as 12 st 14 lb or 5 ft 12 in. The phone app already rounded before splitting (SparkyFitnessMobile/src/utils/unitConversions.ts:47-57). No row changes.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  }
+]

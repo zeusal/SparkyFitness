@@ -1,0 +1,123 @@
+[
+  {
+    "pr": 3531,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Sparky chat can use the tools of an outside MCP server. An admin adds it on the web only (Admin > Global Data Providers, type 'MCP tool server': URL, optional bearer token, Load tools, tick up to 20 allowed tools, optional 'Tell the server who is chatting'); each person then turns each server on for their own chat under 'Tools from outside servers', in AI service settings on the web and in the AI settings screen on iOS and Android (off by default, never in a family member's account). In the same change, on web and mobile alike: every delete in chat, and every change after an outside result in that reply, asks first through an Allow / Deny approval card; replies that used an outside server carry a line to delete that message or clear the chat; and the web tool-call card now uses the same friendly tool labels as mobile (shared chatToolLabel) instead of the technical tool name.",
+    "affected_rows": [
+      {
+        "id": "chat-tool-call-card",
+        "change": "The row says web's generic card shows 'Used tool: <technical_name>' while mobile shows a friendly label. Both now take the label from the shared chatToolLabel (friendly name such as Food or Exercise, plus the action, e.g. 'Food (log food)'; outside tools as '<server>: <tool>'): SparkyFitnessFrontend/src/components/tool-fallback.tsx:314, 322 and SparkyFitnessMobile/src/components/chat/ToolCallCard.tsx:67, shared/src/utils/chatTools.ts:87-115. Web still expands to the arguments and result as JSON (tool-fallback.tsx:323-333); mobile keeps its icons and non-expanding lookups. Both also show a tool whose result reports an error as failed."
+      }
+    ],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": {
+      "name": "Tools from outside MCP servers in Sparky chat, with Allow / Deny approvals",
+      "description": "An admin can give Sparky chat the tools of another MCP server (Streamable HTTP, optional bearer token), choosing which of its tools chat may use; this setup is on the web only. Each person turns each server on for their own chat under 'Tools from outside servers', on the web and in the mobile app's AI settings; servers are off by default and never used in a family member's account. Chat now asks through an Allow / Deny card before any delete, and before any change that follows an outside result, on web, iOS and Android; replies that used an outside server get a line to delete that message or clear the chat.",
+      "web": "Yes",
+      "ios": "Yes",
+      "android": "Yes",
+      "watch": "none",
+      "evidence": "Admin setup (web only): SparkyFitnessFrontend/src/utils/settings.ts:78-84 (MCP tool server type offered only in admin mode), src/pages/Settings/ProviderSpecificFields.tsx:167, src/pages/Settings/McpServerFields.tsx:138 (Load tools), 221-250 (URL, token); per-person opt-in: SparkyFitnessFrontend/src/pages/Settings/AIServiceSettings.tsx:622 (ChatMcpServerSettings), SparkyFitnessMobile/src/screens/AiSettingsScreen.tsx:59, 137 (aiSettings.chatMcp); approvals: SparkyFitnessServer/ai/chatToolApproval.ts:33-54 (DESTRUCTIVE_ACTIONS, isDestructiveToolCall), 99 (needsOutsideApproval), SparkyFitnessFrontend/src/components/thread.tsx:501, 526 (ApprovalCard), SparkyFitnessMobile/src/screens/ChatScreen.tsx:345 (ApprovalCard); outside source line: thread.tsx:535, ChatScreen.tsx:360 (OutsideSourceLine); docs/src/features/ai-assistant.md:54-66"
+    }
+  },
+  {
+    "pr": 3530,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": false},
+    "summary": "Adds SparkyFitnessZeppAuth/, a Cloudflare Worker at zepp-auth.sparkyfitness.com that will relay Zepp (Amazfit) OAuth for #301. For now it only answers 200 to bare GET/HEAD on the two callback paths for registration (SparkyFitnessZeppAuth/src/index.js); no Zepp integration exists in the apps yet. Not part of the web or mobile app; no row changes.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3493,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": false, "android": false, "watch": false, "server_only": false},
+    "summary": "Web only (mobile has no Profile Switcher): after switching to a family member's profile, Sparky chat now works in that person's account within the access they granted (logs go into their diary, View Reports alone is read-only, only existing foods, personal tools such as profile, run programs, fitness tests, Compare and food preferences are refused), keeps the conversation in the delegate's own history, and keeps using the delegate's own AI service; the chat's provider picker is hidden while switched.",
+    "affected_rows": [
+      {
+        "id": "settings-family-delegate-other",
+        "change": "As a delegate on the web, Sparky chat now also follows the switched profile and acts in the family member's account with the delegate's permissions (docs/src/features/family-friends-sharing.md:48-59; SparkyFitnessServer/ai/tools/index.ts:270-271 refuses own-account-only tools in a family account). Still web only: mobile has no delegate mode."
+      },
+      {
+        "id": "chat-provider-switcher",
+        "change": "The web chat's provider dropdown is now hidden while acting on behalf of a family member, because chat always uses the signed-in person's own AI service (SparkyFitnessFrontend/src/pages/Chat/SparkyChat.tsx:41, 86, 157). Still web only."
+      }
+    ],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3380,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "Server/shared: the sparky_ask_user quick-reply options may now be up to 120 characters (was 48), and the model is told to keep food options to the product name and distinct (shared/src/constants/chatAskUser.ts:37, SparkyFitnessServer/ai/tools/askTools.ts:29-35). Fewer failed questions with long product names on web and mobile alike; row chat-ask-user-chips is unchanged in substance.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3283,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": false, "android": false, "watch": false, "server_only": false},
+    "summary": "Adds OpenCode Go as an AI service type, configured on the web (personal and admin global forms share ServiceForm) with a 'Load models' button that lists the provider's models for the entered key; the test-connection result now shows the provider's own error detail. Mobile chat can use it once configured (it uses whatever server provider is active) and now sends a conversationId kept across reopening the chat and rotated on clear or provider change; that and the debug-build user-CA trust on Android are not user-facing features.",
+    "affected_rows": [
+      {
+        "id": "chat-ai-provider-add",
+        "change": "The list of provider types in the description gains OpenCode Go (SparkyFitnessFrontend/src/utils/aiServiceUtils.ts:31-34; server SparkyFitnessServer/ai/config.ts:93-94). Still web only."
+      },
+      {
+        "id": "chat-ai-model-selection",
+        "change": "For OpenCode Go the model dropdown is filled from the provider with a 'Load models' button instead of a fixed recommended list (SparkyFitnessFrontend/src/components/ai/ServiceForm.tsx:73-110, 349-395). Still web only."
+      }
+    ],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3011,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": false, "android": false, "watch": false, "server_only": false},
+    "summary": "MCP clients can now connect with OAuth 2.1 instead of an API key. An admin turns on 'Remote MCP OAuth' and keeps an allowlist of redirect URIs in Admin > Authentication Settings (web); a remote client such as Claude.ai then opens the SparkyFitness login and a new consent screen (web route), and the person can review and revoke connected apps in Settings > Connected MCP Applications (web). Mobile has none of this.",
+    "affected_rows": [
+      {
+        "id": "critic-mcp-external-assistants",
+        "change": "The row says assistants connect only with an API key as a Bearer token and that there is no MCP screen. They can now also use OAuth 2.1: web consent screen (SparkyFitnessFrontend/src/App.tsx:50-51, 136-149, 346; src/pages/Auth/OAuthConsent.tsx), Settings > Connected MCP Applications to review and revoke them (src/pages/Settings/SettingsPage.tsx:475; src/pages/Settings/OAuthClientSettings.tsx:30-65), and the admin switch and redirect allowlist (src/pages/Admin/AuthenticationSettings.tsx:102, 315-349); docs/src/features/mcp-server.md (Connect a Remote Client with OAuth 2.1). API keys still work. Mobile still has nothing for MCP."
+      }
+    ],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3225,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": false, "android": false, "watch": false, "server_only": false},
+    "summary": "Web chat's token usage footer now splits input into cached and uncached, plus output and total (falls back to 'in' when the provider reports no cache figure), per message and for the session. Mobile still has no token display.",
+    "affected_rows": [
+      {
+        "id": "chat-token-usage",
+        "change": "The breakdown is now total, cached, uncached and output tokens (or input and output when no cache figure is reported), so cached + uncached + output add up to the total (SparkyFitnessFrontend/src/components/thread.tsx:335-410 TokenUsageLine, 412 MessageTokenUsage, 433-466 session total; locale keys thread.tokenUsage.*). Still web only."
+      }
+    ],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3224,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "Server only: cuts Sparky chat token use (Anthropic and OpenRouter-Claude prompt caching, shorter category summaries without tool names, two large tools held back until the conversation needs them) and tells the food assistant to look up several foods at once and not start a task for plain logging (SparkyFitnessServer/services/chatService.ts, ai/tools/metaTools.ts, prompts/chatbot-full-food.md). Same for web and mobile; no row changes.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  }
+]

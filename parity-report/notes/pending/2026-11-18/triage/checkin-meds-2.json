@@ -1,0 +1,121 @@
+[
+  {
+    "pr": 3355,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Mobile Lab results gains 'Import from a report': choose a lab report PDF, a photo or screenshot from the library, or take a photo; the server reads it with the user's AI provider (PDF text layer, max 30 pages / about 14 MB; photos resized) and returns rows the user reviews (tap a value to correct it, include/exclude each, date of test, new markers flagged, unit mismatch warning; units are not converted) before saving. The report itself is not stored; only an import record (lab_reports table) so a whole import can be deleted from the Lab results menu ('Delete imported results'). Server adds POST /api/v2/lab-reports/scan and /api/v2/lab-results/imports routes. Same on iOS and Android. The web got its own import dialog later in #3374 (other batch), accepting PDF, JPEG, PNG and WebP.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": {
+      "name": "Import lab results from a report (AI)",
+      "description": "From Lab results, 'Import from a report' reads a lab report PDF or a photo/screenshot of one with the user's configured AI provider and lists the results for review (correct values, include or leave out each, set the test date) before anything is saved; each result keeps the unit and reference range the report printed, units are not converted, and the report file is not stored. An import can be deleted as a whole from the screen's menu. Needs an AI provider. On the phone (iOS and Android: Choose a PDF, Choose a photo or screenshot, Take a photo); the web has the same import since #3374.",
+      "web": "Yes (since #3374, other batch)",
+      "ios": "Yes",
+      "android": "Yes",
+      "watch": "none",
+      "evidence": "SparkyFitnessMobile/src/screens/LabResultsScreen.tsx:93-110 (menu 'Delete imported results'), 150-166 ('Import from a report'); src/screens/LabReportImportScreen.tsx:286-321 (Reading your report..., intro text 'Your AI provider reads it... The report itself is not stored', Choose a PDF / Choose a photo or screenshot / Take a photo), 115-116 (units are not converted), 368-369 (review text), 497 ('Save {{count}} results'); src/services/labReportPicker.ts:20-23 (PDF via expo-document-picker), 78-98 (library, camera). SparkyFitnessServer/routes/v2/labReportRoutes.ts:117 (POST /scan); routes/v2/labResultRoutes.ts:595, 612, 652 (imports); services/labReportScanService.ts:33-39 (no_ai_configured, unreadable_pdf), 50-69 (PDF limits, 30 pages); SparkyFitnessServer.ts:872-873; db/migrations/20261031120000_create_lab_reports.sql. Web: SparkyFitnessFrontend/src/pages/Labs/LabImportDialog.tsx:228-248; src/pages/Labs/labFormat.ts:75-76"
+    }
+  },
+  {
+    "pr": 3330,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Adds Lab results to the mobile app (on top of the server tables from #3237): a Lab results screen reached from Library, listing each marker with its latest value, date and reference range; an Add lab result screen (search the built-in marker catalog such as HbA1c, LDL or vitamin D, or add a new marker; result, unit, optional reference range with sex-specific defaults, date of test, note); a marker detail screen with the latest value on a range bar, a history chart, the list of results, and deleting a result or the whole marker; and a 'Lab Results' Dashboard card that can be hidden in Dashboard settings. Same on iOS and Android. At this point there was no web page; the web Labs page came in #3374 (other batch).",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": {
+      "name": "Lab results (blood test markers)",
+      "description": "Record lab test results (HbA1c, LDL, vitamin D and other markers from a built-in catalog, or your own markers) with unit, reference range, test date and note, and follow each marker over time: list with latest value and status, a detail view with a range bar and history chart, edit and delete. On the phone it is under Library > Lab results with a Lab Results Dashboard card; the web has a Lab results page (tab and + menu) since #3374.",
+      "web": "Yes (since #3374, other batch)",
+      "ios": "Yes",
+      "android": "Yes",
+      "watch": "none",
+      "evidence": "SparkyFitnessMobile/src/screens/LibraryScreen.tsx:460-466 (Library > 'Lab results'); src/screens/LabResultsScreen.tsx:81-110 (header: Add lab result, menu), 168-200 (marker rows with latest date and range); src/screens/LabResultAddScreen.tsx:347-405 (Add lab result, 'Search markers (HbA1c, LDL, ...)', 'Add \"{{name}}\" as a new marker'), 495-618 (Result, Unit, Reference range (optional), Date of test, note); src/screens/LabResultDetailScreen.tsx:16-17, 214-247 (Latest, range bar, history chart), 119 ('Delete marker and all results'), 154-156 (delete a result); src/components/labs/LabResultsCard.tsx; src/screens/DashboardScreen.tsx:967; src/constants/dashboardCards.ts:22, 79-80; src/stores/appPreferencesStore.ts:131 (card visible by default); src/screens/DashboardSettingsScreen.tsx:161-162. Web: SparkyFitnessFrontend/src/pages/Labs/Labs.tsx; src/constants/webTabs.ts:39, 64-65"
+    }
+  },
+  {
+    "pr": 3327,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Bug fix on both web and mobile: the symptom calendar now shades every day an episode covers (from its start to its end, or to today while still ongoing, in the profile timezone), including episodes that began in the previous month; before, only the entry_date (start day) was shaded. Server GET /api/v2/symptoms/entries gains an optional overlapping flag. On mobile a tapped day lists every entry covering it, and the calendar/history no longer stay on yesterday after midnight. Rows meds-symptom-calendar and meds-symptom-history-list stay parity; no row text becomes wrong.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3323,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Removes the opt-in 'Guided check-in' switch that #3197 added to Diary settings: the Daily Check-In item is now always available in the mobile + menu (like any other item it can be moved or hidden in Settings > Quick Actions). What's New and docs updated. Final state of the guided check-in is described under #3197.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3286,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Mobile bug fix: a logged meal's diary row now shows the meal's photos (entry override or the meal's own images), as the web already did and as a food row does. Rows diary-entry-image-override and foods-meal-builder-fields already describe this as parity, so no row changes in substance.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3275,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "Test-only: classifies the lab tables in the RLS permission matrix test (SparkyFitnessServer/tests/rlsPermissionMatrix.integration.test.ts). No user-visible change.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3237,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "Server and shared groundwork for lab results: lab_markers and lab_results tables with RLS (migration 20261029120000_create_lab_tables.sql), a built-in marker catalog (shared/src/constants/labMarkers.ts) and /api/v2/lab-results routes (markers, latest, entries CRUD). No client UI in this PR; the mobile screens are #3330 and the web page #3374. See the new feature recorded under #3330.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3222,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Mobile symptom log: for an episode ('Track as ongoing episode'), the start can now be set to any past date and time with Date and Time pickers (a future time is clamped to now), and a '-1d' shortcut joins Now/-15m/-1h/-3h. A moved start lets the server file the entry under the start's day. There is still no end-time picker on mobile (only 'End Episode Now' on an existing ongoing episode), while the web has 'Still ongoing' and an 'Ended' date-time; the start picker only shows in episode mode.",
+    "affected_rows": [
+      {
+        "id": "meds-symptom-timing",
+        "change": "partial (#3222): the row says mobile has only the Now/-15m/-1h/-3h shortcuts and no date-time picker or end time. Mobile now has Date and Time pickers for the episode start (any past moment, clamped to now) and a -1d shortcut: SparkyFitnessMobile/src/screens/SymptomLogScreen.tsx:187-219 (applyStartedAt, handlePickStartDate/Time), 524-560 (Now, -15m, -1h, -3h, -1d), 565-605 (Date and Time buttons), 833-845 (CalendarSheet maxDate today, TimeSheet), 275 (moved start re-derives entry_date). Still missing on mobile: an end date-time and a 'still ongoing' choice when logging; only 'End Episode Now' on an existing ongoing episode (SymptomLogScreen.tsx:608-619). Web: SparkyFitnessFrontend/src/pages/Symptoms/SymptomLogForm.tsx:403-445 (Pick…, Still ongoing, Ended)."
+      }
+    ],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3197,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Adds a guided daily check-in to the mobile app: 'Daily Check-In' in the + menu walks through Mood, Measurements and Progress photos for the Diary's day, one screen after another, with 'Step N of 3', Save & continue, Skip, Back, Finish, and an offer to Continue or Start over when an unfinished check-in for the same day is reopened. Originally opt-in through a Diary settings switch; #3323 removed the switch, so the item is now always in the + menu (hideable in Quick Actions). Same on iOS and Android. The web has no guided flow (it has the tabbed Check-In page).",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": {
+      "name": "Guided daily check-in",
+      "description": "On the phone, 'Daily Check-In' in the + menu walks through the day's check-in one screen after another: mood, then weight and body measurements, then progress photos, each showing 'Step N of 3' with Save & continue, Skip and Back; what is saved stays saved if you stop part-way, and reopening it the same day offers to continue or start over. It can be moved or hidden in Quick Actions. The web has no guided flow; its Check-In page shows the same areas as tabs.",
+      "web": "No",
+      "ios": "Yes",
+      "android": "Yes",
+      "watch": "none",
+      "evidence": "SparkyFitnessMobile/src/constants/addMenuItems.ts:17 ('checkIn'); src/components/AddSheet.tsx:511-517 (Daily Check-In item, label in src/localization/locales/en/translation.json:636); src/hooks/useAddSheetActions.ts:327-328 (startGuidedCheckIn for the diary day); src/hooks/useGuidedCheckIn.ts:22-26 (steps MoodLog, MeasurementsAdd, ProgressPhotos), 255-290 (Continue / Start over); src/components/GuidedCheckInStepIndicator.tsx, used in src/screens/MoodLogScreen.tsx:246, src/screens/MeasurementsAddScreen.tsx:1505, src/screens/ProgressPhotosScreen.tsx:528; src/hooks/useAddMenuItemAvailable.ts (no setting gate since #3323); docs/src/features/check-in.md:76-88. Web: SparkyFitnessFrontend/src/pages/CheckIn/CheckIn.tsx (tabs, no guided flow)"
+    }
+  }
+]

@@ -1,0 +1,110 @@
+[
+  {
+    "pr": 3314,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": false},
+    "summary": "Repository housekeeping only: adds CODEOWNERS entries so changes to SparkyFitnessTag/ need the maintainer's review. Nothing changes in any app.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3313,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": false},
+    "summary": "The tag site's apple-app-site-association now also lists the maintainer's dev app id (C7WRKGBVR6.org.SparkyApps.SparkyFitnessMobile1.dev), so an NFC tag tap can open a dev build made with ENABLE_NFC_LINKS=1. Production builds are unaffected; no audit row or app feature changes.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3312,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": false},
+    "summary": "The tag.sparkyfitness.com landing page (shown when an NFC tag link does not open the app) now links the App Store listing and the TestFlight beta as well as Google Play (SparkyFitnessTag/index.html:31-46). It is a static site outside the web and mobile apps; no audit row covers it. If the NFC tag feature gets a new-features entry from another batch, this only adds the iOS store links to its fallback page.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3280,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "Server fix: demo account seeding takes a transaction advisory lock (services/demoSeedService.ts:66-68, 410) so several server instances seeding at once no longer both create the demo account. The Explore Live Demo flow (row auth-demo-login, web only) is unchanged.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3274,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "Server regression fix: the guarded fetch wraps the undici Agent in Dispatcher1Wrapper for Node's built-in fetch (SparkyFitnessServer/utils/outboundUrlPolicy.ts, ai/providerDispatch.ts). Before it, every request through createGuardedFetch failed with 'invalid onRequestStart method', breaking barcode lookups, provider searches and AI requests (and the Ollama path) for web and mobile alike. Restores existing behaviour on both clients; no row's facts change.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3255,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "Server/database only: the rls_policy_state table is now created by a migration (SparkyFitnessServer/db/migrations/20261028130000_add_rls_policy_state.sql) instead of at startup in utils/applyRlsPolicies.ts, with its Zod schema and docs. No user-facing change.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3242,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Mobile (iOS and Android): the + sheet is restyled as Quick Actions with four big cards and rows below, and a new Settings > Quick Actions screen lets the person choose which item fills each of the four card slots, drag the rows into any order, set each row's style (full row, compact half-width, or button at the foot of the sheet) and switch items off; a live preview shows the result. The same items as before stay available by default (Food, Exercise, Measurements, Scan Food, Check-In, Progress Photos, Wellness, Symptoms, Mood, Mindfulness, Ask Sparky, Sync Health; Oral care was added later). The web add menu (SparkyFitnessFrontend/src/layouts/MainLayout.tsx:125-199) has no equivalent customisation. The rows that cite AddSheet.tsx line numbers (checkin-add-menu-shortcuts, chat-launcher-addsheet, cycle-addsheet-quick-log, diary-global-add-food, exercise-live-start) keep their facts by default; only their line references moved, and each item can now also be hidden or moved.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": {
+      "name": "Arrange the + menu (Quick Actions)",
+      "description": "On mobile, Settings > Quick Actions lays out the + sheet: pick which items fill the four big cards, drag the other items into order, choose whether each shows as a full row, a compact half-width row or a button at the foot of the sheet, and switch off items you do not use. A preview shows the sheet as it will look. Items of a feature turned off in Settings > Features (Wellness while cycle tracking is off) are left out of the sheet wherever they are placed. The web add menu cannot be customised.",
+      "web": "No",
+      "ios": "Yes",
+      "android": "Yes",
+      "watch": "none",
+      "evidence": "SparkyFitnessMobile/src/screens/AddMenuSettingsScreen.tsx:43-50 (cards, drag to reorder, switch off to hide); src/screens/SettingsScreen.tsx:394-400 (Settings > Quick Actions row); src/constants/addMenuItems.ts:12-26 (items), 34-39 (feature-gated items), 41-49 (four card slots), 130-145 (row styles list/compact/action); src/stores/appPreferencesStore.ts:175, 318, 457 (hiddenAddMenuItems); src/components/AddSheet.tsx:119-125, 572-584 (sheet reads addMenuCards, addMenuOrder and hidden items); src/components/AddMenuPreview.tsx (preview); web: SparkyFitnessFrontend/src/layouts/MainLayout.tsx:125-199 (fixed addCompItems, no settings)"
+    }
+  },
+  {
+    "pr": 3239,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "Server only: RLS policies are re-applied at startup only when db/rls_policies.sql changed, tracked by a hash in rls_policy_state (SparkyFitnessServer/utils/applyRlsPolicies.ts). Faster startup; no user-facing change.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3213,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "Server only: a provider sync (Garmin, Fitbit, etc.) that loses its claim or stalls is aborted, so a wedged sync no longer holds the account until the claim expires (SparkyFitnessServer/services/providerSyncClaim.ts, utils/abortScope.ts, db/poolManager.ts). Server-side cloud syncs are the same for web and mobile; no row's facts change (settings-integrations-sync-frequency and native-web-cloud-integrations are unchanged).",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3204,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "Server/deployment only: the graceful shutdown timeout is configurable through a new environment variable, wired into docker/.env.example, the compose files, the Helm chart and the docs (SparkyFitnessServer/utils/gracefulShutdown.ts). Self-hosting operators only; no app change.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  }
+]

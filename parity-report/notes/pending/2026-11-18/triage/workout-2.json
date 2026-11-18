@@ -1,0 +1,208 @@
+[
+  {
+    "pr": 3440,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Server fix for the mobile live workout's Previous placeholders: when a workout started from a preset with no logged history of its own, recentSessions now falls back to the exercise's history from any workout instead of returning nothing. Only mobile sends presetId to the stats endpoint; the web does not use this scoping. Bug fix, no parity change.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3436,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "The complete and effort request schemas capped program_id at 40 characters while a person's own plan is 'custom:<uuid>' (43), so marking a workout of a custom plan as done or rating its effort was refused with 400 on web and mobile. All program-id fields now share runProgramIdSchema (max 50).",
+    "affected_rows": [
+      {"id": "exercise-run-program-custom", "change": "Add #3436 to the note's PRs: the note says the web can start a plan made on mobile and 'follow it like any program', but until this PR its Mark as done (and the mobile completion and effort rating) failed for custom plans because program_id was limited to 40 characters. Now shared/src/schemas/api/RunProgram.api.zod.ts:134 runProgramIdSchema (max 50) is used at :194, :216 (complete) and :231 (effort); the web sends program_id on Mark as done (SparkyFitnessFrontend/src/pages/Diary/RunProgramBanner.tsx:111-115, TrainingPrograms/TrainingPrograms.tsx:129) and mobile on completion and rating (SparkyFitnessMobile/src/services/runProgramService.ts:206-210, 260)."}
+    ],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3429,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": false, "android": false, "watch": false, "server_only": false},
+    "summary": "Web Settings > External Providers: the Garmin card shows the real last sync ('Last Sync: never' when it never synced), a 'Garmin service unreachable' warning when the Garmin microservice is down, and Sync all reports Garmin syncs that failed part-way (Health, Activities, Nutrition). Garmin remains a web-only integration, so no row changes in substance.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3406,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "Re-lands #3398 (reverted by #3403): a backup restore from the admin page no longer requires scaling to one server instance; every instance fences writes and scheduled jobs during the restore. Self-hosting/admin behaviour only; no parity row covers multi-instance restore.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3341,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "Sparky chat exercise tools salvage calls where the model mixed keys from another action instead of rejecting them. Server-side AI robustness fix, same for every client.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3403,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "Revert of #3398 (restore with every instance running); the change came back in #3406, so the net effect on main is #3406's.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3398,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "First landing of restore with every instance running; reverted by #3403 and re-landed as #3406. No net change of its own.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3348,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Mobile active workout gains an optional Focus view (Workout Settings > Workout view: List or Focus; plus Exercise photo: Large or Small): one exercise per page with numbered chips, a large zoomable photo/GIF card, Swap and the overflow menu, plan and last-time lines, steppers for weight and reps, swipe between exercises, follows the current set with a 'Back to current' pill. Standard format only, ignored in guided mode and interval/tabata/EMOM/WOD. Same on iOS and Android. The web live workout has only the list. No existing row describes a workout layout choice; existing rows (live set logging, RPE/Prev column, guided mode) stay true since the list view is the default and unchanged.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": {
+      "name": "Focus view for the live workout (one exercise at a time)",
+      "description": "An optional layout for the in-progress workout, chosen in Workout Settings > Workout view (List by default, or Focus), with Exercise photo set to Large or Small. Focus shows one exercise per page: numbered exercise chips, a large zoomable photo or GIF card, Swap and the exercise menu, muscle/equipment/best chips, a plan line and a last-time line, weight and reps steppers with an RPE/RIR cell, Previous/Next and swiping between exercises; it follows the current set and offers 'Back to current' after you move by hand. Only for standard-format workouts with guided mode off; the list's Previous column with tap-to-fill and the live heart rate and calories readouts are not in it. Same on iOS and Android; the web workout player has only its list. Its texts are translated into German, French, Polish and Brazilian Portuguese among the shipped languages.",
+      "web": "No",
+      "ios": "Yes",
+      "android": "Yes",
+      "watch": "none",
+      "evidence": "SparkyFitnessMobile/src/stores/appPreferencesStore.ts:189-190 (activeWorkoutView 'list', focusMediaDefault), 783-784; SparkyFitnessMobile/src/screens/WorkoutSettingsScreen.tsx:100-105, 293-340 (Workout view and Exercise photo rows, guided subtitle); SparkyFitnessMobile/src/screens/ActiveWorkoutScreen.tsx:155-161 (focusMode only for standard format with guided mode off); SparkyFitnessMobile/src/components/ActiveWorkoutFocusView.tsx, ActiveWorkoutFocusChips.tsx, ActiveWorkoutFocusMedia.tsx, ActiveWorkoutFocusSets.tsx; SparkyFitnessMobile/src/utils/focusView.ts:32 (FOCUS_FOLLOW_GRACE_MS), 52 (swipePageDelta); SparkyFitnessMobile/agent-docs/exercise-workouts-and-fasting.md 'Focus view' (not carried over: Previous column, cardio effort form, live HR and calories); no Platform gate apart from the weight keyboard type (ActiveWorkoutFocusSets.tsx:474); translations: activeWorkout.focus / workoutSettings.workoutView present in de, fr, pl, pt-BR (and bg, not shipped), absent from es, hu, it, lv, nb-NO, nl, ru, tr, yue-Hant, zh-Hans, zh-Hant (localeRegistry.json). Web has no equivalent: SparkyFitnessFrontend/src/pages/Diary/WorkoutPlaybackPage.tsx with WorkoutPlaybackExercisesList.tsx."
+    }
+  },
+  {
+    "pr": 3369,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": true, "watch": false, "server_only": false},
+    "summary": "Android Health Connect sync: a failed (quota, client unavailable or other retryable) read of a workout's active/total/basal calories now fails the metric so the sync keeps its cursor and retries, instead of uploading the workout with missing or zero calories. Robustness fix; no row changes.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3304,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": false, "android": false, "watch": false, "server_only": false},
+    "summary": "Adds POST /api/generic-health/samples for third-party sources to write passive all-day samples (heart rate, stress, SpO2...) with a shared contract (shared/src/schemas/api/HealthMetricSamples.api.zod.ts). On the web, the Heart Rate report and the HRV card now chart every source's samples for a day (samplesForDay) instead of only the first source's row. API addition and a web chart fix; no row changes.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3375,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "Server fix (#2938): a /health-data import containing workouts with no source (or a user-created source) no longer range-deletes workouts the person logged in SparkyFitness, and malformed sets are reported per entry. Data-safety fix for every client; no row changes.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3358,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "With several server instances, each scheduled job tick (backups, provider syncs, Open Food Facts auto-sync, demo seed) runs on one instance only, via a new scheduled_jobs table. Deployment behaviour only.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3356,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": false, "android": false, "watch": false, "server_only": false},
+    "summary": "Web fix: preset exercises saved from the web stored a stray '[' or '\"' as image_url, giving broken thumbnails in the preset form, workout player and guided mode; one rule (filterValidExerciseImages / firstExerciseImage) now filters images and re-saving a preset repairs it, and exercises created or imported from the add dialog come back with normalized arrays. Bug fix; no row changes.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3236,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": false, "android": false, "watch": false, "server_only": false},
+    "summary": "Hevy integration: the Daily sync frequency for Hevy now runs in the evening (at or after 21:00 in the user's timezone, labelled 'Daily at 21:00' with a help text on the web add/edit forms), and imported Hevy exercises get their muscle groups. Hevy stays a web-only integration (settings-integrations-workout-apps, settings-integrations-sync-frequency stay web_only), so no row changes in substance.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3134,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "New preference adjust_macros_with_exercise: when on, protein, carbs and fat goals set as percentages grow with the exercise calories added to the day's budget (respecting earn-back settings; gram goals unchanged; applies from the day it is changed). A switch on web Settings > Calculation and on mobile Calorie Settings, both always shown. Percentage macro goals themselves can still only be set on the web (goals-macros-percent stays web_only), so on mobile the switch only affects goals set as percentages on the web.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": {
+      "name": "Grow percentage macro goals with exercise calories",
+      "description": "An optional switch, 'Adjust percentage macro goals with exercise calories', raises the protein, carbohydrate and fat targets in proportion when exercise adds calories to the day's budget, following the earn-back settings; goals entered in grams do not change, and a change applies from that day on. The switch is on the web (Settings > Calculation) and in the phone app (Calorie Settings), the same on iOS and Android, but macros can only be set as percentages on the web, so the phone app's switch only matters for goals set that way there.",
+      "web": "Yes",
+      "ios": "Yes",
+      "android": "Yes",
+      "watch": "none",
+      "evidence": "SparkyFitnessFrontend/src/pages/Settings/CalculationSettings.tsx:241, 483, 1650-1675 (switch and hint, always shown); SparkyFitnessMobile/src/screens/CalorieSettingsScreen.tsx:63, 744-772 (switch, saved with mutation adjust_macros_with_exercise); SparkyFitnessServer/services/goalService.ts:193, 563 (applies per day); SparkyFitnessServer/db/migrations/20261024170000_add_exercise_macro_adjustment.sql; shared/src/schemas/database/UserPreferences.zod.ts; mobile GoalsScreen.tsx has no grams/percent macro toggle (only stores protein_percentage etc. in presets, :190-201). Mobile translations: calorieSettings.adjustMacrosWithExercise in de, fr, pl, pt-BR only among shipped locales."
+    }
+  },
+  {
+    "pr": 3320,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Google Health sync now attaches the tracker's heart rate (average, max, time in zones and the HR series) to workouts logged in SparkyFitness that have a start time and no heart rate, once the tracker has uploaded readings past the workout's end; calories are left alone. Done on the server; the Google Health connection is set up only on the web, and the result shows wherever the workout is viewed (web and mobile). No row covers heart rate from a cloud tracker on logged workouts.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": {
+      "name": "Heart rate from a Google Health tracker on logged workouts",
+      "description": "With Google Health connected, each sync fills in a workout logged in SparkyFitness (live workout, web workout player, or by hand with a start time) that has no heart rate yet with the tracker's readings from that time: average and max heart rate, time in each zone and the heart rate graph, as a paired Apple Watch gives. It waits until the tracker has uploaded readings past the workout's end and does not change calories. Google Health is connected from the web only; the filled-in heart rate then shows on the web and in the phone app on iOS and Android.",
+      "web": "Yes",
+      "ios": "Partial",
+      "android": "Partial",
+      "watch": "none",
+      "evidence": "SparkyFitnessServer/integrations/googlehealth/googleHealthWorkoutHeartRate.ts:29 (SETTLE_MS 5 min past the end), 80 (attachHeartRateToLoggedWorkouts), 139 (attachWatchTelemetryToExerciseEntry); SparkyFitnessServer/services/googleHealthService.ts:701 (called at the end of each sync); SparkyFitnessServer/models/workoutTelemetryRepository.ts:433 (getWorkoutEntriesWithoutHeartRate); shared/src/utils/workoutHeartRateSeries.ts (workoutClockWindow); docs/src/features/settings/google-health.md:79. Google Health setup is web-only (native-web-cloud-integrations); no Google Health settings in SparkyFitnessMobile/src/screens."
+    }
+  },
+  {
+    "pr": 3317,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "Server concurrency fix: a workout edit and a distance correction lock the exercise entry row when they reread it, so one no longer writes back over the other. No row changes.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3307,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Mobile active workout fix (#3295): after an autosave, the server's set ids are paired with the exercises by entry id instead of list position, so logging an exercise out of turn no longer makes later saves fail with 'Set does not belong to this exercise entry'. Bug fix; no row changes.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  }
+]

@@ -1,0 +1,77 @@
+[
+  {
+    "pr": 3292,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "The mobile food form (create, edit, adjust nutrition, photo estimate review) gains an 'Enter sodium as' picker: Sodium (mg) or Salt (g); salt typed in grams is saved as sodium (1 g salt = 400 mg), as on the web since #3150. The salt/sodium helpers moved from the frontend to shared (shared/src/utils/saltSodium.ts). On narrow windows the picker moves under the input. The mobile supplement nutrients editor has no salt option (the web supplement form does). Same on iOS and Android.",
+    "affected_rows": [],
+    "new_features_entries": [
+      {
+        "name_en": "Enter sodium as grams of salt",
+        "change": "Now on mobile too: the entry says 'The phone app only has the sodium field in mg' with ios/android No. Set ios Yes and android Yes (food form), add PR 3292, and say the mobile supplement nutrients editor still has only sodium in mg (no salt in SparkyFitnessMobile/src/components/medications/SupplementNutrientsEditor.tsx). Evidence: SparkyFitnessMobile/src/components/FoodForm.tsx:139-147 (SodiumEntryUnit, inline picker width), 316-330, 936-1030 (renderSodiumField: 'Salt (g)', 'Enter sodium as' picker with Sodium (mg) / Salt (g)), 1467; used by src/screens/foodForm/CreateFoodMode.tsx, EditFoodMode.tsx, AdjustNutritionMode.tsx and src/screens/FoodPhotoEstimateReviewScreen.tsx. Also fix the entry's evidence path: the helper is now shared/src/utils/saltSodium.ts (SparkyFitnessFrontend/src/utils/saltSodium.ts no longer exists); web grid SparkyFitnessFrontend/src/components/FoodSearch/NutrientFormGrid.tsx:15, 21-22."
+      }
+    ],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3261,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "Server fix to the food diary CSV export: the per-day burned calories row no longer adds a device 'Active Calories' entry on top of logged workouts (it already includes them); it takes the larger, as the diary's exercise card does (SparkyFitnessServer/services/foodEntryService.ts:55-70, 3602, 3940). Affects the export wherever it is offered (row diary-csv-export, web only); the row's facts do not change.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3249,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "Server fix for the AI chat / MCP food tools: an Open Food Facts product is saved only when it declares energy and all three macros (protein, carbohydrates, fat); before, a missing value was saved as 0 (SparkyFitnessServer/integrations/openfoodfacts/openFoodFactsService.ts hasCompleteOffCoreNutrition; services/foodProviderDetailService.ts:213, used with requireNutrition only by ai/tools/foodTools.ts:892). The app's own barcode and provider import paths are unchanged. Same for every client of the chat; no row changes.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3221,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "Server fix for the AI chat / MCP food tools: a food found by the lookup is saved at the serving the lookup quoted (label serving) instead of the 100 g reference used in search summaries (SparkyFitnessServer/ai/tools/foodTools.ts, integrations/openfoodfacts/openFoodFactsService.ts, services/externalFoodSearchService.ts, utils/foodRanking.ts). Applies to Sparky chat on web and mobile alike; no row changes.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3220,
+    "user_visible": true,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "Server fix for the AI chat / MCP food tools: logging an external food uses the exact item the lookup returned (by its provider ID) instead of re-searching by its full name, which could miss it and make the chat refuse; an Open Food Facts item without nutrition is refused on that direct fetch rather than saved as zeros (SparkyFitnessServer/ai/tools/foodTools.ts, services/foodProviderDetailService.ts). Same for every chat client; no row changes.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3214,
+    "user_visible": false,
+    "surfaces": {"web": false, "ios": false, "android": false, "watch": false, "server_only": true},
+    "summary": "Wording only in the create_food AI/MCP tool schema: the nutrients describe quantity x unit, so a client sending per-100 g values must send quantity 100 g (SparkyFitnessServer/ai/tools/schemas/food.ts, ai/tools/foodTools.ts). No behaviour change in the apps.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  },
+  {
+    "pr": 3198,
+    "user_visible": true,
+    "surfaces": {"web": true, "ios": true, "android": true, "watch": false, "server_only": false},
+    "summary": "Goals fix on server, web and mobile: each weekly goal plan now applies only to its own dates (switching plans no longer rewrote past days' goals), and the 'Active' badge marks only the plan in force today, picked by the profile timezone on both web and mobile through a shared helper (shared/src/utils/weeklyGoalPlans.ts:26-34; SparkyFitnessFrontend/src/pages/Goals/WeeklyGoalPlansSection.tsx:24, 54-56; SparkyFitnessMobile/src/components/WeeklyGoalPlansSection.tsx:43, 105-107). Rows goals-weekly-plans-list and goals-weekly-plans-edit stay parity; no row text becomes wrong.",
+    "affected_rows": [],
+    "new_features_entries": [],
+    "possible_issues": [],
+    "new_feature": null
+  }
+]

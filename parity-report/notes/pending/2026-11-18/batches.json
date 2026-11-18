@@ -1,0 +1,2184 @@
+{
+ "_chores": [
+  {
+   "pr": 3645,
+   "sha": "d125f0433",
+   "date": "2026-11-18",
+   "author": "sparkyfitness-sync[bot]",
+   "title": "chore(i18n): sync translations from Weblate",
+   "kind": "squash"
+  },
+  {
+   "pr": 3644,
+   "sha": "c569f3cf5",
+   "date": "2026-11-18",
+   "author": "sparkyfitness-sync[bot]",
+   "title": "chore: sync db_schema_backup.sql with migrations",
+   "kind": "squash"
+  },
+  {
+   "pr": 3628,
+   "sha": "324d48d5c",
+   "date": "2026-11-17",
+   "author": "sparkyfitness-sync[bot]",
+   "title": "chore(i18n): sync translations from Weblate",
+   "kind": "squash"
+  },
+  {
+   "pr": 3622,
+   "sha": "3586ea4c5",
+   "date": "2026-11-16",
+   "author": "sparkyfitness-sync[bot]",
+   "title": "chore: sync db_schema_backup.sql with migrations",
+   "kind": "squash"
+  },
+  {
+   "pr": 3588,
+   "sha": "e4a21c6f2",
+   "date": "2026-11-15",
+   "author": "sparkyfitness-sync[bot]",
+   "title": "chore(i18n): sync translations from Weblate",
+   "kind": "squash"
+  },
+  {
+   "pr": 3609,
+   "sha": "399c69a33",
+   "date": "2026-11-15",
+   "author": "sparkyfitness-sync[bot]",
+   "title": "chore: sync db_schema_backup.sql with migrations",
+   "kind": "squash"
+  },
+  {
+   "pr": 3603,
+   "sha": "75da8f2fe",
+   "date": "2026-11-15",
+   "author": "sparkyfitness-sync[bot]",
+   "title": "chore: sync db_schema_backup.sql with migrations",
+   "kind": "squash"
+  },
+  {
+   "pr": 3583,
+   "sha": "4d8cae232",
+   "date": "2026-11-14",
+   "author": "Karl Q.",
+   "title": "fix(helm): use database-aware server readiness probe",
+   "kind": "squash"
+  },
+  {
+   "pr": 3584,
+   "sha": "6a0ac7015",
+   "date": "2026-11-14",
+   "author": "sparkyfitness-sync[bot]",
+   "title": "chore: sync db_schema_backup.sql with migrations",
+   "kind": "squash"
+  },
+  {
+   "pr": 3552,
+   "sha": "aed45d4b9",
+   "date": "2026-11-13",
+   "author": "sparkyfitness-sync[bot]",
+   "title": "chore(i18n): sync translations from Weblate",
+   "kind": "squash"
+  },
+  {
+   "pr": 3562,
+   "sha": "5642f65b8",
+   "date": "2026-11-13",
+   "author": "sparkyfitness-sync[bot]",
+   "title": "chore: sync db_schema_backup.sql with migrations",
+   "kind": "squash"
+  },
+  {
+   "pr": 3551,
+   "sha": "2ae867355",
+   "date": "2026-11-13",
+   "author": "sparkyfitness-sync[bot]",
+   "title": "chore: sync db_schema_backup.sql with migrations",
+   "kind": "squash"
+  },
+  {
+   "pr": 3546,
+   "sha": "f59ad47ee",
+   "date": "2026-11-12",
+   "author": "sparkyfitness-sync[bot]",
+   "title": "chore: sync db_schema_backup.sql with migrations",
+   "kind": "squash"
+  },
+  {
+   "pr": 3506,
+   "sha": "dcc492497",
+   "date": "2026-11-12",
+   "author": "sparkyfitness-sync[bot]",
+   "title": "chore(i18n): sync translations from Weblate",
+   "kind": "squash"
+  },
+  {
+   "pr": 3543,
+   "sha": "b877123c6",
+   "date": "2026-11-12",
+   "author": "sparkyfitness-sync[bot]",
+   "title": "chore: sync db_schema_backup.sql with migrations",
+   "kind": "squash"
+  },
+  {
+   "pr": 3542,
+   "sha": "d355a2695",
+   "date": "2026-11-12",
+   "author": "sparkyfitness-sync[bot]",
+   "title": "chore: sync db_schema_backup.sql with migrations",
+   "kind": "squash"
+  },
+  {
+   "pr": 3508,
+   "sha": "8e88560be",
+   "date": "2026-11-10",
+   "author": "sparkyfitness-sync[bot]",
+   "title": "chore(umbrel): update app package to v1.12.1",
+   "kind": "squash"
+  },
+  {
+   "pr": 3507,
+   "sha": "6010bc1e1",
+   "date": "2026-11-10",
+   "author": "sparkyfitness-sync[bot]",
+   "title": "chore(helm): update chart version to v1.12.1",
+   "kind": "squash"
+  },
+  {
+   "pr": 3499,
+   "sha": "39d9ca2d1",
+   "date": "2026-11-09",
+   "author": "sparkyfitness-sync[bot]",
+   "title": "chore: release v1.12.1",
+   "kind": "squash"
+  },
+  {
+   "pr": 3504,
+   "sha": "9ba4dd993",
+   "date": "2026-11-09",
+   "author": "CodeWithCJ",
+   "title": "ci(mobile): build and submit phone, watch and iOS in one EAS workflow",
+   "kind": "squash"
+  },
+  {
+   "pr": 3502,
+   "sha": "c8be5f792",
+   "date": "2026-11-09",
+   "author": "sparkyfitness-sync[bot]",
+   "title": "chore(umbrel): update app package to v1.12.0",
+   "kind": "squash"
+  },
+  {
+   "pr": 3501,
+   "sha": "83c56969e",
+   "date": "2026-11-09",
+   "author": "sparkyfitness-sync[bot]",
+   "title": "chore(helm): update chart version to v1.12.0",
+   "kind": "squash"
+  },
+  {
+   "pr": 3495,
+   "sha": "2395bf512",
+   "date": "2026-11-09",
+   "author": "sparkyfitness-sync[bot]",
+   "title": "chore(i18n): sync non-English translations from Weblate",
+   "kind": "squash"
+  },
+  {
+   "pr": 3311,
+   "sha": "ac0af73d0",
+   "date": "2026-11-09",
+   "author": "github-actions[bot]",
+   "title": "chore: release v1.12.0",
+   "kind": "squash"
+  },
+  {
+   "pr": 3479,
+   "sha": "b9d90064d",
+   "date": "2026-11-09",
+   "author": "sparkyfitness-sync[bot]",
+   "title": "chore: sync db_schema_backup.sql with migrations",
+   "kind": "squash"
+  },
+  {
+   "pr": 3477,
+   "sha": "c04d21341",
+   "date": "2026-11-08",
+   "author": "sparkyfitness-sync[bot]",
+   "title": "chore(i18n): sync translations from Weblate",
+   "kind": "squash"
+  },
+  {
+   "pr": 3472,
+   "sha": "7f2629a9e",
+   "date": "2026-11-08",
+   "author": "sparkyfitness-sync[bot]",
+   "title": "chore: sync db_schema_backup.sql with migrations",
+   "kind": "squash"
+  },
+  {
+   "pr": 3462,
+   "sha": "97abd3f67",
+   "date": "2026-11-07",
+   "author": "sparkyfitness-sync[bot]",
+   "title": "chore(i18n): sync translations from Weblate",
+   "kind": "squash"
+  },
+  {
+   "pr": 3451,
+   "sha": "2312ce141",
+   "date": "2026-11-07",
+   "author": "sparkyfitness-sync[bot]",
+   "title": "chore: sync db_schema_backup.sql with migrations",
+   "kind": "squash"
+  },
+  {
+   "pr": 3444,
+   "sha": "264bfc330",
+   "date": "2026-11-07",
+   "author": "sparkyfitness-sync[bot]",
+   "title": "chore: sync db_schema_backup.sql with migrations",
+   "kind": "squash"
+  },
+  {
+   "pr": 3439,
+   "sha": "4b2bc6e27",
+   "date": "2026-11-06",
+   "author": "CodeWithCJ",
+   "title": "security: push GHCR images and charts with a token held in the release environment",
+   "kind": "squash"
+  },
+  {
+   "pr": 3435,
+   "sha": "576fb9fdd",
+   "date": "2026-11-06",
+   "author": "sparkyfitness-sync[bot]",
+   "title": "chore(i18n): sync translations from Weblate",
+   "kind": "squash"
+  },
+  {
+   "pr": 3422,
+   "sha": "c2ba0cd42",
+   "date": "2026-11-06",
+   "author": "CodeWithCJ",
+   "title": "ci: merge automation PRs with a GitHub App and move release secrets to environments",
+   "kind": "squash"
+  },
+  {
+   "pr": 3432,
+   "sha": "a989325de",
+   "date": "2026-11-06",
+   "author": "github-actions[bot]",
+   "title": "chore(nix): update pnpm deps hashes",
+   "kind": "squash"
+  },
+  {
+   "pr": 3395,
+   "sha": "9850e2387",
+   "date": "2026-11-05",
+   "author": "Zeus Arias Lucero",
+   "title": "ci(i18n): sync translations nightly and merge them before the release PR",
+   "kind": "squash"
+  },
+  {
+   "pr": 3419,
+   "sha": "22b516046",
+   "date": "2026-11-05",
+   "author": "github-actions[bot]",
+   "title": "chore: sync db_schema_backup.sql with migrations",
+   "kind": "squash"
+  },
+  {
+   "pr": 3410,
+   "sha": "357d3bfeb",
+   "date": "2026-11-05",
+   "author": "SisyphusMD",
+   "title": "feat(helm): run every server replica in one Deployment",
+   "kind": "squash"
+  },
+  {
+   "pr": 3366,
+   "sha": "1c46b59a4",
+   "date": "2026-11-04",
+   "author": "Zeus Arias Lucero",
+   "title": "docs: add a code of conduct and a security policy",
+   "kind": "squash"
+  },
+  {
+   "pr": 3391,
+   "sha": "ef0a66314",
+   "date": "2026-11-03",
+   "author": "CodeWithCJ",
+   "title": "ci/schema-backup-sync",
+   "kind": "merge"
+  },
+  {
+   "pr": 3372,
+   "sha": "e2a984506",
+   "date": "2026-11-03",
+   "author": "CodeWithCJ",
+   "title": "chore: sync db_schema_backup.sql with migrations",
+   "kind": "merge"
+  },
+  {
+   "pr": 3371,
+   "sha": "b280c533d",
+   "date": "2026-11-03",
+   "author": "CodeWithCJ",
+   "title": "ci/schema-backup-sync",
+   "kind": "merge"
+  },
+  {
+   "pr": 3370,
+   "sha": "87e8df450",
+   "date": "2026-11-03",
+   "author": "CodeWithCJ",
+   "title": "nix/update-pnpm-hashes",
+   "kind": "merge"
+  },
+  {
+   "pr": 3354,
+   "sha": "3ffaf5271",
+   "date": "2026-11-03",
+   "author": "Jerrys-modz",
+   "title": "fix(mobile): bump react-native-reanimated to 4.7.1 and worklets to 0.…",
+   "kind": "merge"
+  },
+  {
+   "pr": 3337,
+   "sha": "6fe32c039",
+   "date": "2026-11-01",
+   "author": "CodeWithCJ",
+   "title": "docs: add cloud hosting install page",
+   "kind": "merge"
+  },
+  {
+   "pr": 3338,
+   "sha": "f02060496",
+   "date": "2026-11-01",
+   "author": "CodeWithCJ",
+   "title": "chore: sync db_schema_backup.sql with migrations",
+   "kind": "merge"
+  },
+  {
+   "pr": 3302,
+   "sha": "b8567ea7e",
+   "date": "2026-11-01",
+   "author": "SisyphusMD",
+   "title": "feat(helm): safe defaults above one server replica",
+   "kind": "merge"
+  },
+  {
+   "pr": 3308,
+   "sha": "79ff7d575",
+   "date": "2026-10-31",
+   "author": "Jerrys-modz",
+   "title": "chore/bump-reanimated-4.5.5",
+   "kind": "merge"
+  },
+  {
+   "pr": 3328,
+   "sha": "5fc034f2e",
+   "date": "2026-10-31",
+   "author": "CodeWithCJ",
+   "title": "ci/schema-backup-sync",
+   "kind": "merge"
+  },
+  {
+   "pr": 3303,
+   "sha": "2014ef40c",
+   "date": "2026-10-31",
+   "author": "SisyphusMD",
+   "title": "docs(agents): move long feature notes out of the package guides",
+   "kind": "merge"
+  },
+  {
+   "pr": 3301,
+   "sha": "6a696025c",
+   "date": "2026-10-31",
+   "author": "CodeWithCJ",
+   "title": "chore(umbrel): update app package to v1.11.0",
+   "kind": "merge"
+  },
+  {
+   "pr": 3315,
+   "sha": "ea911897d",
+   "date": "2026-10-30",
+   "author": "CodeWithCJ",
+   "title": "ci/schema-backup-sync",
+   "kind": "merge"
+  },
+  {
+   "pr": 3299,
+   "sha": "734ed473e",
+   "date": "2026-10-30",
+   "author": "CodeWithCJ",
+   "title": "chore(helm): update chart version to v1.11.0",
+   "kind": "merge"
+  },
+  {
+   "pr": 3268,
+   "sha": "0d8525e88",
+   "date": "2026-10-30",
+   "author": "CodeWithCJ",
+   "title": "chore: release v1.11.0",
+   "kind": "merge"
+  },
+  {
+   "pr": 3297,
+   "sha": "f7eaf22db",
+   "date": "2026-10-30",
+   "author": "CodeWithCJ",
+   "title": "chore(i18n): sync translations from Weblate",
+   "kind": "merge"
+  },
+  {
+   "pr": 3282,
+   "sha": "ccd0226ff",
+   "date": "2026-10-30",
+   "author": "CodeWithCJ",
+   "title": "chore: sync db_schema_backup.sql with migrations",
+   "kind": "merge"
+  },
+  {
+   "pr": 3281,
+   "sha": "f8c8f1d8a",
+   "date": "2026-10-30",
+   "author": "CodeWithCJ",
+   "title": "build(frontend): decouple validate checks from production build",
+   "kind": "merge"
+  },
+  {
+   "pr": 3277,
+   "sha": "0f428c22a",
+   "date": "2026-10-29",
+   "author": "Jerrys-modz",
+   "title": "docs: add the RLS permission matrix to the new-migration checklist",
+   "kind": "merge"
+  },
+  {
+   "pr": 3273,
+   "sha": "83997ee07",
+   "date": "2026-10-29",
+   "author": "CodeWithCJ",
+   "title": "chore: sync db_schema_backup.sql with migrations",
+   "kind": "merge"
+  },
+  {
+   "pr": 3263,
+   "sha": "ff44debfc",
+   "date": "2026-10-29",
+   "author": "Jerrys-modz",
+   "title": "ci: add a whats-new skill and a drift check for the What's New screen",
+   "kind": "merge"
+  },
+  {
+   "pr": 3271,
+   "sha": "87dc92885",
+   "date": "2026-10-29",
+   "author": "CodeWithCJ",
+   "title": "chore(nix): update pnpm deps hashes",
+   "kind": "merge"
+  },
+  {
+   "pr": 3270,
+   "sha": "352071b46",
+   "date": "2026-10-29",
+   "author": "CodeWithCJ",
+   "title": "chore: sync db_schema_backup.sql with migrations",
+   "kind": "merge"
+  },
+  {
+   "pr": 3269,
+   "sha": "81a55ed3b",
+   "date": "2026-10-29",
+   "author": "CodeWithCJ",
+   "title": "chore: sync db_schema_backup.sql with migrations",
+   "kind": "merge"
+  },
+  {
+   "pr": 3254,
+   "sha": "bb795f153",
+   "date": "2026-10-29",
+   "author": "CodeWithCJ",
+   "title": "chore(umbrel): update app package to v1.10.0",
+   "kind": "merge"
+  },
+  {
+   "pr": 3253,
+   "sha": "c092caaa6",
+   "date": "2026-10-29",
+   "author": "CodeWithCJ",
+   "title": "chore(helm): update chart version to v1.10.0",
+   "kind": "merge"
+  },
+  {
+   "pr": 3252,
+   "sha": "985feaa9d",
+   "date": "2026-10-28",
+   "author": "CodeWithCJ",
+   "title": "chore(helm): update chart version to 1.10.0",
+   "kind": "merge"
+  },
+  {
+   "pr": 3251,
+   "sha": "97a661fe3",
+   "date": "2026-10-28",
+   "author": "CodeWithCJ",
+   "title": "chore(i18n): sync translations from Weblate",
+   "kind": "merge"
+  },
+  {
+   "pr": 3049,
+   "sha": "96421a4f5",
+   "date": "2026-10-28",
+   "author": "CodeWithCJ",
+   "title": "chore: release v1.10.0",
+   "kind": "merge"
+  },
+  {
+   "pr": 3248,
+   "sha": "83d8c70c6",
+   "date": "2026-10-28",
+   "author": "CodeWithCJ",
+   "title": "chore: sync db_schema_backup.sql with migrations",
+   "kind": "merge"
+  },
+  {
+   "pr": 3246,
+   "sha": "b2ae39d11",
+   "date": "2026-10-28",
+   "author": "CodeWithCJ",
+   "title": "chore: sync db_schema_backup.sql with migrations",
+   "kind": "merge"
+  },
+  {
+   "pr": 3241,
+   "sha": "0c8b0c620",
+   "date": "2026-10-28",
+   "author": "CodeWithCJ",
+   "title": "ci/schema-backup-sync",
+   "kind": "merge"
+  },
+  {
+   "pr": 3238,
+   "sha": "8126a1775",
+   "date": "2026-10-28",
+   "author": "SisyphusMD",
+   "title": "docs: keep limits and job status in the database, not server memory",
+   "kind": "merge"
+  },
+  {
+   "pr": 3233,
+   "sha": "fd15c548e",
+   "date": "2026-10-28",
+   "author": "SisyphusMD",
+   "title": "feat(helm): mount existing claims for the server's uploads and backup volumes",
+   "kind": "merge"
+  },
+  {
+   "pr": 3219,
+   "sha": "602085289",
+   "date": "2026-10-27",
+   "author": "Jerrys-modz",
+   "title": "docs(mobile): add watch apps section to DESIGN.md",
+   "kind": "merge"
+  },
+  {
+   "pr": 3209,
+   "sha": "7220b88bf",
+   "date": "2026-10-27",
+   "author": "SisyphusMD",
+   "title": "fix(helm): create the external database Secret from values (the server referenced a Secret the chart never made)",
+   "kind": "merge"
+  },
+  {
+   "pr": 3212,
+   "sha": "149562646",
+   "date": "2026-10-26",
+   "author": "CodeWithCJ",
+   "title": "docs(agent-docs): list only needed changes in PR review reports",
+   "kind": "merge"
+  },
+  {
+   "pr": 3206,
+   "sha": "efe247eea",
+   "date": "2026-10-26",
+   "author": "SisyphusMD",
+   "title": "fix(helm): give the server a startupProbe so a long migration is not restarted",
+   "kind": "merge"
+  }
+ ],
+ "settings-auth-family-1": [
+  {
+   "pr": 3631,
+   "sha": "a7c6257bf",
+   "date": "2026-11-18",
+   "author": "zeusal",
+   "title": "feat/mobile-features-settings",
+   "kind": "merge"
+  },
+  {
+   "pr": 3607,
+   "sha": "0258d478a",
+   "date": "2026-11-16",
+   "author": "Dennis Straffin",
+   "title": "fix(data-import): only confirm closing import dialogs when there are unsaved changes",
+   "kind": "squash"
+  },
+  {
+   "pr": 3566,
+   "sha": "31dc56e51",
+   "date": "2026-11-13",
+   "author": "CodeWithCJ",
+   "title": "feat(preferences): add DD.MM.YYYY date format",
+   "kind": "squash"
+  },
+  {
+   "pr": 3565,
+   "sha": "4062678bc",
+   "date": "2026-11-13",
+   "author": "Zeus Arias Lucero",
+   "title": "fix: don't trap a family member in someone else's onboarding wizard",
+   "kind": "squash"
+  },
+  {
+   "pr": 3555,
+   "sha": "4c5f26202",
+   "date": "2026-11-13",
+   "author": "Zeus Arias Lucero",
+   "title": "feat(server): store optional feature choices per platform",
+   "kind": "squash"
+  },
+  {
+   "pr": 3474,
+   "sha": "0167ae236",
+   "date": "2026-11-08",
+   "author": "CodeWithCJ",
+   "title": "feat(oral-care): oral care tracking, brushing timer, reports, and sync",
+   "kind": "squash"
+  },
+  {
+   "pr": 3459,
+   "sha": "98ae069fe",
+   "date": "2026-11-07",
+   "author": "CodeWithCJ",
+   "title": "refactor(email): decouple email html structure from plain-text translation catalogues",
+   "kind": "squash"
+  },
+  {
+   "pr": 3453,
+   "sha": "9e71fbe97",
+   "date": "2026-11-07",
+   "author": "DUC750",
+   "title": "feat(server): send emails in the recipient's language",
+   "kind": "squash"
+  },
+  {
+   "pr": 3416,
+   "sha": "9ed2a172a",
+   "date": "2026-11-05",
+   "author": "DUC750",
+   "title": "fix(compare): keep noun capitals in German metric names",
+   "kind": "squash"
+  },
+  {
+   "pr": 3384,
+   "sha": "8e7c9a5ec",
+   "date": "2026-11-03",
+   "author": "SisyphusMD",
+   "title": "feat(auth): add an admin switch for magic link login and remove the broken email OTP plugin",
+   "kind": "merge"
+  },
+  {
+   "pr": 3377,
+   "sha": "1064283ed",
+   "date": "2026-11-03",
+   "author": "CodeWithCJ",
+   "title": "fix(mobile): split a timed-out history import window instead of retrying it",
+   "kind": "merge"
+  },
+  {
+   "pr": 3353,
+   "sha": "57d8b9fa1",
+   "date": "2026-11-03",
+   "author": "Shrub24",
+   "title": "fix(server): keep env OIDC issuer URL as configured",
+   "kind": "merge"
+  },
+  {
+   "pr": 3342,
+   "sha": "eceb2de69",
+   "date": "2026-11-03",
+   "author": "SisyphusMD",
+   "title": "fix(backup): restore beside the live database and swap it in",
+   "kind": "merge"
+  },
+  {
+   "pr": 3266,
+   "sha": "8610e0ba9",
+   "date": "2026-10-29",
+   "author": "SisyphusMD",
+   "title": "fix(backup): refuse an in-app restore while other instances are connected",
+   "kind": "merge"
+  },
+  {
+   "pr": 3245,
+   "sha": "d83cad7ef",
+   "date": "2026-10-28",
+   "author": "SisyphusMD",
+   "title": "fix(auth): share IP rate-limit budgets across server instances",
+   "kind": "merge"
+  },
+  {
+   "pr": 3218,
+   "sha": "8ea7ab9e4",
+   "date": "2026-10-28",
+   "author": "Bl4nk24",
+   "title": "codex/feature-2386-copy-to-family",
+   "kind": "merge"
+  },
+  {
+   "pr": 3215,
+   "sha": "d97073e15",
+   "date": "2026-10-27",
+   "author": "SisyphusMD",
+   "title": "fix(backup): clear day-old .tmp work dirs when a backup starts",
+   "kind": "merge"
+  },
+  {
+   "pr": 3120,
+   "sha": "50d33ee4b",
+   "date": "2026-10-26",
+   "author": "Bubbles840",
+   "title": "fix(compare): honest since answers for slow-moving outcomes",
+   "kind": "merge"
+  }
+ ],
+ "watch-1": [
+  {
+   "pr": 3642,
+   "sha": "87eb76d01",
+   "date": "2026-11-17",
+   "author": "Jerrys-modz",
+   "title": "fix(mobile): reload the macro watch complications when nutrition changes",
+   "kind": "squash"
+  },
+  {
+   "pr": 3625,
+   "sha": "1469d9bb5",
+   "date": "2026-11-17",
+   "author": "Mike Brown",
+   "title": "feat(wearos): add new workout view with countdown cues, exercise demo and plate calculator",
+   "kind": "squash"
+  },
+  {
+   "pr": 3563,
+   "sha": "bf86505be",
+   "date": "2026-11-16",
+   "author": "elias170105",
+   "title": "fix(wearos): address post-merge localization review feedback from #3540",
+   "kind": "squash"
+  },
+  {
+   "pr": 3557,
+   "sha": "afbd4328a",
+   "date": "2026-11-15",
+   "author": "Roberto",
+   "title": "feat(mobile): new Apple Watch workout view with countdown cues, exercise demo and plate calculator",
+   "kind": "squash"
+  },
+  {
+   "pr": 3540,
+   "sha": "2322fa4da",
+   "date": "2026-11-13",
+   "author": "elias170105",
+   "title": "refactor(wearos): extract hardcoded UI strings into strings.xml for localization",
+   "kind": "squash"
+  },
+  {
+   "pr": 3452,
+   "sha": "37a193695",
+   "date": "2026-11-07",
+   "author": "CodeWithCJ",
+   "title": "feat(settings): support kilojoules (kJ) energy unit preference across web, mobile, watch and widgets",
+   "kind": "squash"
+  },
+  {
+   "pr": 3351,
+   "sha": "1466a38a8",
+   "date": "2026-11-02",
+   "author": "Jerrys-modz",
+   "title": "feat(watch): send typed weight and reps to the phone before the set i…",
+   "kind": "merge"
+  },
+  {
+   "pr": 3347,
+   "sha": "8ace50cf8",
+   "date": "2026-11-02",
+   "author": "zelphir",
+   "title": "feat/watch-metrics-page-rest-next-set",
+   "kind": "merge"
+  },
+  {
+   "pr": 3305,
+   "sha": "e803d990c",
+   "date": "2026-10-31",
+   "author": "CodeWithCJ",
+   "title": "feat(mobile): build the Wear OS app in the EAS production workflow",
+   "kind": "merge"
+  },
+  {
+   "pr": 3293,
+   "sha": "fb745cf4a",
+   "date": "2026-10-30",
+   "author": "CodeWithCJ",
+   "title": "feat(mobile): ship the Wear OS app through GitHub releases and EAS",
+   "kind": "merge"
+  },
+  {
+   "pr": 3250,
+   "sha": "0a9ccf393",
+   "date": "2026-10-28",
+   "author": "vcdx71",
+   "title": "feat(wearos): add Nutrition, Sleep Health, Medications, and Exercise tiles",
+   "kind": "merge"
+  },
+  {
+   "pr": 3230,
+   "sha": "9c80a44da",
+   "date": "2026-10-28",
+   "author": "Jerrys-modz",
+   "title": "fix(watch): honor haptics setting, use GoalPalette macro colors, localize Apple Watch strings",
+   "kind": "merge"
+  },
+  {
+   "pr": 3226,
+   "sha": "67a8febb1",
+   "date": "2026-10-27",
+   "author": "Jerrys-modz",
+   "title": "fix(watch): stop long exercise names being cut off, and make the larger text setting cover the whole watch",
+   "kind": "merge"
+  },
+  {
+   "pr": 3191,
+   "sha": "5883130da",
+   "date": "2026-10-26",
+   "author": "zelphir",
+   "title": "feat/watch-training-medications-ui",
+   "kind": "merge"
+  }
+ ],
+ "workout-1": [
+  {
+   "pr": 3626,
+   "sha": "8e1b896bb",
+   "date": "2026-11-17",
+   "author": "Jerrys-modz",
+   "title": "feat(mobile): training calendar with planned vs completed work and training load per sport",
+   "kind": "squash"
+  },
+  {
+   "pr": 3606,
+   "sha": "df80f94b0",
+   "date": "2026-11-16",
+   "author": "T",
+   "title": "fix(mobile): keep workout chrome and date buttons clear of the Duo status strip",
+   "kind": "squash"
+  },
+  {
+   "pr": 3483,
+   "sha": "0e6be991b",
+   "date": "2026-11-15",
+   "author": "Bl4nk24",
+   "title": "fix(hevy): preserve synced workouts and allow calorie links",
+   "kind": "squash"
+  },
+  {
+   "pr": 3574,
+   "sha": "8830fcc8b",
+   "date": "2026-11-15",
+   "author": "CodeWithCJ",
+   "title": "feat(writeback): write logged workouts to Apple Health and Health Connect",
+   "kind": "squash"
+  },
+  {
+   "pr": 3572,
+   "sha": "7616867e8",
+   "date": "2026-11-14",
+   "author": "Jerrys-modz",
+   "title": "feat(mobile): see and set your stride, and correct a treadmill that reads long or short",
+   "kind": "squash"
+  },
+  {
+   "pr": 3576,
+   "sha": "7899b2b43",
+   "date": "2026-11-14",
+   "author": "CodeWithCJ",
+   "title": "feat(exercises): add exercise library schema, build tooling, and animated webp media pipeline",
+   "kind": "squash"
+  },
+  {
+   "pr": 3568,
+   "sha": "14f44614c",
+   "date": "2026-11-14",
+   "author": "Kamil Maciąg",
+   "title": "feat: mobile workout plan management with safe entry regeneration (phase 2 of #1995)",
+   "kind": "squash"
+  },
+  {
+   "pr": 3567,
+   "sha": "3fb51d978",
+   "date": "2026-11-13",
+   "author": "simonwjackson",
+   "title": "fix/playback-preset-equipment",
+   "kind": "merge"
+  },
+  {
+   "pr": 3538,
+   "sha": "ea1fbfc0f",
+   "date": "2026-11-12",
+   "author": "Jerrys-modz",
+   "title": "fix(exercise): offer synced strength sessions when linking a workout",
+   "kind": "squash"
+  },
+  {
+   "pr": 3536,
+   "sha": "d4564e6a6",
+   "date": "2026-11-12",
+   "author": "DUC750",
+   "title": "feat(mobile): add a setting to use planned values as live workout placeholders",
+   "kind": "squash"
+  },
+  {
+   "pr": 3535,
+   "sha": "88f86133e",
+   "date": "2026-11-12",
+   "author": "DUC750",
+   "title": "feat(exercise): store when a set was started",
+   "kind": "squash"
+  },
+  {
+   "pr": 3510,
+   "sha": "390d92fd0",
+   "date": "2026-11-12",
+   "author": "Kamil Maciąg",
+   "title": "feat: server-backed workout session lifecycle (phase 1 of #1995)",
+   "kind": "squash"
+  },
+  {
+   "pr": 3523,
+   "sha": "04bac304e",
+   "date": "2026-11-11",
+   "author": "Jerrys-modz",
+   "title": "fix(mobile): keep meditation timer running while the screen is off",
+   "kind": "squash"
+  },
+  {
+   "pr": 3525,
+   "sha": "588168f0c",
+   "date": "2026-11-11",
+   "author": "Reign Gaming Network",
+   "title": "fix(mobile): give cardio in a live workout a start time",
+   "kind": "squash"
+  },
+  {
+   "pr": 3480,
+   "sha": "932833dad",
+   "date": "2026-11-08",
+   "author": "CodeWithCJ",
+   "title": "refactor: align provider lookups and tidy identity routes",
+   "kind": "squash"
+  },
+  {
+   "pr": 3466,
+   "sha": "ff23d5cae",
+   "date": "2026-11-08",
+   "author": "CodeWithCJ",
+   "title": "feat: calorie cycling for training and rest days",
+   "kind": "squash"
+  },
+  {
+   "pr": 3447,
+   "sha": "0892e6a76",
+   "date": "2026-11-07",
+   "author": "Gábor Vészi",
+   "title": "fix(server): round fractional values for integer workout telemetry columns",
+   "kind": "squash"
+  },
+  {
+   "pr": 3455,
+   "sha": "e198d796b",
+   "date": "2026-11-07",
+   "author": "CodeWithCJ",
+   "title": "feat(i18n): connect server email templates to translation sync workflow",
+   "kind": "squash"
+  }
+ ],
+ "workout-2": [
+  {
+   "pr": 3440,
+   "sha": "f35f45e8d",
+   "date": "2026-11-06",
+   "author": "DanzydotDev",
+   "title": "fix(stats): fall back to global recent sessions when a new preset has no history",
+   "kind": "squash"
+  },
+  {
+   "pr": 3436,
+   "sha": "dbd791ef5",
+   "date": "2026-11-06",
+   "author": "Jerrys-modz",
+   "title": "fix: allow custom run program ids when completing or rating workouts",
+   "kind": "squash"
+  },
+  {
+   "pr": 3429,
+   "sha": "081982e2d",
+   "date": "2026-11-06",
+   "author": "JayJay",
+   "title": "feat(garmin): show real last sync, sync failures and service reachabi…",
+   "kind": "squash"
+  },
+  {
+   "pr": 3406,
+   "sha": "4a69a7b7b",
+   "date": "2026-11-04",
+   "author": "SisyphusMD",
+   "title": "feat(backup): restore a backup with every instance running",
+   "kind": "squash"
+  },
+  {
+   "pr": 3341,
+   "sha": "ade10420b",
+   "date": "2026-11-04",
+   "author": "DanzydotDev",
+   "title": "fix(ai): salvage cross-action key bleed in exercise tools instead of rejecting the call",
+   "kind": "squash"
+  },
+  {
+   "pr": 3403,
+   "sha": "045a5d100",
+   "date": "2026-11-04",
+   "author": "CodeWithCJ",
+   "title": "Revert \"feat(backup): restore a backup with every instance running (#3398)\"",
+   "kind": "squash"
+  },
+  {
+   "pr": 3398,
+   "sha": "dcb873d2c",
+   "date": "2026-11-04",
+   "author": "SisyphusMD",
+   "title": "feat(backup): restore a backup with every instance running",
+   "kind": "squash"
+  },
+  {
+   "pr": 3348,
+   "sha": "0d3d5aebf",
+   "date": "2026-11-04",
+   "author": "zelphir",
+   "title": "feat/mobile-workout-focus-view",
+   "kind": "merge"
+  },
+  {
+   "pr": 3369,
+   "sha": "3a91f6966",
+   "date": "2026-11-04",
+   "author": "Bl4nk24",
+   "title": "fix(health-connect): surface workout calorie read failures",
+   "kind": "squash"
+  },
+  {
+   "pr": 3304,
+   "sha": "68ffed8d4",
+   "date": "2026-11-04",
+   "author": "DUC750",
+   "title": "feat/health-samples-write-route",
+   "kind": "merge"
+  },
+  {
+   "pr": 3375,
+   "sha": "ee9eff18c",
+   "date": "2026-11-03",
+   "author": "CodeWithCJ",
+   "title": "fix(health): keep logged workouts when a health import has no source",
+   "kind": "merge"
+  },
+  {
+   "pr": 3358,
+   "sha": "91f1fe5c4",
+   "date": "2026-11-03",
+   "author": "SisyphusMD",
+   "title": "feat(server): run each scheduled job tick on one instance",
+   "kind": "merge"
+  },
+  {
+   "pr": 3356,
+   "sha": "a593a52c0",
+   "date": "2026-11-03",
+   "author": "zeusal",
+   "title": "fix/preset-exercise-image",
+   "kind": "merge"
+  },
+  {
+   "pr": 3236,
+   "sha": "fb8c6f296",
+   "date": "2026-11-02",
+   "author": "Bl4nk24",
+   "title": "feat(hevy): add evening sync and import muscle groups",
+   "kind": "squash"
+  },
+  {
+   "pr": 3134,
+   "sha": "6ea5e55ad",
+   "date": "2026-11-01",
+   "author": "Bl4nk24",
+   "title": "feat(goals): optionally adjust percentage macros with exercise calories",
+   "kind": "merge"
+  },
+  {
+   "pr": 3320,
+   "sha": "6d17c1e94",
+   "date": "2026-11-01",
+   "author": "MegaIndian",
+   "title": "feat(google-health): attach tracker heart rate to workouts logged in SparkyFitness",
+   "kind": "merge"
+  },
+  {
+   "pr": 3317,
+   "sha": "772e03633",
+   "date": "2026-11-01",
+   "author": "SisyphusMD",
+   "title": "fix(exercise): lock the workout row when an edit rereads it",
+   "kind": "merge"
+  },
+  {
+   "pr": 3307,
+   "sha": "753d04a79",
+   "date": "2026-10-31",
+   "author": "Jerrys-modz",
+   "title": "fix(mobile): pair saved exercises with the server reply by id",
+   "kind": "merge"
+  }
+ ],
+ "workout-3": [
+  {
+   "pr": 3279,
+   "sha": "047124b28",
+   "date": "2026-10-29",
+   "author": "SisyphusMD",
+   "title": "fix(server): keep the COROS daily FIT download budget in the database",
+   "kind": "merge"
+  },
+  {
+   "pr": 3278,
+   "sha": "9246afbaa",
+   "date": "2026-10-29",
+   "author": "Jerrys-modz",
+   "title": "fix: stop the run goals API schema shadowing its database schema",
+   "kind": "merge"
+  },
+  {
+   "pr": 3265,
+   "sha": "7241753c5",
+   "date": "2026-10-29",
+   "author": "Jerrys-modz",
+   "title": "feat(ai): add a training review to the AI assistant's exercise stats tool",
+   "kind": "merge"
+  },
+  {
+   "pr": 3264,
+   "sha": "1c004d86b",
+   "date": "2026-10-29",
+   "author": "Jerrys-modz",
+   "title": "feat: look up the weather for GPS-recorded activities",
+   "kind": "merge"
+  },
+  {
+   "pr": 3247,
+   "sha": "5a83572c8",
+   "date": "2026-10-28",
+   "author": "Jerrys-modz",
+   "title": "feat(mobile): refresh What's New with running, routes, check-in, strength and heart rate cards",
+   "kind": "merge"
+  },
+  {
+   "pr": 3235,
+   "sha": "59cbd65a4",
+   "date": "2026-10-28",
+   "author": "Jerrys-modz",
+   "title": "fix: save workout effort with a granted permission, and stop re-asking for routes",
+   "kind": "merge"
+  },
+  {
+   "pr": 3231,
+   "sha": "5e7673b7b",
+   "date": "2026-10-27",
+   "author": "CodeWithCJ",
+   "title": "fix(calories): use Garmin and Polar daily totals in Device Projection",
+   "kind": "merge"
+  },
+  {
+   "pr": 3227,
+   "sha": "7ee83b4e6",
+   "date": "2026-10-27",
+   "author": "CodeWithCJ",
+   "title": "fix(workout): remove exercise-level notes field from preset editor",
+   "kind": "merge"
+  },
+  {
+   "pr": 3201,
+   "sha": "ec596f741",
+   "date": "2026-10-27",
+   "author": "Jerrys-modz",
+   "title": "feat(running): Zone 2 base program with heart rate guidance",
+   "kind": "merge"
+  },
+  {
+   "pr": 3208,
+   "sha": "3c4628d5e",
+   "date": "2026-10-26",
+   "author": "SisyphusMD",
+   "title": "fix(backup): build each backup in a private work directory and publish it whole (a crash or overlapping run left partial archives that retention counted as backups)",
+   "kind": "merge"
+  },
+  {
+   "pr": 3207,
+   "sha": "e86d62911",
+   "date": "2026-10-26",
+   "author": "SisyphusMD",
+   "title": "fix(auth): reset the mfa-factors limit when its window ends",
+   "kind": "merge"
+  },
+  {
+   "pr": 3203,
+   "sha": "ee6cde966",
+   "date": "2026-10-26",
+   "author": "SisyphusMD",
+   "title": "fix(server): finish running jobs and release sync claims on shutdown",
+   "kind": "merge"
+  },
+  {
+   "pr": 3199,
+   "sha": "aff7dbe07",
+   "date": "2026-10-26",
+   "author": "Jerrys-modz",
+   "title": "fix: ask for the workout effort permission once",
+   "kind": "merge"
+  },
+  {
+   "pr": 3192,
+   "sha": "9dfcf72bd",
+   "date": "2026-10-26",
+   "author": "zelphir",
+   "title": "feat(mobile): pin the set to do now, quick exercise swap, and photo zoom",
+   "kind": "merge"
+  }
+ ],
+ "checkin-meds-1": [
+  {
+   "pr": 3613,
+   "sha": "db1b49bc0",
+   "date": "2026-11-17",
+   "author": "DUC750",
+   "title": "feat(diary): log a food by its cooked weight",
+   "kind": "squash"
+  },
+  {
+   "pr": 3601,
+   "sha": "aab06b0ad",
+   "date": "2026-11-15",
+   "author": "Josh Taillon",
+   "title": "feat(web): scan barcodes and nutrition labels from images",
+   "kind": "squash"
+  },
+  {
+   "pr": 3589,
+   "sha": "18431f841",
+   "date": "2026-11-15",
+   "author": "Bl4nk24",
+   "title": "codex/fix-3586-label-scan-adjust-nutrition",
+   "kind": "merge"
+  },
+  {
+   "pr": 3580,
+   "sha": "c5ca03ff3",
+   "date": "2026-11-15",
+   "author": "zeusal",
+   "title": "fix/symptom-notification-category",
+   "kind": "merge"
+  },
+  {
+   "pr": 3509,
+   "sha": "903b8236a",
+   "date": "2026-11-11",
+   "author": "Jay Hemnani",
+   "title": "fix(reports): export body measurements in the user's units",
+   "kind": "squash"
+  },
+  {
+   "pr": 3486,
+   "sha": "8f153ca3d",
+   "date": "2026-11-11",
+   "author": "Bl4nk24",
+   "title": "fix: stabilize adaptive calorie estimates around weight shifts",
+   "kind": "squash"
+  },
+  {
+   "pr": 3498,
+   "sha": "5dd5d5672",
+   "date": "2026-11-10",
+   "author": "Jerrys-modz",
+   "title": "Fix(mobile): handle medication reminder buttons natively on iOS",
+   "kind": "squash"
+  },
+  {
+   "pr": 3491,
+   "sha": "1abb2578d",
+   "date": "2026-11-09",
+   "author": "Bl4nk24",
+   "title": "codex/fix-3490-label-camera-capture",
+   "kind": "merge"
+  },
+  {
+   "pr": 3476,
+   "sha": "693093f9d",
+   "date": "2026-11-08",
+   "author": "CodeWithCJ",
+   "title": "fix(fasting): resolve auto-fast completion, UUID parsing, and clock skew race conditions",
+   "kind": "squash"
+  },
+  {
+   "pr": 3473,
+   "sha": "c11014591",
+   "date": "2026-11-08",
+   "author": "Zeus Arias Lucero",
+   "title": "fix(server): keep times faster than the sport allows out of personal records",
+   "kind": "squash"
+  },
+  {
+   "pr": 3433,
+   "sha": "df04df5ba",
+   "date": "2026-11-07",
+   "author": "Zeus Arias Lucero",
+   "title": "fix(food): show the weight of an Open Food Facts portion when adding a food",
+   "kind": "squash"
+  },
+  {
+   "pr": 3446,
+   "sha": "2b6e72345",
+   "date": "2026-11-07",
+   "author": "Reign Gaming Network",
+   "title": "fix(mobile): open the photo picker after the add-image sheet closes",
+   "kind": "squash"
+  },
+  {
+   "pr": 3441,
+   "sha": "5329d9f7b",
+   "date": "2026-11-06",
+   "author": "Jerrys-modz",
+   "title": "fix(labs): make lab result saves safe to retry",
+   "kind": "squash"
+  },
+  {
+   "pr": 3414,
+   "sha": "eaeefd525",
+   "date": "2026-11-06",
+   "author": "DUC750",
+   "title": "feat(symptoms): show the effect on the day in the symptom report and CSV export",
+   "kind": "squash"
+  },
+  {
+   "pr": 3418,
+   "sha": "a4b71dbb6",
+   "date": "2026-11-05",
+   "author": "DUC750",
+   "title": "fix(symptoms): store timeline times the way PostgreSQL reads them",
+   "kind": "squash"
+  },
+  {
+   "pr": 3374,
+   "sha": "c9274aede",
+   "date": "2026-11-04",
+   "author": "Jerrys-modz",
+   "title": "Feat(web): lab results",
+   "kind": "squash"
+  },
+  {
+   "pr": 3381,
+   "sha": "938781271",
+   "date": "2026-11-03",
+   "author": "SisyphusMD",
+   "title": "fix(family): honor stored grants in the on-behalf-of header and let symptoms-only members switch accounts",
+   "kind": "merge"
+  },
+  {
+   "pr": 3336,
+   "sha": "7550756a9",
+   "date": "2026-11-03",
+   "author": "DUC750",
+   "title": "feat(mobile): show the effect on the day over an episode in the symptom chart",
+   "kind": "merge"
+  }
+ ],
+ "checkin-meds-2": [
+  {
+   "pr": 3355,
+   "sha": "7fa89a77d",
+   "date": "2026-11-03",
+   "author": "Jerrys-modz",
+   "title": "feat: import lab results from a report",
+   "kind": "merge"
+  },
+  {
+   "pr": 3330,
+   "sha": "80ae3a4eb",
+   "date": "2026-11-01",
+   "author": "Jerrys-modz",
+   "title": "feat/lab-results-mobile-tables",
+   "kind": "merge"
+  },
+  {
+   "pr": 3327,
+   "sha": "477bb4df8",
+   "date": "2026-10-31",
+   "author": "zeusal",
+   "title": "fix/symptom-calendar-multi-day",
+   "kind": "merge"
+  },
+  {
+   "pr": 3323,
+   "sha": "bb48aebdd",
+   "date": "2026-10-31",
+   "author": "zeusal",
+   "title": "refactor/mobile-drop-guided-check-in-setting",
+   "kind": "merge"
+  },
+  {
+   "pr": 3286,
+   "sha": "d6c51365e",
+   "date": "2026-10-30",
+   "author": "FTBCraig",
+   "title": "fix(mobile): show logged meal photos in the diary",
+   "kind": "merge"
+  },
+  {
+   "pr": 3275,
+   "sha": "7ccbc3cd1",
+   "date": "2026-10-29",
+   "author": "SisyphusMD",
+   "title": "fix/rls-matrix-lab-tables",
+   "kind": "merge"
+  },
+  {
+   "pr": 3237,
+   "sha": "9bccd276e",
+   "date": "2026-10-29",
+   "author": "Jerrys-modz",
+   "title": "feat: lab-result markers table",
+   "kind": "merge"
+  },
+  {
+   "pr": 3222,
+   "sha": "dd57f3d6c",
+   "date": "2026-10-27",
+   "author": "Jerrys-modz",
+   "title": "feat(mobile): pick any start date and time when logging a symptom epi…",
+   "kind": "merge"
+  },
+  {
+   "pr": 3197,
+   "sha": "16825c7b4",
+   "date": "2026-10-26",
+   "author": "zeusal",
+   "title": "feat(mobile): add an opt-in guided check-in",
+   "kind": "merge"
+  }
+ ],
+ "other-1": [
+  {
+   "pr": 3602,
+   "sha": "ce58b80a7",
+   "date": "2026-11-17",
+   "author": "CodeWithCJ",
+   "title": "feat(mobile): client certificate (mTLS) support (experimental)",
+   "kind": "squash"
+  },
+  {
+   "pr": 3582,
+   "sha": "826e3328b",
+   "date": "2026-11-16",
+   "author": "Jay Hemnani",
+   "title": "fix: pick the Oxford BMR equation by age",
+   "kind": "squash"
+  },
+  {
+   "pr": 3596,
+   "sha": "c481e6a44",
+   "date": "2026-11-15",
+   "author": "DUC750",
+   "title": "feat(mobile): add a setting to keep the keyboard closed when a rest ends",
+   "kind": "squash"
+  },
+  {
+   "pr": 3571,
+   "sha": "245a0f643",
+   "date": "2026-11-15",
+   "author": "zeusal",
+   "title": "fix/treadmill-5k-early-stop",
+   "kind": "merge"
+  },
+  {
+   "pr": 3577,
+   "sha": "dee7fd458",
+   "date": "2026-11-13",
+   "author": "CodeWithCJ",
+   "title": "feat(skills): add pr-bot-loop skill for monitoring and resolving PR review rounds",
+   "kind": "squash"
+  },
+  {
+   "pr": 3575,
+   "sha": "353dc7a97",
+   "date": "2026-11-13",
+   "author": "Karl Q.",
+   "title": "fix(docker): accept IPv6 connections in the frontend",
+   "kind": "squash"
+  },
+  {
+   "pr": 3569,
+   "sha": "437277570",
+   "date": "2026-11-13",
+   "author": "simonwjackson",
+   "title": "fix/playback-progression-warmups",
+   "kind": "merge"
+  },
+  {
+   "pr": 3554,
+   "sha": "a9cd0804d",
+   "date": "2026-11-13",
+   "author": "Zeus Arias Lucero",
+   "title": "fix(web): don't open the player for a resume someone else took over",
+   "kind": "squash"
+  },
+  {
+   "pr": 3549,
+   "sha": "d8be6663c",
+   "date": "2026-11-12",
+   "author": "Zeus Arias Lucero",
+   "title": "fix(web): don't show the previous account's data to the next one",
+   "kind": "squash"
+  },
+  {
+   "pr": 3526,
+   "sha": "8fb1c287e",
+   "date": "2026-11-12",
+   "author": "T",
+   "title": "feat(mobile): support iPhone Duo vertical bars",
+   "kind": "squash"
+  },
+  {
+   "pr": 3547,
+   "sha": "9776fe25f",
+   "date": "2026-11-12",
+   "author": "CodeWithCJ",
+   "title": "fix(ci): handle empty release PR output in release-please workflow",
+   "kind": "squash"
+  },
+  {
+   "pr": 3503,
+   "sha": "b59d0abd9",
+   "date": "2026-11-12",
+   "author": "Zeus Arias Lucero",
+   "title": "feat(web): let people show or hide the main tabs.",
+   "kind": "squash"
+  },
+  {
+   "pr": 3519,
+   "sha": "30530aa93",
+   "date": "2026-11-10",
+   "author": "Jerrys-modz",
+   "title": "fix(mobile): use configured work duration for interval/HIIT timer",
+   "kind": "squash"
+  },
+  {
+   "pr": 3520,
+   "sha": "60cf9d235",
+   "date": "2026-11-10",
+   "author": "CodeWithCJ",
+   "title": "fix(mobile): make the release workflow's submit jobs work on the free plan",
+   "kind": "squash"
+  },
+  {
+   "pr": 3497,
+   "sha": "80418b52c",
+   "date": "2026-11-09",
+   "author": "Bl4nk24",
+   "title": "fix(adaptive-tdee): isolate delegated caches and guard details",
+   "kind": "squash"
+  },
+  {
+   "pr": 3386,
+   "sha": "e8344150f",
+   "date": "2026-11-03",
+   "author": "CodeWithCJ",
+   "title": "fix(mobile): say the server can't be reached instead of \"No server configured\"",
+   "kind": "merge"
+  },
+  {
+   "pr": 3296,
+   "sha": "5397e8f19",
+   "date": "2026-11-01",
+   "author": "stoamandl",
+   "title": "fix(server): honor daily sync frequency and keep last_sync_at after failed syncs",
+   "kind": "merge"
+  },
+  {
+   "pr": 3331,
+   "sha": "f8cc471f1",
+   "date": "2026-11-01",
+   "author": "jayhemnani9910",
+   "title": "fix: keep whole stones and feet when converting back from kg and cm",
+   "kind": "merge"
+  }
+ ],
+ "other-2": [
+  {
+   "pr": 3314,
+   "sha": "051a213dd",
+   "date": "2026-10-30",
+   "author": "CodeWithCJ",
+   "title": "chore: require the maintainer for changes to the tag site",
+   "kind": "merge"
+  },
+  {
+   "pr": 3313,
+   "sha": "126c0d78f",
+   "date": "2026-10-30",
+   "author": "CodeWithCJ",
+   "title": "feat: list the dev app in the tag site's iPhone link file",
+   "kind": "merge"
+  },
+  {
+   "pr": 3312,
+   "sha": "2ab813aed",
+   "date": "2026-10-30",
+   "author": "CodeWithCJ",
+   "title": "fix: add App Store and TestFlight links to the tag landing page",
+   "kind": "merge"
+  },
+  {
+   "pr": 3280,
+   "sha": "29d6bf6ac",
+   "date": "2026-10-30",
+   "author": "SisyphusMD",
+   "title": "fix(demo): take turns on the demo account across server instances",
+   "kind": "merge"
+  },
+  {
+   "pr": 3274,
+   "sha": "e87e5b71a",
+   "date": "2026-10-29",
+   "author": "DUC750",
+   "title": "fix(server): bridge the undici Agent to Node's built-in fetch",
+   "kind": "merge"
+  },
+  {
+   "pr": 3255,
+   "sha": "940fc4a53",
+   "date": "2026-10-29",
+   "author": "SisyphusMD",
+   "title": "fix(server): create the RLS policy state table in a migration",
+   "kind": "merge"
+  },
+  {
+   "pr": 3242,
+   "sha": "cb703d5b8",
+   "date": "2026-10-28",
+   "author": "Jerrys-modz",
+   "title": "feat(mobile): restyle the + menu as Quick Actions and let users arrange it",
+   "kind": "merge"
+  },
+  {
+   "pr": 3239,
+   "sha": "387e5b414",
+   "date": "2026-10-28",
+   "author": "SisyphusMD",
+   "title": "fix(server): apply RLS policies at startup only when they changed",
+   "kind": "merge"
+  },
+  {
+   "pr": 3213,
+   "sha": "e2eff786c",
+   "date": "2026-10-27",
+   "author": "SisyphusMD",
+   "title": "fix(server): stop provider syncs that lose their claim or stall",
+   "kind": "merge"
+  },
+  {
+   "pr": 3204,
+   "sha": "64317b3cf",
+   "date": "2026-10-27",
+   "author": "SisyphusMD",
+   "title": "feat(server): make the graceful shutdown timeout configurable",
+   "kind": "merge"
+  }
+ ],
+ "food-1": [
+  {
+   "pr": 3608,
+   "sha": "bec9e867f",
+   "date": "2026-11-17",
+   "author": "Christopher Pruijsen",
+   "title": "fix(server): rank food search results by name prefix and word start",
+   "kind": "squash"
+  },
+  {
+   "pr": 3597,
+   "sha": "147ed15c6",
+   "date": "2026-11-16",
+   "author": "Sebastian Schneider",
+   "title": "feat: estimated blood alcohol curve from logged drinks",
+   "kind": "squash"
+  },
+  {
+   "pr": 3528,
+   "sha": "8bd760438",
+   "date": "2026-11-15",
+   "author": "Tony",
+   "title": "feat(mobile & web): copy a logged food to Now, Today, Tomorrow or a picked date",
+   "kind": "squash"
+  },
+  {
+   "pr": 3593,
+   "sha": "17a0e70c7",
+   "date": "2026-11-15",
+   "author": "Dennis Straffin",
+   "title": "feat(csv-import): robust header matching, per-meal aggregate imports, and docs",
+   "kind": "squash"
+  },
+  {
+   "pr": 3553,
+   "sha": "c5c0dfb92",
+   "date": "2026-11-13",
+   "author": "CodeWithCJ",
+   "title": "feat(mobile): allow ingredient adjustments before logging saved meals",
+   "kind": "squash"
+  },
+  {
+   "pr": 3396,
+   "sha": "7cafc1b34",
+   "date": "2026-11-12",
+   "author": "Bl4nk24",
+   "title": "feat(mealie): import recipes as editable ingredient meals",
+   "kind": "squash"
+  },
+  {
+   "pr": 3514,
+   "sha": "9fecb7ad0",
+   "date": "2026-11-12",
+   "author": "Tim Cailloux",
+   "title": "feat: push daily nutrition totals to Intervals.icu",
+   "kind": "squash"
+  },
+  {
+   "pr": 3505,
+   "sha": "ef3c824e8",
+   "date": "2026-11-09",
+   "author": "CodeWithCJ",
+   "title": "fix(mobile): stop Calorie Settings crashing on iOS",
+   "kind": "squash"
+  },
+  {
+   "pr": 3461,
+   "sha": "903b09dbc",
+   "date": "2026-11-07",
+   "author": "CodeWithCJ",
+   "title": "fix(mobile): populate and allow editing time when adding a new food",
+   "kind": "squash"
+  },
+  {
+   "pr": 3442,
+   "sha": "234471c1f",
+   "date": "2026-11-07",
+   "author": "darealdemayo",
+   "title": "fix(foods): translate the nutrient name in the Standard badge",
+   "kind": "squash"
+  },
+  {
+   "pr": 3405,
+   "sha": "8a228af58",
+   "date": "2026-11-07",
+   "author": "Tony",
+   "title": "fix: custom nutrients not saving when nothing else is changed",
+   "kind": "squash"
+  },
+  {
+   "pr": 3389,
+   "sha": "537be9d75",
+   "date": "2026-11-06",
+   "author": "darealdemayo",
+   "title": "fix(food-providers): badge standard for swiss and swedish sources by nutrient code, import Swiss water and alcohol",
+   "kind": "squash"
+  },
+  {
+   "pr": 3428,
+   "sha": "461de0ccb",
+   "date": "2026-11-06",
+   "author": "Zeus Arias Lucero",
+   "title": "feat(food): let the food search dialog use 90% of the window height on desktop",
+   "kind": "squash"
+  },
+  {
+   "pr": 3394,
+   "sha": "28d67b9f3",
+   "date": "2026-11-06",
+   "author": "Bl4nk24",
+   "title": "feat(mobile): add in-place barcode scan recovery",
+   "kind": "squash"
+  },
+  {
+   "pr": 3383,
+   "sha": "688e7fc89",
+   "date": "2026-11-03",
+   "author": "CodeWithCJ",
+   "title": "fix(food-search): rank brand searches and relevant foods first",
+   "kind": "merge"
+  },
+  {
+   "pr": 3352,
+   "sha": "4cf324b4f",
+   "date": "2026-11-03",
+   "author": "zelphir",
+   "title": "feat(mobile): show the day's logged drinks from the hydration card",
+   "kind": "merge"
+  },
+  {
+   "pr": 3359,
+   "sha": "441597f9b",
+   "date": "2026-11-03",
+   "author": "SisyphusMD",
+   "title": "fix(foods): keep bulk food import progress in the database",
+   "kind": "merge"
+  },
+  {
+   "pr": 3309,
+   "sha": "3316d6f4a",
+   "date": "2026-10-30",
+   "author": "SisyphusMD",
+   "title": "feat/move-ring-active-calories",
+   "kind": "merge"
+  }
+ ],
+ "food-2": [
+  {
+   "pr": 3292,
+   "sha": "459169596",
+   "date": "2026-10-30",
+   "author": "surfnterd",
+   "title": "feat(mobile): enter sodium as grams of salt in the food form",
+   "kind": "merge"
+  },
+  {
+   "pr": 3261,
+   "sha": "586357cf5",
+   "date": "2026-10-29",
+   "author": "SisyphusMD",
+   "title": "fix(export): count device Active Calories once in the CSV burned calories row",
+   "kind": "merge"
+  },
+  {
+   "pr": 3249,
+   "sha": "f741ad536",
+   "date": "2026-10-28",
+   "author": "SisyphusMD",
+   "title": "fix(ai): require energy and all three macros before saving an Open Food Facts food",
+   "kind": "merge"
+  },
+  {
+   "pr": 3221,
+   "sha": "1d12e9ef7",
+   "date": "2026-10-27",
+   "author": "SisyphusMD",
+   "title": "fix(ai): save foods at the serving the lookup quoted",
+   "kind": "merge"
+  },
+  {
+   "pr": 3220,
+   "sha": "20e93b3d2",
+   "date": "2026-10-27",
+   "author": "SisyphusMD",
+   "title": "fix(ai): log the exact external food the lookup returned",
+   "kind": "merge"
+  },
+  {
+   "pr": 3214,
+   "sha": "25b48a63f",
+   "date": "2026-10-27",
+   "author": "benjamin-m-holden",
+   "title": "fix/create-food-serving-description",
+   "kind": "merge"
+  },
+  {
+   "pr": 3198,
+   "sha": "e91d2e8ab",
+   "date": "2026-10-26",
+   "author": "SisyphusMD",
+   "title": "fix(goals): apply each weekly goal plan only to its own dates",
+   "kind": "merge"
+  }
+ ],
+ "health-1": [
+  {
+   "pr": 3570,
+   "sha": "a7223a0a2",
+   "date": "2026-11-16",
+   "author": "Zeus Arias Lucero",
+   "title": "feat(web): add Settings → Features, with cycle as the first feature",
+   "kind": "squash"
+  },
+  {
+   "pr": 3598,
+   "sha": "e2cf6aa8c",
+   "date": "2026-11-15",
+   "author": "Jerrys-modz",
+   "title": "fix(mobile): add goal weight setting and save steps goal as a whole number",
+   "kind": "squash"
+  },
+  {
+   "pr": 3573,
+   "sha": "b2581f919",
+   "date": "2026-11-14",
+   "author": "Jerrys-modz",
+   "title": "fix: write corrected treadmill distance to Apple Health",
+   "kind": "squash"
+  },
+  {
+   "pr": 3427,
+   "sha": "6e3022704",
+   "date": "2026-11-07",
+   "author": "p1ranha",
+   "title": "feat: add glucose timelines and saved display units +glucos CGM",
+   "kind": "squash"
+  },
+  {
+   "pr": 3409,
+   "sha": "05d27a65b",
+   "date": "2026-11-05",
+   "author": "Jerrys-modz",
+   "title": "feat(mobile): show overnight HRV and skin temperature on the mobile sleep detail screen",
+   "kind": "squash"
+  },
+  {
+   "pr": 3408,
+   "sha": "cabfff09c",
+   "date": "2026-11-05",
+   "author": "Jerrys-modz",
+   "title": "feat(mobile): add trend, day timeline and range timeline to the mobile heart rate report",
+   "kind": "squash"
+  },
+  {
+   "pr": 3407,
+   "sha": "610c3421d",
+   "date": "2026-11-05",
+   "author": "Jerrys-modz",
+   "title": "feat(mobile): upload all-day heart rate readings during sync",
+   "kind": "squash"
+  },
+  {
+   "pr": 3360,
+   "sha": "00ea9afd8",
+   "date": "2026-11-03",
+   "author": "SisyphusMD",
+   "title": "fix(sleep): keep a stored sleep measurement the sync omits",
+   "kind": "merge"
+  },
+  {
+   "pr": 3300,
+   "sha": "97b656d96",
+   "date": "2026-11-01",
+   "author": "SisyphusMD",
+   "title": "feat(server): add a readiness endpoint and use it for the Docker health check",
+   "kind": "merge"
+  },
+  {
+   "pr": 3294,
+   "sha": "a66f59f7f",
+   "date": "2026-10-30",
+   "author": "surfnterd",
+   "title": "fix(sleep): count a day's naps with its night in sleep debt",
+   "kind": "merge"
+  },
+  {
+   "pr": 3243,
+   "sha": "43814b0ca",
+   "date": "2026-10-28",
+   "author": "CodeWithCJ",
+   "title": "fix(sleep): keep a nap as its own sleep entry instead of merging it into the night",
+   "kind": "merge"
+  },
+  {
+   "pr": 3180,
+   "sha": "e3af97288",
+   "date": "2026-10-26",
+   "author": "Bubbles840",
+   "title": "fix(sleep): count a night once when two sources record it",
+   "kind": "merge"
+  }
+ ],
+ "widget-android-1": [
+  {
+   "pr": 3611,
+   "sha": "d68e888fd",
+   "date": "2026-11-16",
+   "author": "Dennis Straffin",
+   "title": "feat(web): show field descriptions in the CSV header-mapping dialog",
+   "kind": "squash"
+  },
+  {
+   "pr": 3482,
+   "sha": "afe80d741",
+   "date": "2026-11-08",
+   "author": "CodeWithCJ",
+   "title": "feat(mobile): add lab results and NFC tags to What's New",
+   "kind": "squash"
+  },
+  {
+   "pr": 3464,
+   "sha": "c20aaebb3",
+   "date": "2026-11-08",
+   "author": "Zeus Arias Lucero",
+   "title": "fix(mobile): keep custom screen headers below the Android status bar",
+   "kind": "squash"
+  },
+  {
+   "pr": 3454,
+   "sha": "dfb7f67e0",
+   "date": "2026-11-07",
+   "author": "CodeWithCJ",
+   "title": "feat(reports): enable dashboard widget customization for nutrients report",
+   "kind": "squash"
+  },
+  {
+   "pr": 3420,
+   "sha": "4a27485a0",
+   "date": "2026-11-05",
+   "author": "CodeWithCJ",
+   "title": "fix(mobile): keep an NFC food tag's unit a saved serving",
+   "kind": "squash"
+  },
+  {
+   "pr": 3411,
+   "sha": "78798499a",
+   "date": "2026-11-05",
+   "author": "CodeWithCJ",
+   "title": "feat: log a food or a saved meal by tapping an NFC tag",
+   "kind": "squash"
+  },
+  {
+   "pr": 3329,
+   "sha": "2aa2e9bde",
+   "date": "2026-10-31",
+   "author": "Irohoho",
+   "title": "fix/android-route-map-layers-and-insets",
+   "kind": "merge"
+  },
+  {
+   "pr": 3256,
+   "sha": "7601a7a4e",
+   "date": "2026-10-31",
+   "author": "Irohoho",
+   "title": "feat(mobile): add keyless MapLibre OpenStreetMap map rendering on Android",
+   "kind": "merge"
+  },
+  {
+   "pr": 3316,
+   "sha": "d24d3cef7",
+   "date": "2026-10-31",
+   "author": "CodeWithCJ",
+   "title": "feat: log water by tapping an NFC tag",
+   "kind": "merge"
+  },
+  {
+   "pr": 3310,
+   "sha": "dd1e71ee2",
+   "date": "2026-10-30",
+   "author": "CodeWithCJ",
+   "title": "feat: add tag.sparkyfitness.com site for NFC tag links",
+   "kind": "merge"
+  },
+  {
+   "pr": 3228,
+   "sha": "5625b4e6d",
+   "date": "2026-10-28",
+   "author": "zeusal",
+   "title": "feat/resizable-android-widgets",
+   "kind": "merge"
+  }
+ ],
+ "ai-chat-1": [
+  {
+   "pr": 3531,
+   "sha": "1322ca978",
+   "date": "2026-11-14",
+   "author": "SisyphusMD",
+   "title": "feat(chat): let chat use tools from an outside MCP server",
+   "kind": "squash"
+  },
+  {
+   "pr": 3530,
+   "sha": "59a812e5d",
+   "date": "2026-11-11",
+   "author": "CodeWithCJ",
+   "title": "feat(zepp): add Zepp OAuth callback Worker at zepp-auth.sparkyfitness.com",
+   "kind": "squash"
+  },
+  {
+   "pr": 3493,
+   "sha": "548281071",
+   "date": "2026-11-10",
+   "author": "SisyphusMD",
+   "title": "fix(chat): follow the Profile Switcher into a family member's account",
+   "kind": "squash"
+  },
+  {
+   "pr": 3380,
+   "sha": "120dc997f",
+   "date": "2026-11-04",
+   "author": "Wu Shuwen",
+   "title": "fix(ai): accept longer ask-user options",
+   "kind": "squash"
+  },
+  {
+   "pr": 3283,
+   "sha": "17618d6fe",
+   "date": "2026-11-02",
+   "author": "Ilya Kogan",
+   "title": "feat: add OpenCode GO AI provider",
+   "kind": "squash"
+  },
+  {
+   "pr": 3011,
+   "sha": "64dc452dc",
+   "date": "2026-10-29",
+   "author": "damupi",
+   "title": "feat(mcp): add OAuth 2.1 authorization",
+   "kind": "merge"
+  },
+  {
+   "pr": 3225,
+   "sha": "b8071ea99",
+   "date": "2026-10-27",
+   "author": "SisyphusMD",
+   "title": "fix(chat): split the usage footer into cached, uncached and output tokens",
+   "kind": "merge"
+  },
+  {
+   "pr": 3224,
+   "sha": "46a9e1e35",
+   "date": "2026-10-27",
+   "author": "SisyphusMD",
+   "title": "perf(ai): cut Sparky chat token use",
+   "kind": "merge"
+  }
+ ]
+}

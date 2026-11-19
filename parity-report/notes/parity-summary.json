@@ -215,6 +215,14 @@
     "label": "Changed by PR #3052 (Wear OS app)"
    },
    {
+    "value": "tag:wearos",
+    "label": "Notes about Wear OS"
+   },
+   {
+    "value": "tag:applewatch",
+    "label": "Notes about the Apple Watch"
+   },
+   {
     "value": "3228",
     "label": "Changed by PR #3228 (resizable Android widgets)"
    },

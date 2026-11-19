@@ -41,6 +41,6 @@ old_rows = page_data(ORIG / 'sparkyfitness-feature-parity.html')['rows']
 new_rows = page_data(ROOT / 'sparkyfitness-feature-parity.html')['rows']
 assert len(old_rows) == len(new_rows), 'page: row count changed'
 for o, n in zip(old_rows, new_rows):
-    assert {k: v for k, v in n.items() if k not in ('u', 'un')} == o, f'page: row {o.get("n")} changed'
+    assert {k: v for k, v in n.items() if k not in ('u', 'un', 't')} == o, f'page: row {o.get("n")} changed'
 print('page: rows with a note', sum('u' in r for r in new_rows))
 print('OK: only notes were added')

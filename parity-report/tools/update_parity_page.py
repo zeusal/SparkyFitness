@@ -29,6 +29,10 @@ PAGE = SUMMARY['page']
 ids = [r['id'] for r in csv.DictReader(open(ORIG / 'sparkyfitness-feature-parity.csv', newline='', encoding='utf-8'))]
 
 
+# Update-filter tags: a row gets the tag when its English note names the surface.
+TAGS = {'wearos': ('Wear OS',), 'applewatch': ('Apple Watch',)}
+
+
 def rep(old, new):
     global h
     assert h.count(old) == 1, old[:80]
@@ -55,6 +59,10 @@ for row, row_id in zip(data['rows'], ids):
         n = notes[row_id]
         row['u'] = '_'.join([n['kind']] + [str(p) for p in sorted(n['prs'])])
         row['un'] = n['note_en']
+        # Tags let the Updates filter list the rows a note is about, whatever PR changed them.
+        tags = [t for t, words in TAGS.items() if any(w in n['note_en'] for w in words)]
+        if tags:
+            row['t'] = ' '.join(tags)
 blob = json.dumps(data, ensure_ascii=False, separators=(',', ':')).replace('</', '<\\/')
 h = h[:a] + blob + h[b:]
 
@@ -92,7 +100,7 @@ rep("[r.n, r.d, r.we, r.me, r.pn, r.no, GT[r.g].t]", "[r.n, r.d, r.we, r.me, r.p
 rep("const DEFAULT = { q: '', domain: '__functional', platform: '', cats: [] };",
     "const DEFAULT = { q: '', domain: '__functional', platform: '', cats: [], upd: '' };")
 rep("  const inCats = r => !state.cats.length || state.cats.includes(r.c);",
-    "  const inCats = r => !state.cats.length || state.cats.includes(r.c);\n  const inUpd = r => !state.upd || (!!r.u && (state.upd === 'any' || r.u.split('_').includes(state.upd)));")
+    "  const inCats = r => !state.cats.length || state.cats.includes(r.c);\n  const inUpd = r => !state.upd || (!!r.u && (state.upd === 'any' || (state.upd.startsWith('tag:') ? (r.t || '').split(' ').includes(state.upd.slice(4)) : r.u.split('_').includes(state.upd))));")
 rep('<span class="fname"><b>${esc(r.n)}</b><span class="desc">',
     '<span class="fname"><b>${esc(r.n)}</b>${r.u ? `<span class="ubadge"><span class="badge upd">${UPD_SHORT(r.u)}</span></span>` : \'\'}<span class="desc">')
 rep("    return f('Description', r.d, false, true) +",

@@ -471,13 +471,17 @@ internal object GarminLink {
     initWatchdog = null
   }
 
+  // Qualified with this@GarminLink: inside this object an unqualified
+  // onSdkReady() or onInitializeError() is the listener's own method, so the
+  // callback would post itself again forever and the link would never get
+  // ready (the init watchdog then reports bindTimeout).
   private fun sdkListener(generation: Int) = object : ConnectIQ.ConnectIQListener {
     override fun onSdkReady() {
-      main.post { if (generation == sdkGeneration) onSdkReady() }
+      main.post { if (generation == sdkGeneration) this@GarminLink.onSdkReady() }
     }
 
     override fun onInitializeError(status: ConnectIQ.IQSdkErrorStatus?) {
-      main.post { if (generation == sdkGeneration) onInitializeError(status) }
+      main.post { if (generation == sdkGeneration) this@GarminLink.onInitializeError(status) }
     }
 
     override fun onSdkShutDown() {

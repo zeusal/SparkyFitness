@@ -1,0 +1,121 @@
+{
+  "$comment": "Which Maestro flow tags a change should run. Globs are relative to the repo root (** spans folders, * does not). A change matching runAll runs every flow; otherwise the flows tagged with 'always' plus every area whose globs match. Used by scripts/maestro-affected.mjs (pnpm run maestro:affected). Add a flow's area here when you add the area.",
+  "always": ["smoke"],
+  "runAll": [
+    "SparkyFitnessMobile/App.tsx",
+    "SparkyFitnessMobile/index.js",
+    "SparkyFitnessMobile/app.config.ts",
+    "SparkyFitnessMobile/app.json",
+    "SparkyFitnessMobile/package.json",
+    "SparkyFitnessMobile/plugins/**",
+    "SparkyFitnessMobile/src/navigation/**",
+    "SparkyFitnessMobile/src/components/ui/**",
+    "SparkyFitnessMobile/src/components/TabsLayout.tsx",
+    "SparkyFitnessMobile/src/components/CustomTabBar.tsx",
+    "SparkyFitnessMobile/src/components/FormScreenChrome.tsx",
+    "SparkyFitnessMobile/src/components/ScreenErrorBoundary.tsx",
+    "SparkyFitnessMobile/src/components/ServerGate.tsx",
+    "SparkyFitnessMobile/src/hooks/useScreenHeader.tsx",
+    "SparkyFitnessMobile/src/hooks/queryClient.ts",
+    "SparkyFitnessMobile/src/services/api/apiClient.ts",
+    "SparkyFitnessMobile/src/localization/**",
+    "SparkyFitnessMobile/.maestro/subflows/**",
+    "SparkyFitnessMobile/.maestro/config.yaml",
+    "shared/src/**",
+    "patches/**",
+    "pnpm-lock.yaml"
+  ],
+  "areas": {
+    "navigation": ["SparkyFitnessMobile/src/hooks/useAppBootstrap.ts"],
+    "add-sheet": [
+      "SparkyFitnessMobile/src/components/AddSheet.tsx",
+      "SparkyFitnessMobile/src/hooks/useAddSheetActions.ts",
+      "SparkyFitnessMobile/src/constants/addMenuItems.ts",
+      "SparkyFitnessMobile/src/utils/addMenu.ts",
+      "SparkyFitnessMobile/src/screens/AddMenuSettingsScreen.tsx"
+    ],
+    "dashboard": [
+      "SparkyFitnessMobile/src/screens/DashboardScreen.tsx",
+      "SparkyFitnessMobile/src/screens/DashboardSettingsScreen.tsx",
+      "SparkyFitnessMobile/src/components/*Card.tsx",
+      "SparkyFitnessMobile/src/components/DateNavigator.tsx",
+      "SparkyFitnessMobile/src/components/CalendarSheet.tsx",
+      "SparkyFitnessMobile/src/constants/dashboardCards.ts"
+    ],
+    "reports": [
+      "SparkyFitnessMobile/src/screens/*Report*.tsx",
+      "SparkyFitnessMobile/src/screens/NutrientTrendsScreen.tsx",
+      "SparkyFitnessMobile/src/screens/ExerciseStatisticsScreen.tsx",
+      "SparkyFitnessMobile/src/components/reports/**",
+      "SparkyFitnessMobile/src/components/exerciseStats/**",
+      "SparkyFitnessMobile/src/components/compare/**",
+      "SparkyFitnessMobile/src/components/charts/**"
+    ],
+    "diary": [
+      "SparkyFitnessMobile/src/screens/DiaryScreen.tsx",
+      "SparkyFitnessMobile/src/screens/MealTypeDetailScreen.tsx",
+      "SparkyFitnessMobile/src/screens/FoodEntryViewScreen.tsx",
+      "SparkyFitnessMobile/src/screens/EditLoggedMealScreen.tsx",
+      "SparkyFitnessMobile/src/components/FoodSummary.tsx",
+      "SparkyFitnessMobile/src/components/Swipeable*.tsx",
+      "SparkyFitnessMobile/src/components/Diary*.tsx",
+      "SparkyFitnessMobile/src/components/ExerciseSummary.tsx",
+      "SparkyFitnessMobile/src/components/MeasurementsSummary.tsx"
+    ],
+    "food": [
+      "SparkyFitnessMobile/src/screens/Food*.tsx",
+      "SparkyFitnessMobile/src/screens/Meal*.tsx",
+      "SparkyFitnessMobile/src/screens/foodForm/**",
+      "SparkyFitnessMobile/src/components/foodSearch/**",
+      "SparkyFitnessMobile/src/components/Food*.tsx",
+      "SparkyFitnessMobile/src/hooks/useFood*.ts",
+      "SparkyFitnessMobile/src/services/api/food*.ts",
+      "SparkyFitnessMobile/src/services/api/meal*.ts",
+      "SparkyFitnessMobile/src/services/api/externalFoodSearchApi.ts",
+      "SparkyFitnessServer/routes/food*.ts",
+      "SparkyFitnessServer/services/food*.ts"
+    ],
+    "exercise": [
+      "SparkyFitnessMobile/src/screens/*Workout*.tsx",
+      "SparkyFitnessMobile/src/screens/Exercise*.tsx",
+      "SparkyFitnessMobile/src/screens/Activity*.tsx",
+      "SparkyFitnessMobile/src/screens/PresetSearchScreen.tsx",
+      "SparkyFitnessMobile/src/screens/RecordActivityScreen.tsx",
+      "SparkyFitnessMobile/src/components/ActiveWorkout*.tsx",
+      "SparkyFitnessMobile/src/components/Workout*.tsx",
+      "SparkyFitnessMobile/src/stores/activeWorkoutStore.ts",
+      "SparkyFitnessMobile/src/services/api/exercise*.ts",
+      "SparkyFitnessMobile/src/services/api/workout*.ts"
+    ],
+    "library": [
+      "SparkyFitnessMobile/src/screens/LibraryScreen.tsx",
+      "SparkyFitnessMobile/src/screens/*LibraryScreen.tsx",
+      "SparkyFitnessMobile/src/screens/*PlansScreen.tsx"
+    ],
+    "settings": [
+      "SparkyFitnessMobile/src/screens/SettingsScreen.tsx",
+      "SparkyFitnessMobile/src/screens/*Settings*.tsx",
+      "SparkyFitnessMobile/src/screens/GoalsScreen.tsx",
+      "SparkyFitnessMobile/src/components/SettingsRow*.tsx",
+      "SparkyFitnessMobile/src/stores/appPreferencesStore.ts"
+    ],
+    "measurements": [
+      "SparkyFitnessMobile/src/screens/MeasurementsAddScreen.tsx",
+      "SparkyFitnessMobile/src/screens/CustomCategor*.tsx",
+      "SparkyFitnessMobile/src/services/api/measurementsApi.ts"
+    ],
+    "water": [
+      "SparkyFitnessMobile/src/screens/Water*.tsx",
+      "SparkyFitnessMobile/src/components/Hydration*.tsx",
+      "SparkyFitnessMobile/src/hooks/useWater*.ts",
+      "SparkyFitnessMobile/src/hooks/invalidateWaterIntake.ts"
+    ],
+    "fasting": [
+      "SparkyFitnessMobile/src/screens/Fasting*.tsx",
+      "SparkyFitnessMobile/src/components/Fasting*.tsx",
+      "SparkyFitnessMobile/src/components/EndFastSheet.tsx",
+      "SparkyFitnessMobile/src/hooks/useFasting*.ts",
+      "SparkyFitnessMobile/src/services/api/fastingApi.ts"
+    ]
+  }
+}

@@ -1,0 +1,24 @@
+# Opens the + sheet's Exercise sub-menu from a tab screen and waits for it.
+# Exercise has no action of its own: its card or row opens the sub-menu with
+# the Workout, Activity, Log Workout and Record Activity rows
+# (src/components/AddSheet.tsx:278-286 and :661-746). Reads only.
+#
+# Settings > Quick Actions can move Exercise out of the four cards and hide
+# it; then the tap below fails and the flow stops here.
+appId: ${APP_ID}
+---
+- runFlow: ../open-add-sheet.yaml
+- tapOn:
+    text: 'Exercise' # addSheet.exercise (src/constants/addMenuItems.ts:64)
+    below: 'Quick Actions' # addSheet.title, the sheet's own title
+    index: 0
+    label: Open the Exercise sub-menu
+# Each row is "name over what it does". The subtitles are on the sub-menu
+# only, while names such as "Workout" or "Activity" may also be on the screen
+# behind the sheet, so the rows are found by their subtitles.
+- extendedWaitUntil:
+    visible: 'Live sets & reps' # addSheet.liveSets, the Workout row's subtitle
+    timeout: 5000
+    label: Exercise sub-menu shown
+- waitForAnimationToEnd:
+    timeout: 3000

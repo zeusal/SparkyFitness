@@ -14,31 +14,32 @@
 appId: ${APP_ID}
 tags:
   - smoke
+  - navigation
 ---
-- runFlow: ../subflows/launch-signed-in.yaml
+- runFlow: ../../subflows/launch-signed-in.yaml
 
 - tapOn:
     text: 'Dashboard'
     index: -1
-- runFlow: ../subflows/assert-no-error-boundary.yaml
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
 - takeScreenshot: smoke-01-dashboard
 
 - tapOn:
     text: 'Library'
     index: -1
-- runFlow: ../subflows/assert-no-error-boundary.yaml
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
 - takeScreenshot: smoke-02-library
 
 - tapOn:
     text: 'Diary'
     index: -1
-- runFlow: ../subflows/assert-no-error-boundary.yaml
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
 - takeScreenshot: smoke-03-diary
 
 - tapOn:
     text: 'Dashboard'
     index: -1
-- runFlow: ../subflows/open-add-sheet.yaml
+- runFlow: ../../subflows/open-add-sheet.yaml
 - takeScreenshot: smoke-04-add-sheet
 - tapOn:
     text: 'Done'
@@ -50,7 +51,7 @@ tags:
 - tapOn:
     text: 'Settings'
     index: -1
-- runFlow: ../subflows/assert-no-error-boundary.yaml
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
 - takeScreenshot: smoke-05-settings
 
 # Settings > Calories & BMR (shown only while connected to the server).
@@ -62,5 +63,5 @@ tags:
 - extendedWaitUntil:
     visible: 'Energy Unit'
     timeout: 15000
-- runFlow: ../subflows/assert-no-error-boundary.yaml
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
 - takeScreenshot: smoke-06-calorie-settings

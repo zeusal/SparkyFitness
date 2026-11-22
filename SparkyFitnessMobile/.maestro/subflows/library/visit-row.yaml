@@ -1,0 +1,53 @@
+# From the Library tab: opens one Browse row, checks the screen it leads to,
+# takes a screenshot and goes back to the Library hub. Reads only: the caller
+# picks a row whose screen does nothing on opening.
+#
+# Env:
+#   ROW          the row's title on the Library hub (screens.library.*,
+#                src/screens/LibraryScreen.tsx:368-667). Searched for
+#                downwards, so callers visit rows top to bottom.
+#   DESTINATION  text the destination always shows and the Library hub never
+#                does (most screens share their title with the row, so the
+#                title alone does not prove the tap navigated). A regex.
+#   LOADING      the destination's loading message, waited out; for a screen
+#                that shows only a spinner or loads nothing, pass FAILED again
+#   FAILED       the destination's load-error message, which must not show;
+#                for a screen that loads nothing, pass 'Something went wrong'
+#                (the error boundary, also checked below)
+#   SHOT         screenshot name
+appId: ${APP_ID}
+---
+- scrollUntilVisible:
+    element: ${ROW}
+    direction: DOWN
+    timeout: 20000
+    label: Scroll the Library to its ${ROW} row
+- tapOn:
+    text: ${ROW}
+    label: Open ${ROW}
+- extendedWaitUntil:
+    visible: ${DESTINATION}
+    timeout: 20000
+    label: ${ROW} screen shown
+- extendedWaitUntil:
+    notVisible: ${LOADING}
+    timeout: 20000
+    label: ${ROW} loaded
+- assertNotVisible:
+    text: ${FAILED}
+    label: ${ROW} loaded without an error
+- waitForAnimationToEnd:
+    timeout: 3000
+- runFlow: ../assert-no-error-boundary.yaml
+- takeScreenshot: ${SHOT}
+- runFlow: ../go-back.yaml
+# The hub keeps its scroll position under the screen it opened; scrolling
+# down also covers a hub that came back at the top.
+- scrollUntilVisible:
+    element: ${ROW}
+    direction: DOWN
+    timeout: 10000
+    label: Back on the Library hub
+- assertNotVisible:
+    text: ${DESTINATION}
+    label: ${ROW} screen closed

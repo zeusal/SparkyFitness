@@ -1,0 +1,71 @@
+# Library > Browse, health rows: Lab results (when that feature is on), Water
+# containers and Medications each open, load without an error, and Back
+# returns to the hub.
+# Screens: Library tab (src/screens/LibraryScreen.tsx) -> LabResultsScreen,
+# WaterContainersScreen, MedicationsListScreen, each closed again with Back.
+#
+# Safe on your everyday build: it only reads. No "+" header button, no lab
+# import or delete menu, no water setting switch, no unit choice, no
+# container move / primary / delete, no medication filter or row is touched.
+# It does force-stop the app on launch: finish any workout or run recording
+# first.
+#
+# Conditional: the Lab results row is there only while Settings > Features
+# leaves Lab results on (the default; LibraryScreen.tsx:505-525, gated through
+# useMobileFeatures). With it off, the scroll for it gives up after its
+# timeout, its visit is skipped and the flow goes on. Reports is covered by
+# flows/reports/.
+appId: ${APP_ID}
+tags:
+  - library
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+- tapOn:
+    text: 'Library' # navigation.library
+    index: -1 # the tab bar's "Library", the bottom-most
+- extendedWaitUntil:
+    visible: 'Browse' # screens.library.browse, shown only while connected
+    timeout: 15000
+    label: Library hub shown (is the app connected to its server?)
+
+# Lab results, gated by the labResults feature. Its header's "+" is labelled
+# "Add lab result" (LabResultsScreen.tsx:79-89) and is never tapped.
+- scrollUntilVisible:
+    element: 'Lab results' # screens.library.labResults
+    direction: DOWN
+    timeout: 12000
+    optional: true
+    label: Scroll to the Lab results row (absent while the feature is off)
+- runFlow:
+    when:
+      visible: 'Lab results' # screens.library.labResults
+    label: Visit Lab results, if the feature is on
+    file: ../../subflows/library/visit-row.yaml
+    env:
+      ROW: 'Lab results' # screens.library.labResults
+      DESTINATION: 'Add lab result' # labs.add, the header button's label
+      LOADING: 'Could not load your lab results.' # spinner only
+      FAILED: 'Could not load your lab results.' # labs.loadFailed
+      SHOT: library-browse-health-01-lab-results
+
+# LibraryScreen.tsx:628-651; header "+" labelled "Add container"
+# (WaterContainersScreen.tsx:269-280).
+- runFlow:
+    file: ../../subflows/library/visit-row.yaml
+    env:
+      ROW: 'Water containers' # screens.library.waterContainers
+      DESTINATION: 'Add container' # waterContainers.add, the header button's label
+      LOADING: 'Loading water containers...' # waterContainers.loading
+      FAILED: 'Failed to load water containers' # waterContainers.loadFailed
+      SHOT: library-browse-health-02-water-containers
+
+# LibraryScreen.tsx:652-666, the last row; header "+" labelled "Add
+# medication" (MedicationsListScreen.tsx:74-88).
+- runFlow:
+    file: ../../subflows/library/visit-row.yaml
+    env:
+      ROW: 'Medications' # screens.library.medications
+      DESTINATION: 'Add medication' # medications.addMedication, the header button's label
+      LOADING: 'Loading medications...' # medications.loading
+      FAILED: 'Failed to load medications.' # medications.loadFailed
+      SHOT: library-browse-health-03-medications

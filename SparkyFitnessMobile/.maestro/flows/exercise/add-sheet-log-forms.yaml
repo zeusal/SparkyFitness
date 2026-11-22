@@ -1,0 +1,98 @@
+# + sheet > Exercise > Activity and Log Workout: each opens its empty form,
+# which is checked and closed again with the form's own Close (X), without
+# saving.
+# Screens: Dashboard -> + sheet Exercise sub-menu (src/components/AddSheet.tsx)
+#   -> Activity: New Activity form (src/screens/ActivityAddScreen.tsx), Close
+#   -> Log Workout: New Workout form (src/screens/WorkoutAddScreen.tsx), Close
+#
+# Safe on your everyday build: nothing is typed, picked or saved. Close is
+# used rather than Back on purpose: Close on an empty form clears the stored
+# form draft (handleCancel, ActivityAddScreen.tsx:154-159 and
+# WorkoutAddScreen.tsx:288-293), while Back would leave an empty draft in the
+# phone's storage (src/hooks/useDraftPersistence.ts:102-113). Like opening
+# these forms by hand from the + sheet, this replaces a stored draft that has
+# no exercise in it; a draft with an exercise is never touched (see below).
+# It does force-stop the app on launch.
+#
+# An unsaved workout or activity draft with an exercise makes both rows ask
+# "Draft in Progress" (src/hooks/useAddSheetActions.ts:212-277). The flow then
+# taps Cancel, keeping the draft, and fails: save or discard that draft in
+# the app first.
+appId: ${APP_ID}
+tags:
+  - exercise
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+- tapOn:
+    text: 'Dashboard' # navigation.dashboard
+    index: -1 # the tab bar's "Dashboard", the bottom-most
+- runFlow: ../../subflows/exercise/open-exercise-menu.yaml
+
+# Activity: a single cardio or other activity, logged after the fact.
+- tapOn:
+    text: 'Duration & distance' # addSheet.durationDistance, inside the Activity row
+    label: Open Activity from the Exercise sub-menu
+- extendedWaitUntil:
+    # activityAdd.actions.selectActivity (ActivityAddScreen.tsx:411), or
+    # addSheetActions.draft.title when a draft is waiting
+    visible: 'Select Activity|Draft in Progress'
+    timeout: 15000
+    label: New Activity form opened (or the draft prompt)
+- runFlow:
+    when:
+      visible: 'Draft in Progress' # addSheetActions.draft.title
+    label: An unsaved draft is waiting - keep it
+    commands:
+      - tapOn: 'Cancel' # common.cancel; never "Discard & Continue"
+- assertVisible:
+    text: 'Select Activity' # activityAdd.actions.selectActivity
+    label: New Activity form open (if not, save or discard the draft first)
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: exercise-add-sheet-log-forms-01-activity
+- tapOn:
+    text: 'Close' # common.close, the header's X (src/hooks/useScreenHeader.tsx:239-240)
+    label: Close the empty Activity form
+- extendedWaitUntil:
+    notVisible: 'Select Activity' # activityAdd.actions.selectActivity
+    timeout: 10000
+    label: New Activity form closed
+- assertVisible:
+    text: 'Library' # navigation.library
+    index: -1
+    label: Back on the tabs
+
+# Log Workout: sets and reps of a workout done earlier.
+- runFlow: ../../subflows/exercise/open-exercise-menu.yaml
+- tapOn:
+    text: 'Past sets & reps' # addSheet.pastSets, inside the Log Workout row
+    label: Open Log Workout from the Exercise sub-menu
+- extendedWaitUntil:
+    # workoutForm.addExercise, the empty exercise list's button
+    # (src/components/WorkoutFormExerciseList.tsx:890), or the draft prompt
+    visible: 'Add Exercise|Draft in Progress'
+    timeout: 15000
+    label: New Workout form opened (or the draft prompt)
+- runFlow:
+    when:
+      visible: 'Draft in Progress' # addSheetActions.draft.title
+    label: An unsaved draft is waiting - keep it
+    commands:
+      - tapOn: 'Cancel' # common.cancel; never "Discard & Continue"
+- assertVisible:
+    text: 'Add Exercise' # workoutForm.addExercise
+    label: New Workout form open (if not, save or discard the draft first)
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: exercise-add-sheet-log-forms-02-log-workout
+- tapOn:
+    text: 'Close' # common.close, the header's X
+    label: Close the empty workout form
+- extendedWaitUntil:
+    notVisible: 'Add Exercise' # workoutForm.addExercise
+    timeout: 10000
+    label: New Workout form closed
+- assertVisible:
+    text: 'Library' # navigation.library
+    index: -1
+    label: Back on the tabs
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: exercise-add-sheet-log-forms-03-back

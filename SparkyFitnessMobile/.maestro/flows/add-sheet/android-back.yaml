@@ -7,14 +7,15 @@
 # iOS has no hardware Back: exclude this flow there with --exclude-tags android.
 appId: ${APP_ID}
 tags:
+  - add-sheet
   - android
   - regression
 ---
-- runFlow: ../subflows/launch-signed-in.yaml
+- runFlow: ../../subflows/launch-signed-in.yaml
 - tapOn:
     text: 'Dashboard'
     index: -1
-- runFlow: ../subflows/open-add-sheet.yaml
+- runFlow: ../../subflows/open-add-sheet.yaml
 
 # Exercise has no action of its own: it opens a sub-menu.
 - tapOn:

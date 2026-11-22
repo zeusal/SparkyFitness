@@ -1,0 +1,6 @@
+# Workspace config for the flows that write data (flows-data/). They write to
+# the account the app is signed in to and clean up after themselves: run them
+# only with a test account and its API key (README "Data flows").
+#   maestro test .maestro --config .maestro/config-data.yaml --include-tags food ...
+flows:
+  - 'flows-data/**'

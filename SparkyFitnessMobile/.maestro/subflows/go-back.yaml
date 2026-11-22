@@ -1,0 +1,20 @@
+# Goes back one screen. Android: the hardware Back key. iOS: the screen's own
+# header back button, labelled "Back" (common.back, src/hooks/useScreenHeader.tsx)
+# on the JS header; the native iOS header (iOS < 26, or Liquid Glass on) is not
+# covered yet.
+appId: ${APP_ID}
+---
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - pressKey: Back
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          text: 'Back'
+          index: 0 # the top-most "Back": the header button
+- waitForAnimationToEnd:
+    timeout: 3000

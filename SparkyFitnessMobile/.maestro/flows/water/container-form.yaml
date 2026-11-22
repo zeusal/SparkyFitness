@@ -1,0 +1,85 @@
+# Library > Water containers > Add container: the containers list loads, the
+# new-container form opens, and both are left again with Back, unsaved.
+# Screens: Library tab (src/screens/LibraryScreen.tsx:628-650) -> Water
+# containers (src/screens/WaterContainersScreen.tsx) -> Add container
+# (src/screens/WaterContainerEditScreen.tsx) -> back -> back.
+# flows/library/browse-health.yaml also opens the list; this goes on to the
+# form, which no other flow reaches.
+#
+# Safe on your everyday build: on the list no container, switch, unit,
+# reorder arrow, delete button or quick-add preset is tapped (each saves at
+# once); on the form nothing is typed and Save is never tapped. It
+# force-stops the app on launch: finish any workout or run recording first.
+appId: ${APP_ID}
+tags:
+  - water
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+- tapOn:
+    text: 'Library' # navigation.library
+    index: -1 # the tab bar's "Library", the bottom-most
+    label: Open the Library tab
+- extendedWaitUntil:
+    visible: 'Browse' # screens.library.browse, a Library section title
+    timeout: 15000
+    label: Library hub shown
+# The row's title is also the list's title; its subtitle is on the row only.
+- scrollUntilVisible:
+    element: 'Bottles, glasses, and drinks linked to foods' # screens.library.waterContainersSubtitle
+    direction: DOWN
+    timeout: 20000
+    label: Scroll the Library to its Water containers row
+- tapOn:
+    text: 'Bottles, glasses, and drinks linked to foods' # screens.library.waterContainersSubtitle
+    label: Open Water containers
+- extendedWaitUntil:
+    notVisible: 'Loading water containers...' # waterContainers.loading
+    timeout: 20000
+    label: Water containers loaded
+- assertNotVisible:
+    text: 'Failed to load water containers' # waterContainers.loadFailed
+    label: Water containers loaded without an error
+# "Add container" is the header's + (WaterContainersScreen.tsx:269-280), and
+# also the empty list's button or the footer button under a list
+# (WaterContainersScreen.tsx:537-573). All three open the same form.
+- extendedWaitUntil:
+    visible: 'Add container' # waterContainers.add
+    timeout: 10000
+    label: Water containers screen shown
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: water-container-form-01-containers
+
+- tapOn:
+    text: 'Add container' # waterContainers.add
+    index: 0 # the top-most: the header's +
+    label: Open the new-container form
+# A new container starts on the Water tab with an empty name
+# (WaterContainerEditScreen.tsx:440-480).
+- extendedWaitUntil:
+    visible: 'e.g. My Water Bottle' # waterContainerEdit.namePlaceholder, the name field
+    timeout: 15000
+    label: New-container form open
+- assertVisible:
+    text: 'Drink \(linked food\)' # waterContainerEdit.tabDrink, the second tab
+    label: Water and Drink tabs shown
+- waitForAnimationToEnd:
+    timeout: 3000
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: water-container-form-02-new-container
+
+- runFlow: ../../subflows/go-back.yaml
+- extendedWaitUntil:
+    notVisible: 'e.g. My Water Bottle' # waterContainerEdit.namePlaceholder
+    timeout: 10000
+    label: New-container form closed
+- extendedWaitUntil:
+    visible: 'Add container' # waterContainers.add
+    timeout: 10000
+    label: Back on Water containers
+- runFlow: ../../subflows/go-back.yaml
+- extendedWaitUntil:
+    visible: 'Bottles, glasses, and drinks linked to foods' # screens.library.waterContainersSubtitle
+    timeout: 10000
+    label: Back on the Library hub
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: water-container-form-03-back

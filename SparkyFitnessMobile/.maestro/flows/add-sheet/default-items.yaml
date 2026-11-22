@@ -1,0 +1,120 @@
+# The + sheet lists its default items, and Done closes it on the tab it was
+# opened over. Safe on your everyday build: it opens the sheet from the Diary,
+# taps nothing in it but Done, and writes nothing. It force-stops the app on
+# launch: finish any workout or run recording first.
+#
+# Screens: Diary tab -> + sheet (src/components/AddSheet.tsx) -> Done.
+# Checks every item the sheet shows by default (src/constants/addMenuItems.ts:
+# the four cards DEFAULT_ADD_MENU_CARDS, then the rows in ADD_MENU_ITEM_KEYS
+# order, styled by ADD_MENU_ITEM_ROW_STYLES), each by a text only the sheet
+# shows: the short card names and the row hints (AddSheet.tsx:493-581).
+# "Food" and "Exercise" are not checked here: the Diary behind the sheet can
+# show the same words; flows/food/search.yaml and the exercise flows tap them.
+# Wellness is left out: it is there only while the cycle feature is on
+# (ADD_MENU_ITEM_FEATURES, AddSheet.tsx:527-534).
+#
+# Done is a dismissal without an action, which navigates back to the last
+# content tab (handleAddSheetDismissWithoutAction,
+# src/hooks/useAddSheetActions.ts:413-441): the Diary must still be showing.
+#
+# Assumes the default arrangement: Settings > Quick Actions untouched (or
+# reset), so no item is hidden, moved to a card or shown in another style,
+# and a phone tall enough to show the whole sheet (it does not scroll).
+appId: ${APP_ID}
+tags:
+  - add-sheet
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+
+# With the custom tab bar the Diary draws its own title, "Diary", above the
+# tab bar's "Diary": two of them mean the Diary is showing
+# (subflows/diary/open-diary.yaml).
+- tapOn:
+    text: 'Diary' # navigation.diary
+    index: -1 # the tab bar's "Diary", the bottom-most
+    label: Open the Diary tab
+- extendedWaitUntil:
+    visible:
+      text: 'Diary' # diary.title (DateNavigator) and navigation.diary (tab bar)
+      index: 1
+    timeout: 20000
+    label: Diary showing
+
+- runFlow: ../../subflows/open-add-sheet.yaml
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+
+# The four cards. Measurements and Scan Food show short names on a card
+# (ADD_MENU_CARD_LABELS, addMenuItems.ts:86-91).
+- assertVisible:
+    text: 'Measure' # addSheet.measureShort
+    below: 'Quick Actions' # addSheet.title
+    label: Measurements card listed
+- assertVisible:
+    text: 'Scan' # addSheet.scanShort
+    below: 'Quick Actions'
+    label: Scan Food card listed
+
+# List rows: name on the left, hint on the right (renderListRow,
+# AddSheet.tsx:342-369).
+- assertVisible:
+    text: 'Habits' # addSheet.checkInHint, the Daily Check-In row
+    below: 'Quick Actions'
+    label: Daily Check-In row listed
+- assertVisible:
+    text: 'Visual' # addSheet.photosHint, the Progress Photos row
+    below: 'Quick Actions'
+    label: Progress Photos row listed
+- assertVisible:
+    text: 'Symptoms & Health' # addSheet.symptomsHealth (its hint is only "Log")
+    below: 'Quick Actions'
+    label: Symptoms & Health row listed
+- assertVisible:
+    text: 'Brush, floss' # addSheet.oralCareHint, the Oral care row
+    below: 'Quick Actions'
+    label: Oral care row listed
+- assertVisible:
+    text: 'Repeat meals' # addSheet.copyFromYesterdayHint, the Copy from yesterday row
+    below: 'Quick Actions'
+    label: Copy from yesterday row listed
+
+# Mood and Mindfulness share a line (renderCompactRow, AddSheet.tsx:371-403).
+- assertVisible:
+    text: 'Track state' # addSheet.moodHint, the Mood row
+    below: 'Quick Actions'
+    label: Mood row listed
+- assertVisible:
+    text: 'Breathing, zen' # addSheet.mindfulnessHint, the Mindfulness row
+    below: 'Quick Actions'
+    label: Mindfulness row listed
+
+# The two buttons at the foot (renderActionButton, AddSheet.tsx:405-447).
+# The Dashboard's own launcher reads "Ask Sparky…", which this does not match.
+- assertVisible:
+    text: 'Ask Sparky' # addSheet.askSparky
+    below: 'Quick Actions'
+    label: Ask Sparky button listed
+- assertVisible:
+    text: 'Sync Health' # addSheet.syncHealthShort
+    below: 'Quick Actions'
+    label: Sync Health button listed
+- takeScreenshot: add-sheet-default-items-01-sheet
+
+# Done sits on the title's line, at its right (AddSheet.tsx:749-768).
+- tapOn:
+    text: 'Done' # common.done
+    rightOf: 'Quick Actions' # addSheet.title
+    label: Close the + sheet with Done
+- extendedWaitUntil:
+    notVisible: 'Quick Actions' # addSheet.title
+    timeout: 5000
+    label: The + sheet closed
+# The return to the last tab runs when the sheet has gone, and again a frame
+# and 150 ms later (useAddSheetActions.ts:434-440): let it settle first.
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible:
+    text: 'Diary' # diary.title and navigation.diary
+    index: 1
+    label: Still on the Diary, the tab the sheet was opened over
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: add-sheet-default-items-02-closed

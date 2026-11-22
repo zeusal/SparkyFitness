@@ -1,0 +1,86 @@
+# Diary > a meal section > MealTypeDetail, on a meal the flow logged itself.
+#
+# WRITES DATA to the account the app is signed in to: run it only with a test
+# account. It does not clear the app. It creates one uniquely named food
+# through the API and logs it for today as breakfast, finds that entry in the
+# Diary, opens its meal section (MealTypeDetail) and checks the entry is
+# listed there, then goes back. The food is deleted together with the entry
+# when the flow ends, also after a failed step (not after Ctrl+C or a killed
+# run: then delete "Maestro Diary ..." by hand, Library > Foods > the food >
+# Delete Food > Delete including history; a plain Delete keeps the entry).
+# Screens: Diary tab (src/screens/DiaryScreen.tsx, src/components/FoodSummary.tsx),
+# MealTypeDetail (src/screens/MealTypeDetailScreen.tsx).
+#
+# "Today" is the computer's date (the API calls run there): the phone must be
+# on the same date.
+#
+# Every -e value, API_KEY included, is stored in plain text in the run's
+# commands.json and maestro.log: use a revocable key of a test account, always
+# pass --test-output-dir and --debug-output, never --verbose, and delete the
+# run's folders afterwards.
+#
+# Env:
+#   APP_ID           the app under test, signed in to the test account
+#   SERVER_URL       the server as this computer reaches it
+#   HOST_SERVER_URL  optional, overrides SERVER_URL for those API calls
+#   API_KEY          a full-access key of THE SAME account the app uses
+#
+# Run: see README "Data flows", with this file's path.
+appId: ${APP_ID}
+tags:
+  - diary
+  - writes-data
+onFlowComplete:
+  - runScript:
+      file: ../../scripts/cleanup-food.js
+      label: Delete the test food and its diary entry
+---
+- runScript:
+    file: ../../scripts/diary-seed-entry.js
+    label: Create a test food and log it for today through the API
+- runFlow: ../../subflows/launch-signed-in.yaml
+- runFlow: ../../subflows/diary/open-diary.yaml
+
+# The diary row shows the entry's food name on its own (SwipeableFoodRow).
+# Centred, so its meal section's header stays on screen above it.
+- scrollUntilVisible:
+    element: ${output.foodName}
+    direction: DOWN
+    centerElement: true
+    timeout: 20000
+    label: Seeded entry listed in today's Diary (is the phone on the computer's date?)
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: diary-meal-type-detail-01-diary
+
+# Each meal section header is a button labelled "<meal> nutrition breakdown"
+# (foodSummary.nutritionBreakdown). The bottom-most one above the seeded row
+# is that row's own section, whatever the meal's label.
+- tapOn:
+    text: '.+ nutrition breakdown'
+    above: ${output.foodName}
+    index: -1
+    label: Open the seeded entry's meal section
+- extendedWaitUntil:
+    visible: 'Foods' # mealTypeDetail.labels.foods; the Diary has no "Foods" text
+    timeout: 15000
+    label: MealTypeDetail shows its foods
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- scrollUntilVisible:
+    element: ${output.foodName}
+    direction: DOWN
+    timeout: 10000
+    label: The seeded entry is listed in its meal
+- takeScreenshot: diary-meal-type-detail-02-meal
+
+- runFlow: ../../subflows/go-back.yaml
+- extendedWaitUntil:
+    visible:
+      text: 'Diary' # diary.title and navigation.diary
+      index: 1 # both on screen: the Diary is showing again
+    timeout: 10000
+    label: Back on the Diary
+- assertNotVisible:
+    text: 'Foods'
+    label: MealTypeDetail is closed
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: diary-meal-type-detail-03-back

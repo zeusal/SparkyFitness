@@ -1,0 +1,58 @@
+# Dashboard Hydration card > History: the card shows its water buttons, and
+# its History link opens the day's drinks (WaterLog), which loads and is left
+# again with Back.
+# Screens: Dashboard Hydration card (src/components/HydrationGauge.tsx, wired
+# in src/screens/DashboardScreen.tsx:824-855) -> Drinks
+# (src/screens/WaterLogScreen.tsx) -> back.
+#
+# Safe on your everyday build: the - and + buttons, the container chips and
+# the quick-add drinks are never tapped (each logs, removes or selects
+# something), and on Drinks no delete button is touched. It force-stops the
+# app on launch: finish any workout or run recording first.
+appId: ${APP_ID}
+tags:
+  - water
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+- runFlow: ../../subflows/water/open-hydration-card.yaml
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: water-hydration-card-01-card
+
+# History opens the drinks of the Dashboard's day, today on a fresh launch
+# (DashboardScreen.tsx:839-841).
+- tapOn:
+    text: 'Drink history' # waterLog.open
+    label: Open the day's drinks from the Hydration card
+- extendedWaitUntil:
+    visible: 'Drinks' # waterLog.title, the header title (WaterLogScreen.tsx:93-96)
+    timeout: 15000
+    label: Drinks screen open
+- extendedWaitUntil:
+    notVisible: 'Loading drinks...' # waterLog.loading
+    timeout: 20000
+    label: Drinks loaded
+- assertNotVisible:
+    text: 'Could not load drinks' # waterLog.loadFailed
+    label: Drinks loaded without an error
+# The list starts with the day it shows (WaterLogScreen.tsx:291-295,
+# formatDateLabel in src/utils/dateUtils.ts:84-95). Under it: one row per
+# drink, or "No drinks logged".
+- assertVisible:
+    text: 'Today' # date.today
+    label: Drinks of today listed
+- waitForAnimationToEnd:
+    timeout: 3000
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: water-hydration-card-02-drinks
+
+- runFlow: ../../subflows/go-back.yaml
+- extendedWaitUntil:
+    notVisible: 'Drinks' # waterLog.title
+    timeout: 10000
+    label: Drinks screen closed
+- extendedWaitUntil:
+    visible: 'Drink history' # waterLog.open
+    timeout: 10000
+    label: Back on the Dashboard's Hydration card
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: water-hydration-card-03-back

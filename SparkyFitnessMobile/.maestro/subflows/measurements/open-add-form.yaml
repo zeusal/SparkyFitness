@@ -1,0 +1,28 @@
+# From a tab screen: + sheet > Measurements, waits for the check-in
+# measurements form (src/screens/MeasurementsAddScreen.tsx) to load the day.
+# Opening it only reads; only its Save writes.
+#
+# The item is the "Measure" tile by default (addSheet.measureShort,
+# DEFAULT_ADD_MENU_CARDS in src/constants/addMenuItems.ts:45-50) or a
+# "Measurements" row when moved below the tiles in Settings > Quick Actions;
+# tile and row both carry the accessibility label "Measurements"
+# (AddSheet.tsx:317-412, every style). Hidden there, it is not in the sheet and the
+# tap below fails.
+appId: ${APP_ID}
+---
+- runFlow: ../open-add-sheet.yaml
+- tapOn:
+    text: 'Measurements' # addSheet.measurements (accessibility label)
+    below: 'Quick Actions' # addSheet.title (narrows to the sheet, see open-add-sheet.yaml)
+    index: 0
+    label: Open Measurements from the + sheet
+# The weight input's testID (MeasurementsAddScreen.tsx:1582-1634), shown in
+# every weight unit once the day's measurements and preferences have loaded.
+- extendedWaitUntil:
+    visible:
+      id: 'field-weight'
+    timeout: 20000
+    label: Measurements form open and loaded (if not, is Measurements hidden in Settings > Quick Actions?)
+- waitForAnimationToEnd:
+    timeout: 3000
+- runFlow: ../assert-no-error-boundary.yaml

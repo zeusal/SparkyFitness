@@ -1,0 +1,22 @@
+# Opens the Diary tab (src/screens/DiaryScreen.tsx) and waits for its day to
+# load. Reads only.
+#
+# With the custom tab bar (Android, and iOS without the Liquid Glass tab bar)
+# the Diary draws its own title, "Diary", in DateNavigator, above the tab
+# bar's "Diary". Two "Diary" texts on screen therefore mean the Diary is
+# showing: the Dashboard shows only the tab label, and inactive tabs are
+# detached from the view tree. The title appears once the connection check
+# has finished.
+appId: ${APP_ID}
+---
+- tapOn:
+    text: 'Diary' # navigation.diary
+    index: -1 # the tab bar's "Diary", the bottom-most
+    label: Open the Diary tab
+- extendedWaitUntil:
+    visible:
+      text: 'Diary' # diary.title (DateNavigator) and navigation.diary (tab bar)
+      index: 1 # exists only while both are on screen
+    timeout: 20000
+    label: Diary title shown above the tab bar
+- runFlow: wait-day-loaded.yaml

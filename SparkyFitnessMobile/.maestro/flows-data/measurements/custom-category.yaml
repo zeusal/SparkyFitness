@@ -1,0 +1,105 @@
+# Creates a custom measurement category through Settings > Custom Measurements
+# > + (Add category) and finds it in the list.
+#
+# WRITES DATA to the account the app is signed in to: run it only with a test
+# account. It does not clear the app. It types a uniquely named category
+# ("Maestro Category <number>", measurement type "bpm", the form's default
+# Numeric and Daily) and saves it; no value is ever logged in it. When the flow
+# ends, also after a failed step, the category is found through the API by
+# that name and deleted (not after Ctrl+C or a killed run: then delete
+# "Maestro Category ..." by hand, Settings > Custom Measurements > the trash
+# icon next to it > Delete).
+# Screens: Settings tab, Custom measurements
+# (src/screens/CustomCategoriesScreen.tsx), Add category
+# (src/screens/CustomCategoryEditScreen.tsx).
+#
+# A weight saved from the + sheet's Measurements form is not covered: the
+# check-in is one row per day (check_in_measurements) that health sync also
+# writes (weight and body fat: SparkyFitnessServer/services/
+# healthDataHandlers.ts:617-633 and 884; steps: upsertStepData), so no API
+# call removes only a value this flow typed.
+#
+# Every -e value, API_KEY included, is stored in plain text in the run's
+# commands.json and maestro.log: use a revocable key of a test account, always
+# pass --test-output-dir and --debug-output, never --verbose, and delete the
+# run's folders afterwards.
+#
+# Env:
+#   APP_ID           the app under test, signed in to the test account
+#   SERVER_URL       the server as this computer reaches it
+#   HOST_SERVER_URL  optional, overrides SERVER_URL for those API calls
+#   API_KEY          a full-access key of THE SAME account the app uses
+#
+# Run: see README "Data flows", with this file's path.
+appId: ${APP_ID}
+tags:
+  - measurements
+  - writes-data
+onFlowComplete:
+  - runScript:
+      file: ../../scripts/measurements-custom-category-cleanup.js
+      label: Find the new category by its name and delete it
+---
+- runScript:
+    file: ../../scripts/measurements-custom-category-setup.js
+    label: Pick a unique category name and check the API key can delete categories
+- runFlow: ../../subflows/launch-signed-in.yaml
+- runFlow: ../../subflows/measurements/open-custom-categories.yaml
+
+# "Add category" is the header's + (accessibility label) and, below the list,
+# the footer or empty-state button; the top-most is the header's.
+- tapOn:
+    text: 'Add category' # customCategories.add
+    index: 0
+    label: Open the Add category form from the header +
+- extendedWaitUntil:
+    visible: 'Internal identifier used for syncing' # customCategoryEdit.nameHelp
+    timeout: 15000
+    label: Add category form open
+
+# Saving needs a name and a measurement type (CustomCategoryEditScreen.tsx
+# save: "Name and measurement type are required.").
+- tapOn:
+    text: 'e.g. Blood Sugar' # customCategoryEdit.namePlaceholder
+    label: Focus the Name field
+- inputText: ${output.categoryName}
+# The field was just typed into, so the keyboard is up and Android Back
+# (hideKeyboard) only closes it.
+- hideKeyboard
+# The quick-pick unit chips under Measurement type are literals
+# (COMMON_UNITS, CustomCategoryEditScreen.tsx:33-43); one tap fills the field.
+- scrollUntilVisible:
+    element: 'bpm'
+    direction: DOWN
+    timeout: 10000
+    label: Show the unit chips
+- tapOn:
+    text: 'bpm'
+    label: Pick bpm as the measurement type
+- assertVisible: ${output.categoryName}
+- takeScreenshot: measurements-custom-category-01-filled
+
+# The footer's Save (common.save, FooterSaveBar; the header Save is iOS
+# only). Mark it before the tap: from then on the cleanup must find and
+# delete the category.
+- evalScript: ${output.categorySaveTapped = true}
+- tapOn:
+    text: 'Save' # common.save
+    label: Save the category
+- extendedWaitUntil:
+    notVisible: 'Internal identifier used for syncing' # customCategoryEdit.nameHelp
+    timeout: 20000
+    label: Category saved and the form closed (else look for a "Failed to save category" toast)
+- extendedWaitUntil:
+    visible: 'Add category' # customCategories.add
+    timeout: 10000
+    label: Back on the Custom measurements list
+# A category without a display name is listed under its name
+# (CustomCategoriesScreen.tsx renderCategory).
+- scrollUntilVisible:
+    element: ${output.categoryName}
+    direction: DOWN
+    timeout: 20000
+    label: New category listed
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: measurements-custom-category-02-listed

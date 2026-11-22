@@ -1,0 +1,27 @@
+# Library > Foods: the saved-foods list opens, loads without an error and
+# Back returns to the Library hub.
+# Screens: Library tab (src/screens/LibraryScreen.tsx), Foods library
+# (src/screens/FoodsLibraryScreen.tsx).
+#
+# Safe on your everyday build: it only reads (no search typed, no food opened,
+# the ownership filter left as it is). It force-stops the app on launch:
+# finish any workout or run recording first.
+appId: ${APP_ID}
+tags:
+  - food
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+- runFlow: ../../subflows/food/open-foods-library.yaml
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: food-foods-library-01-list
+
+- runFlow: ../../subflows/go-back.yaml
+- extendedWaitUntil:
+    visible: 'Browse' # screens.library.browse
+    timeout: 10000
+    label: Back on the Library hub
+- assertNotVisible:
+    text: 'Search foods...'
+    label: The Foods library is closed
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: food-foods-library-02-library

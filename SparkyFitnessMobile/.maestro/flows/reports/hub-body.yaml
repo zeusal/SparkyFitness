@@ -1,0 +1,65 @@
+# The body and wellbeing reports open from the Reports hub, safe on your
+# everyday build: it only opens screens and goes back. It does not clear the
+# app, write data, change a report setting or pick a range. It does force-stop
+# the app on launch, so finish any workout or run recording first.
+#
+# Screens: Library -> Reports hub (src/screens/ReportsScreen.tsx)
+#   -> Sleep analytics (SleepAnalyticsScreen.tsx)
+#   -> Measurements (MeasurementsReportScreen.tsx)
+#   -> Mood (MoodReportScreen.tsx)
+#   -> Heart Rate (HeartRateReportScreen.tsx)
+#   -> Oral care (OralCareReportScreen.tsx)
+# each followed by Back to the hub. Every report is checked for the range
+# control it shows in all its states ('90d', utils/trendRange.ts:30), its
+# title and no error boundary, so empty and data states both pass; none of
+# them needs data. A report hidden in Customize Reports is skipped
+# (subflows/reports/visit-report.yaml).
+appId: ${APP_ID}
+tags:
+  - reports
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+- runFlow: ../../subflows/reports/open-hub.yaml
+- assertVisible:
+    id: 'reports-link-.*' # ReportsScreen.tsx:147, one row per report
+    label: The hub lists reports
+
+- runFlow:
+    file: ../../subflows/reports/visit-report.yaml
+    env:
+      ROW_ID: reports-link-sleep
+      DESTINATION: '90d' # ranges.90d
+      TITLE: 'Sleep Analytics' # sleepAnalytics.title
+      SHOT: reports-hub-body-01-sleep
+
+- runFlow:
+    file: ../../subflows/reports/visit-report.yaml
+    env:
+      ROW_ID: reports-link-measurements
+      DESTINATION: '90d' # ranges.90d
+      TITLE: 'Measurements' # measurementsReport.title
+      SHOT: reports-hub-body-02-measurements
+
+- runFlow:
+    file: ../../subflows/reports/visit-report.yaml
+    env:
+      ROW_ID: reports-link-mood
+      DESTINATION: '90d' # ranges.90d
+      TITLE: 'Mood' # moodReport.title
+      SHOT: reports-hub-body-03-mood
+
+- runFlow:
+    file: ../../subflows/reports/visit-report.yaml
+    env:
+      ROW_ID: reports-link-heartRate
+      DESTINATION: '90d' # ranges.90d
+      TITLE: 'Heart Rate' # reports.heartRate (HeartRateReportScreen.tsx:55-58)
+      SHOT: reports-hub-body-04-heart-rate
+
+- runFlow:
+    file: ../../subflows/reports/visit-report.yaml
+    env:
+      ROW_ID: reports-link-oralCare
+      DESTINATION: '90d' # ranges.90d
+      TITLE: 'Oral care' # oralCareReport.title
+      SHOT: reports-hub-body-05-oral-care

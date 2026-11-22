@@ -1,0 +1,27 @@
+# Opens the Reports hub (src/screens/ReportsScreen.tsx) from the Library tab's
+# Reports row (src/screens/LibraryScreen.tsx:611-626), the entry point that is
+# there whenever the app is connected. The Dashboard's Health Trends link is
+# checked by flows/dashboard/reports-link.yaml. English UI only.
+appId: ${APP_ID}
+---
+- tapOn:
+    text: 'Library' # navigation.library, the bottom-most "Library" is the tab
+    index: -1
+# The row's title "Reports" is also a Settings row and the Dashboard link;
+# its subtitle is on this row only.
+- scrollUntilVisible:
+    element: 'Nutrition, sleep, mood and exercise trends' # screens.library.reportsSubtitle
+    direction: DOWN
+    timeout: 20000
+    label: Scroll the Library to its Reports row
+- tapOn:
+    text: 'Nutrition, sleep, mood and exercise trends' # screens.library.reportsSubtitle
+    label: Open the Reports hub
+# The hub header's options icon (ReportsScreen.tsx:29-37), on the hub only.
+- extendedWaitUntil:
+    visible: 'Customize reports' # reports.customize (accessibility label)
+    timeout: 15000
+    label: Reports hub open
+- waitForAnimationToEnd:
+    timeout: 3000
+- runFlow: ../assert-no-error-boundary.yaml

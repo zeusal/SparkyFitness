@@ -1,0 +1,149 @@
+# Reports hub, Customize Reports and the food and drink reports, safe on your
+# everyday build: it only opens screens and goes back. It does not clear the
+# app, write data, change a report setting (Customize Reports is opened and
+# closed, nothing on it is touched; its Reset button is never tapped) or pick a
+# range. It does force-stop the app on launch, so finish any workout or run
+# recording first.
+#
+# Screens: Library -> Reports hub (src/screens/ReportsScreen.tsx)
+#   -> Customize Reports (ReportsSettingsScreen.tsx) and back
+#   -> Nutrition (NutritionReportScreen.tsx)
+#        -> Protein trends (NutrientTrendsScreen.tsx) when the report has food
+#           logged in its window: the "Trend by nutrient" card
+#           (NutritionReportScreen.tsx:557-583) shows only then, and only while
+#           that section is on in Customize Reports
+#   -> Hydration (HydrationReportScreen.tsx)
+#   -> Caffeine and alcohol (SubstancesReportScreen.tsx)
+# Each report is checked for the range control every report shows in all its
+# states ('90d', utils/trendRange.ts:30), its title and no error boundary, so
+# empty and data states both pass. A report hidden in Customize Reports is
+# skipped (subflows/reports/visit-report.yaml).
+appId: ${APP_ID}
+tags:
+  - reports
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+- runFlow: ../../subflows/reports/open-hub.yaml
+- assertVisible:
+    id: 'reports-link-.*' # ReportsScreen.tsx:147, one row per report
+    label: The hub lists reports
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: reports-hub-food-and-drink-01-hub
+
+# Customize Reports, from the hub header's options icon. Its title "Customize
+# Reports" also matches "Customize reports" (Maestro text is case-insensitive),
+# so it is recognised by its Reset button's accessibility label instead.
+- tapOn:
+    text: 'Customize reports' # reports.customize (accessibility label, ReportsScreen.tsx:33-35)
+    label: Open Customize Reports
+- extendedWaitUntil:
+    visible: 'Reset reports to their defaults' # reportsSettings.resetA11y, header button: never tapped
+    timeout: 10000
+    label: Customize Reports open
+- waitForAnimationToEnd:
+    timeout: 3000
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: reports-hub-food-and-drink-02-customize
+- runFlow: ../../subflows/go-back.yaml
+- extendedWaitUntil:
+    notVisible: 'Reset reports to their defaults' # reportsSettings.resetA11y
+    timeout: 10000
+    label: Customize Reports closed
+- extendedWaitUntil:
+    visible:
+      id: 'reports-link-.*'
+    timeout: 10000
+    label: Back on the Reports hub
+
+# Nutrition, then its Protein trend when the report has food logged. Searched
+# for both ways, as in subflows/reports/visit-report.yaml (first in factory
+# order, but Customize Reports can move it).
+- scrollUntilVisible:
+    element:
+      id: 'reports-link-nutrition'
+    direction: DOWN
+    timeout: 8000
+    optional: true
+    label: Find the Nutrition row (below)
+- scrollUntilVisible:
+    element:
+      id: 'reports-link-nutrition'
+    direction: UP
+    timeout: 8000
+    optional: true
+    label: Find the Nutrition row (above)
+- runFlow:
+    when:
+      visible:
+        id: 'reports-link-nutrition'
+    label: Open Nutrition unless it is hidden in Customize Reports
+    commands:
+      - tapOn:
+          id: 'reports-link-nutrition'
+      - extendedWaitUntil:
+          visible: '90d' # ranges.90d, the report's range control
+          timeout: 20000
+          label: Nutrition report open
+      - assertVisible:
+          text: 'Nutrition' # nutritionReport.title
+          label: Nutrition title
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - runFlow: ../../subflows/assert-no-error-boundary.yaml
+      - takeScreenshot: reports-hub-food-and-drink-03-nutrition
+      # testID nutrition-trend-protein (NutritionReportScreen.tsx:567).
+      # Without food logged in the window this scroll gives up after its
+      # timeout and the trend is skipped.
+      - scrollUntilVisible:
+          element:
+            id: 'nutrition-trend-protein'
+          direction: DOWN
+          timeout: 15000
+          optional: true
+          label: Find Trend by nutrient > Protein (needs food logged in the window)
+      - runFlow:
+          when:
+            visible:
+              id: 'nutrition-trend-protein'
+          label: Open the Protein trend
+          commands:
+            - tapOn:
+                id: 'nutrition-trend-protein'
+            - extendedWaitUntil:
+                visible: 'Summary Statistics' # nutrientTrends.labels.summary
+                timeout: 20000
+                label: Protein trend open
+            - assertVisible:
+                text: 'Protein Trends' # nutrientTrends.title with nutrients.protein
+                label: Protein trend title
+            - waitForAnimationToEnd:
+                timeout: 3000
+            - runFlow: ../../subflows/assert-no-error-boundary.yaml
+            - takeScreenshot: reports-hub-food-and-drink-04-protein-trend
+            - runFlow: ../../subflows/go-back.yaml
+            - extendedWaitUntil:
+                visible:
+                  id: 'nutrition-trend-protein'
+                timeout: 10000
+                label: Back on the Nutrition report
+      - runFlow: ../../subflows/go-back.yaml
+      - extendedWaitUntil:
+          visible: 'Customize reports' # reports.customize
+          timeout: 10000
+          label: Back on the Reports hub
+
+- runFlow:
+    file: ../../subflows/reports/visit-report.yaml
+    env:
+      ROW_ID: reports-link-hydration
+      DESTINATION: '90d' # ranges.90d
+      TITLE: 'Hydration' # hydrationReport.title
+      SHOT: reports-hub-food-and-drink-05-hydration
+
+- runFlow:
+    file: ../../subflows/reports/visit-report.yaml
+    env:
+      ROW_ID: reports-link-substances
+      DESTINATION: '90d' # ranges.90d
+      TITLE: 'Caffeine and alcohol' # substancesReport.title
+      SHOT: reports-hub-food-and-drink-06-caffeine-and-alcohol

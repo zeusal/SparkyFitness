@@ -1,0 +1,34 @@
+# Opens the Dashboard, waits for the day to load and scrolls to the Hydration
+# card (src/components/HydrationGauge.tsx), centred, with its water buttons
+# ready. Reads only: it taps no button, chip or drink on the card.
+#
+# The card's header link reads "History" but is labelled "Drink history" for
+# screen readers (HydrationGauge.tsx:186-201); that label is on this card
+# only, while "History" and "Hydration" are on other cards and charts too.
+# The card is there unless Dashboard Settings hides it (hydrationCardVisible,
+# on by default: src/stores/appPreferencesStore.ts:117).
+appId: ${APP_ID}
+---
+- tapOn:
+    text: 'Dashboard' # navigation.dashboard
+    index: -1 # the tab bar's "Dashboard", the bottom-most
+    label: Open the Dashboard tab
+- extendedWaitUntil:
+    notVisible: 'Loading summary...' # dashboard.loadingSummary
+    timeout: 30000
+    label: The day's summary loaded
+- assertNotVisible:
+    text: 'Failed to load summary' # dashboard.loadFailed
+    label: The day's summary did not fail to load
+- scrollUntilVisible:
+    element: 'Drink history' # waterLog.open, the card's History link (accessibility label)
+    direction: DOWN
+    centerElement: true
+    timeout: 30000
+    label: Scroll to the Hydration card (Dashboard Settings > Hydration must be on)
+# The - and + buttons are drawn once the water containers have loaded
+# (DashboardScreen.tsx:842-843, HydrationGauge.tsx:206-257).
+- extendedWaitUntil:
+    visible: 'Add water' # dashboard.addWater, the + button (accessibility label)
+    timeout: 15000
+    label: Hydration card ready (water containers loaded)

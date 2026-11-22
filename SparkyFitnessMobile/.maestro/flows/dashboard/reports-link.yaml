@@ -1,0 +1,72 @@
+# The Dashboard's Reports link opens the Reports hub, safe on your everyday
+# build: it does not clear the app, write data or change settings. It does
+# force-stop the app on launch, so finish any workout or run recording first.
+#
+# Screens: Dashboard -> Reports hub -> back to the Dashboard. The link sits
+# beside the Health Trends heading (DashboardScreen.tsx:911-944, testID
+# dashboard-reports-link) and is selected by that id, since "Reports" is also a
+# Library row, a Settings row and the hub's title.
+#
+# Conditional: the link is part of the Health Trends card, which Dashboard
+# settings can hide (healthTrendsCardVisible, on by default). With the card
+# hidden the scroll gives up after its timeout and the rest is skipped; the
+# hub itself is covered by flows/reports/.
+appId: ${APP_ID}
+tags:
+  - dashboard
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+
+- tapOn:
+    text: 'Dashboard' # navigation.dashboard, the bottom-most is the tab
+    index: -1
+- extendedWaitUntil:
+    visible: 'Choose date' # familyDiary.chooseDate, the DateNavigator's date button
+    timeout: 30000
+    label: Dashboard connected (DateNavigator shown)
+- extendedWaitUntil:
+    notVisible: 'Loading summary...' # dashboard.loadingSummary
+    timeout: 30000
+    label: Today's summary loaded
+
+# Health Trends is one of the last cards (src/constants/dashboardCards.ts).
+- scrollUntilVisible:
+    element:
+      id: 'dashboard-reports-link'
+    direction: DOWN
+    timeout: 30000
+    optional: true
+    label: Scroll to the Health Trends card's Reports link (absent when the card is hidden)
+- runFlow:
+    when:
+      visible:
+        id: 'dashboard-reports-link'
+    label: Open the Reports hub from the Dashboard
+    commands:
+      - assertVisible:
+          text: 'Health Trends' # dashboard.healthTrends, the card's heading
+          label: The link belongs to the Health Trends card
+      - takeScreenshot: dashboard-reports-link-01-health-trends
+      - tapOn:
+          id: 'dashboard-reports-link'
+      - extendedWaitUntil:
+          visible: 'Customize reports' # reports.customize, the hub header icon (hub only)
+          timeout: 15000
+          label: Reports hub open
+      - assertVisible:
+          id: 'reports-link-.*' # ReportsScreen.tsx:147, one row per report
+          label: The hub lists reports
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - runFlow: ../../subflows/assert-no-error-boundary.yaml
+      - takeScreenshot: dashboard-reports-link-02-reports-hub
+      - runFlow: ../../subflows/go-back.yaml
+      - extendedWaitUntil:
+          visible: 'Choose date' # familyDiary.chooseDate
+          timeout: 10000
+          label: Back on the Dashboard
+      - assertNotVisible:
+          text: 'Customize reports' # reports.customize
+          label: The hub is closed
+      - runFlow: ../../subflows/assert-no-error-boundary.yaml
+      - takeScreenshot: dashboard-reports-link-03-back-on-dashboard

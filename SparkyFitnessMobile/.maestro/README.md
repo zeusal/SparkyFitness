@@ -11,16 +11,22 @@ they visit yet (see "Toward the project"). Android first; iOS is blocked for now
 
 ## What is here
 
-| Path                                         | What it does                                                                                                   | Safe on your everyday build?                           |
-| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| `flows/smoke-tabs.yaml`                      | Every tab, the + sheet and Calorie Settings open without an error-boundary message; a screenshot of each.      | Yes (see below)                                        |
-| `flows/add-sheet-android-back.yaml`          | Android Back inside the + sheet: sub-menu, main menu, closed, app still open (#2868).                          | Yes (see below)                                        |
-| `flows-data/food-log.yaml`                   | Creates a uniquely named food through the API, logs it from + → Food, finds it in the Diary, deletes it again. | Writes to the signed-in account: test account only     |
-| `flows-clean-install/first-run-api-key.yaml` | Clean install: Onboarding, API key sign-in, tabs.                                                              | No: wipes the app under test. A `.e2e` test build only |
-| `subflows/`                                  | Launch, announcement, error-boundary check, + sheet, API key sign-in.                                          | —                                                      |
-| `scripts/`                                   | API seed and cleanup, and a guard that refuses to wipe anything but a `.e2e` build.                            | —                                                      |
+Flows are grouped by feature: one folder per area, and every flow tagged with its area, so a
+change can run just the flows for what it touched.
 
-`maestro test .maestro` runs only `flows/` (see `config.yaml`). The other folders run by path.
+| Path                   | What it holds                                                                                                                           | Safe on your everyday build?                           |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `flows/<area>/`        | Flows that only open screens and look: smoke, dashboard, diary, food, exercise, library, settings, reports and more (list below).       | Yes (see below)                                        |
+| `flows-data/<area>/`   | Flows that write data through the app and clean it up through the API.                                                                  | Writes to the signed-in account: test account only     |
+| `flows-clean-install/` | Clean install: Onboarding, API key sign-in, tabs.                                                                                       | No: wipes the app under test. A `.e2e` test build only |
+| `subflows/`            | Shared steps: launch, announcement, error-boundary check, + sheet, go back, API key sign-in; `subflows/<area>/` for one area's helpers. | —                                                      |
+| `scripts/`             | API seed and cleanup, and a guard that refuses to wipe anything but a `.e2e` build.                                                     | —                                                      |
+| `areas.json`           | Which code paths belong to which area (used by `pnpm run maestro:affected`).                                                            | —                                                      |
+
+`maestro test .maestro` runs every flow under `flows/` (see `config.yaml`).
+`config-data.yaml` selects `flows-data/` instead; `flows-clean-install/` runs by path.
+
+<!-- flow-list -->
 
 "Safe" means: no clearState, no data written, permissions left as they are (`permissions: {}`).
 The flows still force-stop the app when they launch it, so finish any workout or run recording
@@ -98,12 +104,27 @@ maestro --no-ansi test .maestro --device <serial> -e APP_ID=org.SparkyApps.Spark
   --test-output-dir .maestro-results --debug-output .maestro-results
 ```
 
-- One flow: `maestro test .maestro/flows/smoke-tabs.yaml --device <serial> -e APP_ID=... --test-output-dir .maestro-results --debug-output .maestro-results`
+- One area: add `--include-tags diary` (several: `--include-tags diary,food`).
+- One flow: `maestro test .maestro/flows/smoke/smoke-tabs.yaml --device <serial> -e APP_ID=... --test-output-dir .maestro-results --debug-output .maestro-results`
 - `--no-ansi` avoids slow console output on Windows. Keep `:`, `>`, `?` and `|` out of flow names.
 - What Maestro sees on screen right now: `maestro --device <serial> hierarchy`.
 - Always pass `--test-output-dir .maestro-results --debug-output .maestro-results` (ignored by
   git). Without `--debug-output`, Maestro's own log still goes to `~/.maestro/tests` even when
   `--test-output-dir` is set. Screenshots can show account data: look before you share them.
+
+### Run only what your change touches
+
+```sh
+pnpm run maestro:affected -- --app-id org.SparkyApps.SparkyFitnessMobile1.dev --device <serial>
+```
+
+It lists the files changed against `upstream/main` (or `origin/main`, or `--base <ref>`), plus
+uncommitted and untracked ones, maps them to areas with `areas.json`, and runs the `smoke` flows
+and the flows of those areas. A change to something every screen uses (`App.tsx`, navigation,
+`shared/`, the kit's own subflows, dependencies) runs every flow. `--dry-run` only prints what
+would run; `--all` runs everything; `--with-data` also runs the matching `flows-data/` flows,
+reading `SPARKY_E2E_SERVER_URL` and `SPARKY_E2E_API_KEY` from the environment (see "Secrets").
+When you add an area, add its folder, its tag and its globs in `areas.json` together.
 
 ### Keeping the kit while you work on other branches
 
@@ -139,15 +160,20 @@ Maestro writes every `-e` value, `API_KEY` included, in plain text into the run'
 
 ## Data flows
 
-`flows-data/food-log.yaml` needs a test account on your server and a full-access API key of
-that same account (web app → Settings). The app under test must be signed in to that account,
-and FoodSearch's ownership filter (menu on the search screen) must be All or Mine.
+The flows in `flows-data/` need a test account on your server and a full-access API key of
+that same account (web app → Settings). The app under test must be signed in to that account.
+The food flows also need FoodSearch's ownership filter (menu on the search screen) set to All or
+Mine.
 
 ```powershell
-maestro --no-ansi test .maestro/flows-data/food-log.yaml --device <serial> -e APP_ID=<package> `
+maestro --no-ansi test .maestro --config .maestro/config-data.yaml --include-tags food `
+  --device <serial> -e APP_ID=<package> `
   -e SERVER_URL=<server as this computer reaches it> -e "API_KEY=$env:SPARKY_E2E_API_KEY" `
-  --test-output-dir .maestro-results
+  --test-output-dir .maestro-results --debug-output .maestro-results
 ```
+
+Leave out `--include-tags` to run every data flow, or pass one file
+(`.maestro/flows-data/food/food-log.yaml`) instead of `.maestro --config ...`.
 
 The API calls run on the computer, so `SERVER_URL` is the address the computer uses. The food is
 deleted with its diary entry when the flow ends, also after a failed step, but not after Ctrl+C
@@ -198,8 +224,15 @@ maestro --no-ansi test .maestro/flows-clean-install --device <serial> `
 
 ## Writing flows
 
-- Keep flows in `flows/` free of clearState and data writes, and use `permissions: {}` on
-  `launchApp` (Maestro grants every permission on launch otherwise).
+- A flow is a user journey of one feature ("log a food", "open each Settings screen"), not a
+  screen. Put it in `flows/<area>/` (or `flows-data/<area>/` if it writes data) and tag it with
+  its area first: `tags: [diary]`, plus `android`, `regression` or `writes-data` when they apply.
+  Steps several flows share go in `subflows/` (one area only: `subflows/<area>/`).
+- Keep flows in `flows/` free of clearState, data writes, setting changes and system dialogs,
+  and start them with `subflows/launch-signed-in.yaml`, which launches with `permissions: {}`
+  (Maestro grants every permission on launch otherwise). Go back with `subflows/go-back.yaml`.
+- After each tap that navigates, wait for something only the destination shows, then run
+  `subflows/assert-no-error-boundary.yaml` and take a screenshot.
 - Use variables (`-e`) for app ids, URLs and keys; never commit credentials, personal URLs or
   screenshots of real accounts.
 - Tap tabs with `index: -1` (the bottom-most match): "Dashboard" and "Diary" are also Settings

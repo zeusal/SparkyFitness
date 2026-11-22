@@ -1,0 +1,42 @@
+# Library > Create > Food: the New Food form opens, scrolls down to its Save
+# button, and Back closes it without saving.
+# Screens: Library tab (src/screens/LibraryScreen.tsx), New Food form
+# (src/screens/FoodFormScreen.tsx > src/screens/foodForm/CreateFoodMode.tsx,
+# src/components/FoodForm.tsx).
+#
+# Safe on your everyday build: nothing is typed and Save is never tapped, so
+# no food is created (flows-data/food/new-food.yaml covers the save). It
+# force-stops the app on launch: finish any workout or run recording first.
+appId: ${APP_ID}
+tags:
+  - food
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+- runFlow: ../../subflows/food/open-new-food-form.yaml
+- assertVisible:
+    text: 'New Food' # createFood.title, the form's header title
+    label: The form is the New Food form
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: food-new-food-form-01-top
+
+# In library mode the form's own button at the end reads "Save" (common.save);
+# the header Save is iOS-only (placement 'native-only').
+- scrollUntilVisible:
+    element: 'Save'
+    direction: DOWN
+    timeout: 20000
+    label: Scroll to the end of the form (Save is not tapped)
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: food-new-food-form-02-end
+
+# Nothing was typed, so CreateFoodMode's beforeRemove guard (unsaved
+# equivalent units) does not ask anything.
+- runFlow: ../../subflows/go-back.yaml
+- extendedWaitUntil:
+    visible: 'Group foods' # screens.library.groupFoods
+    timeout: 10000
+    label: Back on the Library hub
+- assertNotVisible:
+    text: 'e.g. Chicken Breast'
+    label: The New Food form is closed
+- takeScreenshot: food-new-food-form-03-library

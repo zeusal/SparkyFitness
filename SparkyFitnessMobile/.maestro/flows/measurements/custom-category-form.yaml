@@ -1,0 +1,62 @@
+# Settings > Custom Measurements: the list of custom measurement categories
+# loads, its header + opens the Add category form, and Back leaves the form
+# without saving and then returns to Settings. The form has no unsaved-changes
+# prompt (CustomCategoryEditScreen.tsx registers no BackHandler or
+# beforeRemove listener) and nothing is typed.
+# Screens: Settings tab, Custom measurements
+# (src/screens/CustomCategoriesScreen.tsx), Add category
+# (src/screens/CustomCategoryEditScreen.tsx).
+#
+# Safe on your everyday build: it types nothing and never taps Save, a
+# category or its trash icon. It does force-stop the app on launch: finish any
+# workout or run recording first. Saving a category is
+# flows-data/measurements/custom-category.yaml.
+appId: ${APP_ID}
+tags:
+  - measurements
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+- runFlow: ../../subflows/measurements/open-custom-categories.yaml
+- takeScreenshot: measurements-custom-category-form-01-list
+
+# "Add category" is the header's + (accessibility label) and, below the list,
+# the footer or empty-state button; the top-most is the header's.
+- tapOn:
+    text: 'Add category' # customCategories.add
+    index: 0
+    label: Open the Add category form from the header +
+- extendedWaitUntil:
+    visible: 'Internal identifier used for syncing' # customCategoryEdit.nameHelp, under the Name field
+    timeout: 15000
+    label: Add category form open
+- waitForAnimationToEnd:
+    timeout: 3000
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: measurements-custom-category-form-02-form
+
+- runFlow: ../../subflows/go-back.yaml
+- extendedWaitUntil:
+    notVisible: 'Internal identifier used for syncing' # customCategoryEdit.nameHelp
+    timeout: 10000
+    label: The form closed with no dialog in the way
+- extendedWaitUntil:
+    visible: 'Add category' # customCategories.add
+    timeout: 10000
+    label: Back on the Custom measurements list
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: measurements-custom-category-form-03-list
+
+# The list's own title "Custom measurements" matches the row's words, so the
+# row is looked for above the tab bar, which only Settings shows.
+- runFlow: ../../subflows/go-back.yaml
+- extendedWaitUntil:
+    visible:
+      text: 'Custom Measurements' # settings.rows.customMeasurements
+      above:
+        text: 'Library' # navigation.library
+        index: -1
+    timeout: 10000
+    label: Back on Settings
+- assertNotVisible:
+    text: 'Add category' # customCategories.add
+    label: The Custom measurements list is closed

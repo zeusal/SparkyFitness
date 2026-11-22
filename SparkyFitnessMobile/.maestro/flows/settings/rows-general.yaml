@@ -1,0 +1,105 @@
+# Settings sweep, part 1: each row from Server to Features opens its screen,
+# the screen renders without an error boundary, and Back returns to Settings.
+#
+# Safe on your everyday build: it only opens screens and goes back. It taps no
+# switch, picker or button on them (Server Settings' Open web dashboard and
+# Test connection, Offline's Upload now, the theme and language pickers are
+# left alone), so nothing is written and no setting changes. It does force-stop
+# the app on launch: finish any workout or run recording first.
+#
+# Screens (src/screens/SettingsScreen.tsx, in list order):
+#   Server              -> ServerSettingsScreen.tsx
+#   Offline             -> OfflineSettingsScreen.tsx
+#   App Settings        -> AppSettingsScreen.tsx
+#   Family Diaries      -> FamilyMembersScreen.tsx (empty or with members)
+#   Goals               -> GoalsScreen.tsx
+#   Voice settings      -> ChatSettingsScreen.tsx
+#   Food                -> FoodSettingsScreen.tsx
+#   AI                  -> AiSettingsScreen.tsx
+#   Features            -> FeatureSettingsScreen.tsx
+# Not opened: Health Data Sync (SyncScreen.tsx:219-253 initialises Health
+# Connect and refreshes the enabled metrics' permissions on every focus, which
+# can bring up the system permission screen), Calories & BMR
+# (flows/smoke/smoke-tabs.yaml opens it). The rest of the list is
+# rows-screens.yaml and rows-about.yaml.
+#
+# Each destination is checked for text that only that screen shows, so a tap
+# that did not navigate fails; a screen that cannot load its data fails there
+# too, with the row's name in the step label.
+appId: ${APP_ID}
+tags:
+  - settings
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+- runFlow: ../../subflows/settings/open-settings.yaml
+- takeScreenshot: settings-rows-general-00-settings
+
+- runFlow:
+    file: ../../subflows/settings/visit-row.yaml
+    env:
+      ROW: 'Server' # settings.rows.server
+      DESTINATION: 'Server Settings' # screens.serverSettings, the header title
+      SHOT: settings-rows-general-01-server
+
+- runFlow:
+    file: ../../subflows/settings/visit-row.yaml
+    env:
+      ROW: 'Offline' # settings.rows.offline (listed with a saved server)
+      DESTINATION: 'Waiting to upload' # offline.waitingHeading
+      SHOT: settings-rows-general-02-offline
+
+- runFlow:
+    file: ../../subflows/settings/visit-row.yaml
+    env:
+      ROW: 'App Settings' # settings.rows.app
+      DESTINATION: 'Theme' # settings.theme.title, the first row
+      SHOT: settings-rows-general-03-app
+
+# Loading shows a spinner, then "No family members" or one row per member
+# whose subtitle is "Can copy" or "View only" (FamilyMembersScreen.tsx:64-155).
+- runFlow:
+    file: ../../subflows/settings/visit-row.yaml
+    env:
+      ROW: 'Family Diaries' # familyDiary.title
+      DESTINATION: 'No family members|Can copy|View only' # familyDiary.noMembers, .canCopy, .viewOnly
+      SHOT: settings-rows-general-04-family
+
+- runFlow:
+    file: ../../subflows/settings/visit-row.yaml
+    env:
+      ROW: 'Goals' # settings.rows.goals
+      DESTINATION: 'Daily targets that apply from today onward. Past days keep their goals.' # goals.description, first text of the form
+      SHOT: settings-rows-general-05-goals
+
+- runFlow:
+    file: ../../subflows/settings/visit-row.yaml
+    env:
+      ROW: 'Voice settings' # voiceSettings.open
+      DESTINATION: 'Voice input' # voiceSettings.title, the first row once loaded
+      SHOT: settings-rows-general-06-voice
+
+- runFlow:
+    file: ../../subflows/settings/visit-row.yaml
+    env:
+      ROW: 'Food' # settings.rows.food
+      DESTINATION: 'Meal Types' # foodSettings.mealTypes.title, the first row
+      SHOT: settings-rows-general-07-food
+
+# "Outside tools" heads the screen when the admin added MCP servers, otherwise
+# "Server AI provider" is the first heading (AiSettingsScreen.tsx:131-184).
+- runFlow:
+    file: ../../subflows/settings/visit-row.yaml
+    env:
+      ROW: 'AI' # settings.rows.ai
+      DESTINATION: 'Server AI provider|Outside tools' # aiSettings.server.title, aiSettings.chatMcp.title
+      SHOT: settings-rows-general-08-ai
+
+- runFlow:
+    file: ../../subflows/settings/visit-row.yaml
+    env:
+      ROW: 'Features' # settings.rows.features
+      DESTINATION: 'Turn whole features on or off in this app.' # featureSettings.description
+      SHOT: settings-rows-general-09-features
+
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: settings-rows-general-10-settings

@@ -1,0 +1,92 @@
+# Library > Browse, training rows: Training programs, Challenges, Routes,
+# Personal records and Equipment each open, show without an error, and Back
+# returns to the hub.
+# Screens: Library tab (src/screens/LibraryScreen.tsx) -> RunProgramsScreen,
+# ChallengesScreen, RoutesScreen, PersonalRecordsScreen, EquipmentScreen,
+# each closed again with Back.
+#
+# Safe on your everyday build: it only reads. None of these screens asks for
+# a permission or writes on opening; nothing on them is tapped: no program is
+# started or switched, no goal typed, no challenge joined, no route added or
+# imported (a GPX import opens the system file picker), no shoe or plate
+# opened. It does force-stop the app on launch: finish any workout or run
+# recording first.
+#
+# Exercises and Workout presets are covered by
+# flows/exercise/exercise-libraries.yaml, Lab results by browse-health.yaml.
+appId: ${APP_ID}
+tags:
+  - library
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+- tapOn:
+    text: 'Library' # navigation.library
+    index: -1 # the tab bar's "Library", the bottom-most
+- extendedWaitUntil:
+    visible: 'Browse' # screens.library.browse, shown only while connected
+    timeout: 15000
+    label: Library hub shown (is the app connected to its server?)
+
+# LibraryScreen.tsx:456-485. The row's subtitle names the running program
+# when one is on, so the row is found by its title. The screen opens with
+# the running goals (once they load) over the fitness test panel, which
+# names either the latest test or how to take one, or the intro without a
+# program (RunProgramsScreen.tsx:559-579, :315-324, :446). It shows no
+# load-error message of its own.
+- runFlow:
+    file: ../../subflows/library/visit-row.yaml
+    env:
+      ROW: 'Training programs' # screens.library.runPrograms
+      # runPrograms.goals.title | fitnessTest.panel.emptyTitle |
+      # fitnessTest.panel.title | runPrograms.intro
+      DESTINATION: 'Running goals|Find your training paces|Your fitness test|Follow a plan that builds up week by week.*'
+      LOADING: 'Something went wrong' # nothing to wait out (spinner-free)
+      FAILED: 'Something went wrong' # common error boundary only
+      SHOT: library-browse-training-01-training-programs
+
+# LibraryScreen.tsx:486-504. Once the server has said whether challenges are
+# on: the header's "Join a challenge" button (on), the unavailable notice
+# (off), or the load error (ChallengesScreen.tsx:123-158).
+- runFlow:
+    file: ../../subflows/library/visit-row.yaml
+    env:
+      ROW: 'Challenges' # screens.library.challenges
+      # challenges.join.title | challenges.unavailableTitle | challenges.loadFailed
+      DESTINATION: 'Join a challenge|Challenges are not available|Could not load your challenges\.'
+      LOADING: 'Could not load your challenges.' # spinner only
+      FAILED: 'Could not load your challenges.' # challenges.loadFailed
+      SHOT: library-browse-training-02-challenges
+
+# LibraryScreen.tsx:526-542. The header's Add button is labelled "Add a
+# route" (RoutesScreen.tsx:101-115) and is never tapped.
+- runFlow:
+    file: ../../subflows/library/visit-row.yaml
+    env:
+      ROW: 'Routes' # screens.library.routes
+      DESTINATION: 'Add a route' # routes.addTitle, the header button's label
+      LOADING: 'Could not load your routes.' # spinner only
+      FAILED: 'Could not load your routes.' # routes.loadFailed
+      SHOT: library-browse-training-03-routes
+
+# LibraryScreen.tsx:543-561. The records have no fixed text (sport names such
+# as "Running" may also be exercise names under Recently Logged on the hub),
+# so the header's back button proves a screen opened over the hub.
+- runFlow:
+    file: ../../subflows/library/visit-row.yaml
+    env:
+      ROW: 'Personal records' # screens.library.personalRecords
+      DESTINATION: 'Back' # common.back, the header back button (src/hooks/useScreenHeader.tsx:237-238)
+      LOADING: 'Could not load your records.' # spinner only
+      FAILED: 'Could not load your records.' # personalRecords.loadFailed
+      SHOT: library-browse-training-04-personal-records
+
+# LibraryScreen.tsx:594-610. A hub of two rows, Shoes and Plates & bars
+# (EquipmentScreen.tsx:36-56), which load nothing themselves.
+- runFlow:
+    file: ../../subflows/library/visit-row.yaml
+    env:
+      ROW: 'Equipment' # screens.library.equipment
+      DESTINATION: 'Running shoes and their mileage' # equipmentHub.shoesSubtitle
+      LOADING: 'Something went wrong' # nothing to wait out
+      FAILED: 'Something went wrong' # common error boundary only
+      SHOT: library-browse-training-05-equipment

@@ -1,0 +1,22 @@
+# Library tab > Create > Food: opens the New Food form in library mode
+# (src/screens/LibraryScreen.tsx > FoodForm route, mode 'create-food',
+# pickerMode 'library': src/screens/foodForm/CreateFoodMode.tsx,
+# src/components/FoodForm.tsx). Opening it writes nothing; only its Save does.
+appId: ${APP_ID}
+---
+- tapOn:
+    text: 'Library' # navigation.library
+    index: -1 # the tab bar's "Library", the bottom-most
+    label: Open the Library tab
+- extendedWaitUntil:
+    visible: 'Group foods' # screens.library.groupFoods, subtitle of the Meal tile
+    timeout: 15000
+    label: Library Create tiles shown
+- tapOn:
+    text: 'Food' # screens.library.food, title of the first Create tile
+    index: 0 # the top-most "Food"
+    label: Open the New Food form
+- extendedWaitUntil:
+    visible: 'e.g. Chicken Breast' # foodForm.foodNamePlaceholder, the name field
+    timeout: 15000
+    label: New Food form shown

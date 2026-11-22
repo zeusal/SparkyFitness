@@ -1,0 +1,36 @@
+# Library tab > Browse > Workout presets: opens the saved workout presets
+# (src/screens/LibraryScreen.tsx:577-593 > src/screens/WorkoutPresetsLibraryScreen.tsx)
+# and waits for the list to load. Reads only: it types nothing and leaves the
+# ownership filter as it is.
+#
+# Works from the Library tab at any scroll position above the row: the row is
+# searched for downwards.
+appId: ${APP_ID}
+---
+- tapOn:
+    text: 'Library' # navigation.library
+    index: -1 # the tab bar's "Library", the bottom-most
+    label: Open the Library tab
+# "Workout presets" (screens.library.workoutPresets) is a Browse row; the
+# Create tile above is "Workout preset", and the full-text match keeps them
+# apart. The list it opens has the same title, so the step after the tap
+# waits for the list's search field instead.
+- scrollUntilVisible:
+    element: 'Workout presets'
+    direction: DOWN
+    timeout: 20000
+    label: Scroll the Library to its Workout presets row
+- tapOn:
+    text: 'Workout presets'
+    label: Open the Workout presets library
+- extendedWaitUntil:
+    visible: 'Search workout presets...' # presetLibrary.search, the list's search field
+    timeout: 15000
+    label: Workout presets library shown
+- extendedWaitUntil:
+    notVisible: 'Loading workout presets...' # presetLibrary.loading
+    timeout: 20000
+    label: Workout presets loaded
+- assertNotVisible:
+    text: 'Failed to load workout presets' # presetLibrary.failed
+    label: Workout presets loaded without an error

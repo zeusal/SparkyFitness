@@ -1,0 +1,33 @@
+# From a tab screen: Settings > Custom Measurements, waits for the list of
+# custom measurement categories (src/screens/CustomCategoriesScreen.tsx) to
+# load. Reads only.
+appId: ${APP_ID}
+---
+- runFlow: ../settings/open-settings.yaml
+# The list's title is "Custom measurements" (customCategories.title), the
+# row's words in another case; it is not on Settings, so the row is unique
+# here.
+- scrollUntilVisible:
+    element: 'Custom Measurements' # settings.rows.customMeasurements
+    direction: DOWN
+    timeout: 20000
+    label: Scroll Settings to Custom Measurements
+- tapOn:
+    text: 'Custom Measurements' # settings.rows.customMeasurements
+    label: Open Custom Measurements
+# The header's + button, there in every state of the list
+# (CustomCategoriesScreen.tsx:97-109).
+- extendedWaitUntil:
+    visible: 'Add category' # customCategories.add (accessibility label)
+    timeout: 15000
+    label: Custom measurements list open
+- extendedWaitUntil:
+    notVisible: 'Loading custom measurements...' # customCategories.loading
+    timeout: 20000
+    label: Custom measurements loaded
+- assertNotVisible:
+    text: 'Failed to load custom measurements' # customCategories.loadFailed
+    label: Custom measurements loaded without an error
+- waitForAnimationToEnd:
+    timeout: 3000
+- runFlow: ../assert-no-error-boundary.yaml

@@ -1,0 +1,97 @@
+# A workout preset created on the server shows up in Library > Workout
+# presets, is found by search, and opens on its detail screen.
+# Screens: Library -> Workout presets (src/screens/WorkoutPresetsLibraryScreen.tsx,
+# search through GET /api/workout-presets/search) -> the preset
+# (src/screens/WorkoutPresetDetailScreen.tsx) -> back twice.
+#
+# WRITES DATA to the account the app is signed in to: run it only with a test
+# account. It does not clear the app. It creates one uniquely named, private,
+# empty preset ("Maestro Preset <timestamp>") through the API and deletes it
+# when the flow ends, also after a failed step (not after Ctrl+C or a killed
+# run: then delete it by hand, Library > Workout presets > the preset >
+# Delete preset). In the app it only types the search term: no Start
+# workout, Log past workout, Duplicate, Edit, Share or Delete is tapped.
+#
+# The Workout presets list must show your own presets: its ownership filter
+# (menu in the list's header) set to All (the default) or Mine.
+#
+# Every -e value, API_KEY included, is stored in plain text in the run's
+# commands.json and maestro.log: use a revocable key of a test account, always
+# pass --test-output-dir and --debug-output, never --verbose, and delete the
+# run's folders afterwards.
+#
+# Env:
+#   APP_ID           the app under test, signed in to the test account
+#   SERVER_URL       the server as this computer reaches it (the API calls run
+#                    on the computer, not on the phone)
+#   HOST_SERVER_URL  optional, overrides SERVER_URL for those API calls
+#   API_KEY          a full-access key of THE SAME account the app uses
+#
+# Run: as README "Data flows", with --include-tags exercise or this file's path.
+appId: ${APP_ID}
+tags:
+  - exercise
+  - writes-data
+onFlowComplete:
+  - runScript:
+      file: ../../scripts/exercise-cleanup-workout-preset.js
+      label: Delete the test workout preset
+---
+- runScript:
+    file: ../../scripts/exercise-seed-workout-preset.js
+    label: Create a uniquely named, empty workout preset through the API
+- runFlow: ../../subflows/launch-signed-in.yaml
+- runFlow: ../../subflows/exercise/open-workout-presets.yaml
+
+# Type only the preset's unique number: the server matches part of the name
+# (SparkyFitnessServer/utils/dbSearchHelper.ts buildSqlSearch, ILIKE), and
+# the result row (full name) then differs from the text in the search box.
+- tapOn: 'Search workout presets...' # presetLibrary.search
+- inputText: ${output.presetSearchTerm}
+# Back closes the keyboard the tap above opened, so the next Back leaves
+# the detail screen instead of only closing it.
+- hideKeyboard
+- extendedWaitUntil:
+    visible: ${output.presetName}
+    timeout: 20000
+    label: Seeded preset listed (if not, set the Workout presets filter to All or Mine)
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: exercise-workout-preset-open-01-search
+- tapOn:
+    text: ${output.presetName}
+    label: Open the seeded preset
+
+# The detail's actions sit right under the exercise count, which is 0 here
+# (WorkoutPresetDetailScreen.tsx:392-398 and :466-478); the list has neither.
+- extendedWaitUntil:
+    visible: 'Log past workout' # workoutPresetDetail.actions.logPast
+    timeout: 15000
+    label: Preset detail shown
+- assertVisible:
+    text: ${output.presetName}
+    label: The header names the seeded preset
+- assertVisible:
+    text: '0 exercises' # workoutPresetDetail.exerciseCount_other with count 0
+    label: The seeded preset has no exercises
+- waitForAnimationToEnd:
+    timeout: 3000
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: exercise-workout-preset-open-02-detail
+
+- runFlow: ../../subflows/go-back.yaml
+- extendedWaitUntil:
+    notVisible: 'Log past workout' # workoutPresetDetail.actions.logPast
+    timeout: 10000
+    label: Preset detail closed
+- assertVisible:
+    text: ${output.presetName}
+    label: Back on the search results
+- runFlow: ../../subflows/go-back.yaml
+- extendedWaitUntil:
+    notVisible: ${output.presetName}
+    timeout: 10000
+    label: Workout presets library closed
+- assertVisible:
+    text: 'Library' # navigation.library
+    index: -1
+    label: Back on the Library tab

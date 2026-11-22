@@ -28,17 +28,17 @@ tags:
   - food
 onFlowComplete:
   - runScript:
-      file: ../scripts/cleanup-food.js
+      file: ../../scripts/cleanup-food.js
       label: Delete the test food and its diary entry
 ---
 - runScript:
-    file: ../scripts/seed-food.js
+    file: ../../scripts/seed-food.js
     label: Create a uniquely named test food through the API
-- runFlow: ../subflows/launch-signed-in.yaml
+- runFlow: ../../subflows/launch-signed-in.yaml
 - tapOn:
     text: 'Dashboard'
     index: -1
-- runFlow: ../subflows/open-add-sheet.yaml
+- runFlow: ../../subflows/open-add-sheet.yaml
 - tapOn:
     text: 'Food'
     below: 'Quick Actions'
@@ -82,5 +82,5 @@ onFlowComplete:
     element: '.*${output.foodName}.*'
     direction: DOWN
     timeout: 20000
-- runFlow: ../subflows/assert-no-error-boundary.yaml
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
 - takeScreenshot: food-log-03-diary

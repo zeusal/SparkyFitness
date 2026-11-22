@@ -1,0 +1,100 @@
+# A logged food shows up in the Nutrition report's Protein trend, under Top
+# Sources (src/components/NutrientTopSourcesCard.tsx: the foods contributing
+# most to the nutrient in the trend's window, from GET /api/food-entries/range,
+# ranked by src/utils/nutrientSources.ts buildTopSources).
+#
+# WRITES DATA to the account the app is signed in to: run it only with a test
+# account. It does not clear the app. It logs one uniquely named entry
+# ("Maestro Protein <timestamp>", 2000 kcal and 500 g protein, a standalone
+# entry with no library food) for today through the API, and deletes that
+# entry when the flow ends, also after a failed step (not after Ctrl+C or a
+# killed run: then delete it by hand, Diary > today > the entry > Delete).
+# Until then it counts in that day's totals on every screen.
+#
+# Screens: Library -> Reports hub -> Nutrition -> Trend by nutrient > Protein
+# (NutrientTrendsScreen.tsx). Customize Reports must leave the Nutrition
+# report and its "Trend by nutrient" section shown (the defaults).
+#
+# Every -e value, API_KEY included, is stored in plain text in the run's
+# commands.json and maestro.log: use a revocable key of a test account, always
+# pass --test-output-dir and --debug-output, never --verbose, and delete the
+# run's folders afterwards.
+#
+# Env:
+#   APP_ID           the app under test, signed in to the test account
+#   SERVER_URL       the server as this computer reaches it (the API calls run
+#                    on the computer, not on the phone)
+#   HOST_SERVER_URL  optional, overrides SERVER_URL for those API calls
+#   API_KEY          a full-access key of THE SAME account the app uses
+#
+# Run: as README "Data flows", with this file's path.
+appId: ${APP_ID}
+tags:
+  - reports
+  - writes-data
+onFlowComplete:
+  - runScript:
+      file: ../../scripts/reports-cleanup-food-entry.js
+      label: Delete the test diary entry
+---
+- runScript:
+    file: ../../scripts/reports-seed-food-entry.js
+    label: Log a uniquely named high-protein entry for today through the API
+- runFlow: ../../subflows/launch-signed-in.yaml
+- runFlow: ../../subflows/reports/open-hub.yaml
+
+- scrollUntilVisible:
+    element:
+      id: 'reports-link-nutrition' # ReportsScreen.tsx:147
+    direction: DOWN
+    timeout: 10000
+    label: Nutrition row on the hub (is it hidden in Customize Reports?)
+- tapOn:
+    id: 'reports-link-nutrition'
+- extendedWaitUntil:
+    visible: '90d' # ranges.90d, the report's range control
+    timeout: 20000
+    label: Nutrition report open
+- assertVisible:
+    text: 'Nutrition' # nutritionReport.title
+    label: Nutrition title
+
+# With the entry, today counts as a logged day, so the report shows its
+# "Trend by nutrient" card (NutritionReportScreen.tsx:557-583).
+- scrollUntilVisible:
+    element:
+      id: 'nutrition-trend-protein' # NutritionReportScreen.tsx:567
+    direction: DOWN
+    timeout: 30000
+    label: Trend by nutrient > Protein (is that section off in Customize Reports?)
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: reports-nutrient-top-source-01-nutrition
+- tapOn:
+    id: 'nutrition-trend-protein'
+- extendedWaitUntil:
+    visible: 'Summary Statistics' # nutrientTrends.labels.summary
+    timeout: 20000
+    label: Protein trend open
+- assertVisible:
+    text: 'Protein Trends' # nutrientTrends.title with nutrients.protein
+    label: Protein trend title
+
+# Top Sources is the last card, its title above its rows (testID
+# top-source-<n>, NutrientTopSourcesCard.tsx:158-174); the entry's name is
+# shown nowhere else on this screen. The scrolls are plain swipes: the bar
+# chart selects a day only after a held touch (ChartTouchOverlay.tsx), so they
+# do not narrow the list to one day.
+- scrollUntilVisible:
+    element:
+      text: 'Top Sources' # nutrientTrends.topSources.title
+    direction: DOWN
+    timeout: 20000
+    label: Top Sources card
+- scrollUntilVisible:
+    element:
+      text: ${output.entryName}
+    direction: DOWN
+    timeout: 20000
+    label: The seeded entry is listed under Top Sources
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: reports-nutrient-top-source-02-top-sources

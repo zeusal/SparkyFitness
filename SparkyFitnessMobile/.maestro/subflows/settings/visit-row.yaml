@@ -1,0 +1,56 @@
+# From the Settings tab: scrolls down to one row, opens the screen it leads to,
+# checks that screen rendered, takes a screenshot and goes back to Settings.
+# Read only: it taps nothing on the opened screen.
+#
+# Env:
+#   ROW          the row's title (SettingsRow title; a full-match,
+#                case-insensitive regex, so 'A|B' covers a row whose title
+#                changes)
+#   DESTINATION  text only the opened screen shows: never a Settings row, and
+#                near the top of that screen (Android lists only what is on
+#                screen)
+#   SHOT         screenshot name
+#
+# "Dashboard" and "Diary" are also tab labels, so the row is always selected
+# above the tab bar: above the bottom-most "Library" (navigation.library). The
+# tab labels share one line, so none of them is above another. Rows lie in the
+# Settings scroll view, which ends above the tab bar (TabsLayout.tsx:402-408,
+# not absolutely positioned), so a row never sits behind it. The same selector
+# proves the way back: the tab bar is not shown over a pushed screen.
+#
+# Visit rows from top to bottom: Settings keeps its scroll position, and this
+# only scrolls down.
+appId: ${APP_ID}
+---
+- scrollUntilVisible:
+    element:
+      text: ${ROW}
+      above:
+        text: 'Library' # navigation.library
+        index: -1
+    direction: DOWN
+    timeout: 20000
+    label: Scroll Settings to the ${ROW} row
+- tapOn:
+    text: ${ROW}
+    above:
+      text: 'Library' # navigation.library
+      index: -1
+    label: Open ${ROW}
+- extendedWaitUntil:
+    visible: ${DESTINATION}
+    timeout: 20000
+    label: ${ROW} screen open and loaded
+- waitForAnimationToEnd:
+    timeout: 3000
+- runFlow: ../assert-no-error-boundary.yaml
+- takeScreenshot: ${SHOT}
+- runFlow: ../go-back.yaml
+- extendedWaitUntil:
+    visible:
+      text: ${ROW}
+      above:
+        text: 'Library' # navigation.library
+        index: -1
+    timeout: 10000
+    label: Back on Settings after ${ROW}

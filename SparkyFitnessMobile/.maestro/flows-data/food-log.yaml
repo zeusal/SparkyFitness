@@ -1,0 +1,69 @@
+# Logs a food from the + sheet and finds it in the Diary.
+#
+# WRITES DATA to the account the app is signed in to: run it only with a test
+# account. It does not clear the app. It creates one uniquely named food
+# through the API, logs it for today in the app, and deletes the food together
+# with that diary entry when the flow ends, pass or fail.
+#
+# Env:
+#   APP_ID           the app under test, signed in to the test account
+#   SERVER_URL       the server as this computer reaches it (the API calls run
+#                    on the computer, not on the phone)
+#   HOST_SERVER_URL  optional, overrides SERVER_URL for those API calls
+#   API_KEY          a full-access key of THE SAME account the app uses
+#
+# Run: maestro test .maestro/flows-data/food-log.yaml -e APP_ID=... -e SERVER_URL=... -e API_KEY=...
+appId: ${APP_ID}
+tags:
+  - writes-data
+  - food
+onFlowComplete:
+  - runScript:
+      file: ../scripts/cleanup-food.js
+      label: Delete the test food and its diary entry
+---
+- runScript:
+    file: ../scripts/seed-food.js
+    label: Create a uniquely named test food through the API
+- runFlow: ../subflows/launch-signed-in.yaml
+- tapOn:
+    text: 'Dashboard'
+    index: -1
+- runFlow: ../subflows/open-add-sheet.yaml
+- tapOn:
+    text: 'Food'
+    below: 'Quick Actions'
+    index: 0
+    label: Open food search from the + sheet
+
+- extendedWaitUntil:
+    visible: 'Search foods...'
+    timeout: 15000
+- tapOn: 'Search foods...'
+# Type only the food's unique number: the search matches part of the name,
+# and the result row (full name) then differs from the text in the search box.
+- inputText: ${output.foodSearchTerm}
+- extendedWaitUntil:
+    visible: ${output.foodName}
+    timeout: 20000
+- takeScreenshot: food-log-01-search
+- tapOn: ${output.foodName}
+
+- extendedWaitUntil:
+    visible: 'Add Food'
+    timeout: 15000
+- takeScreenshot: food-log-02-entry
+- tapOn: 'Add Food'
+- extendedWaitUntil:
+    notVisible: 'Add Food'
+    timeout: 15000
+
+- tapOn:
+    text: 'Diary'
+    index: -1
+- scrollUntilVisible:
+    element: '.*${output.foodName}.*'
+    direction: DOWN
+    timeout: 20000
+- runFlow: ../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: food-log-03-diary

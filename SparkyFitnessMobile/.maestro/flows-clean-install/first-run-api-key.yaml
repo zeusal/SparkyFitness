@@ -1,0 +1,27 @@
+# First run from a clean install: Onboarding, sign in with an API key, tabs.
+#
+# WIPES THE APP UNDER TEST (clearState): saved servers, offline uploads, local
+# settings. Run it only against a build kept for tests, never against the store
+# app or the build you use every day. scripts/guard-test-app.js refuses those
+# two package names before anything is cleared.
+#
+# Needs a Release build (no dev launcher after a wipe) and an HTTPS server:
+# builds without __DEV__ refuse http:// URLs. See README "Clean-install flows".
+#
+# Env: APP_ID, SERVER_URL (as the phone reaches it), API_KEY (full access).
+appId: ${APP_ID}
+tags:
+  - clean-install
+---
+- runScript:
+    file: ../scripts/guard-test-app.js
+    label: Refuse to wipe the store or everyday app
+- launchApp:
+    clearState: true
+    # iOS only: tokens live in the Keychain and survive clearState.
+    clearKeychain: true
+    # Start with no permissions granted, like a real first install.
+    permissions: {}
+- runFlow: ../subflows/sign-in-api-key.yaml
+- runFlow: ../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: first-run-01-signed-in

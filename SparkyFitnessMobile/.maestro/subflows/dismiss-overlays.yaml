@@ -1,0 +1,37 @@
+# Closes first-run overlays that can sit on top of the tabs. Every step is
+# conditional, so it is safe to call at any time.
+appId: ${APP_ID}
+---
+# AnnouncementModal (src/components/AnnouncementModal.tsx). The server mirrors
+# the live announcement.md on upstream main. "Got it, don't show again" stores
+# the dismissal for this install; the X would bring it back next launch.
+- runFlow:
+    when:
+      visible: "Got it, don't show again"
+    commands:
+      - tapOn: "Got it, don't show again"
+
+# Android "save to autofill" prompts after typing a secret (Google wording).
+# Other vendors word it differently; check `maestro hierarchy` on your phone
+# and add its button here. Avoid generic words such as "Cancel", which the
+# app itself uses.
+- runFlow:
+    when:
+      platform: Android
+      visible: 'Not now|No thanks'
+    commands:
+      - tapOn: 'Not now|No thanks'
+
+# iOS "Save Password?" sheet.
+- runFlow:
+    when:
+      platform: iOS
+      visible: 'Not Now'
+    commands:
+      - tapOn: 'Not Now'
+
+# A ReauthModal means the session expired: stop with a clear reason instead of
+# timing out behind it.
+- assertNotVisible:
+    text: 'Session Expired'
+    label: The app is not asking to sign in again

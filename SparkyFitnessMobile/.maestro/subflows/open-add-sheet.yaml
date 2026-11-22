@@ -1,0 +1,17 @@
+# Opens the + sheet (src/components/AddSheet.tsx) from a tab screen.
+#
+# Card labels such as "Food" and "Exercise" also appear on the Dashboard and in
+# Library, behind the sheet. Steps that tap a sheet item therefore select it
+# `below: 'Quick Actions'` (the sheet's title) with `index: 0`, the top-most
+# match under the title.
+appId: ${APP_ID}
+---
+- tapOn:
+    text: 'Add'
+    index: -1 # the tab bar's + button, the bottom-most "Add"
+    label: Open the + sheet
+- extendedWaitUntil:
+    visible: 'Quick Actions'
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 3000

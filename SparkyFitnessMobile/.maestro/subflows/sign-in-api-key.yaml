@@ -1,0 +1,41 @@
+# From a clean install: Onboarding, server URL, API Key tab, Connect, Tabs.
+# Used only by flows-clean-install/. English UI only.
+#
+# Env: SERVER_URL (what a person would type), API_KEY (full access).
+# The API key path avoids the email sign-in limit (4 per minute per IP,
+# successes count: SparkyFitnessServer/auth.ts), 2FA and password sheets.
+appId: ${APP_ID}
+---
+# Server URL page (src/screens/OnboardingScreen.tsx). The placeholder is a
+# literal, not translated. Release builds accept only https:// URLs.
+- extendedWaitUntil:
+    visible: 'https://your-sparky-app.com'
+    timeout: 60000
+- tapOn: 'https://your-sparky-app.com'
+- inputText: ${SERVER_URL}
+- hideKeyboard
+- tapOn: 'Next'
+
+# Sign-in page. "API Key" is a segment of the sign-in method switch.
+- extendedWaitUntil:
+    visible: 'Connect'
+    timeout: 20000
+- tapOn: 'API Key'
+- tapOn:
+    text: 'Uds3d8i...' # the API key field's placeholder (a literal)
+    label: Focus the API key field
+- inputText:
+    text: ${API_KEY}
+    # A label keeps the key out of the console and the test report.
+    label: Type the API key
+- hideKeyboard
+- tapOn: 'Connect'
+
+- runFlow: dismiss-overlays.yaml
+- extendedWaitUntil:
+    visible:
+      text: 'Library'
+      index: -1
+    timeout: 30000
+    label: Signed in and on the tabs
+- runFlow: dismiss-overlays.yaml

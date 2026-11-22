@@ -83,3 +83,6 @@ plans/
 /installations
 /.bundle
 watch-tests/.build/
+
+# Maestro run output (screenshots, logs, reports)
+.maestro-results/

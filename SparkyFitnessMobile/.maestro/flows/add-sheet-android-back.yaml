@@ -1,4 +1,5 @@
-# Android hardware Back inside the + sheet, safe on your everyday build.
+# Android hardware Back inside the + sheet, safe on your everyday build (it
+# force-stops the app on launch: finish any workout or run recording first).
 #
 # Regression for "fix(mobile): handle Android Back in the Add sheet" (#2868):
 # with the sheet open, Back closed the whole app. Expected:

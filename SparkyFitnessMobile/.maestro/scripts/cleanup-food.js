@@ -1,6 +1,7 @@
 // Deletes the food seed-food.js created, with every diary entry that uses it,
 // so repeated runs do not fill the test account. Runs from onFlowComplete, so
-// it also cleans up after a failed run. Never print the key.
+// it also cleans up after a failed step, but not after Ctrl+C or a killed run.
+// Never print the key.
 //
 // DELETE /api/foods/:id?mode=delete_with_history
 // (SparkyFitnessServer/routes/foodCrudRoutes.ts: hide | delete |
@@ -36,12 +37,24 @@ if (!present(output.foodId)) {
       '?mode=delete_with_history',
     { headers: { Authorization: 'Bearer ' + apiKey } }
   );
-  if (!res.ok) {
+  var status = '';
+  if (res.ok) {
+    try {
+      status = String(json(res.body).status || '');
+    } catch (e) {
+      status = '';
+    }
+  }
+  // The server hides instead of deleting when another account uses the food.
+  if (status !== 'deleted_with_history') {
     throw new Error(
-      'cleanup-food: DELETE /api/foods/:id -> HTTP ' +
+      'cleanup-food: "' +
+        output.foodName +
+        '" was not deleted (HTTP ' +
         res.status +
-        ' ' +
-        String(res.body || '').slice(0, 300)
+        ', status "' +
+        status +
+        '"). Delete it by hand: Library > Foods > the food > Delete > Delete including history.'
     );
   }
   console.log('cleanup-food: deleted "' + output.foodName + '"');

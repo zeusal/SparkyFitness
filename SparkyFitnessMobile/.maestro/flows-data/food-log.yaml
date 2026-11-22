@@ -3,7 +3,16 @@
 # WRITES DATA to the account the app is signed in to: run it only with a test
 # account. It does not clear the app. It creates one uniquely named food
 # through the API, logs it for today in the app, and deletes the food together
-# with that diary entry when the flow ends, pass or fail.
+# with that diary entry when the flow ends, also after a failed step (not after
+# Ctrl+C or a killed run: then delete "Maestro Oats ..." by hand).
+#
+# FoodSearch must show your own foods: its ownership filter (menu on the
+# search screen) set to All or Mine.
+#
+# Every -e value, API_KEY included, is stored in plain text in the run's
+# commands.json and maestro.log: use a revocable key of a test account, always
+# pass --test-output-dir and --debug-output, never --verbose, and delete the
+# run's folders afterwards.
 #
 # Env:
 #   APP_ID           the app under test, signed in to the test account
@@ -12,7 +21,7 @@
 #   HOST_SERVER_URL  optional, overrides SERVER_URL for those API calls
 #   API_KEY          a full-access key of THE SAME account the app uses
 #
-# Run: maestro test .maestro/flows-data/food-log.yaml -e APP_ID=... -e SERVER_URL=... -e API_KEY=...
+# Run: see README "Data flows" (the key read into $env:SPARKY_E2E_API_KEY).
 appId: ${APP_ID}
 tags:
   - writes-data
@@ -46,17 +55,25 @@ onFlowComplete:
 - extendedWaitUntil:
     visible: ${output.foodName}
     timeout: 20000
+    label: Seeded food listed (if not, set the FoodSearch filter to All or Mine)
 - takeScreenshot: food-log-01-search
 - tapOn: ${output.foodName}
 
 - extendedWaitUntil:
     visible: 'Add Food'
     timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: food-log-02-entry
 - tapOn: 'Add Food'
+# The button shows a spinner while saving; the entry is saved once the stack
+# is back on the tabs.
 - extendedWaitUntil:
-    notVisible: 'Add Food'
+    visible:
+      text: 'Library'
+      index: -1
     timeout: 15000
+    label: Entry saved, back on the tabs
 
 - tapOn:
     text: 'Diary'

@@ -1,37 +1,26 @@
-# Closes first-run overlays that can sit on top of the tabs. Every step is
-# conditional, so it is safe to call at any time.
+# Closes the AnnouncementModal if it is up. Every step is conditional, so it is
+# safe to call at any time.
 appId: ${APP_ID}
 ---
-# AnnouncementModal (src/components/AnnouncementModal.tsx). The server mirrors
-# the live announcement.md on upstream main. "Got it, don't show again" stores
-# the dismissal for this install; the X would bring it back next launch.
+# Maestro counts a `when: visible` wait from the last command that changed the
+# device, so after a long launch wait the check would read the screen once.
+# This step resets that clock, giving the checks below their full 7 s.
+- waitForAnimationToEnd:
+    timeout: 3000
+
+# AnnouncementModal (src/components/AnnouncementModal.tsx), fetched after the
+# tabs mount. The server mirrors the live announcement.md on upstream main.
+# "Got it, don't show again" stores the dismissal for this install: an
+# accepted local change. The X would bring it back on the next launch.
 - runFlow:
     when:
       visible: "Got it, don't show again"
     commands:
       - tapOn: "Got it, don't show again"
 
-# Android "save to autofill" prompts after typing a secret (Google wording).
-# Other vendors word it differently; check `maestro hierarchy` on your phone
-# and add its button here. Avoid generic words such as "Cancel", which the
-# app itself uses.
-- runFlow:
-    when:
-      platform: Android
-      visible: 'Not now|No thanks'
-    commands:
-      - tapOn: 'Not now|No thanks'
-
-# iOS "Save Password?" sheet.
-- runFlow:
-    when:
-      platform: iOS
-      visible: 'Not Now'
-    commands:
-      - tapOn: 'Not Now'
-
-# A ReauthModal means the session expired: stop with a clear reason instead of
-# timing out behind it.
+# A ReauthModal already on screen means the session expired: stop with a
+# clear reason. This reads the screen once; it does not catch a modal that
+# appears later.
 - assertNotVisible:
     text: 'Session Expired'
     label: The app is not asking to sign in again

@@ -1,8 +1,10 @@
 # Smoke test of the app shell, safe on your everyday build: it does not clear
-# the app, write data or change permissions.
+# the app, write data or change permissions. It does force-stop the app on
+# launch, so finish any workout or run recording first.
 #
-# Opens every tab, the + sheet and Calorie Settings, checks that no screen fell
-# into an error boundary, and takes a screenshot of each for a quick look.
+# Opens every tab, the + sheet and Calorie Settings, checks that no
+# error-boundary message shows, and takes a screenshot of each for a quick
+# look. It does not yet prove each tab's content loaded (needs test IDs).
 # Calorie Settings once crashed on iOS only (Hermes lacked an Intl API), which
 # Jest on Node could not catch.
 #

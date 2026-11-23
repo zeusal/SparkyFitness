@@ -1,0 +1,87 @@
+# + sheet > each logging form that is a plain screen: Measurements,
+# Symptoms & Health, Mood, Mindfulness and Oral care. Each form opens, shows
+# its first fields once loaded, and is left again with Back, unsaved.
+# Screens, all from the Dashboard (handlers in src/hooks/useAddSheetActions.ts):
+#   Measure card       -> MeasurementsAdd (src/screens/MeasurementsAddScreen.tsx)
+#   Symptoms & Health  -> SymptomLog (src/screens/SymptomLogScreen.tsx)
+#   Mood               -> MoodLog (src/screens/MoodLogScreen.tsx)
+#   Mindfulness        -> MindfulnessLog (src/screens/MindfulnessLogScreen.tsx)
+#   Oral care          -> OralCareLog (src/screens/OralCareLogScreen.tsx)
+#
+# Safe on your everyday build: nothing is typed, picked or saved, no timer or
+# breathing exercise is started, and none of these forms asks for a
+# permission or keeps a draft when it opens. Back leaves an untouched form
+# without asking. It force-stops the app on launch: finish any workout or run
+# recording first.
+#
+# Not opened here: Food (flows/food/search.yaml), Exercise (the exercise
+# flows), Scan Food (camera), Daily Check-In (starts the guided check-in),
+# Wellness (only with the cycle feature on), Copy from yesterday (a sheet
+# whose button copies meals) and Sync Health (starts a health sync).
+#
+# Assumes the default + sheet arrangement (Settings > Quick Actions), where
+# Measurements is a card and the others are rows with their hints.
+# Android only: the forms' X is labelled Cancel or Close, which
+# subflows/go-back.yaml does not tap on iOS yet.
+appId: ${APP_ID}
+tags:
+  - add-sheet
+  - android
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+- tapOn:
+    text: 'Dashboard' # navigation.dashboard
+    index: -1 # the tab bar's "Dashboard", the bottom-most
+
+# Measurements: the form shows its fields once the day's values have loaded
+# (MeasurementsAddScreen.tsx:1560-1641).
+- runFlow:
+    file: ../../subflows/add-sheet/visit-item.yaml
+    env:
+      ITEM: 'Measure' # addSheet.measureShort, the card's short name
+      DESTINATION: 'Body fat %' # measurements.fields.bodyFatPercentage, the second field
+      FAILED: 'Something went wrong' # errorBoundary.somethingWentWrong; no load error of its own
+      SHOT: add-sheet-open-log-forms-01-measurements
+
+# Symptoms & Health: a new symptom (no entryId), drawn at once
+# (SymptomLogScreen.tsx:497-505).
+- runFlow:
+    file: ../../subflows/add-sheet/visit-item.yaml
+    env:
+      ITEM: 'Symptoms & Health' # addSheet.symptomsHealth; its hint is only "Log"
+      DESTINATION: 'Track as ongoing episode' # symptoms.ongoingEpisode
+      FAILED: 'Something went wrong' # errorBoundary.somethingWentWrong
+      SHOT: add-sheet-open-log-forms-02-symptoms
+
+# Mood: once the server check says which form fits, both the check-in
+# composer and the one-entry-a-day form show the mood faces under this
+# heading (MoodLogScreen.tsx:108-148, src/components/mood/MoodLogFields.tsx:44-47).
+# Leaving without saving offers no reminders (that comes after a save,
+# MoodLogScreen.tsx:171-192).
+- runFlow:
+    file: ../../subflows/add-sheet/visit-item.yaml
+    env:
+      ITEM: 'Track state' # addSheet.moodHint
+      DESTINATION: 'Overall mood' # mood.overall
+      FAILED: "Couldn't reach your server.*" # mood.serverCheckFailed
+      SHOT: add-sheet-open-log-forms-03-mood
+
+# Mindfulness: a new session shows the practice tools on top
+# (MindfulnessLogScreen.tsx:206-260); neither is tapped.
+- runFlow:
+    file: ../../subflows/add-sheet/visit-item.yaml
+    env:
+      ITEM: 'Breathing, zen' # addSheet.mindfulnessHint
+      DESTINATION: 'Paced Breathing' # mindfulness.tools.breatheTitle
+      FAILED: 'Something went wrong' # errorBoundary.somethingWentWrong
+      SHOT: add-sheet-open-log-forms-04-mindfulness
+
+# Oral care: the sheet opens it without startTimer (useAddSheetActions.ts:347-350),
+# so the timer only offers itself (OralCareLogScreen.tsx:96-98, 209-240).
+- runFlow:
+    file: ../../subflows/add-sheet/visit-item.yaml
+    env:
+      ITEM: 'Brush, floss' # addSheet.oralCareHint
+      DESTINATION: 'Brush with the timer' # oralCare.log.timerTitle
+      FAILED: 'Something went wrong' # errorBoundary.somethingWentWrong
+      SHOT: add-sheet-open-log-forms-05-oral-care

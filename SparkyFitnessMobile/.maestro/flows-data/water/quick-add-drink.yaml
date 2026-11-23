@@ -1,0 +1,112 @@
+# Logs a drink with a quick-add preset on the Dashboard's Hydration card,
+# finds it in the day's drinks and deletes it there.
+#
+# WRITES DATA to the account the app is signed in to: run it only with a test
+# account. It does not clear the app. It creates one uniquely named quick-add
+# drink ("Maestro Cup <ms>", 250 ml of water) through the API, logs one drink
+# with it from the Hydration card, opens History (Drinks), checks the drink is
+# listed and deletes it with its delete button. When the flow ends, also after
+# a failed step, scripts/water-cleanup-quick-add.js deletes any drink still
+# logged with that preset and then the preset (not after Ctrl+C or a killed
+# run: then delete the drink in Dashboard > Hydration > History, and the
+# preset in Library > Water containers).
+# Screens: Dashboard Hydration card (src/components/HydrationGauge.tsx:324-361,
+# src/screens/DashboardScreen.tsx:304-319), Drinks (src/screens/WaterLogScreen.tsx).
+#
+# Why a preset and not the + and - buttons: + logs with whichever container
+# is selected on this phone, maybe one linked to a food
+# (src/hooks/useWaterIntakeMutation.ts:110-137), and - deletes the day's
+# manual drink with the latest time, not necessarily the one + added
+# (SparkyFitnessServer/services/measurementService.ts:878-915). The preset
+# names the drink, so the flow and the cleanup touch only what it logged.
+# Logging a drink also moves the hydration reminders' anchor while it exists
+# (src/hooks/useHydrationReminder.ts), as a drink logged by hand does.
+#
+# Every -e value, API_KEY included, is stored in plain text in the run's
+# commands.json and maestro.log: use a revocable key of a test account, always
+# pass --test-output-dir and --debug-output, never --verbose, and delete the
+# run's folders afterwards.
+#
+# Env:
+#   APP_ID           the app under test, signed in to the test account
+#   SERVER_URL       the server as this computer reaches it (the API calls run
+#                    on the computer, not on the phone)
+#   HOST_SERVER_URL  optional, overrides SERVER_URL for those API calls
+#   API_KEY          a full-access key of THE SAME account the app uses
+#
+# Run: see README "Data flows", with --include-tags water or this file's path.
+appId: ${APP_ID}
+tags:
+  - water
+  - writes-data
+onFlowComplete:
+  - runScript:
+      file: ../../scripts/water-cleanup-quick-add.js
+      label: Delete the test drink preset and any drink logged with it
+---
+- runScript:
+    file: ../../scripts/water-seed-quick-add.js
+    label: Create a uniquely named quick-add drink through the API
+# A fresh launch reads the water containers again, the new preset included
+# (src/hooks/useWaterIntakeMutation.ts:59-64).
+- runFlow: ../../subflows/launch-signed-in.yaml
+- runFlow: ../../subflows/water/open-hydration-card.yaml
+
+# Quick-add presets sit in their own row at the foot of the card, each a
+# button labelled "Log <name>" (HydrationGauge.tsx:327-358).
+- scrollUntilVisible:
+    element: 'Log ${output.waterContainerName}' # dashboard.logDrink
+    direction: DOWN
+    centerElement: true
+    timeout: 20000
+    label: The seeded quick-add drink is on the Hydration card
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: water-quick-add-drink-01-card
+- tapOn:
+    text: 'Log ${output.waterContainerName}' # dashboard.logDrink
+    label: Log one drink with the seeded preset
+
+# Drinks re-reads the day when it opens, and again when the log call
+# finishes (WaterLogScreen.tsx:76-83, src/hooks/invalidateWaterIntake.ts).
+# Each row shows the drink's container name (WaterLogScreen.tsx:162-184).
+- tapOn:
+    text: 'Drink history' # waterLog.open, the card's History link
+    label: Open the day's drinks
+- extendedWaitUntil:
+    notVisible: 'Loading drinks...' # waterLog.loading
+    timeout: 20000
+    label: Drinks loaded
+- extendedWaitUntil:
+    visible: ${output.waterContainerName}
+    timeout: 20000
+    label: The new drink is listed (if not, did the app say "Could not log that drink"?)
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: water-quick-add-drink-02-listed
+
+# A manual drink has a delete button labelled "Delete <name> at <time>"
+# (WaterLogScreen.tsx:220-235), which asks first (WaterLogScreen.tsx:139-160).
+- tapOn:
+    text: 'Delete ${output.waterContainerName} at .*' # waterLog.deleteDrink
+    label: Delete the drink this flow logged
+- extendedWaitUntil:
+    visible: 'Delete drink' # waterLog.deleteTitle, the confirmation's title
+    timeout: 5000
+    label: Delete confirmation shown
+- tapOn:
+    text: 'Delete' # common.delete, the confirmation's button
+    label: Confirm the delete
+- extendedWaitUntil:
+    notVisible: ${output.waterContainerName}
+    timeout: 20000
+    label: The drink is gone from the day's drinks
+- assertNotVisible:
+    text: 'Could not delete that drink' # waterLog.deleteFailed
+    label: The delete did not fail
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: water-quick-add-drink-03-deleted
+
+- runFlow: ../../subflows/go-back.yaml
+- extendedWaitUntil:
+    visible: 'Drink history' # waterLog.open
+    timeout: 10000
+    label: Back on the Dashboard's Hydration card

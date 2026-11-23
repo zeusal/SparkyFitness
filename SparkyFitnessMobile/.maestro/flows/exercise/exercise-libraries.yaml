@@ -1,0 +1,101 @@
+# The exercise libraries open from the Library tab: Exercises (and, when it
+# lists any, the first exercise's detail) and Workout presets, each loading
+# without an error, then Back to the Library hub.
+# Screens: Library tab (src/screens/LibraryScreen.tsx)
+#   -> Exercises (src/screens/ExercisesLibraryScreen.tsx)
+#      -> the top exercise (src/screens/ExerciseDetailScreen.tsx), back
+#   -> Workout presets (src/screens/WorkoutPresetsLibraryScreen.tsx), back
+#
+# Safe on your everyday build: it only reads. Nothing is typed, no row is
+# long-pressed (that selects exercises to keep offline), the ownership
+# filters are left as they are, and on the exercise detail neither Start
+# Workout, Log Exercise nor Delete Exercise is tapped. It does force-stop the
+# app on launch: finish any workout or run recording first.
+appId: ${APP_ID}
+tags:
+  - exercise
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+- tapOn:
+    text: 'Library' # navigation.library
+    index: -1 # the tab bar's "Library", the bottom-most
+- extendedWaitUntil:
+    visible: 'Browse' # screens.library.browse, shown only while connected
+    timeout: 15000
+    label: Library hub shown (is the app connected to its server?)
+
+# Exercises (LibraryScreen.tsx:562-576). The list it opens has the same
+# title, so the step after the tap waits for its search field.
+- scrollUntilVisible:
+    element: 'Exercises' # screens.library.exercises; the Create tile is "Exercise"
+    direction: DOWN
+    timeout: 20000
+    label: Scroll the Library to its Exercises row
+- tapOn:
+    text: 'Exercises'
+    label: Open the Exercises library
+- extendedWaitUntil:
+    visible: 'Search exercises...' # exerciseLibrary.search (ExercisesLibraryScreen.tsx:384)
+    timeout: 15000
+    label: Exercises library shown
+- extendedWaitUntil:
+    notVisible: 'Loading exercises...' # exerciseLibrary.loading
+    timeout: 20000
+    label: Exercises loaded
+- assertNotVisible:
+    text: 'Failed to load exercises' # exerciseLibrary.failed
+    label: Exercises loaded without an error
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: exercise-exercise-libraries-01-exercises
+
+# Each row carries testID exercise-row-<id> (ExercisesLibraryScreen.tsx:225).
+# An empty library has none, and then the detail is skipped.
+- runFlow:
+    when:
+      visible:
+        id: 'exercise-row-.*'
+    label: Open the top exercise, if the library lists any
+    commands:
+      - tapOn:
+          id: 'exercise-row-.*'
+          index: 0 # the top-most row
+          label: Open the top exercise's detail
+      # The detail's tabs start with Summary (ExerciseDetailScreen.tsx:369-387).
+      # They show when there are two or more, and a library exercise always
+      # has History while connected (:191, :719); the list has no such text.
+      - extendedWaitUntil:
+          visible: 'Summary' # exerciseDetail.summary
+          timeout: 15000
+          label: Exercise detail shown
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - runFlow: ../../subflows/assert-no-error-boundary.yaml
+      - takeScreenshot: exercise-exercise-libraries-02-exercise-detail
+      - runFlow: ../../subflows/go-back.yaml
+      - extendedWaitUntil:
+          visible: 'Search exercises...' # exerciseLibrary.search
+          timeout: 10000
+          label: Back on the Exercises library
+
+- runFlow: ../../subflows/go-back.yaml
+- extendedWaitUntil:
+    notVisible: 'Search exercises...' # exerciseLibrary.search
+    timeout: 10000
+    label: Exercises library closed
+
+# Workout presets, the row below Exercises.
+- runFlow: ../../subflows/exercise/open-workout-presets.yaml
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: exercise-exercise-libraries-03-workout-presets
+- runFlow: ../../subflows/go-back.yaml
+- extendedWaitUntil:
+    notVisible: 'Search workout presets...' # presetLibrary.search
+    timeout: 10000
+    label: Workout presets library closed
+- scrollUntilVisible:
+    element: 'Workout presets' # screens.library.workoutPresets
+    direction: DOWN
+    timeout: 10000
+    label: Back on the Library hub
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: exercise-exercise-libraries-04-library

@@ -1,0 +1,73 @@
+# Settings sweep, part 3: What's New, View Logs and About each open their
+# screen, render without an error boundary, and Back returns to Settings.
+#
+# Safe on your everyday build: it only opens screens and goes back. It taps
+# nothing on them (What's New's card links, the Logs filter chips and Clear,
+# About's GitHub, Documentation and Privacy Policy links that open the
+# browser are left alone). Opening What's New stores nothing: only the tab
+# bar's banner marks the content as seen (WhatsNewBanner.tsx:74-79). It does
+# force-stop the app on launch: finish any workout or run recording first.
+#
+# Screens (src/screens/SettingsScreen.tsx, last group):
+#   What's New  -> WhatsNewScreen.tsx
+#   View Logs   -> LogScreen.tsx
+#   About       -> AboutScreen.tsx
+# Not opened: Share Diagnostic Report (opens the system share sheet) and the
+# dev build's DevTools buttons (they seed data and trigger syncs).
+appId: ${APP_ID}
+tags:
+  - settings
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+- runFlow: ../../subflows/settings/open-settings.yaml
+
+# What's New. The tab bar's banner, shown once after an update, reads
+# "What's new" (whatsNew.title) and Maestro matches text without regard to
+# case, so the row is selected above the next row, View Logs. The screen's
+# cards change with every release and its title is the row's title, so the
+# check is that Settings is gone and that title is up.
+- scrollUntilVisible:
+    element: 'View Logs' # settings.rows.logs
+    direction: DOWN
+    timeout: 20000
+    label: Scroll Settings to its last group
+- tapOn:
+    text: "What's New" # settings.rows.whatsNew
+    above: 'View Logs' # settings.rows.logs, the row under it
+    label: Open What's New
+- extendedWaitUntil:
+    notVisible: 'View Logs' # settings.rows.logs
+    timeout: 15000
+    label: Left Settings for What's New
+- extendedWaitUntil:
+    visible: "What's New" # whatsNewPage.title, the header
+    timeout: 10000
+    label: What's New screen open
+- waitForAnimationToEnd:
+    timeout: 3000
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: settings-rows-about-01-whats-new
+- runFlow: ../../subflows/go-back.yaml
+- extendedWaitUntil:
+    visible: 'View Logs' # settings.rows.logs
+    timeout: 10000
+    label: Back on Settings after What's New
+
+# The Logs header's Clear button carries "Clear logs" whether or not there
+# are logs (LogScreen.tsx:254-268); it is never tapped.
+- runFlow:
+    file: ../../subflows/settings/visit-row.yaml
+    env:
+      ROW: 'View Logs' # settings.rows.logs
+      DESTINATION: 'Clear logs' # logScreen.clearLogs (accessibility label)
+      SHOT: settings-rows-about-02-logs
+
+- runFlow:
+    file: ../../subflows/settings/visit-row.yaml
+    env:
+      ROW: 'About' # settings.rows.about
+      DESTINATION: 'About this app' # about.descriptionTitle
+      SHOT: settings-rows-about-03-about
+
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: settings-rows-about-04-settings

@@ -1,0 +1,19 @@
+# Opens the + sheet (src/components/AddSheet.tsx) from a tab screen.
+#
+# Card labels such as "Food" and "Exercise" also appear on the Dashboard and in
+# Library, behind the sheet, and Maestro still sees those nodes. Steps that tap
+# a sheet item select it `below: 'Quick Actions'` (the sheet's title) with
+# `index: 0`. That narrows the overlap but does not rule it out, so each tap is
+# followed by a check of where it led. Test IDs on the sheet items are the
+# real fix (README "Toward the project").
+appId: ${APP_ID}
+---
+- tapOn:
+    text: 'Add'
+    index: -1 # the tab bar's + button, the bottom-most "Add"
+    label: Open the + sheet
+- extendedWaitUntil:
+    visible: 'Quick Actions'
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 3000

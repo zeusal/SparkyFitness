@@ -1,0 +1,67 @@
+# Smoke test of the app shell, safe on your everyday build: it does not clear
+# the app, write data or change permissions. It does force-stop the app on
+# launch, so finish any workout or run recording first.
+#
+# Opens every tab, the + sheet and Calorie Settings, checks that no
+# error-boundary message shows, and takes a screenshot of each for a quick
+# look. It does not yet prove each tab's content loaded (needs test IDs).
+# Calorie Settings once crashed on iOS only (Hermes lacked an Intl API), which
+# Jest on Node could not catch.
+#
+# Tabs are tapped with `index: -1`, the bottom-most match, because "Dashboard"
+# and "Diary" are also rows in Settings and screen titles. The order below never
+# taps a tab while the Settings tab is showing.
+appId: ${APP_ID}
+tags:
+  - smoke
+  - navigation
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+
+- tapOn:
+    text: 'Dashboard'
+    index: -1
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: smoke-01-dashboard
+
+- tapOn:
+    text: 'Library'
+    index: -1
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: smoke-02-library
+
+- tapOn:
+    text: 'Diary'
+    index: -1
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: smoke-03-diary
+
+- tapOn:
+    text: 'Dashboard'
+    index: -1
+- runFlow: ../../subflows/open-add-sheet.yaml
+- takeScreenshot: smoke-04-add-sheet
+- tapOn:
+    text: 'Done'
+    label: Close the + sheet
+- extendedWaitUntil:
+    notVisible: 'Quick Actions'
+    timeout: 5000
+
+- tapOn:
+    text: 'Settings'
+    index: -1
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: smoke-05-settings
+
+# Settings > Calories & BMR (shown only while connected to the server).
+- scrollUntilVisible:
+    element: 'Calories & BMR'
+    direction: DOWN
+    timeout: 15000
+- tapOn: 'Calories & BMR'
+- extendedWaitUntil:
+    visible: 'Energy Unit'
+    timeout: 15000
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: smoke-06-calorie-settings

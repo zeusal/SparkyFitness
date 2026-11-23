@@ -1,0 +1,64 @@
+# From a clean install: Onboarding, server URL, API Key tab, Connect, Tabs.
+# Used only by flows-clean-install/. English UI only (pin the test app's
+# language first, README "Clean-install flows").
+#
+# Env: SERVER_URL (what a person would type), API_KEY (full access).
+# The API key path avoids the email sign-in limit (4 per minute per IP,
+# successes count: SparkyFitnessServer/auth.ts), 2FA and password sheets.
+# Every -e value, API_KEY included, is stored in plain text in the run's
+# commands.json and maestro.log; a `label` only changes the console line.
+appId: ${APP_ID}
+---
+# Server URL page (src/screens/OnboardingScreen.tsx). The placeholder is a
+# literal, not translated. Release builds accept only https:// URLs.
+- extendedWaitUntil:
+    visible: 'https://your-sparky-app.com'
+    timeout: 60000
+    label: Onboarding shown (if not, is the app in English?)
+- tapOn: 'https://your-sparky-app.com'
+- inputText: ${SERVER_URL}
+- hideKeyboard
+- tapOn: 'Next'
+
+# Sign-in page. Next always opens the Sign In tab; "API Key" is the segment
+# that is always there ("Connect" exists on Sign In only when the server
+# allows email sign-in).
+- extendedWaitUntil:
+    visible: 'API Key'
+    timeout: 20000
+- tapOn: 'API Key'
+- extendedWaitUntil:
+    visible: 'Uds3d8i...' # the API key field's placeholder (a literal)
+    timeout: 5000
+- tapOn:
+    text: 'Uds3d8i...'
+    label: Focus the API key field
+- inputText:
+    text: ${API_KEY}
+    label: Type the API key
+- hideKeyboard
+- tapOn: 'Connect'
+
+# Android "save to autofill" prompt after typing a secret (Google wording;
+# other vendors differ, check `maestro --device <serial> hierarchy`).
+- runFlow:
+    when:
+      platform: Android
+      visible: 'Not now|No thanks'
+    commands:
+      - tapOn: 'Not now|No thanks'
+# iOS "Save Password?" sheet.
+- runFlow:
+    when:
+      platform: iOS
+      visible: 'Not Now'
+    commands:
+      - tapOn: 'Not Now'
+
+- extendedWaitUntil:
+    visible:
+      text: 'Library'
+      index: -1
+    timeout: 30000
+    label: Signed in and on the tabs
+- runFlow: dismiss-overlays.yaml

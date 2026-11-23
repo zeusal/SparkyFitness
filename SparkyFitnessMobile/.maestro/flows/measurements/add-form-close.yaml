@@ -1,0 +1,72 @@
+# + sheet > Measurements opens the check-in measurements form for the
+# Dashboard's day, and leaving it without saving goes straight back to the
+# Dashboard: once with Android Back, once with the form's own close (X)
+# button. Neither exit asks about unsaved changes: the X calls
+# navigation.goBack() (MeasurementsAddScreen.tsx:504-506 handleClose, header at
+# 1353-1371), and the screen registers no BackHandler or beforeRemove
+# listener, so Back pops it the same way. Nothing is typed, so there would be
+# nothing to discard either.
+# Screens: Dashboard tab, + sheet (src/components/AddSheet.tsx),
+# MeasurementsAdd (src/screens/MeasurementsAddScreen.tsx).
+#
+# Safe on your everyday build: it types nothing and never taps Save; opening
+# the form only reads the day's measurements. It does force-stop the app on
+# launch: finish any workout or run recording first. Measurements must not be
+# hidden in Settings > Quick Actions (subflows/measurements/open-add-form.yaml).
+appId: ${APP_ID}
+tags:
+  - measurements
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+- tapOn:
+    text: 'Dashboard' # navigation.dashboard
+    index: -1 # the tab bar's "Dashboard", the bottom-most
+- runFlow: ../../subflows/measurements/open-add-form.yaml
+- takeScreenshot: measurements-add-form-close-01-form
+
+# Exit 1: Android Back (iOS has no hardware Back, and this modal has no "Back"
+# for subflows/go-back.yaml to tap there).
+- runFlow:
+    when:
+      platform: Android
+    file: ../../subflows/go-back.yaml
+    label: Leave the form with Android Back
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - extendedWaitUntil:
+          notVisible:
+            id: 'field-weight'
+          timeout: 10000
+          label: The form closed with no dialog in the way
+      - assertVisible:
+          text: 'Library' # navigation.library
+          index: -1
+          label: Back on the tabs
+      - assertNotVisible:
+          text: 'Quick Actions' # addSheet.title
+          label: The + sheet stayed closed
+      - runFlow: ../../subflows/assert-no-error-boundary.yaml
+      - takeScreenshot: measurements-add-form-close-02-after-back
+
+# Exit 2: the header's X, whose accessibility label is "Close" (common.close,
+# useScreenHeader kind 'dismiss'); it is the only "Close" on this screen.
+- runFlow: ../../subflows/measurements/open-add-form.yaml
+- tapOn:
+    text: 'Close' # common.close
+    label: Leave the form with its X
+- extendedWaitUntil:
+    notVisible:
+      id: 'field-weight'
+    timeout: 10000
+    label: The form closed with no dialog in the way
+- assertVisible:
+    text: 'Library' # navigation.library
+    index: -1
+    label: Back on the tabs
+- assertNotVisible:
+    text: 'Quick Actions' # addSheet.title
+    label: The + sheet stayed closed
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: measurements-add-form-close-03-after-close

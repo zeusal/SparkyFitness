@@ -1,0 +1,20 @@
+# Opens the Settings tab (src/screens/SettingsScreen.tsx) from a tab screen and
+# waits until it shows the rows that need the server. Reads only.
+appId: ${APP_ID}
+---
+- tapOn:
+    text: 'Settings' # navigation.settings
+    index: -1 # the tab bar's "Settings"; the screen's own title is the same word
+    label: Open the Settings tab
+- extendedWaitUntil:
+    visible: 'App Settings' # settings.rows.app, a row that is always listed
+    timeout: 15000
+    label: Settings tab shown
+# Most rows are listed only while the server is connected
+# (SettingsScreen.tsx:275-401). The Server row's accessibility label says
+# whether it is (SettingsScreen.tsx:231-243).
+- extendedWaitUntil:
+    visible: 'Server settings. Connected.' # settings.serverConnected
+    timeout: 30000
+    label: Settings shows the server as connected (rows that need it are hidden otherwise)
+- runFlow: ../assert-no-error-boundary.yaml

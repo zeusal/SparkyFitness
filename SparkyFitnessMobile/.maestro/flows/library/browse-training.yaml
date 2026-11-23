@@ -1,0 +1,113 @@
+# Library > Browse, training rows: Training programs, Challenges, Routes,
+# Personal records and Equipment each open, show without an error, and Back
+# returns to the hub.
+# Screens: Library tab (src/screens/LibraryScreen.tsx) -> RunProgramsScreen,
+# ChallengesScreen, RoutesScreen, PersonalRecordsScreen, EquipmentScreen,
+# each closed again with Back.
+#
+# Safe on your everyday build: it only reads. None of these screens asks for
+# a permission or writes on opening; nothing on them is tapped: no program is
+# started or switched, no goal typed, no challenge joined, no route added or
+# imported (a GPX import opens the system file picker), no shoe or plate
+# opened. It does force-stop the app on launch: finish any workout or run
+# recording first.
+#
+# Exercises and Workout presets are covered by
+# flows/exercise/exercise-libraries.yaml, Lab results by browse-health.yaml.
+appId: ${APP_ID}
+tags:
+  - library
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+- tapOn:
+    text: 'Library' # navigation.library
+    index: -1 # the tab bar's "Library", the bottom-most
+- extendedWaitUntil:
+    visible: 'Browse' # screens.library.browse, shown only while connected
+    timeout: 15000
+    label: Library hub shown (is the app connected to its server?)
+
+# LibraryScreen.tsx:456-485. The row's subtitle names the running program
+# when one is on, so the row is found by its title. The screen shows only
+# its header until the program has loaded (RunProgramsScreen.tsx:333-334,
+# :441), with no spinner and no load-error message of its own. The running
+# goals card comes from a query of its own (:559, :579) and can show while
+# the program still loads, so the wait is for the fitness test panel, which
+# opens the body with or without a program (:337, :444) once the fitness
+# tests have loaded too (FitnessTestPanel.tsx:43): it names how to take a
+# test or the latest one. A failed load leaves it out and the wait fails.
+- runFlow:
+    file: ../../subflows/library/visit-row.yaml
+    env:
+      ROW: 'Training programs' # screens.library.runPrograms
+      # fitnessTest.panel.emptyTitle | fitnessTest.panel.title
+      # (FitnessTestPanel.tsx:52, :72, :103)
+      DESTINATION: 'Find your training paces|Your fitness test'
+      LOADING: 'Something went wrong' # nothing to wait out (spinner-free)
+      FAILED: 'Something went wrong' # common error boundary only
+      SHOT: library-browse-training-01-training-programs
+
+# LibraryScreen.tsx:486-504. The screen shows only a spinner until the
+# server has said whether challenges are on and, if they are, the list has
+# loaded (ChallengesScreen.tsx:141-142, src/hooks/useChallenges.ts:60). The
+# header's "Join a challenge" button appears as soon as they are on, over
+# that spinner (:123-138), so the wait is for what replaces it: the
+# unavailable notice (off), the empty state, a challenge row's member count,
+# or the load error (:143-219). A failed refresh keeps the list under its
+# own notice (:206-216), which counts as a load error too.
+- runFlow:
+    file: ../../subflows/library/visit-row.yaml
+    env:
+      ROW: 'Challenges' # screens.library.challenges
+      # challenges.unavailableTitle | challenges.emptyTitle |
+      # challenges.memberCount_one/_other (:87-94) | challenges.loadFailed
+      DESTINATION: 'Challenges are not available|No challenges yet|[0-9]+ members?|Could not load your challenges\.'
+      LOADING: 'Could not load your challenges\.|Could not refresh your challenges.*' # none: spinner only
+      # challenges.loadFailed | challenges.listRefreshFailed
+      FAILED: 'Could not load your challenges\.|Could not refresh your challenges.*'
+      SHOT: library-browse-training-02-challenges
+
+# LibraryScreen.tsx:526-542. The header's Add button is labelled "Add a
+# route" (RoutesScreen.tsx:101-115) and is never tapped. The screen shows
+# only a spinner while it loads (:127-128), so the wait is for what replaces
+# it: the empty state, a route row's distance ("12.4 km" / "7.7 mi",
+# formatRouteDistance, src/utils/routeDisplay.ts:7-16; rows have no fixed
+# text), or the load error (:129-171).
+- runFlow:
+    file: ../../subflows/library/visit-row.yaml
+    env:
+      ROW: 'Routes' # screens.library.routes
+      # routes.empty | a route's distance | routes.loadFailed
+      DESTINATION: 'No routes yet\..*|[0-9][0-9.,]* (km|mi)|Could not load your routes\.'
+      LOADING: 'Could not load your routes.' # none: spinner only
+      FAILED: 'Could not load your routes.' # routes.loadFailed
+      SHOT: library-browse-training-03-routes
+
+# LibraryScreen.tsx:543-561. The screen shows only a spinner while it loads
+# (PersonalRecordsScreen.tsx:44-45), so the wait is for what replaces it:
+# the empty state, a record row, or the load error (:46-105). Record texts
+# are not fixed (sport names such as "Running" may also be exercise names
+# under Recently Logged on the hub), so a row is matched by its
+# accessibility label, "<distance>, <time>, <pace>, <date>"
+# (personalRecords.rowA11y, :72-80), through the pace the server formats as
+# "M:SS /km" or "M:SS /mi" (SparkyFitnessServer/services/exerciseStatsService.ts:160-172).
+- runFlow:
+    file: ../../subflows/library/visit-row.yaml
+    env:
+      ROW: 'Personal records' # screens.library.personalRecords
+      # personalRecords.empty | personalRecords.rowA11y | personalRecords.loadFailed
+      DESTINATION: 'No records yet\..*|.*, [0-9]+:[0-9]{2} /(km|mi), .*|Could not load your records\.'
+      LOADING: 'Could not load your records.' # none: spinner only
+      FAILED: 'Could not load your records.' # personalRecords.loadFailed
+      SHOT: library-browse-training-04-personal-records
+
+# LibraryScreen.tsx:594-610. A hub of two rows, Shoes and Plates & bars
+# (EquipmentScreen.tsx:36-56), which load nothing themselves.
+- runFlow:
+    file: ../../subflows/library/visit-row.yaml
+    env:
+      ROW: 'Equipment' # screens.library.equipment
+      DESTINATION: 'Running shoes and their mileage' # equipmentHub.shoesSubtitle
+      LOADING: 'Something went wrong' # nothing to wait out
+      FAILED: 'Something went wrong' # common error boundary only
+      SHOT: library-browse-training-05-equipment

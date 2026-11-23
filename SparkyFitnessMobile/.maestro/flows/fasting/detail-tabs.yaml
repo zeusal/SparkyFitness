@@ -1,0 +1,172 @@
+# Dashboard Fasting card > Details: FastingDetail opens, each of its tabs
+# (Fasting, History, Report) shows its content, its gear opens Fasting
+# Settings, and Back returns to the Dashboard.
+# Screens: Dashboard Fasting card (src/components/FastingCard.tsx)
+#   -> FastingDetail (src/screens/FastingDetailScreen.tsx): Fasting, History,
+#      Report (src/components/FastingReport.tsx)
+#   -> Fasting Settings (src/screens/FastingSettingsScreen.tsx), back, back.
+#
+# Safe on your everyday build: it never starts, ends, edits or deletes a fast
+# (no Start Fast, End Fast, Start Fasting Now or Log Meal to End Fast, no
+# history row is tapped or swiped) and changes no fasting setting. The
+# report's range control only narrows what is drawn (FastingReport.tsx:48-54,
+# local state). It force-stops the app on launch: finish any workout or run
+# recording first. Works with or without a fast running.
+#
+# The Fasting card is on the Dashboard unless Dashboard Settings hides it
+# (fastingCardVisible, on by default: src/stores/appPreferencesStore.ts:120).
+# Android only: FastingDetail draws its own back chevron without a label
+# (FastingDetailScreen.tsx:188-195), which subflows/go-back.yaml cannot tap
+# on iOS.
+appId: ${APP_ID}
+tags:
+  - fasting
+  - android
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+- tapOn:
+    text: 'Dashboard' # navigation.dashboard
+    index: -1 # the tab bar's "Dashboard", the bottom-most
+- extendedWaitUntil:
+    notVisible: 'Loading summary...' # dashboard.loadingSummary
+    timeout: 30000
+    label: The day's summary loaded
+- assertNotVisible:
+    text: 'Failed to load summary' # dashboard.loadFailed
+    label: The day's summary did not fail to load
+
+# Once the current fast has loaded, the card is either idle ("Ready to
+# start") or a running fast, the whole card a button labelled "Open fasting
+# details" (FastingCard.tsx:98-124, 293-305). If the card was still loading
+# when the scroll passed it, the second scroll comes back up to it.
+- scrollUntilVisible:
+    element: 'Ready to start|Open fasting details' # fastingCard.readyToStart | fastingCard.openDetails
+    direction: DOWN
+    centerElement: true
+    timeout: 20000
+    optional: true
+    label: Scroll down to the Fasting card
+- scrollUntilVisible:
+    element: 'Ready to start|Open fasting details' # fastingCard.readyToStart | fastingCard.openDetails
+    direction: UP
+    centerElement: true
+    timeout: 20000
+    label: Fasting card shown (Dashboard Settings > Fasting must be on)
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: fasting-detail-tabs-01-card
+
+# "Details" sits at the right of the card's "Fasting" title in both states.
+# Idle, it is its own button (FastingCard.tsx:310-328), and the rest of the
+# card opens the start-a-fast sheet, so the tap must land on it; running,
+# the whole card opens the details (FastingCard.tsx:117-169). The Nutrients
+# and Training Load cards above it say "Details" too (DashboardScreen.tsx:690,
+# TrainingLoadDashboardCard.tsx:117), and a rightOf anchor does not pick the
+# nearest one: Maestro taps the first match in hierarchy order. So the search
+# stays inside this card, whose own button is labelled "Start a fast" when
+# idle and "Open fasting details" when running (FastingCard.tsx:117-124,
+# 298-305). Nothing inside it matches those labels ("Start Fast" differs).
+- tapOn:
+    text: 'Details' # fastingCard.details
+    childOf:
+      text: 'Start a fast|Open fasting details' # fastingCard.startFast | fastingCard.openDetails (accessibility labels)
+    label: Open the fasting details from the card
+- extendedWaitUntil:
+    visible: 'Fasting settings' # fastingDetail.settings, the header gear (FastingDetailScreen.tsx:199-208)
+    timeout: 15000
+    label: FastingDetail open
+# The tabs show once the current fast has loaded (FastingDetailScreen.tsx:291-332).
+- extendedWaitUntil:
+    visible: 'Report' # fastingDetail.tabs.report
+    timeout: 20000
+    label: FastingDetail tabs shown
+
+# Fasting tab, the one it opens on: no fast, a running fast (its clock,
+# utils/fasting.ts:37-44, and End Fast) or an open eating window
+# (FastingDetailScreen.tsx:393-405, 519-580, 669-690).
+- extendedWaitUntil:
+    visible: 'No active fast|End Fast|[0-9]{2,}:[0-9]{2}:[0-9]{2}|.*Eating Window Open' # fastingDetail.noActiveFast | fastingDetail.endFast | the fast's clock | fastingDetail.eatingWindowOpen
+    timeout: 15000
+    label: Fasting tab shows the current fast or none
+- waitForAnimationToEnd:
+    timeout: 3000
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: fasting-detail-tabs-02-fasting
+
+# History tab: past fasts, or "No past fasts yet." (FastingDetailScreen.tsx:342-391).
+- tapOn:
+    text: 'History' # fastingDetail.tabs.history
+    label: Open the History tab
+- extendedWaitUntil:
+    visible: 'Tap to edit · swipe left to delete' # fastingHistory.hint, the tab's first line
+    timeout: 10000
+    label: History tab shown
+- waitForAnimationToEnd:
+    timeout: 3000
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: fasting-detail-tabs-03-history
+
+# Report tab: one 90-day query, then the summary tiles
+# (FastingReport.tsx:99-160). It opens on 30 days.
+- tapOn:
+    text: 'Report' # fastingDetail.tabs.report
+    label: Open the Report tab
+- extendedWaitUntil:
+    visible: '30 days' # fastingReport.range.30d, the range control
+    timeout: 10000
+    label: Report tab shown
+- extendedWaitUntil:
+    visible: 'Total fasts|Could not load your fasting report\.' # fastingReport.totalFasts | fastingReport.loadFailed
+    timeout: 20000
+    label: Fasting report loaded
+- assertNotVisible:
+    text: 'Could not load your fasting report\.' # fastingReport.loadFailed
+    label: Fasting report loaded without an error
+- tapOn:
+    text: '90 days' # fastingReport.range.90d
+    label: Show the last 90 days
+- assertVisible:
+    text: 'Total fasts' # fastingReport.totalFasts
+    label: Report redrawn for 90 days
+- waitForAnimationToEnd:
+    timeout: 3000
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: fasting-detail-tabs-04-report
+
+# Back to the Fasting tab. "Fasting" is also the header title, the top-most;
+# the tab is the second (FastingDetailScreen.tsx:196-198, 311).
+- tapOn:
+    text: 'Fasting' # fastingDetail.tabs.fasting
+    index: 1
+    label: Back to the Fasting tab
+- extendedWaitUntil:
+    visible: 'No active fast|End Fast|[0-9]{2,}:[0-9]{2}:[0-9]{2}|.*Eating Window Open'
+    timeout: 10000
+    label: Fasting tab shown again
+
+# The header gear opens Fasting Settings (FastingDetailScreen.tsx:199-208);
+# its first row shows once the preferences have loaded
+# (FastingSettingsScreen.tsx:202-222). Nothing on it is touched.
+- tapOn:
+    text: 'Fasting settings' # fastingDetail.settings
+    label: Open Fasting Settings from the header
+- extendedWaitUntil:
+    visible: 'Auto-calculate fasting from meals' # fastingSettings.autoCalculate
+    timeout: 20000
+    label: Fasting Settings open and loaded
+- waitForAnimationToEnd:
+    timeout: 3000
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: fasting-detail-tabs-05-settings
+- runFlow: ../../subflows/go-back.yaml
+- extendedWaitUntil:
+    visible: 'Fasting settings' # fastingDetail.settings
+    timeout: 10000
+    label: Back on FastingDetail
+
+- runFlow: ../../subflows/go-back.yaml
+- extendedWaitUntil:
+    visible: 'Ready to start|Open fasting details' # fastingCard.readyToStart | fastingCard.openDetails
+    timeout: 10000
+    label: Back on the Dashboard's Fasting card
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: fasting-detail-tabs-06-back

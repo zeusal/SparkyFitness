@@ -1,0 +1,48 @@
+# Android hardware Back inside the + sheet, safe on your everyday build (it
+# force-stops the app on launch: finish any workout or run recording first).
+#
+# Regression for "fix(mobile): handle Android Back in the Add sheet" (#2868):
+# with the sheet open, Back closed the whole app. Expected:
+#   Exercise sub-menu --Back--> main menu --Back--> sheet closed, app still open.
+# iOS has no hardware Back: exclude this flow there with --exclude-tags android.
+appId: ${APP_ID}
+tags:
+  - add-sheet
+  - android
+  - regression
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+- tapOn:
+    text: 'Dashboard'
+    index: -1
+- runFlow: ../../subflows/open-add-sheet.yaml
+
+# Exercise has no action of its own: it opens a sub-menu.
+- tapOn:
+    text: 'Exercise'
+    below: 'Quick Actions'
+    index: 0
+    label: Open the Exercise sub-menu
+- extendedWaitUntil:
+    visible: 'Live sets & reps' # subtitle of the Workout row, sub-menu only
+    timeout: 5000
+- takeScreenshot: add-sheet-back-01-exercise-menu
+
+# Back 1: sub-menu -> main menu, sheet still open.
+- pressKey: Back
+- extendedWaitUntil:
+    visible: 'Quick Actions'
+    timeout: 5000
+- assertNotVisible: 'Live sets & reps'
+- takeScreenshot: add-sheet-back-02-main-menu
+
+# Back 2: the sheet closes and the app stays in the foreground.
+- pressKey: Back
+- extendedWaitUntil:
+    notVisible: 'Quick Actions'
+    timeout: 5000
+- assertVisible:
+    text: 'Library'
+    index: -1
+    label: The app is still open (tab bar visible)
+- takeScreenshot: add-sheet-back-03-closed

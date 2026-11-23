@@ -1,0 +1,72 @@
+# Library > Browse, first rows: Meals, Meal plans, Workout plans and Training
+# calendar each open, load without an error, and Back returns to the hub.
+# Screens: Library tab (src/screens/LibraryScreen.tsx) -> MealsLibraryScreen,
+# MealPlansScreen, WorkoutPlansScreen, TrainingCalendarScreen, each closed
+# again with Back.
+#
+# Safe on your everyday build: it only reads. No Create tile, no "+" header
+# button, no plan switch or menu, no Mealie import and no search is touched;
+# the ownership filters and the calendar's month / week choice are left as
+# they are. It does force-stop the app on launch: finish any workout or run
+# recording first.
+#
+# Foods is covered by flows/food/foods-library.yaml, Exercises and Workout
+# presets by flows/exercise/exercise-libraries.yaml.
+appId: ${APP_ID}
+tags:
+  - library
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+- tapOn:
+    text: 'Library' # navigation.library
+    index: -1 # the tab bar's "Library", the bottom-most
+- extendedWaitUntil:
+    visible: 'Browse' # screens.library.browse, shown only while connected
+    timeout: 15000
+    label: Library hub shown (is the app connected to its server?)
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: library-browse-plans-01-library
+
+# LibraryScreen.tsx:385-399; the Create tile above is "Meal".
+- runFlow:
+    file: ../../subflows/library/visit-row.yaml
+    env:
+      ROW: 'Meals' # screens.library.meals
+      DESTINATION: 'Search meals...' # mealLibrary.search, shown while connected (MealsLibraryScreen.tsx:261)
+      LOADING: 'Loading meals...' # mealLibrary.loading
+      FAILED: 'Failed to load meals' # mealLibrary.failed
+      SHOT: library-browse-plans-02-meals
+
+# LibraryScreen.tsx:400-416. The "+" in the header is labelled "Create meal
+# plan" (MealPlansScreen.tsx:160-172) and is never tapped.
+- runFlow:
+    file: ../../subflows/library/visit-row.yaml
+    env:
+      ROW: 'Meal plans' # screens.library.mealPlans
+      DESTINATION: 'Create meal plan' # mealPlans.create, the header button's label
+      LOADING: 'Loading meal plans...' # mealPlans.loading
+      FAILED: 'Failed to load meal plans' # mealPlans.loadFailed
+      SHOT: library-browse-plans-03-meal-plans
+
+# LibraryScreen.tsx:417-435; header "+" labelled "Create workout plan"
+# (WorkoutPlansScreen.tsx:314-326).
+- runFlow:
+    file: ../../subflows/library/visit-row.yaml
+    env:
+      ROW: 'Workout plans' # screens.library.workoutPlans
+      DESTINATION: 'Create workout plan' # workoutPlans.create, the header button's label
+      LOADING: 'Loading workout plans...' # workoutPlans.loading
+      FAILED: 'Failed to load workout plans' # workoutPlans.loadFailed
+      SHOT: library-browse-plans-04-workout-plans
+
+# LibraryScreen.tsx:436-455. The calendar shows only a spinner while it
+# loads (TrainingCalendarScreen.tsx:550); its grid's "Total" column heading
+# appears once it has (:603), and an error replaces the grid.
+- runFlow:
+    file: ../../subflows/library/visit-row.yaml
+    env:
+      ROW: 'Training calendar' # screens.library.trainingCalendar
+      DESTINATION: 'Total' # trainingCalendar.weekTotalHeader
+      LOADING: 'Could not load your training calendar.' # trainingCalendar.loadFailed (spinner only)
+      FAILED: 'Could not load your training calendar.' # trainingCalendar.loadFailed
+      SHOT: library-browse-plans-05-training-calendar

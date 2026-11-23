@@ -1,0 +1,86 @@
+# Logs a food from the + sheet and finds it in the Diary.
+#
+# WRITES DATA to the account the app is signed in to: run it only with a test
+# account. It does not clear the app. It creates one uniquely named food
+# through the API, logs it for today in the app, and deletes the food together
+# with that diary entry when the flow ends, also after a failed step (not after
+# Ctrl+C or a killed run: then delete "Maestro Oats ..." by hand).
+#
+# FoodSearch must show your own foods: its ownership filter (menu on the
+# search screen) set to All or Mine.
+#
+# Every -e value, API_KEY included, is stored in plain text in the run's
+# commands.json and maestro.log: use a revocable key of a test account, always
+# pass --test-output-dir and --debug-output, never --verbose, and delete the
+# run's folders afterwards.
+#
+# Env:
+#   APP_ID           the app under test, signed in to the test account
+#   SERVER_URL       the server as this computer reaches it (the API calls run
+#                    on the computer, not on the phone)
+#   HOST_SERVER_URL  optional, overrides SERVER_URL for those API calls
+#   API_KEY          a full-access key of THE SAME account the app uses
+#
+# Run: see README "Data flows" (the key read into $env:SPARKY_E2E_API_KEY).
+appId: ${APP_ID}
+tags:
+  - writes-data
+  - food
+onFlowComplete:
+  - runScript:
+      file: ../../scripts/cleanup-food.js
+      label: Delete the test food and its diary entry
+---
+- runScript:
+    file: ../../scripts/seed-food.js
+    label: Create a uniquely named test food through the API
+- runFlow: ../../subflows/launch-signed-in.yaml
+- tapOn:
+    text: 'Dashboard'
+    index: -1
+- runFlow: ../../subflows/open-add-sheet.yaml
+- tapOn:
+    text: 'Food'
+    below: 'Quick Actions'
+    index: 0
+    label: Open food search from the + sheet
+
+- extendedWaitUntil:
+    visible: 'Search foods...'
+    timeout: 15000
+- tapOn: 'Search foods...'
+# Type only the food's unique number: the search matches part of the name,
+# and the result row (full name) then differs from the text in the search box.
+- inputText: ${output.foodSearchTerm}
+- extendedWaitUntil:
+    visible: ${output.foodName}
+    timeout: 20000
+    label: Seeded food listed (if not, set the FoodSearch filter to All or Mine)
+- takeScreenshot: food-log-01-search
+- tapOn: ${output.foodName}
+
+- extendedWaitUntil:
+    visible: 'Add Food'
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: food-log-02-entry
+- tapOn: 'Add Food'
+# The button shows a spinner while saving; the entry is saved once the stack
+# is back on the tabs.
+- extendedWaitUntil:
+    visible:
+      text: 'Library'
+      index: -1
+    timeout: 15000
+    label: Entry saved, back on the tabs
+
+- tapOn:
+    text: 'Diary'
+    index: -1
+- scrollUntilVisible:
+    element: '.*${output.foodName}.*'
+    direction: DOWN
+    timeout: 20000
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: food-log-03-diary

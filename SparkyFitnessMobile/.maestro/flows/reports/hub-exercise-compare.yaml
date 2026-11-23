@@ -1,0 +1,40 @@
+# Exercise statistics and Compare open from the Reports hub, safe on your
+# everyday build: it only opens screens and goes back. It does not clear the
+# app, write data, pick a range or ask Compare a question (a picked question
+# is saved to the recent questions, appPreferencesStore
+# compareRecentQuestions). It does force-stop the app on launch, so finish any
+# workout or run recording first.
+#
+# Screens: Library -> Reports hub (src/screens/ReportsScreen.tsx)
+#   -> Exercise statistics (ExerciseStatisticsScreen.tsx: its own scaffold,
+#      same range control, '90d' at ExerciseStatisticsScreen.tsx:630-637)
+#   -> Compare (CompareReportScreen.tsx: no range control; it opens with no
+#      question, so its start state "Try one of these" always shows,
+#      CompareReportScreen.tsx:231-241, CompareStartState.tsx:39)
+# each followed by Back to the hub. A report hidden in Customize Reports is
+# skipped (subflows/reports/visit-report.yaml).
+appId: ${APP_ID}
+tags:
+  - reports
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+- runFlow: ../../subflows/reports/open-hub.yaml
+- assertVisible:
+    id: 'reports-link-.*' # ReportsScreen.tsx:147, one row per report
+    label: The hub lists reports
+
+- runFlow:
+    file: ../../subflows/reports/visit-report.yaml
+    env:
+      ROW_ID: reports-link-exercise
+      DESTINATION: '90d' # ranges.90d
+      TITLE: 'Exercise Statistics' # exerciseStatistics.title
+      SHOT: reports-hub-exercise-compare-01-exercise
+
+- runFlow:
+    file: ../../subflows/reports/visit-report.yaml
+    env:
+      ROW_ID: reports-link-compare
+      DESTINATION: 'Try one of these' # compareReport.start.suggestions
+      TITLE: 'Compare' # compareReport.title
+      SHOT: reports-hub-exercise-compare-02-compare

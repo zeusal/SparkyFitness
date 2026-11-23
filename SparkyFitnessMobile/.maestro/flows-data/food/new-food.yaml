@@ -1,0 +1,116 @@
+# Creates a custom food through the New Food form, then finds it in the Foods
+# library and opens its detail page.
+#
+# WRITES DATA to the account the app is signed in to: run it only with a test
+# account. It does not clear the app. It types a uniquely named food
+# ("Maestro New Food <number>", serving size 100, no nutrients) into Library >
+# Create > Food and saves it, searches for it in Library > Foods and opens it
+# (FoodDetail). When the flow ends, also after a failed step, the food is
+# found through the API by that name and deleted (not after Ctrl+C or a killed
+# run: then delete "Maestro New Food ..." by hand, Library > Foods > the food
+# > Delete Food > Delete including history).
+# Screens: Library tab, New Food form (src/screens/foodForm/CreateFoodMode.tsx,
+# src/components/FoodForm.tsx), Foods library (src/screens/FoodsLibraryScreen.tsx),
+# FoodDetail (src/screens/FoodDetailScreen.tsx).
+#
+# The Foods library's ownership filter (menu on that screen) must be All or
+# Mine, or the new food is not listed there.
+#
+# Every -e value, API_KEY included, is stored in plain text in the run's
+# commands.json and maestro.log: use a revocable key of a test account, always
+# pass --test-output-dir and --debug-output, never --verbose, and delete the
+# run's folders afterwards.
+#
+# Env:
+#   APP_ID           the app under test, signed in to the test account
+#   SERVER_URL       the server as this computer reaches it
+#   HOST_SERVER_URL  optional, overrides SERVER_URL for those API calls
+#   API_KEY          a full-access key of THE SAME account the app uses
+#
+# Run: see README "Data flows", with this file's path.
+appId: ${APP_ID}
+tags:
+  - food
+  - writes-data
+onFlowComplete:
+  - runScript:
+      file: ../../scripts/food-new-food-cleanup.js
+      label: Find the new food by its name and delete it
+---
+- runScript:
+    file: ../../scripts/food-new-food-setup.js
+    label: Pick a unique food name and check the API key can search foods
+- runFlow: ../../subflows/launch-signed-in.yaml
+- runFlow: ../../subflows/food/open-new-food-form.yaml
+
+# Serving size first: with the form untouched it is on screen. Its label is
+# "Serving Size" (foodForm.servingSize) and every number field's placeholder
+# is "0", so the top-most "0" under that label is its input. Saving needs a
+# serving size above zero (CreateFoodMode handleSubmit).
+- tapOn:
+    text: '0'
+    below: 'Serving Size'
+    index: 0
+    label: Focus the Serving Size field
+- inputText: '100'
+# The field was just focused and typed into, so the keyboard is up and
+# Android Back (hideKeyboard) only closes it.
+- hideKeyboard
+- tapOn:
+    text: 'e.g. Chicken Breast' # foodForm.foodNamePlaceholder
+    label: Focus the Food Name field
+- inputText: ${output.newFoodName}
+- hideKeyboard
+- assertVisible: ${output.newFoodName}
+- takeScreenshot: food-new-food-01-filled
+
+# The form's own Save at its end (common.save; library mode). Mark it before
+# the tap: from then on the cleanup must find and delete the food.
+- scrollUntilVisible:
+    element: 'Save'
+    direction: DOWN
+    timeout: 20000
+- evalScript: ${output.newFoodSaveTapped = true}
+- tapOn:
+    text: 'Save'
+    label: Save the new food
+# Library mode pops back to the Library hub once the food is saved.
+- extendedWaitUntil:
+    visible: 'Group foods' # screens.library.groupFoods
+    timeout: 20000
+    label: Food saved, back on the Library hub (else look for a "Failed to save food" toast)
+- assertNotVisible:
+    text: 'e.g. Chicken Breast'
+    label: The New Food form is closed
+
+# Find it in Library > Foods by its number (the search matches part of the
+# name) and open it.
+- runFlow: ../../subflows/food/open-foods-library.yaml
+- tapOn: 'Search foods...' # foodLibrary.search
+- inputText: ${output.newFoodSearchTerm}
+- extendedWaitUntil:
+    visible: ${output.newFoodName}
+    timeout: 20000
+    label: New food listed (if not, set the Foods library filter to All or Mine)
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: food-new-food-02-library
+# Just typed into the search field, so Back only closes the keyboard; it must
+# not stay up over FoodDetail, where the next steps scroll from mid-screen.
+- hideKeyboard
+- tapOn:
+    text: ${output.newFoodName}
+    label: Open the new food
+# "Log Food" (foodDetail.logFood) is FoodDetail's own button; the name sits
+# at the top of the page (FoodNutritionSummary).
+- scrollUntilVisible:
+    element: 'Log Food'
+    direction: DOWN
+    timeout: 15000
+    label: FoodDetail open
+- scrollUntilVisible:
+    element: ${output.newFoodName}
+    direction: UP
+    timeout: 10000
+    label: FoodDetail shows the new food
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: food-new-food-03-detail

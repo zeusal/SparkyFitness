@@ -1,0 +1,19 @@
+# Waits until the Diary (src/screens/DiaryScreen.tsx) has finished loading the
+# selected day and checks it did not fail. Call it after opening the Diary or
+# after changing the day. Reads only.
+#
+# A new day has no cached summary (useDailySummary keeps no placeholder data),
+# so "Loading diary..." shows in the same render as the new date label.
+appId: ${APP_ID}
+---
+- extendedWaitUntil:
+    notVisible: 'Loading diary...' # diary.loading
+    timeout: 20000
+    label: The diary day finished loading
+- assertNotVisible:
+    text: 'Failed to load diary' # diary.loadFailed
+    label: The diary day loaded without an error
+# Offline the Diary shows only this phone's workouts (renderOfflineDay).
+- assertNotVisible:
+    text: 'Only workouts are available offline.*' # offline.diaryNote
+    label: The diary is not in its offline view (is the server reachable?)

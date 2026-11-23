@@ -1,0 +1,116 @@
+# Day navigation on the Dashboard, safe on your everyday build: it does not
+# clear the app, write data or change settings; it only changes the day on
+# screen, which is not saved (src/stores/diaryDateStore.ts: every launch starts
+# on today). It does force-stop the app on launch, so finish any workout or run
+# recording first.
+#
+# Screens: Dashboard only. Checks, with the DateNavigator
+# (src/components/DateNavigator.tsx, used on Android and wherever the iOS
+# Liquid Glass tabs are off; the native iOS header is not covered):
+#   Previous day -> "Yesterday", Previous day -> a date, Next day ->
+#   "Yesterday", then re-tapping the Dashboard tab returns to "Today"
+#   (DashboardScreen.tsx:149-157: the tab press calls goToToday).
+# After each change it waits for the day's summary to load and checks that
+# neither an error boundary nor the summary's load error shows.
+#
+# The day label is read from inside the date button, whose accessibility label
+# is "Choose date" (the Dashboard passes onDatePress, DateNavigator.tsx:161-191),
+# because "Today" and "Yesterday" are also words on Dashboard cards. The date
+# button opens the calendar sheet, which this flow never does: Android Back
+# would not close that sheet and would leave the app instead.
+appId: ${APP_ID}
+tags:
+  - dashboard
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+
+- tapOn:
+    text: 'Dashboard' # navigation.dashboard, the bottom-most is the tab
+    index: -1
+- extendedWaitUntil:
+    visible:
+      text: 'Today' # date.today
+      childOf:
+        text: 'Choose date' # familyDiary.chooseDate (accessibility label)
+    timeout: 30000
+    label: Dashboard on today (DateNavigator shows only while connected)
+- extendedWaitUntil:
+    notVisible: 'Loading summary...' # dashboard.loadingSummary
+    timeout: 30000
+    label: Today's summary loaded
+- assertNotVisible:
+    text: 'Failed to load summary' # dashboard.loadFailed
+    label: Today's summary did not fail to load
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: dashboard-day-navigation-01-today
+
+# Previous day: yesterday.
+- tapOn:
+    text: 'Previous day' # familyDiary.previousDay (accessibility label)
+    label: Go to the previous day
+- extendedWaitUntil:
+    visible:
+      text: 'Yesterday' # date.yesterday
+      childOf:
+        text: 'Choose date' # familyDiary.chooseDate
+    timeout: 10000
+    label: Date label reads Yesterday
+- extendedWaitUntil:
+    notVisible: 'Loading summary...' # dashboard.loadingSummary
+    timeout: 30000
+- assertNotVisible:
+    text: 'Failed to load summary' # dashboard.loadFailed
+    label: Yesterday's summary did not fail to load
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: dashboard-day-navigation-02-yesterday
+
+# Previous day again: two days ago, labelled with its date ("Thu, Nov 20",
+# utils/dateUtils.ts formatDate), the only label of the three with a digit.
+- tapOn:
+    text: 'Previous day' # familyDiary.previousDay
+    label: Go back one more day
+- extendedWaitUntil:
+    visible:
+      text: '.*[0-9].*' # a date, not "Today" or "Yesterday"
+      childOf:
+        text: 'Choose date' # familyDiary.chooseDate
+    timeout: 10000
+    label: Date label shows a date
+- extendedWaitUntil:
+    notVisible: 'Loading summary...' # dashboard.loadingSummary
+    timeout: 30000
+- assertNotVisible:
+    text: 'Failed to load summary' # dashboard.loadFailed
+    label: That day's summary did not fail to load
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: dashboard-day-navigation-03-two-days-ago
+
+# Next day: yesterday again.
+- tapOn:
+    text: 'Next day' # familyDiary.nextDay (accessibility label)
+    label: Go to the next day
+- extendedWaitUntil:
+    visible:
+      text: 'Yesterday' # date.yesterday
+      childOf:
+        text: 'Choose date' # familyDiary.chooseDate
+    timeout: 10000
+    label: Date label reads Yesterday again
+
+# Re-tapping the Dashboard tab while it is showing jumps back to today.
+- tapOn:
+    text: 'Dashboard' # navigation.dashboard
+    index: -1
+    label: Re-tap the Dashboard tab
+- extendedWaitUntil:
+    visible:
+      text: 'Today' # date.today
+      childOf:
+        text: 'Choose date' # familyDiary.chooseDate
+    timeout: 10000
+    label: Back on today
+- extendedWaitUntil:
+    notVisible: 'Loading summary...' # dashboard.loadingSummary
+    timeout: 30000
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: dashboard-day-navigation-04-back-to-today

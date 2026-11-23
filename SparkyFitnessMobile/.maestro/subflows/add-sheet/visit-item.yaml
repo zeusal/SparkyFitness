@@ -1,0 +1,52 @@
+# From a tab screen: opens the + sheet (src/components/AddSheet.tsx), taps one
+# item, checks the screen it opens, takes a screenshot and goes back to the
+# tabs. Reads only: callers pick items whose screen does nothing on opening
+# and taps nothing on that screen.
+#
+# Env:
+#   ITEM         text inside the item, a full-match regex: the hint of a list
+#                or compact row ("Visual", "Track state"; AddSheet.tsx:513-570)
+#                or the short name of a card ("Measure"; ADD_MENU_CARD_LABELS,
+#                src/constants/addMenuItems.ts:86-91). A row's own name is
+#                often also a Dashboard card title behind the sheet, its hint
+#                is not. Selected below the sheet title, the top-most match.
+#   DESTINATION  text near the top of the opened screen, shown once it has
+#                loaded, that neither the sheet nor the tab behind it shows
+#   FAILED       the screen's load-error message, which must not show; for a
+#                screen without one, 'Something went wrong' (the error
+#                boundary, also checked below)
+#   SHOT         screenshot name
+appId: ${APP_ID}
+---
+- runFlow: ../open-add-sheet.yaml
+- tapOn:
+    text: ${ITEM}
+    below: 'Quick Actions' # addSheet.title, the sheet's own title
+    index: 0
+    label: Open ${ITEM} from the + sheet
+# Picking an item closes the sheet, then navigates (handleAction,
+# AddSheet.tsx:213-225).
+- extendedWaitUntil:
+    notVisible: 'Quick Actions' # addSheet.title
+    timeout: 10000
+    label: The + sheet closed
+- extendedWaitUntil:
+    visible: ${DESTINATION}
+    timeout: 20000
+    label: ${ITEM} screen open and loaded
+- assertNotVisible:
+    text: ${FAILED}
+    label: ${ITEM} screen loaded without an error
+- waitForAnimationToEnd:
+    timeout: 3000
+- runFlow: ../assert-no-error-boundary.yaml
+- takeScreenshot: ${SHOT}
+- runFlow: ../go-back.yaml
+- extendedWaitUntil:
+    notVisible: ${DESTINATION}
+    timeout: 10000
+    label: ${ITEM} screen closed
+- assertVisible:
+    text: 'Library' # navigation.library
+    index: -1 # the tab bar's "Library", shown only on the tabs
+    label: Back on the tabs after ${ITEM}

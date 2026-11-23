@@ -1,0 +1,70 @@
+# Diary: today, one day back, one day forward, and the day's sections.
+#
+# Checks that the Diary tab opens on today ("Today" in the date pill), that
+# the day's sections render down to the last one (the progress photos row, or
+# the empty-day card), and that the date chevrons move to yesterday and back
+# to today, each day loading without an error-boundary message.
+# Screens: Diary tab (src/screens/DiaryScreen.tsx, src/components/DateNavigator.tsx,
+# FoodSummary, ExerciseSummary, MeasurementsSummary, CheckInPhotosSummary).
+#
+# Safe on your everyday build: it only reads. The diary date is not stored
+# (src/stores/diaryDateStore.ts) and the flow ends on today. It force-stops
+# the app on launch: finish any workout or run recording first.
+#
+# Needs the custom tab bar (Android; iOS with the Liquid Glass tab bar puts the
+# date buttons in the native header under other labels).
+appId: ${APP_ID}
+tags:
+  - diary
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+- runFlow: ../../subflows/diary/open-diary.yaml
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+# A fresh launch starts on today (diaryDateStore is not persisted).
+- assertVisible:
+    text: 'Today' # date.today, the DateNavigator date pill
+    label: The Diary opens on today
+- takeScreenshot: diary-day-navigation-01-today
+
+# The non-empty day ends with the progress photos row: "Tap to add photos"
+# (progressPhotos.tapToAdd) or its "Progress photos" title
+# (progressPhotos.diarySection). An empty day shows only the empty-day card
+# (diary.emptyDay). The date row stays put: it sits above the scroll view.
+- scrollUntilVisible:
+    element: 'Tap to add photos|Progress photos|No entries recorded for this day'
+    direction: DOWN
+    timeout: 20000
+    label: Scroll to the last section of today
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: diary-day-navigation-02-today-end
+
+# Back one day: the chevron's accessibility label is "Previous day"
+# (familyDiary.previousDay, DateNavigator's default labels).
+- tapOn:
+    text: 'Previous day'
+    label: Go to the previous day
+- extendedWaitUntil:
+    visible: 'Yesterday' # date.yesterday, the date pill
+    timeout: 10000
+    label: The Diary shows yesterday
+- runFlow: ../../subflows/diary/wait-day-loaded.yaml
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- scrollUntilVisible:
+    element: 'Tap to add photos|Progress photos|No entries recorded for this day'
+    direction: DOWN
+    timeout: 20000
+    label: Scroll to the last section of yesterday
+- takeScreenshot: diary-day-navigation-03-yesterday
+
+# Forward one day: back on today.
+- tapOn:
+    text: 'Next day' # familyDiary.nextDay
+    label: Go to the next day
+- extendedWaitUntil:
+    visible: 'Today' # date.today
+    timeout: 10000
+    label: The Diary is back on today
+- assertNotVisible: 'Yesterday'
+- runFlow: ../../subflows/diary/wait-day-loaded.yaml
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: diary-day-navigation-04-today-again

@@ -1,0 +1,26 @@
+# Maestro workspace config for SparkyFitnessMobile.
+# https://docs.maestro.dev/reference/workspace-configuration
+#
+# `maestro test .maestro` runs every flow under flows/ (one folder per feature,
+# each flow tagged with its feature). They do not clear the app,
+# write data or change its permissions, so they can run on the build you use
+# every day. They do force-stop it on launch (finish any workout or run
+# recording first) and dismiss the current announcement for good.
+#
+# The other folders are run by path, on purpose:
+#   flows-data/           writes to the signed-in account, then cleans up
+#                         (run with --config .maestro/config-data.yaml)
+#   flows-clean-install/  wipes the app under test (clearState); needs a
+#                         separate test build
+flows:
+  - 'flows/**'
+
+# iOS note: Maestro reads the iOS view tree through XCUITest. Today the app's
+# screens are probably hidden from it (and from VoiceOver) by the always-mounted
+# toast overlay, see README "iOS". Maestro has a workaround key,
+# `platform.ios.snapshotKeyHonorModalViews: false` (since 1.41.0), that is not
+# confirmed for this case; `maestro hierarchy` and Studio ignore this file, so
+# try it with `maestro test`.
+# platform:
+#   ios:
+#     snapshotKeyHonorModalViews: false

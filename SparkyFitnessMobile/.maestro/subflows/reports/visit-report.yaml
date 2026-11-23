@@ -1,0 +1,58 @@
+# From the Reports hub: opens one report, checks it rendered, takes a
+# screenshot and goes back to the hub. Read only.
+#
+# Env:
+#   ROW_ID       the hub row's testID, reports-link-<key>
+#                (src/screens/ReportsScreen.tsx:147, keys in src/constants/reports.ts)
+#   DESTINATION  text the report always shows and the hub never does: '90d'
+#                (ranges.90d, the range control of ReportScreenLayout, shown in
+#                the loading, error, empty and data states alike) or, for
+#                Compare, its start state
+#   TITLE        the report's header title (the hub row often has the same
+#                words, so DESTINATION is what proves the tap navigated)
+#   SHOT         screenshot name
+#
+# The hub lists the reports in the order and with the ones hidden as set in
+# Customize Reports (appPreferencesStore reportOrder / hiddenReports; by
+# default all ten in factory order). So the row is searched for downwards,
+# then upwards, and a report hidden there has no row and is skipped.
+appId: ${APP_ID}
+---
+- scrollUntilVisible:
+    element:
+      id: ${ROW_ID}
+    direction: DOWN
+    timeout: 8000
+    optional: true
+    label: Find the hub row ${ROW_ID} (below)
+- scrollUntilVisible:
+    element:
+      id: ${ROW_ID}
+    direction: UP
+    timeout: 8000
+    optional: true
+    label: Find the hub row ${ROW_ID} (above)
+- runFlow:
+    when:
+      visible:
+        id: ${ROW_ID}
+    label: Open ${ROW_ID} unless it is hidden in Customize Reports
+    commands:
+      - tapOn:
+          id: ${ROW_ID}
+      - extendedWaitUntil:
+          visible: ${DESTINATION}
+          timeout: 20000
+          label: Report screen for ${ROW_ID} open
+      - assertVisible:
+          text: ${TITLE}
+          label: Report title ${TITLE}
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - runFlow: ../assert-no-error-boundary.yaml
+      - takeScreenshot: ${SHOT}
+      - runFlow: ../go-back.yaml
+      - extendedWaitUntil:
+          visible: 'Customize reports' # reports.customize, the hub header icon
+          timeout: 10000
+          label: Back on the Reports hub

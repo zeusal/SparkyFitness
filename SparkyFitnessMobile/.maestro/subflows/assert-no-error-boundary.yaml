@@ -1,0 +1,10 @@
+# The screen on display did not fall into an error boundary
+# (src/components/ScreenErrorBoundary.tsx). English UI only.
+appId: ${APP_ID}
+---
+- assertNotVisible:
+    text: 'Something went wrong'
+    label: No screen error boundary
+- assertNotVisible:
+    text: 'This section failed to load.'
+    label: No section error boundary

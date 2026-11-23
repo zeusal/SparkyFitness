@@ -1,0 +1,66 @@
+# Food search from the + sheet: + > Food opens FoodSearch, its landing list
+# loads, a short query renders the results area, and Close returns to the tabs.
+# Screens: AddSheet (src/components/AddSheet.tsx), FoodSearch
+# (src/screens/FoodSearchScreen.tsx, src/components/foodSearch/).
+#
+# Safe on your everyday build: typing only searches (your saved foods and
+# meals, and the online provider your account has selected); nothing is
+# logged or saved and the ownership filter is left as it is. It force-stops
+# the app on launch: finish any workout or run recording first. "Food" must be
+# in your + sheet (Settings > Quick Actions).
+appId: ${APP_ID}
+tags:
+  - food
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+- tapOn:
+    text: 'Dashboard' # navigation.dashboard
+    index: -1 # the tab bar's "Dashboard", the bottom-most
+- runFlow: ../../subflows/open-add-sheet.yaml
+- tapOn:
+    text: 'Food' # addSheet.food
+    below: 'Quick Actions' # addSheet.title; the Dashboard behind has a "Food" card
+    index: 0
+    label: Open food search from the + sheet
+
+- extendedWaitUntil:
+    visible: 'Search foods...' # foodSearch.search.placeholder
+    timeout: 15000
+    label: FoodSearch open
+# The landing settles on its sections (Favorites, Recently Logged, Top:
+# foodSearch.sections.*, drawn upper-case) or, with nothing logged yet, on a
+# hint (foodSearch.states.searchToLog / noFilteredFoods).
+- extendedWaitUntil:
+    visible: 'Favorites|Recently Logged|Top|Search for a food or meal to log|No foods in .+'
+    timeout: 20000
+    label: FoodSearch landing loaded
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: food-search-01-landing
+
+# Two characters switch the screen into search mode (inSearchMode). The local
+# part always ends in "Your Foods"/"Your Meals" sections or the not-found row
+# (foodSearch.states.noSavedFoodsMeals, with " in <filter>" when filtered).
+- tapOn: 'Search foods...'
+- inputText: 'egg'
+- extendedWaitUntil:
+    visible: 'Your Foods|Your Meals|No saved foods or meals found.*'
+    timeout: 20000
+    label: Search results area rendered
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: food-search-02-results
+
+# The search field keeps the keyboard up, so Android Back would only hide it:
+# the screen's own Close button (common.close) leaves instead.
+- tapOn:
+    text: 'Close'
+    label: Close food search
+- extendedWaitUntil:
+    notVisible: 'Search foods...'
+    timeout: 10000
+    label: FoodSearch closed
+- assertVisible:
+    text: 'Library'
+    index: -1
+    label: Back on the tabs (tab bar visible)
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: food-search-03-closed

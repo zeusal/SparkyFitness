@@ -1,0 +1,131 @@
+# Exercise Statistics switches between its Strength and Cardio views, each
+# rendering without an error, then Back to the Reports hub.
+# Screens: Library -> Reports hub (src/screens/ReportsScreen.tsx)
+#   -> Exercise Statistics (src/screens/ExerciseStatisticsScreen.tsx):
+#      Strength (the default), Cardio, Strength again, then back.
+# flows/reports/hub-exercise-compare.yaml only opens this screen; this flow
+# covers the Cardio view (cardio sessions, running trends).
+#
+# Safe on your everyday build: the Strength / Cardio switch is screen state
+# only (useState, ExerciseStatisticsScreen.tsx:136), the range is left as it
+# is, and no workout, muscle or section is opened. The scrolls are swipes,
+# which do not press the rows they pass over, and the cards here have no
+# touch gestures of their own (none uses ChartTouchOverlay). It does
+# force-stop the app on launch: finish any workout or run recording first.
+#
+# Customize Reports must leave the Exercise report shown (the default); with
+# it hidden the hub has no row for it and the flow stops with that label.
+# Keep at least one Exercise section shown too: with every one hidden, a range
+# that has workouts draws nothing under the switch and the Strength waits
+# below time out.
+#
+# The switch checks read the tab's selected state (SegmentedControl.tsx sets
+# accessibilityState.selected on each tab). Android reports it as the node's
+# selected flag, with the tab's content description built from its label
+# (React Native's ReactAccessibilityDelegate), and iOS as the selected trait,
+# so `selected: true` fails when a tap does not switch the view.
+appId: ${APP_ID}
+tags:
+  - exercise
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+# Shared with the reports flows: Library > Reports row > hub.
+- runFlow: ../../subflows/reports/open-hub.yaml
+- scrollUntilVisible:
+    element:
+      id: 'reports-link-exercise' # ReportsScreen.tsx:147, key in src/constants/reports.ts
+    direction: DOWN
+    timeout: 15000
+    label: Exercise row on the hub (is it hidden in Customize Reports?)
+- tapOn:
+    id: 'reports-link-exercise'
+    label: Open Exercise Statistics
+- extendedWaitUntil:
+    visible: '90d' # ranges.90d, the report's range control (Exercise Statistics only, not the hub)
+    timeout: 20000
+    label: Exercise Statistics open
+- assertVisible:
+    text: 'Exercise Statistics' # exerciseStatistics.title
+    label: Exercise Statistics title
+- assertVisible:
+    text: 'Cardio' # exerciseStatistics.views.cardio
+    label: Strength / Cardio switch shown
+
+# Strength, the view it opens on.
+- assertVisible:
+    text: 'Strength' # exerciseStatistics.views.strength
+    selected: true
+    label: Strength selected on open
+# Every Strength state but loading starts right under the switch with one of
+# these (renderBody, ExerciseStatisticsScreen.tsx:300-617): the load error, the
+# empty state, or the first shown section (overview tile, Sets per Muscle, Heat
+# Map, Training Load, Training Consistency, More Analysis). None is drawn by
+# the Cardio view.
+- extendedWaitUntil:
+    visible: 'Failed to load exercise statistics|No workouts in this range|Workouts|Sets per Muscle|Muscle Heat Map|Training Load|Training Consistency|More Analysis' # exerciseStatistics.states.loadFailed | .states.empty | .stats.workouts | .setsPerMuscle.title | .heatMap.title | .load.title | .consistency.title | .analysis.title
+    timeout: 20000
+    label: Strength view loaded
+- assertNotVisible:
+    text: 'Failed to load exercise statistics' # exerciseStatistics.states.loadFailed
+    label: Strength view without a load error
+- waitForAnimationToEnd:
+    timeout: 3000
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: exercise-statistics-views-01-strength
+
+# Cardio (ExerciseStatisticsScreen.tsx:233-298 and :638-656). The switch sits
+# at the top of the content, above every card that could also say "Cardio".
+- tapOn:
+    text: 'Cardio' # exerciseStatistics.views.cardio
+    index: 0 # the top-most, the switch
+    label: Show the Cardio view
+- assertVisible:
+    text: 'Cardio' # exerciseStatistics.views.cardio
+    selected: true
+    label: Cardio selected
+# Every Cardio state but loading ends with one of these: no sessions, the hint
+# above the session list (below the running cards), or the load error.
+- scrollUntilVisible:
+    element: 'No cardio workouts in this range|Tap a workout for its route and heart rate\.|Failed to load cardio sessions' # exerciseStatistics.cardio.empty | .hint | .loadFailed
+    direction: DOWN
+    timeout: 30000
+    label: Cardio view loaded
+- assertNotVisible:
+    text: 'Failed to load cardio sessions' # exerciseStatistics.cardio.loadFailed
+    label: Cardio sessions loaded without an error
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: exercise-statistics-views-02-cardio
+
+# Back to Strength.
+- scrollUntilVisible:
+    element: 'Strength' # exerciseStatistics.views.strength
+    direction: UP
+    timeout: 20000
+    label: Scroll back up to the Strength / Cardio switch
+- tapOn:
+    text: 'Strength' # exerciseStatistics.views.strength
+    index: 0 # the top-most, the switch
+    label: Show the Strength view again
+- assertVisible:
+    text: 'Strength' # exerciseStatistics.views.strength
+    selected: true
+    label: Strength selected again
+# The switch stays on screen after the scroll up, so the top of the Strength
+# body under it is too.
+- extendedWaitUntil:
+    visible: 'Failed to load exercise statistics|No workouts in this range|Workouts|Sets per Muscle|Muscle Heat Map|Training Load|Training Consistency|More Analysis' # as for the first Strength view
+    timeout: 20000
+    label: Strength view shown again
+- assertNotVisible:
+    text: 'Failed to load exercise statistics' # exerciseStatistics.states.loadFailed
+    label: Strength view without a load error
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: exercise-statistics-views-03-strength-again
+
+- runFlow: ../../subflows/go-back.yaml
+- extendedWaitUntil:
+    visible: 'Customize reports' # reports.customize, the hub header icon (hub only)
+    timeout: 10000
+    label: Back on the Reports hub
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: exercise-statistics-views-04-hub

@@ -1,0 +1,26 @@
+# Closes the AnnouncementModal if it is up. Every step is conditional, so it is
+# safe to call at any time.
+appId: ${APP_ID}
+---
+# Maestro counts a `when: visible` wait from the last command that changed the
+# device, so after a long launch wait the check would read the screen once.
+# This step resets that clock, giving the checks below their full 7 s.
+- waitForAnimationToEnd:
+    timeout: 3000
+
+# AnnouncementModal (src/components/AnnouncementModal.tsx), fetched after the
+# tabs mount. The server mirrors the live announcement.md on upstream main.
+# "Got it, don't show again" stores the dismissal for this install: an
+# accepted local change. The X would bring it back on the next launch.
+- runFlow:
+    when:
+      visible: "Got it, don't show again"
+    commands:
+      - tapOn: "Got it, don't show again"
+
+# A ReauthModal already on screen means the session expired: stop with a
+# clear reason. This reads the screen once; it does not catch a modal that
+# appears later.
+- assertNotVisible:
+    text: 'Session Expired'
+    label: The app is not asking to sign in again

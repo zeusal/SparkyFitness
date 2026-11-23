@@ -1,0 +1,77 @@
+# + sheet > Progress Photos and Ask Sparky: each opens its screen, which is
+# checked and left again without touching anything on it.
+# Screens, from the Dashboard (handlers in src/hooks/useAddSheetActions.ts):
+#   Progress Photos -> ProgressPhotos (src/screens/ProgressPhotosScreen.tsx)
+#   Ask Sparky      -> Chat (src/screens/ChatScreen.tsx)
+#
+# Safe on your everyday build: no photo slot, day, Compare or Time-lapse is
+# tapped (so no camera or photo picker), and nothing is typed or sent to
+# Sparky; the suggestion chips would send at once, so none is tapped. Opening
+# Sparky reads the chat history and, when no conversation is stored on the
+# phone yet, starts a new local conversation id, as opening it by hand does
+# (ChatScreen.tsx:1621-1643, src/stores/appPreferencesStore.ts:753-757).
+# It force-stops the app on launch: finish any workout or run recording first.
+#
+# Assumes the default + sheet arrangement (Settings > Quick Actions).
+appId: ${APP_ID}
+tags:
+  - add-sheet
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+- tapOn:
+    text: 'Dashboard' # navigation.dashboard
+    index: -1 # the tab bar's "Dashboard", the bottom-most
+
+# Progress Photos, opened on its own (not as the check-in's last step), shows
+# Compare and Time-lapse under its History heading
+# (ProgressPhotosScreen.tsx:580-646). The Dashboard's Progress Photos card
+# behind the sheet has the row's name, so the row is found by its hint.
+- runFlow:
+    file: ../../subflows/add-sheet/visit-item.yaml
+    env:
+      ITEM: 'Visual' # addSheet.photosHint, the Progress Photos row
+      DESTINATION: 'Time-lapse' # progressPhotos.timelapse
+      FAILED: "Couldn't load your progress photos." # progressPhotos.loadError
+      SHOT: add-sheet-open-screens-01-progress-photos
+
+# Ask Sparky: the button at the foot of the sheet.
+- runFlow: ../../subflows/open-add-sheet.yaml
+- tapOn:
+    text: 'Ask Sparky' # addSheet.askSparky; the Dashboard launcher reads "Ask Sparky…"
+    below: 'Quick Actions' # addSheet.title
+    index: 0
+    label: Open Sparky from the + sheet
+- extendedWaitUntil:
+    notVisible: 'Quick Actions' # addSheet.title
+    timeout: 10000
+    label: The + sheet closed
+# With an AI provider the thread shows its composer; without one, a note
+# (ChatScreen.tsx:1732-1772).
+- extendedWaitUntil:
+    visible: 'Message Sparky…|No active AI provider.*' # chat.placeholder (the composer's placeholder) | chat.noProvider
+    timeout: 20000
+    label: Sparky open and loaded
+- assertVisible:
+    text: 'Sparky' # chat.title, the header title
+    label: Sparky header shown
+- waitForAnimationToEnd:
+    timeout: 3000
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: add-sheet-open-screens-02-sparky
+# The composer takes focus when the screen has slid in (ChatScreen.tsx:510-518),
+# and Android Back would then only hide the keyboard. The header's own back
+# button leaves in one tap, keyboard or not.
+- tapOn:
+    text: 'Back' # common.back, the header's back button (src/hooks/useScreenHeader.tsx:236-238)
+    index: 0 # the top-most "Back"
+    label: Leave Sparky with the header's back button
+- extendedWaitUntil:
+    notVisible: 'Message Sparky…|No active AI provider.*'
+    timeout: 10000
+    label: Sparky closed
+- assertVisible:
+    text: 'Library' # navigation.library
+    index: -1 # the tab bar's "Library", shown only on the tabs
+    label: Back on the tabs
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: add-sheet-open-screens-03-back

@@ -28,6 +28,7 @@
     "watch:device": "xcodebuild -workspace ios/SparkyFitness.xcworkspace -scheme 'SparkyFitnessWatch' -destination 'generic/platform=watchOS' build",
     "knip": "knip",
     "i18n:audit": "node scripts/audit-mobile-i18n.mjs",
+    "maestro:affected": "node scripts/maestro-affected.mjs",
     "i18n:audit:watch": "node scripts/audit-watch-i18n.mjs",
     "prebuild": "expo prebuild --clean",
     "lint": "expo lint src App.tsx index.js __tests__ --max-warnings 0",

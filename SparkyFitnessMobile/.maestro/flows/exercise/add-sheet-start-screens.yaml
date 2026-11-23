@@ -1,0 +1,106 @@
+# + sheet > Exercise > Workout and Record Activity: each opens its start
+# screen, which is checked and closed again WITHOUT starting anything.
+# Screens: Dashboard -> + sheet Exercise sub-menu (src/components/AddSheet.tsx)
+#   -> Workout: Start Workout (src/screens/PresetSearchScreen.tsx), back
+#   -> Record Activity (src/screens/RecordActivityScreen.tsx), back
+#
+# Safe on your everyday build: no preset, "Empty workout" or Start is tapped,
+# so no live workout or recording begins. Neither screen asks for a
+# permission when it opens: Record Activity asks for location only when a
+# recording starts (src/services/gpsRecordingService.ts:1229-1248). It does
+# force-stop the app on launch.
+#
+# Finish any live workout and any run recording first: with a workout going,
+# Workout asks "Workout in progress" (src/hooks/useStartLiveWorkout.ts:256-293);
+# the flow then taps Cancel, leaving the workout alone, and fails. With a
+# recording going, Record Activity shows it instead of its setup and the flow
+# fails there.
+appId: ${APP_ID}
+tags:
+  - exercise
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+- tapOn:
+    text: 'Dashboard' # navigation.dashboard
+    index: -1 # the tab bar's "Dashboard", the bottom-most
+- runFlow: ../../subflows/exercise/open-exercise-menu.yaml
+- takeScreenshot: exercise-add-sheet-start-screens-01-menu
+
+# Workout (handleStartWorkout, src/hooks/useAddSheetActions.ts:282-301)
+# opens Start Workout. Tapping a preset row there starts the workout at once,
+# so nothing on that screen is tapped.
+- tapOn:
+    text: 'Live sets & reps' # addSheet.liveSets, inside the Workout row
+    label: Open Workout from the Exercise sub-menu
+- extendedWaitUntil:
+    # presetSearch.searchPlaceholder (PresetSearchScreen.tsx:436), or
+    # liveWorkout.inProgressTitle when a workout is already going
+    visible: 'Search presets.*|Workout in progress'
+    timeout: 15000
+    label: Start Workout opened (or the in-progress prompt)
+- runFlow:
+    when:
+      visible: 'Workout in progress' # liveWorkout.inProgressTitle
+    label: A live workout is going - leave it alone
+    commands:
+      - tapOn: 'Cancel' # common.cancel; never "Clear & Start"
+- assertVisible:
+    text: 'Empty workout' # presetSearch.emptyWorkout, the pinned row (PresetSearchScreen.tsx:461-486)
+    label: Start Workout screen open (if not, finish the live workout first)
+# The pinned row shows at once; under it the presets are only a spinner
+# while they load (PresetSearchScreen.tsx:351-352), so wait for what
+# replaces it before checking for the error.
+- extendedWaitUntil:
+    # presetSearch.viewDetails, the info button's label on every preset row
+    # (:251-253) | presetSearch.noPresetsYet (:371) | presetSearch.noPresetsIn
+    # while the ownership filter hides them all (:394, src/utils/shareStatus.ts:84-107)
+    # | presetSearch.loadFailed (:358)
+    visible: 'View preset details|No presets yet|No presets in .*|Failed to load presets'
+    timeout: 20000
+    label: Presets loaded (or failed to)
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertNotVisible:
+    text: 'Failed to load presets' # presetSearch.loadFailed
+    label: Presets loaded without an error
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: exercise-add-sheet-start-screens-02-start-workout
+- runFlow: ../../subflows/go-back.yaml
+- extendedWaitUntil:
+    notVisible: 'Empty workout' # presetSearch.emptyWorkout
+    timeout: 10000
+    label: Start Workout closed
+- assertVisible:
+    text: 'Library' # navigation.library
+    index: -1
+    label: Back on the tabs
+
+# Record Activity (handleRecordActivity, useAddSheetActions.ts:364-366)
+# opens the GPS recording setup. Its switches save recording preferences, so
+# none is touched, and Start is never tapped.
+- runFlow: ../../subflows/exercise/open-exercise-menu.yaml
+- tapOn:
+    text: 'Track a walk, run or ride with GPS' # addSheet.recordActivityHint, inside the Record Activity row
+    label: Open Record Activity from the Exercise sub-menu
+# The Outdoor / Indoor control is in the setup only, shown once the screen
+# has checked for a recording left from earlier (RecordActivityScreen.tsx:1313-1369).
+- extendedWaitUntil:
+    visible: 'Outdoor' # recordActivity.location.outdoor
+    timeout: 20000
+    label: Record Activity setup shown (if not, finish the recording in progress)
+- assertVisible:
+    text: 'Indoor' # recordActivity.location.indoor
+    label: Outdoor and Indoor choices shown
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: exercise-add-sheet-start-screens-03-record-activity
+- runFlow: ../../subflows/go-back.yaml
+- extendedWaitUntil:
+    notVisible: 'Outdoor' # recordActivity.location.outdoor
+    timeout: 10000
+    label: Record Activity closed
+- assertVisible:
+    text: 'Library' # navigation.library
+    index: -1
+    label: Back on the tabs
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: exercise-add-sheet-start-screens-04-back

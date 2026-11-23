@@ -1,0 +1,34 @@
+# Library tab > Browse > Foods: opens the saved-foods list
+# (src/screens/LibraryScreen.tsx > src/screens/FoodsLibraryScreen.tsx) and
+# waits for it to load. Reads only.
+appId: ${APP_ID}
+---
+- tapOn:
+    text: 'Library' # navigation.library
+    index: -1 # the tab bar's "Library", the bottom-most
+    label: Open the Library tab
+- extendedWaitUntil:
+    visible: 'Browse' # screens.library.browse, a Library section title
+    timeout: 15000
+    label: Library hub shown
+# "Foods" (screens.library.foods) is the first row under Browse. The list it
+# opens has the same title, so the step after the tap waits for its search
+# field instead.
+- scrollUntilVisible:
+    element: 'Foods'
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    text: 'Foods'
+    label: Open the Foods library
+- extendedWaitUntil:
+    visible: 'Search foods...' # foodLibrary.search, the list's search field
+    timeout: 15000
+    label: Foods library shown
+- extendedWaitUntil:
+    notVisible: 'Loading foods...' # foodLibrary.loading
+    timeout: 20000
+    label: Foods library loaded
+- assertNotVisible:
+    text: 'Failed to load foods' # foodLibrary.failed
+    label: Foods library loaded without an error

@@ -1,0 +1,122 @@
+# Settings sweep, part 2: each row from Dashboard to NFC tags opens its screen,
+# the screen renders without an error boundary, and Back returns to Settings.
+#
+# Safe on your everyday build: it only opens screens and goes back. It taps no
+# switch, drag handle, picker or button on them (Customize Reports' Reset,
+# Fasting Settings' Save, NFC tags' Scan a tag are left alone), so nothing is
+# written and no setting changes. It does force-stop the app on launch: finish
+# any workout or run recording first.
+#
+# Screens (src/screens/SettingsScreen.tsx, in list order):
+#   Dashboard            -> DashboardSettingsScreen.tsx
+#   Diary                -> DiarySettingsScreen.tsx
+#   Custom Measurements  -> CustomCategoriesScreen.tsx
+#   Reports              -> ReportsSettingsScreen.tsx
+#   Cycle & Pregnancy    -> CycleSettingsScreen.tsx ("Wellness" in discreet mode)
+#   Fasting              -> FastingSettingsScreen.tsx
+#   Quick Actions        -> AddMenuSettingsScreen.tsx
+#   Workout              -> WorkoutSettingsScreen.tsx
+#   NFC tags             -> ActionTagsScreen.tsx (only on a phone with NFC)
+# Not opened: Wear OS / Apple Watch (listed only with a paired watch, and the
+# dev build's DevTools section has a "Wear OS" heading too).
+#
+# "Dashboard", "Diary" and "Quick Actions" are also tab labels or the + sheet's
+# title: subflows/settings/visit-row.yaml selects rows above the tab bar, and
+# this flow never taps a tab or opens the sheet while on Settings.
+appId: ${APP_ID}
+tags:
+  - settings
+---
+- runFlow: ../../subflows/launch-signed-in.yaml
+- runFlow: ../../subflows/settings/open-settings.yaml
+
+- runFlow:
+    file: ../../subflows/settings/visit-row.yaml
+    env:
+      ROW: 'Dashboard' # settings.rows.dashboard (also the tab's label)
+      DESTINATION: 'Dashboard Settings' # dashboardSettings.title, the header
+      SHOT: settings-rows-screens-01-dashboard
+
+- runFlow:
+    file: ../../subflows/settings/visit-row.yaml
+    env:
+      ROW: 'Diary' # settings.rows.diary (also the tab's label)
+      DESTINATION: 'Show calories and macronutrients' # diarySettings.summarySubtitle, the first row
+      SHOT: settings-rows-screens-02-diary
+
+# The list's title "Custom measurements" (customCategories.title) matches the
+# row's words, so the check is its header + button, on screen in every state.
+- runFlow:
+    file: ../../subflows/settings/visit-row.yaml
+    env:
+      ROW: 'Custom Measurements' # settings.rows.customMeasurements
+      DESTINATION: 'Add category' # customCategories.add (header button's accessibility label)
+      SHOT: settings-rows-screens-03-custom-measurements
+
+- runFlow:
+    file: ../../subflows/settings/visit-row.yaml
+    env:
+      ROW: 'Reports' # settings.rows.reports
+      DESTINATION: 'Customize Reports' # screens.reportsSettings, the header
+      SHOT: settings-rows-screens-04-reports
+
+# The row's title follows discreet mode (SettingsScreen.tsx:380-388), which is
+# assumed while the cycle settings load (useDiscreetMode.ts:19-20). Once loaded the first row
+# says whether the feature is on (CycleSettingsScreen.tsx:352-367).
+- runFlow:
+    file: ../../subflows/settings/visit-row.yaml
+    env:
+      ROW: 'Cycle & Pregnancy|Wellness' # settings.rows.cyclePregnancy, settings.rows.wellness
+      DESTINATION: 'Turned on|Turned off' # cycleSettings.feature.on, cycleSettings.feature.off
+      SHOT: settings-rows-screens-05-cycle
+
+- runFlow:
+    file: ../../subflows/settings/visit-row.yaml
+    env:
+      ROW: 'Fasting' # settings.rows.fasting
+      DESTINATION: 'Auto-calculate fasting from meals' # fastingSettings.autoCalculate, the first row once loaded
+      SHOT: settings-rows-screens-06-fasting
+
+- runFlow:
+    file: ../../subflows/settings/visit-row.yaml
+    env:
+      ROW: 'Quick Actions' # settings.rows.addMenu
+      DESTINATION: 'How Quick Actions looks with your choices.' # addMenuSettings.previewDescription
+      SHOT: settings-rows-screens-07-quick-actions
+
+- runFlow:
+    file: ../../subflows/settings/visit-row.yaml
+    env:
+      ROW: 'Workout' # settings.rows.workout
+      DESTINATION: 'Default rest period' # workoutSettings.defaultRest, the first row
+      SHOT: settings-rows-screens-08-workout
+
+# NFC tags is listed only when useNfcSupport says the phone has NFC
+# (SettingsScreen.tsx:417-426). Its screen's header + button carries
+# "Set up a tag" whenever NFC is supported (ActionTagsScreen.tsx:85-99).
+- scrollUntilVisible:
+    element:
+      text: 'NFC tags' # settings.rows.nfcTags
+      above:
+        text: 'Library' # navigation.library
+        index: -1
+    direction: DOWN
+    timeout: 8000
+    optional: true
+    label: Look for the NFC tags row (phones with NFC only)
+- runFlow:
+    when:
+      visible:
+        text: 'NFC tags' # settings.rows.nfcTags
+        above:
+          text: 'Library' # navigation.library
+          index: -1
+    file: ../../subflows/settings/visit-row.yaml
+    env:
+      ROW: 'NFC tags' # settings.rows.nfcTags
+      DESTINATION: 'Set up a tag' # actionTags.list.add (header button's accessibility label)
+      SHOT: settings-rows-screens-09-nfc-tags
+    label: Open NFC tags if this phone has NFC
+
+- runFlow: ../../subflows/assert-no-error-boundary.yaml
+- takeScreenshot: settings-rows-screens-10-settings

@@ -58,11 +58,17 @@ tags:
 # "Details" sits at the right of the card's "Fasting" title in both states.
 # Idle, it is its own button (FastingCard.tsx:310-328), and the rest of the
 # card opens the start-a-fast sheet, so the tap must land on it; running,
-# the whole card opens the details (FastingCard.tsx:117-169). Other cards
-# say "Details" too: the one nearest the Fasting title is this card's.
+# the whole card opens the details (FastingCard.tsx:117-169). The Nutrients
+# and Training Load cards above it say "Details" too (DashboardScreen.tsx:690,
+# TrainingLoadDashboardCard.tsx:117), and a rightOf anchor does not pick the
+# nearest one: Maestro taps the first match in hierarchy order. So the search
+# stays inside this card, whose own button is labelled "Start a fast" when
+# idle and "Open fasting details" when running (FastingCard.tsx:117-124,
+# 298-305). Nothing inside it matches those labels ("Start Fast" differs).
 - tapOn:
     text: 'Details' # fastingCard.details
-    rightOf: 'Fasting' # fastingCard.title
+    childOf:
+      text: 'Start a fast|Open fasting details' # fastingCard.startFast | fastingCard.openDetails (accessibility labels)
     label: Open the fasting details from the card
 - extendedWaitUntil:
     visible: 'Fasting settings' # fastingDetail.settings, the header gear (FastingDetailScreen.tsx:199-208)

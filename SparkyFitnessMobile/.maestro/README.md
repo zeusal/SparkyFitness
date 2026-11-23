@@ -26,7 +26,60 @@ change can run just the flows for what it touched.
 `maestro test .maestro` runs every flow under `flows/` (see `config.yaml`).
 `config-data.yaml` selects `flows-data/` instead; `flows-clean-install/` runs by path.
 
-<!-- flow-list -->
+The flows by area (the folder name is also each flow's tag). Files are in `flows/<area>/`; those
+marked (data) are in `flows-data/<area>/`. Each file's header says what it needs and what it
+leaves alone.
+
+- **smoke**
+  - `smoke-tabs.yaml`: every tab, the + sheet and Settings → Calories & BMR open without an error-boundary message.
+- **add-sheet**
+  - `android-back.yaml` (Android): Back in the + sheet goes from the Exercise sub-menu to the main menu, then closes the sheet, not the app (#2868).
+  - `default-items.yaml`: the sheet lists its default cards and rows, and Done closes it back onto the Diary.
+  - `open-log-forms.yaml` (Android): Measure, Symptoms & Health, Mood, Mindfulness and Oral care each open their form, left unsaved.
+  - `open-screens.yaml`: Progress Photos and Ask Sparky open their screens, left untouched.
+- **dashboard**
+  - `day-navigation.yaml`: Previous / Next day move the Dashboard to yesterday, two days ago and back, and the Dashboard tab returns to today.
+  - `reports-link.yaml`: the Health Trends card's Reports link opens the Reports hub (skipped when that card is hidden).
+- **diary**
+  - `day-navigation.yaml`: the Diary opens on today, renders down to its last section, and Previous / Next day go to yesterday and back.
+  - `meal-type-detail.yaml` (data): an entry seeded through the API shows in today's Diary, and its meal section opens MealTypeDetail listing it.
+- **exercise**
+  - `add-sheet-log-forms.yaml`: + → Exercise → Activity and Log Workout open their empty forms, closed unsaved.
+  - `add-sheet-start-screens.yaml`: + → Exercise → Workout and Record Activity open their start screens without starting anything.
+  - `exercise-libraries.yaml`: Library → Exercises (and the top exercise's detail) and Workout presets load.
+  - `statistics-views.yaml`: Exercise Statistics switches Strength → Cardio → Strength, each view rendering.
+  - `workout-preset-open.yaml` (data): a preset seeded through the API is found by search in Workout presets and opens.
+- **fasting**
+  - `detail-tabs.yaml` (Android): the Fasting card opens its details; the Fasting, History and Report tabs and Fasting Settings render, nothing started.
+- **food**
+  - `foods-library.yaml`: Library → Foods loads and Back returns to the Library.
+  - `new-food-form.yaml`: Library → Create → Food opens the New Food form, scrolled to Save and left unsaved.
+  - `search.yaml`: + → Food opens food search, its landing list loads and a typed query renders results.
+  - `food-log.yaml` (data): a food seeded through the API is logged from + → Food and shows in the Diary.
+  - `new-food.yaml` (data): a food saved through the New Food form is found in Library → Foods and opens.
+- **library**
+  - `browse-health.yaml`: Lab results (while that feature is on), Water containers and Medications open and load.
+  - `browse-plans.yaml`: Meals, Meal plans, Workout plans and Training calendar open and load.
+  - `browse-training.yaml`: Training programs, Challenges, Routes, Personal records and Equipment open.
+- **measurements**
+  - `add-form-close.yaml`: + → Measurements opens the check-in form, left unsaved once with Back and once with its X.
+  - `custom-category-form.yaml`: Settings → Custom Measurements loads and its + opens the Add category form, left unsaved.
+  - `custom-category.yaml` (data): a category saved through that form shows in the list.
+- **reports**
+  - `hub-body.yaml`: Sleep analytics, Measurements, Mood, Heart Rate and Oral care open from the Reports hub.
+  - `hub-exercise-compare.yaml`: Exercise statistics and Compare open from the hub, with no Compare question asked.
+  - `hub-food-and-drink.yaml`: Customize Reports, Nutrition (and its Protein trend when food is logged), Hydration and Caffeine and alcohol open.
+  - `nutrient-top-source.yaml` (data): an entry seeded through the API is listed under the Protein trend's Top Sources.
+- **settings**
+  - `rows-general.yaml`: each Settings row from Server to Features opens its screen and Back returns.
+  - `rows-screens.yaml`: each row from Dashboard to NFC tags opens its screen and Back returns.
+  - `rows-about.yaml`: What's New, View Logs and About open and Back returns.
+- **water**
+  - `container-form.yaml`: Library → Water containers loads and its Add container form opens, both left unsaved.
+  - `hydration-card.yaml`: the Dashboard's Hydration card shows and its History link opens the day's Drinks.
+  - `quick-add-drink.yaml` (data): a seeded quick-add drink is logged from the Hydration card, found in Drinks and deleted there.
+- **clean-install** (`flows-clean-install/`)
+  - `first-run-api-key.yaml`: Onboarding, API key sign-in and the tabs on a wiped `.e2e` build.
 
 "Safe" means: no clearState, no data written, permissions left as they are (`permissions: {}`).
 The flows still force-stop the app when they launch it, so finish any workout or run recording
@@ -121,10 +174,13 @@ pnpm run maestro:affected -- --app-id org.SparkyApps.SparkyFitnessMobile1.dev --
 It lists the files changed against `upstream/main` (or `origin/main`, or `--base <ref>`), plus
 uncommitted and untracked ones, maps them to areas with `areas.json`, and runs the `smoke` flows
 and the flows of those areas. A change to something every screen uses (`App.tsx`, navigation,
-`shared/`, the kit's own subflows, dependencies) runs every flow. `--dry-run` only prints what
-would run; `--all` runs everything; `--with-data` also runs the matching `flows-data/` flows,
-reading `SPARKY_E2E_SERVER_URL` and `SPARKY_E2E_API_KEY` from the environment (see "Secrets").
-When you add an area, add its folder, its tag and its globs in `areas.json` together.
+`shared/`, the kit's shared subflows `subflows/*.yaml` and configs, dependencies) runs every flow;
+a change to an area's own flows, `subflows/<area>/` or `scripts/<area>-*.js` runs that area (and
+any area whose flows use that subflow). `--dry-run` only prints what would run; `--all` runs
+everything; `--with-data` also runs the matching `flows-data/` flows, reading
+`SPARKY_E2E_SERVER_URL` and `SPARKY_E2E_API_KEY` from the environment (see "Secrets").
+When you add an area, add its folder, its tag and its globs in `areas.json` together: the screens
+its flows open, its own kit folders and scripts, and any other area's subflow its flows use.
 
 ### Keeping the kit while you work on other branches
 
@@ -164,6 +220,17 @@ The flows in `flows-data/` need a test account on your server and a full-access 
 that same account (web app → Settings). The app under test must be signed in to that account.
 The food flows also need FoodSearch's ownership filter (menu on the search screen) set to All or
 Mine.
+
+Before running the data flows that seed diary entries (`diary` and `reports`), turn off nutrition
+write-back on the phone: Settings → Health Data Sync → Write to Health Connect (Apple Health on
+iOS) → Nutrition, or at least Sync on Open and Background Sync on that screen. These flows log
+their entry through the API before the app starts, so the sync on open copies today's diary, the
+test entry included, into the phone's Health Connect or Apple Health, where other apps read it.
+The cleanup deletes only the server rows: the copy stays until a later sync with write-back
+rewrites that day. With write-back on, a background sync during any data flow can do the same
+with what the flow logs in the app (Hydration for the water flow), and signing the phone in to
+the test account copies that account's diary there anyway, so turning write-back off is the
+safer choice.
 
 ```powershell
 maestro --no-ansi test .maestro --config .maestro/config-data.yaml --include-tags food `

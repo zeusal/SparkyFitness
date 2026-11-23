@@ -14,6 +14,14 @@
 # "Today" is the computer's date (the API calls run there): the phone must be
 # on the same date.
 #
+# Before running it, turn off nutrition write-back on the phone (Settings >
+# Health Data Sync > Write to Health Connect, or Apple Health, > Nutrition),
+# or at least Sync on Open and Background Sync on that screen. The entry is
+# logged before the app starts, so the sync on open copies today's diary,
+# this entry included, into the phone's health store, where other apps read
+# it. The cleanup deletes only the server rows: the copy stays until a later
+# sync with write-back rewrites that day. See README "Data flows".
+#
 # Every -e value, API_KEY included, is stored in plain text in the run's
 # commands.json and maestro.log: use a revocable key of a test account, always
 # pass --test-output-dir and --debug-output, never --verbose, and delete the

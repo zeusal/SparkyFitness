@@ -5,11 +5,23 @@
 #
 # WRITES DATA to the account the app is signed in to: run it only with a test
 # account. It does not clear the app. It logs one uniquely named entry
-# ("Maestro Protein <timestamp>", 2000 kcal and 500 g protein, a standalone
+# ("Maestro Protein <timestamp>", 1 kcal and 300 g protein, a standalone
 # entry with no library food) for today through the API, and deletes that
 # entry when the flow ends, also after a failed step (not after Ctrl+C or a
 # killed run: then delete it by hand, Diary > today > the entry > Delete).
 # Until then it counts in that day's totals on every screen.
+#
+# Before running it, turn off nutrition write-back on the phone (Settings >
+# Health Data Sync > Write to Health Connect, or Apple Health, > Nutrition),
+# or at least Sync on Open and Background Sync on that screen. The entry is
+# logged before the app starts, so the sync on open copies today's diary,
+# this entry included, into the phone's health store, where other apps read
+# it. The cleanup deletes only the server entry: the copy stays until a later
+# sync with write-back rewrites that day. See README "Data flows".
+#
+# Top Sources lists the 3 foods with the most protein over the last 7 days, so
+# the check fails if three other foods in the test account reach 300 g of
+# protein in that week.
 #
 # Screens: Library -> Reports hub -> Nutrition -> Trend by nutrient > Protein
 # (NutrientTrendsScreen.tsx). Customize Reports must leave the Nutrition
@@ -95,6 +107,6 @@ onFlowComplete:
       text: ${output.entryName}
     direction: DOWN
     timeout: 20000
-    label: The seeded entry is listed under Top Sources
+    label: The seeded entry is listed under Top Sources (do 3 other foods have 300 g+ protein this week?)
 - runFlow: ../../subflows/assert-no-error-boundary.yaml
 - takeScreenshot: reports-nutrient-top-source-02-top-sources

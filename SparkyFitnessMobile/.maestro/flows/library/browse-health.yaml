@@ -29,7 +29,10 @@ tags:
     label: Library hub shown (is the app connected to its server?)
 
 # Lab results, gated by the labResults feature. Its header's "+" is labelled
-# "Add lab result" (LabResultsScreen.tsx:79-89) and is never tapped.
+# "Add lab result" (LabResultsScreen.tsx:79-89) and is never tapped. The
+# screen shows only a spinner while it loads (:121-122), so the wait is for
+# what replaces it: the "Import from a report" button, shown with no results
+# and above the list alike (:152, :161), or the load error (:123-133).
 - scrollUntilVisible:
     element: 'Lab results' # screens.library.labResults
     direction: DOWN
@@ -43,8 +46,9 @@ tags:
     file: ../../subflows/library/visit-row.yaml
     env:
       ROW: 'Lab results' # screens.library.labResults
-      DESTINATION: 'Add lab result' # labs.add, the header button's label
-      LOADING: 'Could not load your lab results.' # spinner only
+      # labs.import.cta | labs.loadFailed
+      DESTINATION: 'Import from a report|Could not load your lab results\.'
+      LOADING: 'Could not load your lab results.' # none: spinner only
       FAILED: 'Could not load your lab results.' # labs.loadFailed
       SHOT: library-browse-health-01-lab-results
 

@@ -47,6 +47,17 @@ tags:
 - assertVisible:
     text: 'Empty workout' # presetSearch.emptyWorkout, the pinned row (PresetSearchScreen.tsx:461-486)
     label: Start Workout screen open (if not, finish the live workout first)
+# The pinned row shows at once; under it the presets are only a spinner
+# while they load (PresetSearchScreen.tsx:351-352), so wait for what
+# replaces it before checking for the error.
+- extendedWaitUntil:
+    # presetSearch.viewDetails, the info button's label on every preset row
+    # (:251-253) | presetSearch.noPresetsYet (:371) | presetSearch.noPresetsIn
+    # while the ownership filter hides them all (:394, src/utils/shareStatus.ts:84-107)
+    # | presetSearch.loadFailed (:358)
+    visible: 'View preset details|No presets yet|No presets in .*|Failed to load presets'
+    timeout: 20000
+    label: Presets loaded (or failed to)
 - waitForAnimationToEnd:
     timeout: 3000
 - assertNotVisible:

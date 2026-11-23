@@ -28,55 +28,76 @@ tags:
     label: Library hub shown (is the app connected to its server?)
 
 # LibraryScreen.tsx:456-485. The row's subtitle names the running program
-# when one is on, so the row is found by its title. The screen opens with
-# the running goals (once they load) over the fitness test panel, which
-# names either the latest test or how to take one, or the intro without a
-# program (RunProgramsScreen.tsx:559-579, :315-324, :446). It shows no
-# load-error message of its own.
+# when one is on, so the row is found by its title. The screen shows only
+# its header until the program has loaded (RunProgramsScreen.tsx:333-334,
+# :441), with no spinner and no load-error message of its own. The running
+# goals card comes from a query of its own (:559, :579) and can show while
+# the program still loads, so the wait is for the fitness test panel, which
+# opens the body with or without a program (:337, :444) once the fitness
+# tests have loaded too (FitnessTestPanel.tsx:43): it names how to take a
+# test or the latest one. A failed load leaves it out and the wait fails.
 - runFlow:
     file: ../../subflows/library/visit-row.yaml
     env:
       ROW: 'Training programs' # screens.library.runPrograms
-      # runPrograms.goals.title | fitnessTest.panel.emptyTitle |
-      # fitnessTest.panel.title | runPrograms.intro
-      DESTINATION: 'Running goals|Find your training paces|Your fitness test|Follow a plan that builds up week by week.*'
+      # fitnessTest.panel.emptyTitle | fitnessTest.panel.title
+      # (FitnessTestPanel.tsx:52, :72, :103)
+      DESTINATION: 'Find your training paces|Your fitness test'
       LOADING: 'Something went wrong' # nothing to wait out (spinner-free)
       FAILED: 'Something went wrong' # common error boundary only
       SHOT: library-browse-training-01-training-programs
 
-# LibraryScreen.tsx:486-504. Once the server has said whether challenges are
-# on: the header's "Join a challenge" button (on), the unavailable notice
-# (off), or the load error (ChallengesScreen.tsx:123-158).
+# LibraryScreen.tsx:486-504. The screen shows only a spinner until the
+# server has said whether challenges are on and, if they are, the list has
+# loaded (ChallengesScreen.tsx:141-142, src/hooks/useChallenges.ts:60). The
+# header's "Join a challenge" button appears as soon as they are on, over
+# that spinner (:123-138), so the wait is for what replaces it: the
+# unavailable notice (off), the empty state, a challenge row's member count,
+# or the load error (:143-219). A failed refresh keeps the list under its
+# own notice (:206-216), which counts as a load error too.
 - runFlow:
     file: ../../subflows/library/visit-row.yaml
     env:
       ROW: 'Challenges' # screens.library.challenges
-      # challenges.join.title | challenges.unavailableTitle | challenges.loadFailed
-      DESTINATION: 'Join a challenge|Challenges are not available|Could not load your challenges\.'
-      LOADING: 'Could not load your challenges.' # spinner only
-      FAILED: 'Could not load your challenges.' # challenges.loadFailed
+      # challenges.unavailableTitle | challenges.emptyTitle |
+      # challenges.memberCount_one/_other (:87-94) | challenges.loadFailed
+      DESTINATION: 'Challenges are not available|No challenges yet|[0-9]+ members?|Could not load your challenges\.'
+      LOADING: 'Could not load your challenges\.|Could not refresh your challenges.*' # none: spinner only
+      # challenges.loadFailed | challenges.listRefreshFailed
+      FAILED: 'Could not load your challenges\.|Could not refresh your challenges.*'
       SHOT: library-browse-training-02-challenges
 
 # LibraryScreen.tsx:526-542. The header's Add button is labelled "Add a
-# route" (RoutesScreen.tsx:101-115) and is never tapped.
+# route" (RoutesScreen.tsx:101-115) and is never tapped. The screen shows
+# only a spinner while it loads (:127-128), so the wait is for what replaces
+# it: the empty state, a route row's distance ("12.4 km" / "7.7 mi",
+# formatRouteDistance, src/utils/routeDisplay.ts:7-16; rows have no fixed
+# text), or the load error (:129-171).
 - runFlow:
     file: ../../subflows/library/visit-row.yaml
     env:
       ROW: 'Routes' # screens.library.routes
-      DESTINATION: 'Add a route' # routes.addTitle, the header button's label
-      LOADING: 'Could not load your routes.' # spinner only
+      # routes.empty | a route's distance | routes.loadFailed
+      DESTINATION: 'No routes yet\..*|[0-9][0-9.,]* (km|mi)|Could not load your routes\.'
+      LOADING: 'Could not load your routes.' # none: spinner only
       FAILED: 'Could not load your routes.' # routes.loadFailed
       SHOT: library-browse-training-03-routes
 
-# LibraryScreen.tsx:543-561. The records have no fixed text (sport names such
-# as "Running" may also be exercise names under Recently Logged on the hub),
-# so the header's back button proves a screen opened over the hub.
+# LibraryScreen.tsx:543-561. The screen shows only a spinner while it loads
+# (PersonalRecordsScreen.tsx:44-45), so the wait is for what replaces it:
+# the empty state, a record row, or the load error (:46-105). Record texts
+# are not fixed (sport names such as "Running" may also be exercise names
+# under Recently Logged on the hub), so a row is matched by its
+# accessibility label, "<distance>, <time>, <pace>, <date>"
+# (personalRecords.rowA11y, :72-80), through the pace the server formats as
+# "M:SS /km" or "M:SS /mi" (SparkyFitnessServer/services/exerciseStatsService.ts:160-172).
 - runFlow:
     file: ../../subflows/library/visit-row.yaml
     env:
       ROW: 'Personal records' # screens.library.personalRecords
-      DESTINATION: 'Back' # common.back, the header back button (src/hooks/useScreenHeader.tsx:237-238)
-      LOADING: 'Could not load your records.' # spinner only
+      # personalRecords.empty | personalRecords.rowA11y | personalRecords.loadFailed
+      DESTINATION: 'No records yet\..*|.*, [0-9]+:[0-9]{2} /(km|mi), .*|Could not load your records\.'
+      LOADING: 'Could not load your records.' # none: spinner only
       FAILED: 'Could not load your records.' # personalRecords.loadFailed
       SHOT: library-browse-training-04-personal-records
 

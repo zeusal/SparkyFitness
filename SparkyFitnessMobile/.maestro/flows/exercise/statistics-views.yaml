@@ -15,6 +15,15 @@
 #
 # Customize Reports must leave the Exercise report shown (the default); with
 # it hidden the hub has no row for it and the flow stops with that label.
+# Keep at least one Exercise section shown too: with every one hidden, a range
+# that has workouts draws nothing under the switch and the Strength waits
+# below time out.
+#
+# The switch checks read the tab's selected state (SegmentedControl.tsx sets
+# accessibilityState.selected on each tab). Android reports it as the node's
+# selected flag, with the tab's content description built from its label
+# (React Native's ReactAccessibilityDelegate), and iOS as the selected trait,
+# so `selected: true` fails when a tap does not switch the view.
 appId: ${APP_ID}
 tags:
   - exercise
@@ -43,9 +52,21 @@ tags:
     label: Strength / Cardio switch shown
 
 # Strength, the view it opens on.
+- assertVisible:
+    text: 'Strength' # exerciseStatistics.views.strength
+    selected: true
+    label: Strength selected on open
+# Every Strength state but loading starts right under the switch with one of
+# these (renderBody, ExerciseStatisticsScreen.tsx:300-617): the load error, the
+# empty state, or the first shown section (overview tile, Sets per Muscle, Heat
+# Map, Training Load, Training Consistency, More Analysis). None is drawn by
+# the Cardio view.
 - extendedWaitUntil:
-    notVisible: 'Failed to load exercise statistics' # exerciseStatistics.states.loadFailed
-    timeout: 5000
+    visible: 'Failed to load exercise statistics|No workouts in this range|Workouts|Sets per Muscle|Muscle Heat Map|Training Load|Training Consistency|More Analysis' # exerciseStatistics.states.loadFailed | .states.empty | .stats.workouts | .setsPerMuscle.title | .heatMap.title | .load.title | .consistency.title | .analysis.title
+    timeout: 20000
+    label: Strength view loaded
+- assertNotVisible:
+    text: 'Failed to load exercise statistics' # exerciseStatistics.states.loadFailed
     label: Strength view without a load error
 - waitForAnimationToEnd:
     timeout: 3000
@@ -58,6 +79,10 @@ tags:
     text: 'Cardio' # exerciseStatistics.views.cardio
     index: 0 # the top-most, the switch
     label: Show the Cardio view
+- assertVisible:
+    text: 'Cardio' # exerciseStatistics.views.cardio
+    selected: true
+    label: Cardio selected
 # Every Cardio state but loading ends with one of these: no sessions, the hint
 # above the session list (below the running cards), or the load error.
 - scrollUntilVisible:
@@ -81,9 +106,15 @@ tags:
     text: 'Strength' # exerciseStatistics.views.strength
     index: 0 # the top-most, the switch
     label: Show the Strength view again
+- assertVisible:
+    text: 'Strength' # exerciseStatistics.views.strength
+    selected: true
+    label: Strength selected again
+# The switch stays on screen after the scroll up, so the top of the Strength
+# body under it is too.
 - extendedWaitUntil:
-    notVisible: 'No cardio workouts in this range|Tap a workout for its route and heart rate\.' # Cardio-only texts
-    timeout: 10000
+    visible: 'Failed to load exercise statistics|No workouts in this range|Workouts|Sets per Muscle|Muscle Heat Map|Training Load|Training Consistency|More Analysis' # as for the first Strength view
+    timeout: 20000
     label: Strength view shown again
 - assertNotVisible:
     text: 'Failed to load exercise statistics' # exerciseStatistics.states.loadFailed

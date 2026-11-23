@@ -77,11 +77,16 @@ var entryName = 'Maestro Protein ' + String(Date.now());
 // answers 201 with the new row. Without food_id the server stores the
 // nutrition given here as the entry's snapshot (models/foodEntry.ts,
 // createFoodEntry). The body mirrors the app's standalone entry
-// (src/services/api/foodEntriesApi.ts, CreateFoodEntryPayload). Calories
-// must be above 0: the Nutrition report counts a day as logged only then
-// (src/utils/nutritionReport.ts loggedPoints), and only a logged window shows
-// its "Trend by nutrient" card. 500 g of protein keeps it among the 3 Top
-// Sources (src/utils/nutrientSources.ts) whatever else the week holds.
+// (src/services/api/foodEntriesApi.ts, CreateFoodEntryPayload). The values
+// are kept small, because while the entry exists a sync with nutrition
+// write-back copies it to the phone's health store (README "Data flows").
+// Calories must be above 0: the Nutrition report counts a day as logged only
+// then (src/utils/nutritionReport.ts loggedPoints), and only a logged window
+// shows its "Trend by nutrient" card; 1 kcal is enough. Top Sources lists the
+// 3 foods with the most protein in the window (src/utils/nutrientSources.ts
+// buildTopSources, each food summed over the window), so 300 g keeps the entry
+// among them unless three other foods reach 300 g of protein in the last 7
+// days. It stays a test-account entry: see the flow's header.
 var res = http.post(BASE + '/api/food-entries', {
   headers: headers,
   body: JSON.stringify({
@@ -92,8 +97,8 @@ var res = http.post(BASE + '/api/food-entries', {
     food_name: entryName,
     serving_size: 100,
     serving_unit: 'g',
-    calories: 2000,
-    protein: 500,
+    calories: 1,
+    protein: 300,
     carbs: 0,
     fat: 0,
   }),
